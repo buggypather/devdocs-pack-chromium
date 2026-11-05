@@ -1,0 +1,22 @@
+{
+  "name": "Chromium",
+  "docs": [
+    {
+      "name": "Chromium",
+      "slug": "chromium",
+      "category": "tools",
+      "source": {
+        "repo": "chromium/chromium",
+        "path": "docs",
+        "root": ""
+      },
+      "site": "https://chromium.googlesource.com/chromium/src/+/main",
+      "siteFiles": true,
+      "links": {
+        "home": "https://www.chromium.org/developers/",
+        "code": "https://chromium.googlesource.com/chromium/src/+/main/docs/"
+      },
+      "attribution": "&copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License."
+    }
+  ]
+}
