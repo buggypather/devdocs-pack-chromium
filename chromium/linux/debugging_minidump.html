@@ -1,0 +1,144 @@
+<h1>Linux Minidump Code Lab</h1>
+<h2 id="about-minidumps">About Minidumps</h2>
+<p>Minidump is a file format for storing parts of a program&#39;s state for later
+inspection. <a href="https://docs.microsoft.com/en-us/windows/desktop/api/minidumpapiset/">Microsoft&#39;s
+Documentation</a>
+defines the format though the <a href="https://docs.rs/minidump/latest/minidump/format/index.html">Rust
+Documentation</a>
+is sometimes easier to navigate. The minidump implementation and tools used by
+Chrome are
+<a href="https://chromium.googlesource.com/breakpad/breakpad/+/refs/heads/main/README.md">Breakpad</a>
+and
+<a href="https://chromium.googlesource.com/crashpad/crashpad/+/main/README.md">Crashpad</a>.
+However, the tools of interest here are from the Breakpad project.</p>
+<h2 id="create-a-minidump">Create a Minidump</h2>
+<p>When Chrome crashes it writes out a minidump file. The minidump file is written
+under the application product directory. On Linux this is
+<code>&lt;XDG_CONFIG_HOME&gt;/&lt;app-name&gt;/Crash Reports</code>. The default for <code>XDG_CONFIG_HOME</code>
+is <code>~.config</code>. Common <code>&lt;app-name&gt;</code>s are <code>chromium</code>, <code>google-chrome</code>,
+<code>google-chrome-beta</code>, and <code>google-chrome-unstable</code>. A typical example is
+<code>~.config/google-chrome/Crash Reports</code>. When a minidump is uploaded it will be
+moved between the <code>new</code>, <code>pending</code>, and <code>completed</code> subdirectories. The minidump
+file is named something like <code>&lt;uuid&gt;.dmp</code>. If the minidump is uploaded to the
+crash reporting system, the <code>&lt;uuid&gt;.meta</code> file will contain the crash report id.
+Those with access can find the uploaded report at <code>go/crash/&lt;report-id&gt;</code>, where
+the minidump file will be available with a name like
+<code>upload_file_minidump-&lt;report-id&gt;.dmp</code>.</p>
+<p>To create a minidump, you can use a local build of Chromium or a release
+version of Chrome. Run the browser with the environment variable
+<code>CHROME_HEADLESS=1</code>, which enables crash dumping but prevents crash dumps from
+being uploaded and deleted. Something like <code>$ env CHROME_HEADLESS=1 ./out/debug/chrome-wrapper</code> or <code>$ env CHROME_HEADLESS=1 /opt/google/chrome/google-chrome</code>. Navigate to <code>chrome://crash</code> to trigger a
+crash in the renderer process or reproduce your current crash bug. A crash dump
+file should appear in the <code>Crash Reports</code> directory.</p>
+<h2 id="inspect-the-minidump">Inspect the Minidump</h2>
+<p>To get an idea about what is in a minidump file, install the Okteta hex editor
+and add the <a href="https://github.com/bungeman/structures/tree/main/okteta-minidump">Minidump Structure
+Definition</a>.
+Open the minidump previously created and explore the information it contains.</p>
+<p>One quirk to notice is that there is a <code>ThreadListStream</code> which contains
+<code>MINIDUMP_THREAD</code>s which contain a <code>MINIDUMP_THREAD_CONTEXT</code> and an
+<code>ExceptionStream</code> which also contains a <code>MINIDUMP_THREAD_CONTEXT</code>. The thread
+list contains the thread contexts as they existed when the crash reporter was
+running. The exception&#39;s thread context is the state of the crashing thread at
+the time that it crashed, which is generally the most interesting thread
+context. When using the Breakpad tools for Linux (like <code>minidump_stackwalk</code> and
+<code>minidump-2-core</code>) the thread context from the exception record is used in place
+of the thread context associated with the corresponding thread.</p>
+<p>Each <code>MINIDUMP_THREAD</code> contains a <code>StackMemoryRva</code> which is a reference to to a
+copy of the stack on that thread at the time the crash handler was running.
+Parsing a stack usefully requires additional debug information.
+<code>minidump_stackwalk</code> or a debugger may be used to parse the stack memory to
+create a usable trace.</p>
+<h2 id="get-the-tools">Get the Tools</h2>
+<p>From a Chromium checkout <code>ninja -C out/release minidump-2-core minidump_stackwalk dump_syms</code>. From a <a href="https://chromium.googlesource.com/breakpad/breakpad/">Breakpad
+checkout</a> <code>make</code>. It can
+be useful to use Breakpad directly on machines where one does not already have
+a Chromium checkout.</p>
+<p>When working at this level, one will also want to have <code>readelf</code> and
+<code>objdump</code> available, which are available from most distributions.</p>
+<h2 id="get-executables-and-symbols">Get Executables and Symbols</h2>
+<p>In addition to the minidump, you will need the exact executables of Chromium or
+Chrome which produced the minidump and those executable&#39;s symbols. If the
+minidump was created locally, you already have the executables. Symbols for
+Google Chrome&#39;s official builds are available from
+<code>https://edgedl.me.gvt1.com/chrome/linux/symbols/google-chrome-debug-info-linux64-${VERSION}.zip</code>
+where <code>${VERSION}</code> is any version of Google Chrome that has recently been served
+to Stable, Beta, or Unstable (Dev) channels on Linux, like <code>114.0.5696.0</code>. Those
+with access can find both executables and symbols for unreleased builds at
+<code>go/chrome-symbols</code>.</p>
+<p>For symbols outside of Chrome (like when the crash is happening in a shared
+library) then symbols for the files of interest must be found. If the minidump
+was created locally then install the symbol packages from your distribution.  If
+not, you will need to track down the exact symbol files, which can be an
+interesting exercise. For some distributions using the
+<a href="https://sourceware.org/elfutils/Debuginfod.html">debuginfod</a> system can be
+quite helpful.</p>
+<p>To ensure the correct binaries and debug symbols are used, the minidump contains
+the build-id for each loaded module in the <code>ModuleListStream</code> in the
+<code>CvRecordRva</code>&#39;s <code>Signature</code>. This build-id is matched against a note
+section of type <code>NT_GNU_BUILD_ID</code>, usually named <code>.note.gnu.build-id</code> in the
+executable and symbol files. This note can be inspected with <code>readelf -n &lt;file&gt;</code> like <code>readelf -n chrome</code> or <code>readelf -n chrome.debug</code> and looking for
+the <code>.note.gnu.build-id</code> section. <code>readelf</code> reports the <code>Build ID</code> as the flat
+bytes in the note, but Breakpad binaries like <code>stackwalk_minidimp</code> and
+<code>dump_syms</code> will report and expect this truncated to a formatted Type 2 GUID
+(without dashes). This means <code>readelf</code> will output a <code>&lt;build-id&gt;</code> like
+33221100554477668899AABBCCDDEEFFXXXXXXXX but crashpad binaries will expect and
+report this as a <code>&lt;build-uuid&gt;</code> of 00112233445566778899AABBCCDDEEFF.</p>
+<p>The <code>.gnu_debuglink</code> section states which debug symbol file to use with a
+striped binary. For example <code>readelf --string-dump=.gnu_debuglink chrome</code>
+produces <code>chrome.debug</code>. This can be helpful to know for libraries with
+interesting debug symbol setup, like libc.so.6.</p>
+<h2 id="create-symbolized-stack">Create Symbolized Stack</h2>
+<p>Given a minidump with the name <code>mini.dmp</code></p>
+<p><code>minidump_stackwalk mini.dmp &gt; mini.stackwalk.nosym</code></p>
+<p>This will produce a mostly unsymbolized summary of the crash. To symbolize, look
+toward the bottom of the output for <code>WARNING: No symbols, &lt;file&gt;, &lt;build-uuid&gt;</code>.
+For each <code>&lt;file&gt;</code> which is of interest, <code>mkdir -p symbols/&lt;file&gt;/&lt;build-uuid&gt;</code> then
+<code>dump_syms &lt;file&gt; &lt;directory-with-file.debug&gt; &gt; symbols/&lt;file&gt;/&lt;build-uuid&gt;/&lt;file&gt;.sym</code>. Ensure this output <code>&lt;file&gt;.sym</code>
+contains the expected <code>&lt;build-uuid&gt;</code>. Then re-run <code>minidump_stackwalk</code> but
+with the symbols directory, like <code>minidump_stackwalk mini.dmp symbols/ &gt; mini.stackwalk</code>.</p>
+<p>The output of <code>minidump_stackwalk</code> is often quite useful and enough to track
+down many issues. However, it does not fully use all of the information from
+DWARF, so it is possible sometimes to get much better stack traces from a full
+debugger like gdb. This is particularly true when functions have been
+aggressively inlined.</p>
+<h2 id="create-core-file">Create Core File</h2>
+<p><code>minidump-2-core mini.dmp &gt; mini.core</code></p>
+<h2 id="loading-into-gdb">Loading into GDB</h2>
+<p>This works best if the binaries, symbols, and core files are all in different
+directories to prevent gdb from automatically loading them into the wrong
+locations. This is also generally necessary when using a system installed
+version of Chrome. For full details see <a href="https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html">the gdb
+manual</a>.
+The easiest way is to rename and move the .debug files to a directory structure
+like <code>&lt;debugdir&gt;/debug/.build-id/nn/nnnnnnnn.debug</code> where <code>nn</code> are the first
+two hex characters of the <code>build-id</code>, and <code>nnnnnnnn</code> are the rest of the hex
+characters of the <code>build-id</code>. Note that this <code>build-id</code> is exactly what is
+reported by <code>readelf -n &lt;binary&gt; | grep &quot;Build ID&quot;</code> and not the <code>build-uuid</code>
+used by Breakpad. Then in gdb use <code>show debug-file-directory</code> to get the
+<code>&lt;previous-directories&gt;</code> and <code>set debug-file-directory &lt;previous-directories&gt;:&lt;debugdir&gt;/debug</code>.</p>
+<p>The <code>offset</code>s used here are the offsets of the corresponding module from the
+output of <code>minidump_stackwalk</code> or (equivalently) the value of
+<code>ModuleListStream::Modules[]::BaseOfImage</code> from the minidump file (which can be
+read with the structure definition).</p>
+<pre>$ gdb
+(gdb) file &lt;executable&gt;
+(gdb) show debug-file-directory
+&lt;previous directories&gt;
+(gdb) set debug-file-directory &lt;previous directories&gt;:&lt;debugdir&gt;/debug
+(gdb) symbol-file &lt;executable&gt; -o &lt;executable-offset&gt;
+(gdb) core-file &lt;mini.core&gt;</pre>
+<p>Running the commands in this order avoids needing to load the symbols twice and
+maps the <code>&lt;executable&gt;</code> to the expected location.</p>
+<p>To add an additional shared library it is possible to
+<code>(gdb) add-symbol-file &lt;shared-library&gt; -o &lt;shared-library-offset&gt;</code></p>
+<p>Source paths in Chrome builds are relative to the <code>out/&lt;build&gt;</code> directory. If you
+have a Chromium checkout at or around when the Chrome build was created, it can
+be added to the debugger search path, like</p>
+<pre>(gdb) directory &lt;path-to-chromium&gt;/chromium/src/out/&lt;build&gt;/</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/debugging_minidump.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/debugging_minidump.md</a>
+  </p>
+</div>

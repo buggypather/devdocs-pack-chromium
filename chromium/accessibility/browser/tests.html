@@ -1,0 +1,157 @@
+<h1>Accessibility</h1>
+<p>Here&#39;s a quick overview of all of the locations in the codebase where you&#39;ll
+find accessibility tests, and a brief overview of the purpose of all of them.</p>
+<h2 id="web-tests">Web Tests</h2>
+<p>This is the primary place where we test accessibility code in Blink. This code
+should have no platform-specific code. Use this to test anything where there&#39;s
+any interesting web platform logic, or where you need to be able to query things
+synchronously from the renderer thread to test them.</p>
+<p>Don&#39;t add tests for trivial features like ARIA attributes that we just expose
+directly to the next layer up. In those cases the Blink tests are trivial and
+it&#39;s more valuable to test these features at a higher level where we can ensure
+they actually work.</p>
+<p>Note that many of these tests are inherited from WebKit and the coding style has
+evolved a lot since then. Look for more recent tests as a guide if writing a new
+one.</p>
+<p>Test files:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/web_tests/accessibility/">third_party/blink/web_tests/accessibility</a></p>
+<p>Source code to AccessibilityController and WebAXObjectProxy:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/web_test/renderer/">content/web_test/renderer</a></p>
+<p>First, you&#39;ll need to build the tests:</p>
+<pre>autoninja -C out/release blink_tests</pre>
+<p>Then, to run all accessibility web tests:</p>
+<pre>third_party/blink/tools/run_web_tests.py --build-directory=out --target=release accessibility/</pre>
+<p>Or, to run just one test by itself, without invoking the <code>run_web_tests.py</code> script:</p>
+<pre>out/release/content_shell \
+  --run-web-tests third_party/blink/web_tests/accessibility/name-calc-inputs.html</pre>
+<p>For information on modifying or adding web tests, see the main
+<a href="../../testing/web_tests">web tests documentation</a>.</p>
+<h2 id="dumpaccessibilitytree-tests">DumpAccessibilityTree tests</h2>
+<p>This is the best way to write both cross-platform and platform-specific tests
+using only an input HTML file, some magic strings to describe what attributes
+you&#39;re interested in, and one or more expectation files to enable checking
+whether the resulting accessibility tree is correct or not. In particular,
+almost no test code is required.</p>
+<p><a href="https://github.com/chromium/chromium/blob/HEAD/content/test/data/accessibility/readme.md">More documentation on DumpAccessibilityTree</a></p>
+<p>Test files:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/test/data/accessibility/">content/test/data/accessibility</a></p>
+<p>Test runner:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/accessibility/dump_accessibility_tree_browsertest.h">content/browser/accessibility/dump_accessibility_tree_browsertest.h</a></p>
+<p>To run all tests:</p>
+<pre>autoninja -C out/release content_browsertests &amp;&amp; \
+  out/release/content_browsertests --gtest_filter=&quot;All/DumpAccessibilityTree*&quot;</pre>
+<p>Expectation baselines for each OS can be generated via:</p>
+<pre>tools/accessibility/rebase_dump_accessibility_tree_tests.py</pre>
+<h2 id="other-content_browsertests">Other content_browsertests</h2>
+<p>There are many other tests in content/ that relate to accessibility. All of
+these tests work by launching a full multi-process browser shell, loading a web
+page in a renderer, then accessing the resulting accessibility tree from the
+browser process, and running some test from there.</p>
+<p>To run all tests:</p>
+<pre>autoninja -C out/release content_browsertests &amp;&amp; \
+  out/release/content_browsertests --gtest_filter=&quot;*ccessib*&quot;</pre>
+<h2 id="accessibility-unittests">Accessibility unittests</h2>
+<p>This tests the core accessibility code that&#39;s shared by both web and non-web
+accessibility infrastructure.</p>
+<p>Code location:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/accessibility/">ui/accessibility</a>
+and subdirectories; check the
+<a href="https://source.chromium.org/search?q=path:accessibility%20path:_unittest&amp;sq=&amp;ss=chromium%2Fchromium%2Fsrc:ui%2Faccessibility%2F"><code>*_unittest.cc</code> files</a>,
+next to every file that it&#39;s being tested.</p>
+<p>List of sources:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/accessibility/BUILD.gn?q=%22test(%22accessibility_unittests%22)%20%7B%22">ui/accessibility/BUILD.gn</a></p>
+<p>To run all tests:</p>
+<pre>autoninja -C out/release accessibility_unittests &amp;&amp; \
+  out/release/accessibility_unittests</pre>
+<h2 id="chromevox-tests">ChromeVox tests</h2>
+<p>ChromeVox tests are part of the browser_tests suite. You must build with
+<code>target_os = &quot;chromeos&quot;</code> in your GN args.</p>
+<p>To run all tests:</p>
+<pre>autoninja -C out/release browser_tests &amp;&amp; \
+  out/release/browser_tests --test-launcher-jobs=20 --gtest_filter=ChromeVox*</pre>
+<h3 id="select-to-speak-tests">Select-To-Speak tests</h3>
+<pre>autoninja -C out/Default unit_tests browser_tests &amp;&amp; \
+  out/Default/unit_tests --gtest_filter=*SelectToSpeak* &amp;&amp; \
+  out/Default/browser_tests --gtest_filter=*SelectToSpeak*</pre>
+<h2 id="performance-tests">Performance tests</h2>
+<p>We also have a page on <a href="perf">Performance Tests</a>.</p>
+<h2 id="other-locations-of-accessibility-tests">Other locations of accessibility tests:</h2>
+<p>Even this isn&#39;t a complete list. The tests described above cover more than 90%
+of the accessibility tests, and the remainder are scattered throughout the
+codebase. Here are a few other locations to check:</p>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/javatests/src/org/chromium/chrome/browser/accessibility/">chrome/android/javatests/src/org/chromium/chrome/browser/accessibility</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/accessibility/">chrome/browser/accessibility</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ash/accessibility/">chrome/browser/ash/accessibility/</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/chromeos/">ui/chromeos</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/accessibility/">ui/views/accessibility</a></li>
+</ul>
+<h2 id="helpful-flags">Helpful flags:</h2>
+<p>Across all tests there are some helpful flags that will make testing easier.</p>
+<ul>
+<li><p>Run tests multiple times in parallel (useful for finding flakes):
+<code>--test-launcher-jobs=10</code></p>
+</li>
+<li><p>Filter which tests to run: <code>--gtest_filter=&quot;*Cats*&quot;</code></p>
+</li>
+</ul>
+<h2 id="manual-testing">Manual testing:</h2>
+<p>The Chromium accessibility pipeline supports an ecosystem of various assistive
+technologies through the platform accessibility APIs. When we make changes that
+modify the output of a platform accessibility interface, we should test the
+major assistive technologies (JAWS, NVDA, Narrator, VoiceOver, etc.) that rely
+on those interfaces to reduce the risk of introducing regressions. Below is a
+list of key features to validate for each AT:</p>
+<h3 id="narrator">Narrator:</h3>
+<p>Narrator relies only on UIA -- it does not use MSAA/IA2. When modifying the UIA
+APIs, we should ensure that these key features still work:</p>
+<ul>
+<li>Scan Mode (toggle it with Narrator + space)</li>
+<li>Navigation by text unit (Narrator + CTRL + up/down arrow to change the text
+unit, then Narrator + left/right arrow to navigate backward or forward).
+Here are the text units to validate:<ul>
+<li>Character navigation</li>
+<li>Word navigation</li>
+<li>Line navigation</li>
+<li>Sentence navigation</li>
+<li>Paragraph navigation</li>
+<li>Item navigation (as in list items, bullet points)</li>
+<li>Heading navigation</li>
+<li>Link navigation</li>
+<li>Form field navigation</li>
+<li>Landmark navigation</li>
+<li>Table navigation</li>
+</ul>
+</li>
+<li>Search (Narrator + CTRL + F)</li>
+<li>List of links (Narrator + F7)</li>
+<li>List of headings (Narrator + F6)</li>
+<li>List of landmarks (Narrator + F5)</li>
+<li>Caret navigation (with Scan Mode off) in a text field<ul>
+<li>The character that follows the caret should be read.</li>
+<li>&quot;Blank&quot; or similar should be announced when moving the character after the
+last character of the text field.</li>
+<li>Spelling and grammar errors should be announced properly when moving using
+the arrow keys.<ul>
+<li>For web content, errors can be added using the aria-invalid attribute or
+CSS highlights. Chromium&#39;s implementations for each of them is different
+for UIA, so both should be tested.</li>
+<li>Errors should be announced when the caret is positioned at the very
+beginning of an error range. We should test arrow key navigations and word
+navigation (CTRL + right/left arrow key).</li>
+<li>All errors in the same line should be announced when arrowing up/down at
+the start of a line.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>This section is continuously updated. Feel free to edit it to add more core
+features to test when making a potentially breaking change, or to add testing
+instructions for other assistive technologies.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/tests.md</a>
+  </p>
+</div>

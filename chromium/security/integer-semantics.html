@@ -1,0 +1,65 @@
+<h1>Integer Semantics, Unsafety, And You</h1>
+<p>These handy tips apply in any memory management situation and in any kind of IPC
+situation (classic Chromium IPC, Mojo, Windows/POSIX IPC, Mach IPC, files,
+sockets, parsing binary formats, ...).</p>
+<p>Basically, don&#39;t believe the lie that &#39;computers are good at arithmetic&#39;. In
+general, unless you explicitly check an arithmetic operation, it&#39;s safest to
+assume the operation went wrong. The least painful way to systematically check
+arithmetic is Chromium&#39;s base/numerics templates and helper functions.</p>
+<h2 id="be-aware-of-the-subtleties-of-integer-types">Be Aware Of The Subtleties Of Integer Types</h2>
+<p>First <a href="http://en.wikipedia.org/wiki/Integer_overflow">read about the scary security implications of integer arithmetic in
+C/C++</a>. Adhere to these best
+practices:</p>
+<ul>
+<li>Use the <a href="https://github.com/chromium/chromium/blob/HEAD/base/numerics/README.md">integer templates and cast templates in
+base/numerics</a> to avoid overflows, <strong>especially when
+calculating the size or offset of memory allocations</strong>.</li>
+<li>Use unsigned types for values that shouldn&#39;t be negative or where defined
+overflow behavior is required. (Overflow is undefined behavior for signed
+types!)</li>
+<li>Across any process boundary, use explicitly sized integer types, such as
+<code>int32_t</code>, <code>int64_t</code>, or <code>uint32_t</code>, since caller and callee could potentially
+use different interpretations of implicitly-sized types like <code>int</code> or <code>long</code>.
+(For example, a 64-bit browser process and a 32-bit plug-in process might
+interpret <code>long</code> differently.)</li>
+</ul>
+<h2 id="be-aware-of-the-subtleties-of-integer-types-across-languages">Be Aware Of The Subtleties Of Integer Types Across Languages</h2>
+<h3 id="java">Java</h3>
+<p>When writing code for Chromium on Android, you will often need to marshall
+arrays, and their sizes and indices, across the language barrier (and possibly
+also across the IPC barrier). The trouble here is that the Java integer types
+are well-defined, but the C++ integer types are whimsical. A Java <code>int</code> is a
+signed 32-bit integer with well-defined overflow semantics, and a Java <code>long</code> is
+a signed 64-bit integer with well-defined overflow semantics. in C++, only the
+explicitly-sized types (e.g. <code>int32_t</code>) have guaranteed exact sizes, and only
+unsigned integers (of any size) have defined overflow semantics.</p>
+<p>Essentially, Java integers <strong>actually are</strong> what people often (incorrectly)
+<strong>assume</strong> C++ integers are. Furthermore, Java <code>Array</code>s are indexed with Java
+<code>int</code>s, whereas C++ arrays are indexed with <code>size_t</code> (often implicitly cast, of
+course). Note that this also implies a 2^31 limit on the number of elements in
+an array that is coming from or going to Java. That Should Be Enough For
+Anybody, but it&#39;s good to keep in mind.</p>
+<p>You need to make sure that every integer value survives its journey across
+languages intact. That generally means explicit casts with range checks; the
+easiest way to do this is with the <code>base::checked_cast</code> or (much less likely)
+<code>base::saturated_cast</code> templates in base/numerics. Depending on how the integer
+object is going to be used, and in which direction the value is flowing, it may
+make sense to cast the value to <code>jint</code> (an ID or regular integer), <code>jlong</code> (a
+regular long integer), <code>size_t</code> (a size or index), or one of the other more
+exotic C/C++ integer types like <code>off_t</code>.</p>
+<h3 id="javascript-and-json">JavaScript And JSON</h3>
+<p><a href="http://2ality.com/2014/02/javascript-integers.html">Here is some good reading on integers in
+JavaScript</a>. TL;DR:</p>
+<ul>
+<li>Normal JavaScript <code>Number</code>s have a &#39;safe&#39; integer range of 53 bits (signed).
+See <code>Number.isSafeInteger</code>, <code>Number.MIN_SAFE_INTEGER</code>, and
+<code>Number.MAX_SAFE_INTEGER</code>.</li>
+<li>Array indices are unsigned 32-bit values.</li>
+<li>Character codes (<code>fromCharCode</code>, <code>charCodeAt</code>) are unsigned 16-bit values.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/integer-semantics.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/integer-semantics.md</a>
+  </p>
+</div>

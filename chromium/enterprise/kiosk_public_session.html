@@ -1,0 +1,30 @@
+<h1>Kiosk mode and public sessions (ChromeOS)</h1>
+<p>When ChromeOS device is enterprise enrolled, organization admins can add two
+special types of users on the device. Those are Public sessions and Kiosk apps.</p>
+<h2 id="public-sessions">Public sessions</h2>
+<p>Public session can be described as managed guest session: guest mode that is
+controlled by user policy.</p>
+<p>It does not have any real google account, it is ephemeral (no data would be
+persisted on the device after session is ended), but organization admins
+still have some control over that: they can pre-install extensions, set
+policies, install certificates.</p>
+<p>To set up public session, go to <a href="https://admin.google.com">Admin console</a> under
+<code>Device Management &gt; Chrome Management &gt; Device Settings</code>, <code>Kiosk settings</code> section, and set <code>Public session kiosk</code> setting to
+<code>Allow</code>. You can also configure additional settings.</p>
+<h2 id="kiosk-mode">Kiosk mode</h2>
+<p>Kiosk mode is a session that runs a single Chrome/Android app.</p>
+<p>It does not have any real google account, it is persistent (data will be
+persisted between kiosk sessions) by default.</p>
+<p>Multiple kiosk apps are allowed per device, and they can be launched from system
+shelf on the login screen. Additionally, the administrator can set up one app to
+launch automatically on start-up, in which case login screen is not shown unless
+the user cancels the app launch from the app launch splash screen.</p>
+<p>To set up kiosk mode, go to <a href="https://admin.google.com">Admin console</a> under
+<code>Device Management &gt; Chrome Management &gt; Device Settings</code>, <code>Kiosk settings</code> section, add available apps under <code>Kiosk apps</code> / <code>Manage Kiosk Applications</code>.</p>
+<p>You can configure kiosk app settings under <code>Device Management &gt; Chrome Management &gt; Apps &amp; Extensions</code></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/kiosk_public_session.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/kiosk_public_session.md</a>
+  </p>
+</div>

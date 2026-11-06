@@ -1,0 +1,111 @@
+<h1>document.domain Setting is Deprecated</h1>
+<p>Setting <a href="https://developer.mozilla.org/en-US/docs/Web/API/Document/domain"><code>document.domain</code></a>
+is <a href="https://html.spec.whatwg.org/multipage/origin.html#relaxing-the-same-origin-restriction">deprecated</a>.
+<code>document.domain</code> setting can be used to relax the same-origin restrictions
+between different frames, hosted within the same site but on different origins.
+Doing so make themselves effectively same-origin for the purpose of
+synchronous access.</p>
+<p>For example, <code>https.//www.example.test/</code> might host a media player on
+<code>media.example.org</code>. If both the main page and the frame execute
+<code>document.domain = &quot;example.org&quot;;</code> they may then access each others&#39; DOM
+tree, which they normally couldn&#39;t. (A better way would be to cooperate
+by <code>postMessage()</code>.)</p>
+<p>This usage is now being deprecated. (More information can be found
+<a href="https://developer.chrome.com/blog/immutable-document-domain/">here</a> and
+<a href="https://github.com/mikewest/deprecating-document-domain">there</a>).</p>
+<h2 id="what-is-happening-and-when">What is happening, and when?</h2>
+<ul>
+<li>M100: Chrome will show deprecation warnings when document.domain is set.</li>
+<li>M106: Chrome will disable document.domain by default.</li>
+</ul>
+<p>Note that the second milestone is tentative: When the time comes, we will
+examine how many pages will be impacted by this change, and will start a
+separate discussion (intent to remove) on the
+<a href="https://groups.google.com/a/chromium.org/g/blink-dev">blink-dev mailing list</a>.</p>
+<h2 id="documentdomain-and-origin-keyed-agent-clusters"><code>document.domain</code> and Origin-keyed Agent Clusters</h2>
+<p>Most documentation on this change is phrased in terms of origin-keyed
+agent clusters. This is <a href="https://html.spec.whatwg.org/multipage/origin.html#origin-keyed-agent-clusters">a concept in the HTML
+specification</a>.
+Here we focus on the behaviour of the <code>document.domain</code> setter, which is
+the visible effect.</p>
+<p>A web browser can cluster sites (in order to assign them to operating
+system processes) and sites can be clustered by origin, or by site.
+Origin-keyed agent clustering is preferable for security reasons. However
+when sites are clustered by origin, synchronous access to frames outside of
+that origin (but within the same site) is no longer possible. Thus sites in
+origin-keyed agent clusters disable the <code>document.domain</code> setter. This is the
+mechanism underlying this change: From M106 on pages will be assigned to
+origin-keyed agent clusters by default and therefore <code>document.domain</code>
+will no longer be settable by default, either.</p>
+<p>This also gives us an opt-out mechanism for pages who do not wish to follow
+this change: By setting the <code>Origin-Agent-Cluster: ?0</code> http header, a site
+can request assignment to a site-keyed agent cluster, and <code>document.domain</code>
+will continue to work for them as it currently does. Note that adding this
+header has no other observable effect and thus retains the current
+(pre-M106) behaviour. This makes it an easy and <em>safe</em> way to opt-out.</p>
+<p>Setting this header is a no-op in current versions of Chromium since it
+matches the default setting, and will preserve this behaviour in the future.
+It is also a no-op in other browsers, since they either match Chromium&#39;s
+current default or have not implemented the <code>Origin-Agent-Cluster</code> header at
+all.</p>
+<h2 id="where-are-the-deprecation-warnings-found">Where are the deprecation warnings found?</h2>
+<p>The deprecation warnings are found in the <a href="https://developer.chrome.com/docs/devtools/issues/">issues tab</a>.</p>
+<h2 id="what-does-the-deprecation-warning-tell-me">What does the deprecation warning tell me?</h2>
+<p>There are two deprecation warnings: One for setting the <code>document.domain</code>
+accessors, which modifies the security behaviour. And from M101 on,
+a second warning when a cross-domain access is made that is facilitated by
+the modified <code>document.domain</code> property. The first warning tells you where
+the setup happens, and the second one tells you where it is being used (and
+thus likely why this is being done in the first place).</p>
+<h2 id="how-can-i-test-this">How Can I Test This?</h2>
+<p>In the DevTools console, for a page <code>www.example.test</code>:</p>
+<pre>document.domain = &quot;example.test&quot;;
+document.domain;  // &quot;example.test&quot; in a site-keyed agent cluster.
+                  // &quot;www.example.test&quot; in an origin-keyed agent cluster.</pre>
+<p>One can also directly query whether a page is assigned to an origin-keyed
+agent cluster, by querying <code>window.originAgentCluster</code>.</p>
+<pre>window.originAgentCluster;  // true, if page is assigned to an origin-keyed
+                            // agent cluster.</pre>
+<p>How to enable/disable the deprecation:</p>
+<h3 id="enable-the-deprecation-scheduled-for-m106">Enable the Deprecation (Scheduled for M106)</h3>
+<ul>
+<li>In <a href="chrome://flags#origin-agent-cluster-default">chrome://flags</a>, go to
+the &quot;Origin Agent Cluster Default&quot; setting and enable it.</li>
+<li>Or start Chrome with <code>--enable-features=OriginAgentClusterDefaultEnable</code></li>
+<li>Or add the <code>Origin-Agent-Cluster: ?1</code> header to your pages and frames.
+(E.g. in a testing instance of your site.)</li>
+</ul>
+<h3 id="testing-at-scale--reporting-api">Testing at Scale / Reporting API</h3>
+<p>The deprecation warnings are delivered through the
+<a href="https://web.dev/reporting-api/">Reporting API</a>. They can
+be pragrammatically processed using <code>ReportingObserver</code>. For example, the
+first code snippet in
+<a href="https://developers.google.com/web/updates/2018/07/reportingobserver">https://developers.google.com/web/updates/2018/07/reportingobserver</a>
+will report these warnings. The message object delivered by this API is a
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/DeprecationReportBody"><code>DeprecationReportBody</code></a>
+instance which offers information about the source code location that triggered
+the warning.</p>
+<h2 id="what-can-i-do">What can I do?</h2>
+<p>If your site does not use <code>document.domain</code> setting you don&#39;t have to do
+anything. You could explicitly set the <code>Origin-Agent-Cluster: ?1</code> header.
+But after M106 this would be the default behaviour anyhow.</p>
+<p>If your site uses <code>document.domain</code> setting to enable cross-origin Javascript
+access, you should refactor the code to instead use
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage"><code>window.postMessage()</code></a> (or any other mechanism) to cooperate across origins. Or alternatively
+reduce the need for cross-origin cooperation by moving the cooperating pieces
+onto the same origin.</p>
+<h2 id="what-if-i-dont-have-the-time-right-now-or-want-to-continue-setting-documentdomain">What if I don&#39;t have the time right now, or want to continue setting <code>document.domain</code>?</h2>
+<p>You can add the <code>Origin-Agent-Cluster: ?0</code> HTTP header to your site. Note that
+the header must be set both for the main page, as well as for the embedded
+frame(s) that wish to use <code>document.domain</code> setting.</p>
+<h2 id="enterprise-users">Enterprise Users</h2>
+<p>Users of <a href="https://chromeenterprise.google/">Chrome for Enterprise</a> can set
+the <code>OriginAgentClusterDefaultEnabled</code> policy to <code>False</code> to retain the
+current (pre-M106) default for all of their users, until all their internal
+sites and customers have migrated off of <code>document.domain</code> usage.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/document-domain.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/document-domain.md</a>
+  </p>
+</div>

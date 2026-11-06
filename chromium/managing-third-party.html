@@ -1,0 +1,101 @@
+<h1>Managing third-party dependencies</h1>
+<p>Before reading documentation in this directory, please check the general
+policies in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/adding_to_third_party.md">Adding third_party Libraries</a>.
+You MUST obtain the required approvals before adding a third-party dependency
+and accept the responsibility as a dependency owner.</p>
+<p>This directory contains how-to guides on managing your dependency with autoroll
+tooling (aka. well-lit paths). Please refer to individual files to understand
+their use cases and constraints. You should adopt <strong>one well-lit path</strong> that
+suits your need (e.g. code organization, need for patching).</p>
+<p>You can request to be exempted from the well-lit paths if your dependency does
+not release new versions or updating would introduce performance regressions.
+Please refer to <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/adding_to_third_party.md#autoroll-exceptions">Autoroll Exceptions</a> for more detail.</p>
+<p>If you are not sure which path to take, please file a bug in
+<a href="https://issues.chromium.org/issues/new?noWizard=true&amp;component=1900398&amp;template=2268619">&quot;Chromium &gt; Third Party &gt; Freshness&quot; component</a>
+for consultation.</p>
+<p>If you&#39;re a Googler, you can alternatively email
+<a href="mailto:chrome-ssci-team@google.com">chrome-ssci-team@google.com</a>.</p>
+<h2 id="wlps">Well-lit paths</h2>
+<h3 id="skia-autoroller"><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/managing-third-party/skia-autoroller.md">Skia Autoroller</a></h3>
+<p>Recommended for dependencies that are imported as Git submodules, and can be
+used without modifying the dependency&#39;s source code. You can add BUILD.gn rules
+and tests alongside your dependency.</p>
+<h3 id="crowbar-workflow"><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/managing-third-party/crowbar-workflow.md">Crowbar Workflow</a></h3>
+<p>Recommended for checked-in code (e.g. a subset of files), or if you need to
+patch upstream source code.</p>
+<h3 id="3pp--cipd"><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/cipd_and_3pp.md">3PP + CIPD</a></h3>
+<p>Recommended for dependencies which cannot be built from source.</p>
+<h2 id="handling-onboarding-bugs">Handling onboarding bugs</h2>
+<p>Owners of existing dependencies will progressively receive bugs to onboard them
+to autoroll mechanisms as they become available. The bugs propose a well-lit
+path suitable for the dependency based on static analysis, but you may choose
+any of the three above.</p>
+<p>There are several steps involved with onboarding a dependency to automated
+updates. We recommend doing them in the below order: landing a change between
+each step, to reduce the chance of build breakage and make changes more
+reviewable.</p>
+<h3 id="prepare">Prepare</h3>
+<ol>
+<li>Determine what state the dependency is in. Understanding the current state
+will help you figure out what automated paths support your needs and what
+pre-work needs to be done.<ul>
+<li>Is the dependency a pristine copy of the upstream?</li>
+<li>Is it a partial checkout of a git repo, which removes large files or
+ directories?</li>
+<li>Is the Chromium copy carrying patches? Are the patches clean, or do they
+ also contain formatting changes?</li>
+<li>Does the upstream tag release versions, or will a time based roll be
+ more effective?</li>
+<li>Are there post update code generation steps?</li>
+<li>Does the metadata in the README reflect the version that&#39;s actually used
+ in Chromium? Have there been historic cherry picks which put us between
+ versions?</li>
+<li>Is there a backward dependency on components like <code>//base</code> which make
+ git submodule use undesirable?</li>
+</ul>
+</li>
+<li>Ensure the dependency uses the <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/adding_to_third_party.md#standard-dep-structure">recommended directory structure</a>. If it does not, this
+is the optimal time to fix it.<ul>
+<li>We recommend you do this, resolve any BUILD breakages and send a CL to
+ land this restructure before making any further changes.</li>
+</ul>
+</li>
+<li>Clean up any existing patches. Some dependencies may already have patch
+ files; but there&#39;s no guarantee they&#39;re in good condition, or still required.<ul>
+<li>Patches MUST NOT contain formatting changes.</li>
+<li>If your dependency requires patches you must create a <code>patches/</code>
+ directory, following the <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/adding_to_third_party.md#standard-dep-structure">recommended directory structure</a> and store patches
+ there, as numbered files. We recommend one patch file per logic change
+ to make future maintenance easier.</li>
+<li>Patches should apply cleanly to a fresh checkout of the upstream, at the
+ same version. <em>A fresh copy of the upstream at the same revision, with
+ patches applied, should produce the same logical file content as what is
+ currently used in Chromium.</em> If you&#39;re backing out formatting changes,
+ there may still be a git diff.</li>
+</ul>
+</li>
+</ol>
+<h3 id="update">Update</h3>
+<p>Now that your dependency is cleaned up, it&#39;s time to update.</p>
+<ul>
+<li>It&#39;s recommended to do a one-time update to the newest version before
+onboarding to automation. This will allow a clean onboarding and allow the
+testing of patches to identify any edge cases.</li>
+<li>Dependencies which are extremely old may benefit from several incremental
+updates rather than one large update.</li>
+<li>Ensure the README.chromium metadata is correct and complete.</li>
+</ul>
+<h3 id="onboard">Onboard</h3>
+<p>Determine which well-lit path your dependency should be using and create the
+required configuration, following the <a href="#wlps">guides above</a>.</p>
+<ul>
+<li>Mark the bug as <code>Fixed</code> and re-assign to <a href="mailto:chrome-ssci-team@google.com">chrome-ssci-team@google.com</a>
+for verification.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/managing-third-party/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/managing-third-party/README.md</a>
+  </p>
+</div>

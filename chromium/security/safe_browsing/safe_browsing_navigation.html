@@ -1,0 +1,137 @@
+<h1>How Safe Browsing Lookup Interacts with Navigation</h1>
+<h2 id="overview">Overview</h2>
+<p>During navigation, Chrome checks the Safe Browsing reputation of each URL and
+decides whether to show a warning to the user. This document describes how Safe
+Browsing lookup interacts with navigation and how Safe Browsing lookups affect
+the speed of navigation.</p>
+<h2 id="background">Background</h2>
+<p>When a user navigates to a URL, Chrome checks the Safe Browsing reputation of
+the URL before the URL is loaded. If Safe Browsing believes that the URL is
+dangerous, Chrome shows a warning to the user:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/safe_browsing/warning_screenshot.png" alt="warning page"></p>
+<p>Chrome can perform three types of Safe Browsing checks during navigation:</p>
+<ul>
+<li>The hash-prefix database check
+(<a href="https://developers.google.com/safe-browsing/reference/How.To.Guides#local-list-mode">HPD</a>).</li>
+<li>The URL real-time check
+(<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/safe_browsing/core/browser/realtime/">URT</a>).</li>
+<li>The hash-prefix real-time check
+(<a href="https://developers.google.com/safe-browsing/reference/How.To.Guides#real-time-mode">HPRT</a>).</li>
+</ul>
+<p>Only the HPD check is on the blocking path of navigation. Before the check is
+completed, the navigation is not committed, the page body is not read by the
+renderer, and the user won’t see any page content in their browser.</p>
+<p>Real-time checks (URT and HPRT) take longer than HPD checks. To ensure smooth
+user experience, they don&#39;t delay navigation. This means the navigation can
+proceed before the check is completed and the user may see the page before the
+warning is shown. When real-time checks are enabled, an additional HPD check is
+added to ensure users are still protected against threats like exploits against
+the browser.</p>
+<p>NOTE: There is another type of Safe Browsing check called Client Side Phishing
+Detection (CSD). It also checks the reputation of the page. However, this check
+is performed after the navigation is committed and it doesn’t block the
+navigation, so it is out-of-scope for this doc.</p>
+<h2 id="navigation-basics">Navigation Basics</h2>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/navigation.md">Life of a Navigation</a>
+gives a high level overview of a navigation from the time a URL is typed in the
+URL bar to the time the web page is completely loaded. It breaks down a frame
+navigation into two phases:</p>
+<ul>
+<li><strong>Navigation phase</strong>: From the time the network request is sent to the time
+the a navigation is committed. Note that at this point, nothing is rendered
+on the page.<ul>
+<li>Any of the three Safe Browsing checks above may be performed in this
+phase, depending on user consent. The URT check is only performed if the
+user has agreed to share URLs with Google. The HPRT check is used in
+most other scenarios, but in incognito mode or other cases when the
+real-time checks are unavailable, the HPD check will be performed
+instead.</li>
+</ul>
+</li>
+<li><strong>Loading phase</strong>: Consists of reading the response body from the server,
+parsing it, rendering the document so it is visible to the user, executing
+any script, and loading any subresources (images, scripts, CSS files)
+specified by the document.<ul>
+<li>Safe Browsing doesn&#39;t check subresources, iframes or websocket
+connection.</li>
+</ul>
+</li>
+</ul>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/navigation_concepts.md">Navigation Concepts</a>
+covers a set of important topics to understand navigation, such as:</p>
+<ul>
+<li>Same-document and cross-document navigation. Same-document navigation keeps
+the same document and changes states associated with it. Some examples of
+same-document navigation are fragment navigation
+(<code>https://foo.com/1.html#fragment</code>) and using the
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/History/pushState">history.pushState</a>
+API.<ul>
+<li>Same-document navigation can change the URL, but Safe Browsing doesn’t
+check these navigation. Same-document navigation doesn’t pose a security
+risk because no new content is loaded from the network.</li>
+</ul>
+</li>
+<li>Server redirects and client redirects. A server redirect happens when the
+browser receives a 300-level HTTP
+<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status#redirection_messages">response code</a>
+before the document commits, telling it to request a different URL, possibly
+cross-origin. A client redirect happens after a document has been committed,
+when the HTML in the document instructs the browser to request a new
+document (e.g., via
+<a href="https://www.w3schools.com/tags/att_meta_http_equiv.asp">meta tags</a> or
+<a href="https://www.w3schools.com/howto/howto_js_redirect_webpage.asp">JavaScript</a>).<ul>
+<li>Redirect URLs are all checked by Safe Browsing. Server redirects are
+checked in the navigation phase and client redirects are checked after a
+document is committed.</li>
+</ul>
+</li>
+</ul>
+<h2 id="workflow">Workflow</h2>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/safe_browsing/safe_browsing_navigation_flowchart.png" alt="workflow"></p>
+<p>As illustrated above, only the HPD check delays navigation in the navigation
+phase. It blocks the navigation before it is committed. The check needs to
+finish checking all URLs (including redirect URLs) before committing the
+navigation. If one of the URLs (initial URL or redirect URLs) is classified as
+dangerous, a warning page will be shown and the navigation will be canceled.</p>
+<p>For URT and HPRT checks, they don&#39;t delay navigation. If they find any URL to be
+dangerous, a warning will be triggered immediately.</p>
+<p>All three checks are initiated from the browser process.</p>
+<h2 id="speed">Speed</h2>
+<p>Safe Browsing checks and network requests are performed in parallel. Performing
+a Safe Browsing check doesn’t block the start of network requests or the fetch
+of response header and body. It doesn’t block redirects either.</p>
+<p>However, completion of the HPD check does block the browser from reading or
+parsing the response body. When the response header is received, the HPD check
+will block the navigation if the check is not completed.</p>
+<p>HPD check won’t slow down the navigation if it is completed before the response
+header is received. If the HPD check is not completed at this point, the
+response body will still be fetched but the renderer won’t read or parse it.</p>
+<p>SafeBrowsing.BrowserThrottle.TotalDelay2 is the metric to measure the speed of
+Safe Browsing checks. 0 means that the Safe Browsing check is completed before
+the response header is received -- it doesn&#39;t delay the navigation.</p>
+<p>Real-time checks, on the other hand, don&#39;t affect the loading speed.</p>
+<h2 id="implementation-details">Implementation Details</h2>
+<p>Safe Browsing blocks navigation by implementing the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/common/loader/url_loader_throttle.h;l=43;drc=0e45c020c43b1a9f6d2870ff7f92b30a2f03a458">URLLoaderThrottle</a>
+interface. This interface provides several phases to defer URL loading:</p>
+<ul>
+<li><code>WillStartRequest(request, defer)</code></li>
+<li><code>WillRedirectRequest(request, defer)</code></li>
+<li><code>WillProcessResponse(request, defer)</code></li>
+</ul>
+<p>The throttle can mark <code>defer</code> as true if it wants to defer the navigation and
+can call Resume to resume the navigation.</p>
+<p>The throttle class is
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/safe_browsing/content/browser/browser_url_loader_throttle.h;drc=67847e1d488161fcc71acdfd3b77e1654f6e6121">BrowserUrlLoaderThrottle</a>.
+The throttle only marks <code>defer</code> as true in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/safe_browsing/content/browser/browser_url_loader_throttle.cc;l=489;drc=710d8b1f851677cbdafb8f14d0a5bba26066aebe">WillProcessResponse</a>.</p>
+<p>Safe Browsing doesn’t defer navigation forever. The current timeout is set to 5
+seconds. If the check is not completed in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/safe_browsing/core/browser/safe_browsing_lookup_mechanism_runner.cc;l=14;drc=615be57df122442ad3c09558b7d7a7b8495c2360">5 seconds</a>,
+the navigation will resume.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/safe_browsing/safe_browsing_navigation.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/safe_browsing/safe_browsing_navigation.md</a>
+  </p>
+</div>

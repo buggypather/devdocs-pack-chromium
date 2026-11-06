@@ -1,0 +1,350 @@
+<h1>Threat Model And Defenses Against Compromised Renderers</h1>
+<p>Given the complexity of the browser, our threat model must use a &quot;defense
+in depth&quot; approach to limit the damage that occurs if an attacker
+finds a way around the Same Origin Policy or other security logic in the
+renderer process.
+For example, the combination of Chrome&#39;s sandbox, IPC security checks, and Site
+Isolation limit what an untrustworthy renderer process can do.  They
+protect Chrome users against attackers, even when such attackers are able to
+bypass security logic in the renderer process.
+For other arguments for the &quot;defense in depth&quot; approach and why our
+threat model covers compromised renderers, please see
+<a href="https://www.chromium.org/Home/chromium-security/site-isolation#TOC-Motivation">the Site Isolation motivation</a>.</p>
+<p>In a compromised renderer, an attacker is able to execute
+arbitrary native (i.e. non-JavaScript) code within the renderer
+process&#39;s sandbox.  A compromised renderer can forge
+malicious IPC messages, impersonate a Chrome Extension content script,
+or use other techniques to trick more privileged parts of the browser.</p>
+<p>The document below gives an overview of features that Chrome attempts to
+protect against attacks from a compromised renderer.  Newly discovered
+holes in this protection would be considered security bugs and possibly
+eligible for the
+<a href="https://www.google.com/about/appsecurity/chrome-rewards/">Chrome Vulnerability Rewards Program</a>.</p>
+<h2 id="site-isolation-foundations">Site Isolation foundations</h2>
+<p>Most of the other protections listed in this document implicitly assume that
+attacker-controlled execution contexts (e.g. HTML documents or service workers)
+are hosted in a separate renderer process from other, victim contexts.
+This separation is called
+<a href="https://www.chromium.org/Home/chromium-security/site-isolation">Site Isolation</a>
+and allows the privileged browser
+process to restrict what origins a renderer process is authorized to read or
+control.</p>
+<p>The privilege restriction can be implemented in various ways - see the
+&quot;protection techniques&quot; listed in other sections in this document.
+One example is validating in the browser process whether an incoming IPC can
+legitimately claim authority over a given origin (e.g. by checking via
+<code>CanAccessDataForOrigin</code> if the process lock matches).
+Another example is making sure that capabilities handed over to renderer
+processes are origin-bound (e.g. by setting <code>request_initiator_origin_lock</code>
+on a <code>URLLoaderFactory</code> given to renderer processes).
+Yet another example is making security decisions based on trustworthy knowledge,
+calculated within the privileged browser process (e.g. using
+<code>RenderFrameHost::GetLastCommittedOrigin()</code>).</p>
+<p>Compromised renderers shouldn’t be able to commit an execution context
+(e.g. commit a navigation to a HTML document, or create a service worker)
+in a renderer process hosting other, cross-site execution contexts.
+On desktop platforms all sites (site = scheme plus eTLD+1) should be isolated
+from each other.
+On Android, sites where the user entered a password should be isolated
+from each other and from other sites.</p>
+<p><strong>Known gaps in protection</strong>:</p>
+<ul>
+<li>No form of Site Isolation is active in Android WebView.
+See also <a href="https://crbug.com/769449">https://crbug.com/769449</a>.</li>
+<li>Frames with <code>&lt;iframe sandbox&gt;</code> attribute are not isolated
+from their non-opaque precursor origin.
+See also <a href="https://crbug.com/510122">https://crbug.com/510122</a>.</li>
+<li><code>file:</code> frames may share a process with other <code>file:</code> frames.
+See also <a href="https://crbug.com/780770">https://crbug.com/780770</a>.</li>
+</ul>
+<h2 id="cross-origin-http-resources">Cross-Origin HTTP resources</h2>
+<p>Compromised renderers shouldn&#39;t be able to read the contents (header + body) of
+a cross-site HTTP response, unless it is a valid subresource needed for
+compatibility (e.g., JavaScript, images, etc), or is successfully allowed via
+CORS.</p>
+<p>Protection techniques:</p>
+<ul>
+<li>Enforcing
+<a href="https://www.chromium.org/Home/chromium-security/corb-for-developers">Cross-Origin Read Blocking
+(CORB)</a>
+in the NetworkService process
+(i.e. before the HTTP response is handed out to the renderer process).</li>
+<li>Only allowing the privileged browser process to create
+<code>network::mojom::URLLoaderFactory</code> objects that handle HTTP requests.
+This lets the browser process carefully control security-sensitive
+<code>network::mojom::URLLoaderFactoryParams</code> of such factories (such as
+<code>request_initiator_origin_lock</code>, <code>is_orb_enabled</code>, <code>disable_web_security</code> or
+<code>isolation_info</code>).</li>
+</ul>
+<p><strong>Known gaps in protection</strong>:</p>
+<ul>
+<li>Content types for which CORB does not apply
+(e.g. <code>image/png</code>, <code>application/octet-stream</code>) are not protected by
+default.  We recommend that HTTP servers protect such resources by
+either serving a <code>Cross-Origin-Resource-Policy: same-origin</code> response header
+or validating the <code>Sec-Fetch-Site</code> request header.</li>
+</ul>
+<h2 id="contents-of-cross-site-frames">Contents of cross-site frames</h2>
+<p>Compromised renderers shouldn&#39;t be able to read the contents of cross-site
+frames.  Examples:</p>
+<ul>
+<li>Text or pixels of cross-site frames.</li>
+<li>Full URL (e.g. URL path or query) of cross-site frames.
+Note that the origin of other frames
+needs to be exposed via <code>window.origin</code> for legacy reasons.</li>
+</ul>
+<p>Protection techniques:</p>
+<ul>
+<li>Compositing tab contents (both for display and for printing)
+outside the renderer processes.</li>
+<li>Isolating PDF plugins.</li>
+<li>Being careful what URLs are exposed in console messages.</li>
+</ul>
+<p><strong>Known gaps in protection</strong>:</p>
+<ul>
+<li>Mixed content console messages may disclose cross-site URLs
+(see also <a href="https://crbug.com/726178">https://crbug.com/726178</a>).</li>
+</ul>
+<h2 id="cookies">Cookies</h2>
+<p>Compromised renderers shouldn’t be able to read or write
+any cookies of another site,
+or <code>httpOnly</code> cookies even from the same site.</p>
+<p>Protection techniques:</p>
+<ul>
+<li>Renderer processes are only given <code>network::mojom::RestrictedCookieManager</code>
+for origins within their site
+(see <code>StoragePartitionImpl::CreateRestrictedCookieManager</code>).</li>
+<li>Mojo serialization does not send any cookies from HTTP headers to the renderer
+process (see
+<code>ParamTraits&lt;scoped_refptr&lt;net::HttpResponseHeaders&gt;&gt;::Write</code>).</li>
+</ul>
+<h2 id="passwords">Passwords</h2>
+<p>Compromised renderers shouldn’t be able to read or write passwords of
+other sites.</p>
+<p>Protection techniques:</p>
+<ul>
+<li>Using <code>CanAccessDataForOrigin</code> to verify IPCs sent by a renderer process
+(e.g. <code>//components/password_manager/content/browser/bad_message.cc</code>)</li>
+<li>Using trustworthy, browser-side knowledge
+to determine which credentials to read or write
+(e.g. <code>content::RenderFrameHost::GetLastCommittedURL</code> in
+<code>password_manager::CredentialManagerImpl::GetOrigin</code>).</li>
+</ul>
+<h2 id="security-sensitive-uichrome-elements-eg-omnibox">Security-sensitive UI/chrome elements (e.g. Omnibox)</h2>
+<p>Compromised renderers shouldn’t be able to influence/spoof
+security-sensitive UI elements.</p>
+<p>Examples:</p>
+<ul>
+<li>Omnibox<ul>
+<li>URL (e.g. renderer process locked to foo.com shouldn’t
+be able to trick the Omnibox into displaying bar.com)</li>
+<li>Secure / not secure chip (e.g. a renderer process locked to a HTTP
+site shouldn’t be able to trick the Omnibox into displaying a
+HTTPS-associated lock)</li>
+<li>Content settings (e.g. a renderer process that has been granted
+microphone access shouldn’t be able to suppress the mic/camera
+icon in the Omnibox)</li>
+</ul>
+</li>
+<li>Dialogs and prompts (for example a permissions dialog asking to allow
+a site to show notifications)<ul>
+<li>Origin in dialogs (e.g. a renderer process locked to foo.com
+shouldn’t be able to trick the Omnibox into displaying a bar.com
+URL in permission dialogs)</li>
+</ul>
+</li>
+</ul>
+<p>Protection techniques:</p>
+<ul>
+<li><code>RenderFrameHostImpl::CanCommitOriginAndUrl</code> verifies that the renderer
+process is able to commit what it claims, and kills the process otherwise.</li>
+<li>Work-in-progress: calculating the origin in the browser process,
+before a navigation commits (<a href="https://crbug.com/888079">https://crbug.com/888079</a>).</li>
+</ul>
+<h2 id="permissions">Permissions</h2>
+<p>Compromised renderers shouldn’t be able to gain permissions without user
+consent.</p>
+<p>Examples: microphone access permission, geolocation permission, etc.</p>
+<p>Protection techniques:</p>
+<ul>
+<li>Requesting permissions based on browser-side knowledge of frame&#39;s origin
+(e.g. see <code>GeolocationServiceImplContext::RequestPermission</code>).</li>
+</ul>
+<h2 id="web-storage">Web storage</h2>
+<p>Compromised renderers shouldn’t be able to read from or write into
+storage of another site.</p>
+<p>Examples of protected storage technologies:</p>
+<ul>
+<li>localStorage</li>
+<li>sessionStorage</li>
+<li>indexedDB</li>
+<li>blob storage</li>
+<li>webSQL</li>
+</ul>
+<p>Protection techniques:</p>
+<ul>
+<li>Using <code>CanAccessDataForOrigin</code> to verify IPCs sent by a renderer process
+(e.g. see <code>StoragePartitionImpl::OpenLocalStorage</code>).</li>
+<li>Binding Mojo interfaces to a single origin obtained from browser-side
+information in <code>RenderFrameHost::GetLastCommittedOrigin()</code>
+(e.g. see <code>RenderFrameHostImpl::CreateIDBFactory</code>).</li>
+</ul>
+<h2 id="messaging">Messaging</h2>
+<p>Compromised renderers shouldn’t be able to:</p>
+<ul>
+<li>Spoof the <code>MessageEvent.origin</code> seen by a recipient of a <code>postMessage</code>.</li>
+<li>Bypass enforcement of the <code>targetOrigin</code> argument of <code>postMessage</code>.</li>
+<li>Send or receive <code>BroadcastChannel</code> messages for another origin.</li>
+<li>Spoof the <code>MessageSender.url</code>, nor <code>MessageSender.origin</code>, nor
+<code>MessageSender.id</code> (i.e. an extension id which can differ from the origin when
+the message is sent from a content script), as seen by a recipient of a
+<code>chrome.runtime.sendMessage</code>.
+See also <a href="https://developers.chrome.com/extensions/runtime#type-MessageSender">MessageSender documentation</a> and <a href="https://groups.google.com/a/chromium.org/forum/#!topic/chromium-extensions/0ei-UCHNm34">content script security guidance</a>.</li>
+<li>Spoof the id of a Chrome extension initiating
+<a href="https://developer.chrome.com/docs/apps/nativeMessaging/">native messaging</a>
+communication.</li>
+</ul>
+<p>Protection techniques:</p>
+<ul>
+<li>Using <code>CanAccessDataForOrigin</code> to verify IPCs sent by a renderer process
+(e.g. in <code>RenderFrameProxyHost::OnRouteMessageEvent</code> or
+<code>BroadcastChannelProvider::ConnectToChannel</code>).</li>
+<li>Using <code>ContentScriptTracker</code> to check if IPCs from a given renderer process
+can legitimately claim to act on behalf content scripts of a given extension.</li>
+</ul>
+<h2 id="javascript-code-cache">JavaScript code cache</h2>
+<p>Compromised renderers shouldn&#39;t be able to poison the JavaScript code cache
+used by scripts executed in cross-site execution contexts.</p>
+<p>Protection techniques:</p>
+<ul>
+<li>Using trustworthy, browser-side origin lock while writing to and fetching from
+the code cache by using <code>ChildProcessSecurityPolicyImpl::GetOriginLock</code> in
+<code>GetSecondaryKeyForCodeCache</code> in
+<code>//content/browser/renderer_host/code_cache_host_impl.cc</code></li>
+</ul>
+<h2 id="cross-origin-resource-policy-response-header">Cross-Origin-Resource-Policy response header</h2>
+<p>A compromised renderer shouldn’t be able to bypass
+<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Cross-Origin_Resource_Policy_%28CORP%29">Cross-Origin-Resource-Policy (CORP)</a>,
+which prevents or allows responses from being requested cross-origin, more
+explicitly than CORB.</p>
+<p>Protection techniques:</p>
+<ul>
+<li>Enforcing Cross-Origin-Resource-Policy in the NetworkService process
+(i.e. before the HTTP response is handed out to the renderer process).</li>
+<li>Preventing spoofing of <code>network::ResourceRequest::request_initiator</code>
+by comparing against <code>request_initiator_origin_lock</code> in
+<code>network::CorsURLLoaderFactory::IsValidRequest</code>.</li>
+</ul>
+<h2 id="frame-ancestors-csp-and-x-frame-options-response-headers">Frame-ancestors CSP and X-Frame-Options response headers</h2>
+<p>A compromised renderer shouldn’t be able to bypass <code>X-Frame-Options</code>
+or <code>frame-ancestors</code> CSP.</p>
+<p>For example, if example.com/page.html sends a <code>X-Frame-Options: deny</code> header,
+then it should never commit in a subframe, even if some renderers have
+been compromised.</p>
+<p>Protection techniques:</p>
+<ul>
+<li><code>X-Frame-Options: deny</code> is enforced in the browser process
+via <code>content::AncestorThrottle</code>, an implementation of
+<code>content::NavigationThrottle</code>.</li>
+<li><code>frame-ancestors</code> is enforced in a renderer process, but
+this process is considered trustworthy in this scenario
+(because it hosts the frame that is requesting protection).
+See also <a href="https://crbug.com/759184">https://crbug.com/759184</a> which tracks
+moving this enforcement into the browser process.</li>
+</ul>
+<h2 id="http-request-headers">HTTP request headers</h2>
+<p>Compromised renderers shouldn’t be able to control security sensitive HTTP
+request headers like <code>Host</code>, <code>Origin</code>, or <code>Sec-Fetch-Site</code>.</p>
+<p>Protection techniques:</p>
+<ul>
+<li>Using <code>AreRequestHeadersSafe</code> to reject <code>Host</code> and other headers that
+should only be generated internally within the NetworkService.</li>
+<li>Preventing spoofing of <code>network::ResourceRequest::request_initiator</code>
+by comparing against <code>request_initiator_origin_lock</code> in
+<code>network::CorsURLLoaderFactory::IsValidRequest</code>.</li>
+</ul>
+<h2 id="wip-samesite-cookies">(WIP) SameSite cookies</h2>
+<p>Compromised renderers shouldn’t be able to send a cross-site HTTP request with
+SameSite cookies.</p>
+<p><strong>Work-in-progress / not protected today</strong>.</p>
+<p>TODO(morlovich): Add details.  I assume that this requires trustworthy
+|request_initiator| (similar to the <code>Origin</code> header), but probably more
+than that.</p>
+<p>See also <a href="https://crbug.com/927967">https://crbug.com/927967</a>.</p>
+<h2 id="wip-user-gestures--activations">(WIP) User gestures / activations.</h2>
+<p>Compromised renderers shouldn&#39;t be able to spoof user gestures to perform
+actions requiring them:</p>
+<ul>
+<li><p>A compromised renderer should not be able to forge a gesture that affects
+the trusted browser UI.  For example, a compromised renderer should not be
+able to interact with the Omnibox or the WebBluetooth chooser.</p>
+</li>
+<li><p>A compromised renderer should not be able to forge a gesture that grants
+extra capabilities to a web origin.   For example, a compromised renderer
+should not be able to open an unlimited number of popup
+windows by forging user gestures.
+<strong>Work-in-progress / not protected today</strong> - see <a href="https://crbug.com/40091540">https://crbug.com/40091540</a>.</p>
+</li>
+</ul>
+<h2 id="web-accessible-resources-of-chrome-extensions">Web Accessible Resources of Chrome Extensions</h2>
+<p>Compromised non-extension renderers shouldn’t be able to access
+non-web-accessible-resources of a Chrome Extension.</p>
+<p>Protection techniques:</p>
+<ul>
+<li>Navigations: Enforcement in the browser process
+via <code>extensions::ExtensionNavigationThrottle</code>, an implementation of
+<code>content::NavigationThrottle</code>.  This relies on non-spoofability
+of <code>content::NavigationHandle::GetInitiatorOrigin</code>.</li>
+<li>Subresources: Enforcement in the browser process via
+<code>ExtensionURLLoaderFactory::CreateLoaderAndStart</code>.  This relies
+on process boundaries and therefore doesn&#39;t rely on non-spoofability
+of <code>network::ResourceRequest::request_initiator</code>.</li>
+</ul>
+<h2 id="non-web-resources">Non-Web resources</h2>
+<p>Compromised <em>web</em> renderer processes shouldn’t be able to access
+<em>local</em> resources (e.g. <code>file://...</code> or <code>chrome://settings</code>).</p>
+<p>Protection techniques:</p>
+<ul>
+<li>TODO(lukasza, nasko): need to research</li>
+</ul>
+<h2 id="android-specific-protection-gaps">Android-specific protection gaps</h2>
+<p>Due to resource constraints, on Android platforms only some sites get a
+dedicated renderer process, isolated from other sites.
+(Current heuristic is to isolate the sites where the user has entered a password
+in the past.)
+This means that some sites are hosted in a renderer process that is
+<em>not</em> locked to any particular site.  If an attacker compromises
+an unlocked renderer process, they may try to abuse protection gaps listed
+below.</p>
+<p><strong>Known gaps in protection</strong>:</p>
+<ul>
+<li>When <code>CanAccessDataForOrigin</code> runs on the IO thread, it cannot protect
+isolated sites against being accessed from an unlocked renderer process.
+Some web storage protections depend on <code>CanAccessDataForOrigin</code> calls
+on the IO thread.
+See also <a href="https://crbug.com/764958">https://crbug.com/764958</a>.</li>
+</ul>
+<h2 id="renderer-processes-hosting-devtools-frontend">Renderer processes hosting DevTools frontend</h2>
+<p>If an attacker could take control over the DevTools frontend then the attacker
+would gain access to all the cookies, storage, etc. of any origin within the
+page and would be able to execute arbitrary scripts in any frame of the page.
+This means that treating the DevTools renderer as untrustworthy wouldn&#39;t in
+practice offer additional protection for the same-origin-policy.</p>
+<p>Because of the above:</p>
+<ul>
+<li>Chrome ensures that the DevTools frontend is always hosted in a renderer
+process separate from renderers hosting web origins.</li>
+<li>Chrome assumes that the DevTools frontend is always trustworthy
+(i.e. never compromised, or under direct control of an attacker).
+For example, when the DevTools process asks to initiate a HTTP request on
+behalf of <a href="https://example.com">https://example.com</a>, the browser process trusts the DevTools
+renderer to claim authority to initiate requests of behalf of this origin
+(e.g. attach SameSite cookies, send appropriate Sec-Fetch-Site request header,
+etc.).</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/compromised-renderers.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/compromised-renderers.md</a>
+  </p>
+</div>

@@ -1,0 +1,69 @@
+<h1>Using clang-format on Chromium C++ Code</h1>
+<p>*** note
+NOTE: This page does not apply to the Chromium OS project. See <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=878506#c10">Chromium Issue
+878506</a>
+for updates.</p>
+<hr>
+<h2 id="easiest-usage-from-the-command-line">Easiest usage, from the command line</h2>
+<p>To automatically format a pending patch according to
+<a href="https://chromium.googlesource.com/chromium/src/+/main/styleguide/c++/c++.md">Chromium style</a>, run: <code>git cl format</code> from the command
+line. This should work on all platforms without any extra set up: the tool is
+integrated with depot_tools and the Chromium checkout.</p>
+<p>Like other <code>git-cl</code> commands, this operates on a diff relative to the upstream
+branch. Only the lines that changed in a CL will be reformatted. To see what
+clang-format would choose, commit any local changes and then run <code>git cl format</code> followed by <code>git diff</code>. Alternatively, run <code>git cl format</code> and commit
+the now-formatted code.</p>
+<h2 id="editor-integrations">Editor integrations</h2>
+<p>Many developers find it useful to integrate the clang-format tool with their
+editor of choice. As a convenience, the scripts for this are also available in
+your checkout of Chrome under
+<a href="https://source.chromium.org/chromium/chromium/src/+/HEAD:third_party/clang-format/script/">src/third_party/clang-format/script/</a>.</p>
+<p>If you use an editor integration, you should try to make sure that you&#39;re using
+the version of clang-format that comes with your checkout. That way, you&#39;ll
+automatically get updates and be running a tool that formats consistently with
+other developers. The binary lives under <code>src/buildtools</code>, but it&#39;s also in your
+path indirectly via a <code>depot_tools</code> launcher script:
+<a href="https://source.chromium.org/chromium/chromium/tools/depot_tools/+/HEAD:clang-format">clang-format</a>
+(<a href="https://source.chromium.org/chromium/chromium/tools/depot_tools/+/HEAD:clang-format.bat">clang-format.bat</a> on Windows). Assuming that <code>depot_tools</code> is in your editor&#39;s <code>PATH</code>
+and the editor command runs from a working directory inside the Chromium
+checkout, the editor scripts (which anticipate clang-format on the path) should
+work.</p>
+<p>For further guidance on editor integration, see these specific pages:</p>
+<ul>
+<li><a href="https://www.chromium.org/developers/sublime-text#TOC-Format-selection-or-area-around-cursor-using-clang-format">Sublime Text</a></li>
+<li><a href="http://clang.llvm.org/docs/ClangFormat.html">llvm&#39;s guidelines for vim, emacs, and bbedit</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/vscode.md#useful-extensions">Visual Studio Code</a></li>
+<li>For vim, <code>:so tools/vim/clang-format.vim</code> and then hit cmd-shift-i (mac)
+ctrl-shift-i (elsewhere) to indent the current line or current selection.</li>
+</ul>
+<h2 id="reporting-problems">Reporting problems</h2>
+<p>If clang-format is broken, or produces badly formatted code, please file a
+<a href="https://code.google.com/p/chromium/issues/entry?comment=clang-format%20produced%20code%20that%20(choose%20all%20that%20apply):%20%0A-%20Doesn%27t%20match%20Chromium%20style%0A-%20Doesn%27t%20match%20blink%20style%0A-%20Riles%20my%20finely%20honed%20stylistic%20dander%0A-%20No%20sane%20human%20would%20ever%20choose%0A%0AHere%27s%20the%20code%20before%20formatting:%0A%0A%0AHere%27s%20the%20code%20after%20formatting:%0A%0A%0AHere%27s%20how%20it%20ought%20to%20look:%0A%0A%0ACode%20review%20link%20for%20full%20files/context:&amp;summary=clang-format%20quality%20problem&amp;cc=thakis@chromium.org&amp;labels=Type-Bug,Build-Tools,OS-?,clang-format">bug</a>. Assign it to <a href="mailto:thakis@chromium.org">thakis@chromium.org</a> or <a href="mailto:dcheng@chromium.org">dcheng@chromium.org</a>, who will route
+it upstream.</p>
+<h2 id="are-robots-taking-over-my-freedom-to-choose-where-newlines-go">Are robots taking over my freedom to choose where newlines go?</h2>
+<p>Mostly. At upload time, a presubmit check warns if a CL is not clang-formatted,
+but this is a non-blocking warning, and the CL may still be submitted. Even so,
+try to prefer clang-format&#39;s output when possible:</p>
+<ul>
+<li>While clang-format does not necessarily format code the exact same way a human
+might choose, it produces style-conformat code by design. This can allow
+development and review time to be focused on discovering functional defects,
+addressing readability/understandability concerns that can&#39;t be automatically
+fixed by tooling, et cetera.</li>
+<li>Continually fighting the tooling is a losing battle. Most Chromium developers
+use clang-format. Large-scale changes will simply run <code>git cl format</code> once to
+avoid having to deal with the particulars of formatting. Over time, this will
+likely undo any carefully-curated manual formatting of the affected lines.</li>
+</ul>
+<p>There is one notable exception where clang-format is often disabled: large
+tables of data are often surrounded by <code>// clang-format off</code> and <code>// clang-format on</code>. Try to use this option sparingly, as widespread usage makes
+tool-assisted refactoring more difficult.</p>
+<p>Again, if clang-format produces something odd, please err on the side of
+<a href="#Reporting-problems">reporting an issue</a>: bugs that aren&#39;t reported can&#39;t be
+fixed.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/clang_format.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/clang_format.md</a>
+  </p>
+</div>

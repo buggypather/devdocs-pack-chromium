@@ -1,0 +1,27 @@
+<h1>Interaction to Next Paint Changes in Chrome 112</h1>
+<h2 id="patched-the-following-issues-with-the-flush-timer-in-event-timing">Patched the following issues with the flush timer in Event Timing</h2>
+<h3 id="issue-1---intermittent-single-tap-triggers-double-interactions"><a href="https://issues.chromium.org/issues/40253245">Issue 1</a> - Intermittent single tap triggers double interactions</h3>
+<ul>
+<li>When tapping on a page with no event handlers, a single tap could sometimes
+trigger event timing reports pointerup &amp; click events with different
+interactionIDs.</li>
+</ul>
+<h3 id="issue-2---duplicate-reporting-of-pointerdown-events"><a href="https://issues.chromium.org/issues/40890326">Issue 2</a> - Duplicate reporting of pointerdown events</h3>
+<ul>
+<li>Event timing reports the same pointerdown entry twice when the click event is
+prevented from a touch input. (eg. registering a touchStart handler that
+invokes preventDefault.)</li>
+</ul>
+<p>Both issues were patched in this <a href="https://chromium-review.googlesource.com/c/chromium/src/+/4209550">change</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>INP durations values will not change, however total measured number of
+interactions might (rarely) decrease, and this might affect measurement only on
+pages with &gt; 50 interactions.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 112 was released the week of April 04, 2023.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_04_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_04_inp.md</a>
+  </p>
+</div>

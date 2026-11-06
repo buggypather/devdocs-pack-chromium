@@ -1,0 +1,136 @@
+<h1>Instrumentation Test Batching Guide</h1>
+<h2 id="what-is-test-batching">What is Test Batching?</h2>
+<p>Outside of Chromium, it is most common to run all tests of a test suite using a
+single <code>adb shell am instrument</code> command (a single execution / OS process).
+However, Chromium&#39;s test runner runs each test using a separate command, which
+means tests cannot interfere with one another, but also that tests take much
+longer to run. Test batching is a way to make our tests run faster by not
+restarting the process between every test.</p>
+<p>All on-device tests would ideally be annotated with one of:</p>
+<ul>
+<li><code>@Batch(Batch.UNIT_TESTS)</code>: For tests the do not rely on global application
+state.</li>
+<li><code>@Batch(Batch.PER_CLASS)</code>: For test classes where the process does not need
+ to be restarted between <code>@Test</code>s within the class, but should be restarted
+ before and after the suite runs.</li>
+<li><code>@DoNotBatch(reason = &quot;...&quot;</code>: For tests classes that require the process to be
+restarted for each test or are infeasible to batch.</li>
+</ul>
+<p>Tests that are not annotated are treated as <code>@DoNotBatch</code> and are assumed to
+have not yet been assessed.</p>
+<h2 id="is-the-activity-kept-between-test-cases">Is the Activity kept between test cases?</h2>
+<ul>
+<li>The browser process is always kept.</li>
+<li>The Android Activities are finished between test cases in
+<strong>Activity-restarted</strong> batched tests.</li>
+<li>The Android Activities are kept between test cases in <strong>Activity-reused</strong>
+batched tests.<ul>
+<li>This means the developer needs to get the app state back to where the next
+test in the batch assumes it starts.</li>
+</ul>
+</li>
+</ul>
+<h3 id="how-to-tell-activity-restarted-from-activity-reused-batched-tests">How to tell Activity-restarted from Activity-reused batched tests</h3>
+<p>A batched test is <strong>Activity-restarted</strong> if the <code>ActivityTestRule</code> is a
+non-static <code>@Rule</code>. It is the <code>ActivityTestRule</code> which stops activities after
+each test case.</p>
+<p>Activity-restarted Public Transit tests use the <code>FreshCtaTransitRule</code>.</p>
+<p>A batched test is <strong>Activity-reused</strong> if either:</p>
+<ul>
+<li>The <code>ActivityTestRule</code> is a static <code>@ClassRule</code></li>
+<li><code>setFinishActivity(false)</code> is called on the non-static <code>ActivityTestRule</code>.
+<code>BlankCTATabInitialStateRule</code> does this.</li>
+</ul>
+<p>In either batched test type, <code>@ClassRule</code>s are applied only once per batch,
+while <code>@Rule</code>s are applied once per test case. <code>@BeforeClass</code> and <code>@AfterClass</code>
+are the same. This contrasts with non-batched tests, where both <code>@ClassRule</code>s
+and <code>@Rule</code>s are applied for each test case, and both <code>@BeforeClass</code> and
+<code>@Before</code> are run for each test case (same for <code>@AfterClass</code> / <code>@After</code>).</p>
+<p>Activity-reused Public Transit tests use the <code>ReusedCtaTransitRule</code> or the
+<code>AutoResetCtaTransitRule</code>.</p>
+<h3 id="performance">Performance</h3>
+<p>In terms of performance:</p>
+<pre>Activity-reused batched tests &gt; Activity-restarted batched tests &gt; non-batched
+tests</pre>
+<p>Activity-restarted batched tests are faster than non-batched tests. This
+different is huge in Debug (&gt;50%) and significant in Release (~25%).</p>
+<p>Activity-reused batched tests are even faster than Activity-restarted batched
+tests. This difference is significant in Debug and huge in Release.</p>
+<h2 id="how-to-batch-a-test">How to Batch a Test</h2>
+<p>Add the <code>@Batch</code> annotation to the test class, and ensure that each test within
+the chosen batch doesn&#39;t leave behind state that could cause other tests in the
+batch to fail.</p>
+<p>For some tests, batching won’t be as useful (tests that test Activity
+startup, for example), and tests that test process startup shouldn’t be batched
+at all.</p>
+<p>If a few tests within a larger batched suite cannot be batched (eg. it tests
+process initialization), you may add the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:base/test/android/javatests/src/org/chromium/base/test/util/RequiresRestart.java;bpv=1;bpt=1;l=19?q=RequiresRestart&amp;ss=chromium%2Fchromium%2Fsrc&amp;originalUrl=https:%2F%2Fcs.chromium.org%2F&amp;gsn=RequiresRestart&amp;gs=kythe%3A%2F%2Fchromium.googlesource.com%2Fchromium%2Fsrc%3Flang%3Djava%3Fpath%3Dorg.chromium.base.test.util.RequiresRestart%23b5e85d5c8071e18f350b7f2c5014310bd2cabd0e0d3d176949c991ea18403f55">@RequiresRestart</a>
+annotation to test methods to exclude them from the batch.</p>
+<h2 id="types-of-batched-tests">Types of Batched tests</h2>
+<h3 id="unit_tests"><a href="https://source.chromium.org/chromium/chromium/src/+/main:base/test/android/javatests/src/org/chromium/base/test/util/Batch.java;bpv=1;bpt=1;l=51?q=Batch.java&amp;ss=chromium%2Fchromium%2Fsrc&amp;originalUrl=https:%2F%2Fcs.chromium.org%2F&amp;gsn=UNIT_TESTS&amp;gs=kythe%3A%2F%2Fchromium.googlesource.com%2Fchromium%2Fsrc%3Flang%3Djava%3Fpath%3Dorg.chromium.base.test.util.Batch%2319ebd2758adfaed0bda0e97542f70ca5b1564e7c1fa0f8c2bcb9e8170b75684d">UNIT_TESTS</a></h3>
+<p>Tests that belong in this category are tests that are effectively unit tests.
+They may be written as instrumentation tests rather than junit tests for a
+variety of reasons such as needing to use real Android APIs, or needing to
+use the native library.</p>
+<p>Batching Unit Test style tests is usually fairly simple
+(<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2216044">example</a>).
+It requires adding the <code>@Batch(Batch.UNIT_TESTS)</code> annotation, and ensuring no
+global state, like test overrides, persists across tests. Unit Tests should also
+not start the browser process, but may load the native library. Note that even
+with Batched tests, the test fixture (the class) is recreated for each test.</p>
+<p>Note that since the browser isn&#39;t initialized for unit tests, if you would like
+to take advantage of feature annotations in your test you will have to use
+<code>Features.JUnitProcessor</code> instead of <code>Features.InstrumentationProcessor</code>.</p>
+<h3 id="per_class"><a href="https://source.chromium.org/chromium/chromium/src/+/main:base/test/android/javatests/src/org/chromium/base/test/util/Batch.java;bpv=1;bpt=1;l=39?q=Batch.java&amp;ss=chromium%2Fchromium%2Fsrc&amp;originalUrl=https:%2F%2Fcs.chromium.org%2F&amp;gsn=PER_CLASS&amp;gs=kythe%3A%2F%2Fchromium.googlesource.com%2Fchromium%2Fsrc%3Flang%3Djava%3Fpath%3Dorg.chromium.base.test.util.Batch%23780b702db42a1901f05647fd29f75d443bc4efd2db588848b4aedf826ddf9e21">PER_CLASS</a></h3>
+<p>This batching type is typically for larger and more complex test suites, and
+will run the suite in its own batch. This will limit side-effects and reduce
+the complexity of managing state from these tests as you only have to think
+about tests within the suite.</p>
+<p>Tests with different <code>@Features</code> annotations (<code>@EnableFeatures</code> and
+<code>@DisableFeatures</code>) or <code>@CommandLineFlags</code> will be run in separate batches.</p>
+<h3 id="custom">Custom</h3>
+<p>This batching type is best for smaller and less complex test suites, that
+require browser initialization, or something else that prevents them from being
+unit tests. Custom batches allow you to pay the process startup cost once per
+batch instead of once per test suite. To put multiple test suites into the same
+batch, you will have to use a shared custom batch name
+(<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2307650">example</a>).
+When batching across suites you’ll want to use something like
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/test/android/javatests/src/org/chromium/chrome/test/batch/BlankCTATabInitialStateRule.java?q=BlankCTATabInitialStateRule&amp;ss=chromium&amp;originalUrl=https:%2F%2Fcs.chromium.org%2F">BlankCTATabInitialStateRule</a>
+to persist static state (like the Activity) between test suites and perform any
+necessary state cleanup between tests.</p>
+<p>Note that there is an inherent tradeoff here between batch size and
+debuggability - the larger your batch, the harder it will be to diagnose one
+test causing a different test to fail/flake. I would recommend grouping tests
+semantically to make it easier to understand relationships between the tests and
+which shared state is relevant.</p>
+<h3 id="running-test-batches">Running Test Batches</h3>
+<p>Run all tests with <code>@Batch=UnitTests</code>:</p>
+<pre data-language="shell">out/&lt;dir&gt;/bin/run_chrome_public_unit_test_apk -A Batch=UnitTests
+
+out/&lt;dir&gt;/bin/run_chrome_public_test_apk -A Batch=UnitTests</pre>
+<p>Run all tests in a custom batch:</p>
+<pre data-language="shell">./tools/autotest.py -C out/Debug BluetoothChooserDialogTest \
+--gtest_filter=&quot;*&quot; -A Batch=device_dialog</pre>
+<h2 id="things-worth-noting">Things worth noting</h2>
+<ul>
+<li>Important for Activity-reused tests: @ClassRule and @BeforeClass/@AfterClass
+run during test listing, so don’t do any heavy work in them (and will run
+twice for parameterized tests). See
+<a href="https://crbug.com/1090043">issue 1090043</a>.</li>
+<li>Sometimes it can be very difficult to figure out which test in a batch is
+causing another test to fail. A good first step is to minimize
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:build/android/pylib/local/device/local_device_instrumentation_test_run.py;drc=3ab9a142091516aa57f10feebc46dee649ae4589;l=109">_TEST_BATCH_MAX_GROUP_SIZE</a>
+to minimize the number of tests within the batch while still reproducing the
+failure. Then, you can use multiple gtest filter patterns to control which
+tests run together. Ex:<pre data-language="shell">./tools/autotest.py -C out/Debug ExternalNavigationHandlerTest \
+--gtest_filter=&quot;*#testOrdinaryIncognitoUri:*#testChromeReferrer&quot;</pre>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/batching_instrumentation_tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/batching_instrumentation_tests.md</a>
+  </p>
+</div>

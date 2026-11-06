@@ -1,0 +1,123 @@
+<h1>Client Update Protocol (CUP)</h1>
+<p>CUP is an HTTP protocol extension used to secure communication with CUP-capable
+servers when TLS is untrustworthy or impractical for other reasons.</p>
+<p>CUP provides:</p>
+<ul>
+<li>Integrity of the client&#39;s request body.</li>
+<li>Integrity of the server&#39;s response body.</li>
+<li>Freshness of the server&#39;s response body.</li>
+</ul>
+<p>CUP does not provide:</p>
+<ul>
+<li>Integrity of the client&#39;s request headers or request line.</li>
+<li>Integrity of the server&#39;s response headers.</li>
+<li>Confidentiality of the client&#39;s request.</li>
+<li>Confidentiality of the server&#39;s response.</li>
+<li>Freshness of the client&#39;s request.</li>
+</ul>
+<p>CUP requires:</p>
+<ul>
+<li>Control of both the client and server.</li>
+</ul>
+<p>Current CUP communications are secured by an ECDSA key pair. The client has the
+public key hardcoded into the application binary. The server signs
+request-response pairs with the private key, and the client verifies using the
+public key.</p>
+<p>In Chromium, CUP keys are rotated annually. Each key pair has a corresponding
+version number. To interoperate with old clients, the server must keep all
+historical versions of the key, and be prepared to sign with any of them. The
+client should only keep a single version (whichever was most recent at compile
+time).</p>
+<h2 id="details">Details</h2>
+<h3 id="description">Description</h3>
+<p>The server publishes an elliptic curve field/equation and a public key curve
+point to be used by the client. In practice, these values are hardcoded into
+each client at compile time.</p>
+<p>For each request, the client assembles three components:</p>
+<ol>
+<li>The message body (the request body to be sent to the server).</li>
+<li>A random value to be used as a nonce for freshness (at least 256 bits).</li>
+<li>A code to identify the public key the client will use to verify this
+request. The client converts the public key id and nonce to a string: the
+public key is converted to decimal, and the nonce to any url-safe encoding.</li>
+</ol>
+<p>The client stores the request body in a buffer, in UTF-8 format; it
+appends the keyid/nonce string to this buffer. It calculates a SHA-256 hash of
+this combined buffer, which it stores for validation later. It sends the
+request and the keyid/nonce string to the server.</p>
+<p>The server receives the request body, public key id, and nonce; it performs
+the same appending operation, and computes the SHA-256 hash of the received data
+buffer.</p>
+<p>The server attempts to find a matching ECDSA private key for the specified
+public key id, returning an HTTP error if no such private key exists. Finally,
+it assembles the response body.</p>
+<p>Before sending, the server stores the response body (also in UTF-8) in a
+buffer. It appends the computed SHA-256 hash of the request body+keyid+nonce to
+the buffer. It then calculates an ECDSA signature over that combined buffer,
+using the server’s private key. It sends the ECDSA signature and the response
+body + client hash back to the user.</p>
+<p>The client receives the response body, observed client hash, and ECDSA signature.
+The client compares the observed client hash to its stored request hash. If
+there is a mismatch, then either the request or response have been tampered with
+and the response is rejected.</p>
+<p>The client concatenates the request hash to the response body, and verifies the
+signature using its public key. If verification fails, then either the request
+or response have been tampered with and the response is rejected.</p>
+<h3 id="http-implementation">HTTP Implementation</h3>
+<p>The request body is a POST body. The key ID and nonce, are transmitted in a
+query parameter appended to the requested URL, using the format <code>&amp;cup2key=%d:%u</code>
+where the first parameter is the key ID, the second is the freshness nonce.</p>
+<p>For debugging purposes, the request hash is sent to the server using a query
+parameter appended to the requested URL, using the format <code>&amp;cup2hreq=%s</code> where
+%s is the lowercase hexadecimal value of the hash (in big-endian format).</p>
+<p>The server returns the ECDSA signature and the request hash it computed in at
+least one of three forms:</p>
+<ol>
+<li>The <code>X-Cup-Server-Proof</code> HTTP header, with the value in the format
+<code>signature:hash</code>.</li>
+<li>The <code>ETag</code> HTTP header, with the value in the format of
+<code>W/&quot;signature:hash&quot;</code>.</li>
+<li>The <code>ETag</code> HTTP header, with the value in the format of <code>signature:hash</code>.</li>
+</ol>
+<p>If multiple forms are present in the response, clients should prefer form 1,
+falling back to form 2 only if form 1 is not present, and falling back to form 3
+only if form 1 and 2 are not present.</p>
+<p>In practice, multiple forms allow the communication to navigate different types
+of proxies that mutate request headers.</p>
+<p>In all forms, <code>signature</code> is a DER-encoded ASN.1 sequence of &quot;R&quot; and &quot;S&quot;,
+rendered in lowercase hexadecimal representation.</p>
+<p>In all forms, <code>hash</code> is a 256-bit value rendered in lowercase hexadecimal
+representation (big-endian).</p>
+<h3 id="k-repetition">K-Repetition</h3>
+<p>A grave danger in any system involving ECDSA is the danger of K repetition.</p>
+<p>Computing an ECDSA signature starts with selecting a random 256-bit integer,
+called K. The combination of K and the public key are used to produce the first
+half of the signature, called R; the values of R, K, the private key, and the
+message digest are used to compute the other half of the signature, called S.</p>
+<p>Because of this process, if the same value of K is chosen for two signatures,
+both signatures will have the same value for R. If a malicious user can acquire
+two messages that have different bodies but identical R values, a
+straightforward computation yields the server&#39;s private key.</p>
+<p>Assuming that a good PRNG is used, and properly seeded, the probability of a
+collision is small even across a large number of signatures. However, regular
+key rotation is still recommended:</p>
+<ol>
+<li>Key material may be disclosed due to server compromise, and organizations
+should be prepared to remediate by performing a key rotation. Regularly
+exercising a key rotation process is important preparation.</li>
+<li>PRNGs are not always perfectly secure or properly seeded.</li>
+</ol>
+<h2 id="see-also">See Also</h2>
+<p>Previous documents describing CUP can be found at:</p>
+<ul>
+<li><a href="https://github.com/google/omaha/blob/master/doc/ClientUpdateProtocol.md">Original Public Design</a></li>
+<li><a href="https://github.com/google/omaha/blob/master/doc/ClientUpdateProtocolEcdsa.md">ECDSA Extension</a></li>
+</ul>
+<p>Chromium&#39;s implementation of CUP can be found in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/client_update_protocol/">components/client_update_protocol</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updater/cup.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updater/cup.md</a>
+  </p>
+</div>

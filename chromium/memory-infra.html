@@ -1,0 +1,138 @@
+<h1>MemoryInfra</h1>
+<p>MemoryInfra is a timeline-based profiling system integrated in chrome://tracing.
+It aims at creating Chrome-scale memory measurement tooling so that on any
+Chrome in the world --- desktop, mobile, Chrome OS or any other --- with the
+click of a button you can understand where memory is being used in your system.</p>
+<h2 id="taking-a-memory-infra-trace">Taking a memory-infra trace</h2>
+<ol>
+<li><p><a href="https://sites.google.com/a/chromium.org/dev/developers/how-tos/trace-event-profiling-tool/recording-tracing-runs">Record a trace as usual</a>: open <a href="chrome://tracing">chrome://tracing</a>
+on Desktop Chrome or <a href="chrome://inspect/?tracing#devices">chrome://inspect/?tracing#devices</a> to trace
+Chrome for Android.</p>
+</li>
+<li><p>Make sure to enable the <strong>memory-infra</strong> category on the right.</p>
+<p>  <img src="https://storage.googleapis.com/chromium-docs.appspot.com/1c6d1886584e7cc6ffed0d377f32023f8da53e02" alt="Tick the memory-infra checkbox when recording a trace."></p>
+</li>
+</ol>
+<h2 id="navigating-a-memory-infra-trace">Navigating a memory-infra trace</h2>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/db12015bd262385f0f8bd69133330978a99da1ca" alt="Timeline View and Analysis View"></p>
+<p>After recording a trace, you will see the <strong>timeline view</strong>. The <strong>timeline
+view</strong> is primarily used for other tracing features. Click one of the
+<img src="https://storage.googleapis.com/chromium-docs.appspot.com/d7bdf4d16204c293688be2e5a0bcb2bf463dbbc3" alt="M"> dots to bring up the <strong>analysis view</strong>. Click on a cell in
+analysis view to reveal more information about its subsystem. PartitionAlloc for
+instance, has more details about its partitions.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/02eade61d57c83f8ef8227965513456555fc3324" alt="Component details for PartitionAlloc"></p>
+<p>The full details of the MemoryInfra UI are explained in its <a href="https://docs.google.com/document/d/1b5BSBEd1oB-3zj_CBAQWiQZ0cmI0HmjmXG-5iNveLqw/edit">design
+doc</a>.</p>
+<h2 id="columns">Columns</h2>
+<p><strong>Columns in blue</strong> reflect the amount of actual physical memory used by the
+process. This is what exerts memory pressure on the system.</p>
+<ul>
+<li><strong>Total Resident</strong>: The current working set size of the process, excluding
+the memory overhead of tracing. On Linux, this returns the resident set size.</li>
+<li><strong>Peak Total Resident</strong>: The overall peak working set size of the process on
+supported platforms. On Linux kernel versions &gt;= 4.0 the peak usage between
+two memory dumps is shown.</li>
+<li><strong>PSS</strong>: POSIX only. The process&#39;s proportional share of total resident size.</li>
+<li><strong>Private Dirty</strong>: The total size of dirty pages which are not used by any
+other process.</li>
+<li><strong>Swapped</strong>: The total size of anonymous memory used by process, which is
+swapped out of RAM.</li>
+</ul>
+<p><strong>Columns in black</strong> reflect a best estimation of the amount of physical
+memory used by various subsystems of Chrome.</p>
+<ul>
+<li><strong>Blink GC</strong>: Memory used by <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/heap/BlinkGCAPIReference.md">Oilpan</a>.</li>
+<li><strong>CC</strong>: Memory used by the compositor.
+See <a href="memory-infra/probe-cc">cc/memory</a> for the full details.</li>
+<li><strong>Discardable</strong>: Total <a href="https://github.com/chromium/chromium/blob/HEAD/docs/memory-infra/base/memory/discardable_memory.h">discardable</a> memory used by the process
+from various components like Skia caches and Web caches.</li>
+<li><strong>Font Caches</strong>: Size of cache that stores Font shapes and platform Fonts.</li>
+<li><strong>GPU</strong> and <strong>GPU Memory Buffer</strong>: GPU memory and RAM used for GPU purposes.
+See <a href="memory-infra/probe-gpu">GPU Memory Tracing</a>.</li>
+<li><strong>LevelDB</strong>: Memory used for LeveldbValueStore(s), IndexedDB databases and
+ProtoDatabase(s).</li>
+<li><strong>Malloc</strong>: Memory allocated by calls to <code>malloc</code>, or <code>new</code> for most
+  non-Blink objects.</li>
+<li><strong>PartitionAlloc</strong>: Memory allocated via <a href="https://chromium.googlesource.com/chromium/src/+/main/base/allocator/partition_allocator/PartitionAlloc.md">PartitionAlloc</a>.
+Blink objects that are not managed by Oilpan are allocated with
+PartitionAlloc.</li>
+<li><strong>Skia</strong>: Memory used by all resources used by the Skia rendering system.</li>
+<li><strong>SQLite</strong>: Memory used for all sqlite databases.</li>
+<li><strong>Sync</strong>: Memory used by Chrome Sync when signed in.</li>
+<li><strong>UI</strong>: Android only. Memory used by Android java bitmaps for the UI.</li>
+<li><strong>V8</strong>: Memory used by V8 Javascript engine.</li>
+<li><strong>Web Cache</strong>: Memory used by resources downloaded from the Web, like images
+and scripts.</li>
+</ul>
+<p>The <strong>tracing column in gray</strong> reports memory that is used to collect all of the
+above information. This memory would not be used if tracing were not enabled,
+and it is discounted from malloc and the blue columns.</p>
+<!-- TODO(primiano): Improve this. https://crbug.com/??? --><h2 id="effective_size-vs-size">&#39;effective_size&#39; vs. &#39;size&#39;</h2>
+<p>This is a little like the difference between &#39;self time&#39; and &#39;cumulative time&#39;
+in a profiling tool. Size is the total amount of memory allocated/requested
+by a subsystem whereas effective size is the total amount of memory
+used/consumed by a subsystem. If Skia allocates 10mb via partition_alloc
+that memory would show up in the size of both Skia and partition_alloc
+but only in the effective size of Skia since although partition_alloc
+allocates the 10mb it does so on behalf of Skia which is responsible
+for the memory. Summing all effective sizes gives the total amount of
+memory used whereas summing size would give a number larger than the total
+amount of memory used.</p>
+<h2 id="related-pages">Related Pages</h2>
+<ul>
+<li><a href="memory-infra/adding_memory_infra_tracing">Adding MemoryInfra Tracing to a Component</a></li>
+<li><a href="memory-infra/probe-gpu">GPU Memory Tracing</a></li>
+<li><a href="memory-infra/heap_profiler">Heap Profiling with MemoryInfra</a></li>
+<li><a href="memory/heap_profiling_external">Heap Profiling with External Tools</a></li>
+<li><a href="memory-infra/memory_infra_startup_tracing">Startup Tracing with MemoryInfra</a></li>
+</ul>
+<h2 id="rationale">Rationale</h2>
+<p>Another memory profiler? What is wrong with tool X?
+Most of the existing tools:</p>
+<ul>
+<li>Are hard to get working with Chrome. (Massive symbols, require OS-specific
+tricks.)</li>
+<li>Lack Chrome-related context.</li>
+<li>Don&#39;t deal with multi-process scenarios.</li>
+</ul>
+<p>MemoryInfra leverages the existing tracing infrastructure in Chrome and provides
+contextual data:</p>
+<ul>
+<li><strong>It speaks Chrome slang.</strong>
+The Chromium codebase is instrumented. Its memory subsystems (allocators,
+caches, etc.) uniformly report their stats into the trace in a way that can
+be understood by Chrome developers. No more
+<code>__gnu_cxx::new_allocator&lt; std::_Rb_tree_node&lt; std::pair&lt; std::string const, base::Value*&gt;&gt;&gt; ::allocate</code>.</li>
+<li><strong>Timeline data that can be correlated with other events.</strong>
+Did memory suddenly increase during a specific Blink / V8 / HTML parsing
+event? Which subsystem increased? Did memory not go down as expected after
+closing a tab? Which other threads were active during a bloat?</li>
+<li><strong>Works out of the box on desktop and mobile.</strong>
+ No recompilations, no time-consuming symbolizations stages. All the
+logic is already in Chrome, ready to dump at any time.</li>
+<li><strong>The same technology is used for telemetry and the ChromePerf dashboard.</strong>
+See <a href="https://docs.google.com/presentation/d/1OyxyT1sfg50lA36A7ibZ7-bBRXI1kVlvCW0W9qAmM_0/present?slide=id.gde150139b_0_137">the slides</a> and take a look at
+<a href="https://chromeperf.appspot.com/report?sid=3b54e60c9951656574e19252fadeca846813afe04453c98a49136af4c8820b8d">some ChromePerf dashboards</a> and
+<a href="https://catapult.gsrc.io/telemetry">telemetry documentation</a>.</li>
+</ul>
+<h2 id="development">Development</h2>
+<p>MemoryInfra is based on a simple and extensible architecture. See
+<a href="https://docs.google.com/presentation/d/1GI3HY3Mm5-Mvp6eZyVB0JiaJ-u3L1MMJeKHJg4lxjEI/present?slide=id.g995514d5c_1_45">the slides</a> on how to get your subsystem reported in MemoryInfra,
+or take a look at one of the existing examples such as
+<a href="https://chromium.googlesource.com/chromium/src.git/+/main/base/trace_event/malloc_dump_provider.cc">malloc_dump_provider.cc</a>. The crbug label is
+<a href="https://code.google.com/p/chromium/issues/list?q=label:Hotlist-MemoryInfra">Hotlist-MemoryInfra</a>. Don&#39;t hesitate to contact
+<a href="mailto:tracing@chromium.org">tracing@chromium.org</a> for questions and support.</p>
+<h2 id="design-documents">Design documents</h2>
+<p>Architectural:</p>
+<iframe width="100%" height="300px" src="https://docs.google.com/a/google.com/embeddedfolderview?id=0B3KuDeqD-lVJfmp0cW1VcE5XVWNxZndxelV5T19kT2NFSndYZlNFbkFpc3pSa2VDN0hlMm8&resourcekey=0-ROo3GFIuBBIGakbTlSKZuw">
+</iframe><p>Chrome-side design docs:</p>
+<iframe width="100%" height="300px" src="https://docs.google.com/a/google.com/embeddedfolderview?id=0B3KuDeqD-lVJfndSa2dleUQtMnZDeWpPZk1JV0QtbVM5STkwWms4YThzQ0pGTmU1QU9kNVk&resourcekey=0-_pVIubJkVbp5xAPQ0WKsvA">
+</iframe><p>Catapult-side design docs:</p>
+<iframe width="100%" height="300px" src="https://docs.google.com/a/google.com/embeddedfolderview?id=0B3KuDeqD-lVJfm10bXd5YmRNWUpKOElOWS0xdU1tMmV1S3F4aHo0ZDJLTmtGRy1qVnQtVWM&resourcekey=0-GvJpfCIKyDiXaERBTvoKhg">
+</iframe>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/README.md</a>
+  </p>
+</div>

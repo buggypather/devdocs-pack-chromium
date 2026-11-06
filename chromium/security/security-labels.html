@@ -1,0 +1,340 @@
+<h1>Security Fields, Hotlists, and Issue Access / Visibility</h1>
+<p>Bug database labels are used very heavily for security bugs. We rely on the
+labels being correct for a variety of reasons, including driving fixing efforts,
+driving release management efforts (merges and release notes) and also
+historical queries and data mining.</p>
+<p>Because of the extent to which we rely on labels, it is an important part of the
+Security Sheriff duty to ensure that all security bugs are correctly tagged and
+managed. But even if you are not the Security Shepherd, please fix any labeling
+errors you happen upon.</p>
+<p>Any issue that relates to security should have one of the following:</p>
+<ul>
+<li><strong>Security</strong> Component Tag: Features that are related to security.</li>
+<li><strong>Type=Vulnerability</strong>: Designates a security vulnerability that impacts
+users. This label should not be used for new features that relate to security,
+or general remediation/refactoring ideas. (Use the <strong>Security</strong> Component Tag
+for that.)</li>
+</ul>
+<h2 id="fields-and-hotlists-relevant-for-any-typevulnerability">Fields and Hotlists Relevant For Any <strong>Type=Vulnerability</strong></h2>
+<ul>
+<li><p><strong>Security_Severity-</strong>{<strong>Critical (S0)</strong>, <strong>High (S1)</strong>, <strong>Medium (S2)</strong>,
+<strong>Low(S3)</strong>, <strong>Unknown / Not Yet Assessed (S4)</strong>}: Designates the severity
+of a vulnerability according to our
+<a href="severity-guidelines">severity guidelines</a>.</p>
+</li>
+<li><p><strong>Priority: P#</strong>: Is set by a robot, but teams can increase it if they wish.</p>
+</li>
+<li><p><strong>Found In: MMM#</strong>: Designates which milestones of Chrome are
+impacted by the bug. Multiple milestones may be set in the Found In field,
+but the most important one is the earliest affected milestone. See
+<a href="https://chromiumdash.appspot.com/releases?platform=Windows">ChromiumDash</a> for
+current releases.</p>
+</li>
+<li><p><strong>Security_Impact-</strong>{<strong>Head</strong>, <strong>Beta</strong>, <strong>Stable</strong>, <strong>Extended</strong>, <strong>None</strong>}
+hotlists: Derived from milestones set in the <strong>Found In</strong> field,, this
+hotlist specifies the earliest affected release channel. Should not normally
+be set by humans, except in the case of <strong>Security_Impact-None</strong>
+(hotlistID: 5433277) which means that the bug is in a disabled feature, or
+otherwise doesn&#39;t impact Chrome: see the section below for more details.</p>
+<ul>
+<li>Note that <strong>Severity</strong> should still be set to the appropriate Severity
+  (S0-S3) for <strong>Security_Impact-None</strong> issues, as if the feature were enabled
+  or the code reachable.</li>
+</ul>
+</li>
+<li><p><strong>Issue access level &amp; collaborator groups</strong>{<strong>collaborators=
+<a href="mailto:security@chromium.org">security@chromium.org</a></strong>, <strong>collaborators=<a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a></strong>,
+<strong>Limited Visibility + Google</strong>, <strong>SecurityEmbargo hotlist</strong>}: settings
+that restrict access to the bug. Meaning and usage guidelines are as follows:</p>
+<ul>
+<li><strong>Issue Access level: Limited Visibility + collaborator group =
+<a href="mailto:security@chromium.org">security@chromium.org</a></strong>: Restricts access to members of
+<em><a href="mailto:security@chromium.org">security@chromium.org</a></em>. This is the default that should be used for general
+security bugs that aren&#39;t sensitive otherwise.</li>
+<li><strong>Issue Access level: Limited Visibility + collaborator group =
+<a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a></strong>: Restricts access to members of
+<em><a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a></em>, which includes external parties who ship
+Chromium-based products and who need to know about available bug fixes.
+<em><a href="mailto:security@chromium.org">security@chromium.org</a></em> is a member of that group so the former is a
+superset of the latter.
+<strong>Collaborator group = <a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a></strong> is not suitable for
+sensitive bugs.</li>
+<li><strong>Issue Access level: Limited Visibility + collaborator group =
+<a href="mailto:security-notify@webrtc.org">security-notify@webrtc.org</a></strong>: As above, but additionally give access to
+<em><a href="mailto:security-notify@webrtc.org">security-notify@webrtc.org</a></em>, a community of downstream WebRTC embedders.</li>
+<li><strong>Issue Access level: Limited Visibility + Googlers</strong>: Restricts access to
+users that are Google employees (but also via their <em>chromium.org</em>
+accounts). This should be used for bugs that aren&#39;t OK for external
+contributors to see (even if we trust them with security work), for
+example due to:<ul>
+<li>legal reasons (bug affects a partner Google is under NDA and the
+information is subject to that)</li>
+<li>the bug affecting more Google products than Chrome and Chrome OS</li>
+</ul>
+</li>
+<li><strong>SecurityEmbargo hotlist</strong> (hotlistID: 5432549): Keeps issues already
+set with Issue Access level: Limited Visibility + collaborator group =
+<em><a href="mailto:security@chromium.org">security@chromium.org</a></em> from being automatically de-restricted by Blintz
+and keeping the bug from being opened for public disclosure. Use this if
+the bug in question is subject to disclosure decisions made externally,
+such as:<ul>
+<li>We receive advance notice of security bugs from an upstream open source
+project or Google partner and they organize a coordinated disclosure
+process. We&#39;d remove the restriction hotlist if/when the embargo gets
+lifted.</li>
+<li>The reporter indicates a preference to remain anonymous and the bug
+history would give away the reporter&#39;s identity (if they file using an
+anonymous account, this doesn&#39;t apply).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>reward-</strong>{<strong>topanel</strong>, <strong>unpaid</strong>, <strong>na</strong>, <strong>inprocess</strong>, <em>#</em>} hotlists:
+Hotlists used for tracking bugs nominated for our <a href="https://www.chromium.org/Home/chromium-security/vulnerability-rewards-program">Vulnerability Reward
+Program</a>.</p>
+</li>
+<li><p><strong>reward_to-external</strong> (hotlistID: 5432589): If a bug is filed by a Google or
+Chromium user on behalf of an external party, use <strong>reward_to-external</strong> to
+ensure the report is still properly credited to the external reporter in the
+release notes. IF, however, <em>the reporter is an individual with an email
+address</em> you should set the <strong>Reporter</strong> field to reflect the email address
+of the external reporter. If the reporter was an organization or entity with a
+specific email address, then do not alter the <strong>Reporter</strong> field and use the
+<strong>reward-to_external</strong> hotlist. Despite its name, you should add
+this label whether or not the reporter is in scope for the vulnerability rewards
+program, because external reports are credited in the release notes irrespective.</p>
+</li>
+<li><p><strong>M-#</strong> field: Target milestone for the fix.</p>
+</li>
+<li><p>Chromium &#39;Component Tags&#39;: For bugs filed as <strong>Type=Vulnerability</strong>, we also
+want to track which Chromium component(s) the bug is in.</p>
+</li>
+<li><p><strong>ReleaseBlock field = Stable</strong>: When we find a security bug regression that
+has not yet shipped to stable, we use this label to try and prevent the security
+regression from ever affecting users of the Stable channel.</p>
+</li>
+<li><p><strong>OS:</strong>{<strong>ChromeOS</strong>, <strong>Linux</strong>, <strong>Windows</strong>, ...}: Denotes which operating
+systems are affected.</p>
+</li>
+<li><p><strong>Merge: field</strong>{<strong>Request-?</strong>, <strong>Approved-?</strong>, <strong>Merged-?</strong>}: Security fixes
+are frequently merged to earlier release branches.</p>
+</li>
+<li><p><strong>Security Release: #-M###</strong>: Denotes which exact patch a security fix made
+it into. This is more fine-grained than the <strong>M-#</strong> label. <strong>Release-0-M105</strong>
+denotes the initial release of an M105 release to Stable channel.</p>
+</li>
+<li><p><strong>CVE field: -####-####</strong>: For security bugs that get assigned a CVE, we
+update the CVE field for appropriate bug(s) with the CVE number  for easy
+searching.
+<strong>Type=Vulnerability</strong> bugs should always have <strong>Severity of S0-S3</strong>,
+<strong>Found In - ### set</strong>, <strong>Security_Impact</strong> hotlist, <strong>OS</strong>, <strong>Priority</strong>,
+<strong>M</strong>, <strong>Component Tags</strong>, and an <strong>Assignee</strong> set.</p>
+</li>
+</ul>
+<h3 id="TOC-Security-Impact-None">When to use the  Security_Impact-None hotlist</h3>
+<p><strong>Security_Impact-None</strong> says that the bug can&#39;t affect any users running the
+default configuration of Chrome. It&#39;s most commonly used for cases where
+code is entirely disabled by runtime flags or absent in the production build.</p>
+<p>Other cases where it&#39;s OK to set <strong>Security_Impact-None</strong>:</p>
+<ul>
+<li>The impacted code runs behind a feature flag which is <em>disabled by default</em>,
+and the field trial configuration has not been switched on.</li>
+<li>The impacted code only runs behind a command-line flag or <code>chrome://flags</code>
+entry. (In particular, if a bug can only affect those who have
+set <code>#enable-experimental-web-platform-features</code>, it is <strong>Security_Impact-None</strong>.</li>
+<li>It&#39;s a V8 feature behind flags such as <code>--future</code>, <code>--es-staging</code> or
+<code>--wasm-staging</code> or other experimental flags that are disabled by default.</li>
+</ul>
+<p>Cases where it&#39;s <em>not</em> OK to set <strong>Security_Impact-None</strong>:</p>
+<ul>
+<li>Features enabled via normal UI or settings which users might happen across
+in normal usage. For instance, accessibility features and the Chrome Labs
+experimental features accessible from the toolbar.</li>
+<li>Origin trials. Origin trials are only active on some websites, but the
+affected code does run for Chrome users with the default Chrome configuration.</li>
+<li>The impacted code runs behind a feature flag which is <em>enabled by default</em>,
+even if that field trial configuration has been switched off. That&#39;s because
+the code may be active for devices which can&#39;t access the field trial
+configuration service.</li>
+<li>The feature is turned on for any users, even if only for a small percent of users, e.g. 1%.</li>
+<li>Feature or flag checks are done somewhere that the attacker could influence.
+For example a privilege escalation from a lower-privileged process
+(e.g. renderer) to a higher-privileged process (e.g. browser)
+assumes that the lower-privileged process is already compromised. The
+attacker could overwrite memory for any feature checks performed within
+that lower-privileged process; the bug only qualifies as impact <strong>None</strong>
+if checks are performed in the higher-privileged process.</li>
+<li>If a bug involves a patch to a renderer or use of a flag to turn on
+<a href="https://github.com/chromium/chromium/blob/HEAD/mojo/public/js/README.md">MojoJS</a>
+this may mean it&#39;s a simulation of a compromised renderer and the
+bug may still be a valid <a href="severity-guidelines#TOC-High-severity">sandbox escape
+bug</a>.</li>
+</ul>
+<p>It&#39;s important to get this right, because this label influences how rapidly
+we merge and release the fix. Ask for help if you&#39;re not sure.</p>
+<p>Some <strong>Security_Impact-None</strong> bugs may still be considered for VRP rewards, if
+those bugs are found in code that we&#39;re likely to enable in the future.</p>
+<h3 id="os-field">OS Field</h3>
+<p>It can be hard to know which OS(s) a bug applies to. Here are some guidelines:</p>
+<ul>
+<li>Blink is used on all platforms except iOS. A (say) UAF in Blink is probably
+not particular to whatever platform it was found on; it&#39;s probably applicable
+to all.</li>
+<li>The same is true of Skia, and the net/ code.</li>
+<li>If the bug is in a file named <code>foo_{win,linux,mac,...}.cc</code>, it&#39;s specific to
+the named platform.</li>
+<li>Java code is particular to Android.</li>
+<li>Objective-C++ (<code>foo.mm</code>) is particular to macOS and iOS. (But note that most
+of our Objective-C++ is particular to macOS <em>or</em> iOS. You can usually tell by
+the pathname.)</li>
+<li>Views code (e.g. <code>ui/message_center/views</code>) is used on Windows, Linux, Chrome
+OS, and perhaps Fuchsia (?). Views for macOS is increasingly a thing, but Cocoa
+code (e.g. <code>ui/message_center/cocoa</code>) is particular to macOS.</li>
+</ul>
+<h2 id="TOC-Merge-labels">After the bug is fixed: Merge field labels</h2>
+<p>Once you&#39;ve landed a complete fix for a security bug, please immediately
+mark the bug as Fixed. Do not request merges: Sheriffbot will request
+appropriate merges to beta or stable according to our guidelines.
+However, it is really helpful if you comment upon any unusual stability or
+compatibility risks of merging.</p>
+<p>(Some Chromium teams traditionally deal with merges <em>before</em> marking bugs as
+Fixed. Please don&#39;t do that for security bugs.)</p>
+<p>Please take the opportunity to consider whether there are any variants
+or related problems. It&#39;s very common for attackers to tweak working attack code
+to exploit a similar situation elsewhere. If you&#39;ve even the remotest thought
+that there <em>might</em> be equivalent patterns or variants elsewhere, file a bug
+with type=Bug-Security. It can be nearly blank. The important thing is to record
+the fact that something may need doing.</p>
+<h2 id="sheriffbot-automation">Sheriffbot automation</h2>
+<p>Security labels guide the actions taken by
+<a href="https://www.chromium.org/issue-tracking/autotriage">Blintz</a>. The source of
+truth for the actual rule set is
+<a href="https://goto.google.com/chrome-blintz-source">go/chrome-blintz-source</a> (sorry,
+Google employees only). The motivation behind these rules is to help automate
+the security bug life cycle so security shepherds and security engineers in
+general spend less time updating bugs and can do more useful work instead.</p>
+<p>The following sections describe the current set of rules relevant to security
+bugs. The list below only describes rules that change the labels described
+above. There are additional rules for sending nag messages and janitorial tasks;
+check the <a href="https://goto.google.com/chrome-blintz-source">Chrome blintz source</a>
+for details.</p>
+<h3 id="remove-invalid-release--field-entries">Remove Invalid <strong>Release-#</strong> Field Entries</h3>
+<p>Only bugs that affect stable should carry a release designator, this rule
+removes release designators that are set on bugs not affecting stable.</p>
+<h3 id="remove-invalid-security_impact-x-hotlists">Remove Invalid <strong>Security_Impact-X</strong> Hotlists</h3>
+<p>Each bug should be on exactly one <strong>Security_Impact-X</strong> and it should be one of
+the 5 valid Security_Impact hotlists (None, Extended, Stable, Beta, Head). This
+rule a bug from any invalid and excess Security_Impact hotlists.</p>
+<h3 id="adjust-security_impact-x-hotlists-to-match-found-in">Adjust <strong>Security_Impact-X</strong> Hotlists to match Found In</h3>
+<p>Based on <strong>Found In #</strong> milestone set in the field this rule assigns
+corresponding <strong>Security_Impact-X</strong> hotlists if they are incorrect or absent.
+<strong>Security_Impact-None</strong> is never changed.</p>
+<h3 id="update-m--field">Update <strong>M-#</strong> Field</h3>
+<p>Bugs that are set with milestones earlier than the current milestone will
+be updated to set the field to the current milestone and
+<strong>Security_Impact-Extended</strong>.</p>
+<p>Bugs that carry a <strong>Security_Impact-X</strong> hotlist but are missing a milestone
+field being set will be updated so that the <strong>M-#</strong> field reflects the
+corresponding to the respective milestone.</p>
+<h3 id="set-releaseblock-field-for-regressions">Set <strong>ReleaseBlock field</strong> For Regressions</h3>
+<p>If there&#39;s a high or medium severity security regression in beta or ToT, update
+the <strong>ReleaseBlock</strong> field to Stable to prevent that regression from being
+shipped to users.</p>
+<p>Similarly, critical security regressions are marked <strong>ReleaseBlock: Beta</strong>.</p>
+<h3 id="adjust-priority-p-to-match-severity">Adjust <strong>Priority P#</strong> To Match Severity</h3>
+<p>Adjust <strong>Priority P#</strong> according to the priority rules for severity labels described
+above. If there is evidence of active exploitation then a higher priority should
+be used.</p>
+<h3 id="drop-visibility-group-restrictions-from-old-fixed-bugs-for-disclosure">Drop <strong>Visibility Group Restrictions</strong> From Old, Fixed Bugs for Disclosure</h3>
+<p>Remove **<a href="mailto:security@chromium.org">security@chromium.org</a>, <strong><a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a></strong> and
+<strong><a href="mailto:security-notify@webrtc.org">security-notify@webrtc.org</a></strong> from <strong>Collaborator Groups</strong> and Update <strong>Issue
+Access level to Default Visibility</strong> for security bugs that have been closed
+(Fixed, Verified, Duplicate) more than 30 days ago, making them publicly
+accessible. The idea here is that by 30 days, important security fixes will have
+shipped in a Stable channel update and allowing users time to update. Issues we
+do not accept (WontFix,Invalid) will be made public after 14 weeks to allow time
+for resubmission.</p>
+<h3 id="set-security-notifychromiumorg-as-collaborator-on-fixed-bugs">Set <strong><a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a> as Collaborator</strong> On Fixed Bugs</h3>
+<p>While <strong>Issue Access level</strong> remains <strong>Limited Visibility</strong> removes
+<strong><a href="mailto:security@chromium.org">security@chromium.org</a></strong> as Collaborator field / Add Collaborator Groups
+and replaces updates with <strong><a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a></strong> for fixed security
+bugs. Rationale is that while fixed bugs are generally not intended to become
+public immediately, we&#39;d like to give access to external parties depending on
+Chromium via <em><a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a></em>.
+(Collaborator for WebRTC bugs is instead updated to
+<strong><a href="mailto:security-notify@webrtc.org">security-notify@webrtc.org</a></strong>).</p>
+<h3 id="update-merge-field-with-request-x-for-fixed-bugs">Update <strong>Merge Field with Request-X</strong> For Fixed Bugs</h3>
+<p>Fixed security bugs that affect stable or beta and are critical or high severity
+will automatically trigger a merge request for the current beta branch, and
+perhaps stable if also impacted.</p>
+<h3 id="drop-x-from-releaseblock-field-for-security_impact-none-bugs">Drop <strong>X from ReleaseBlock field</strong> For <strong>Security_Impact-None</strong> Bugs</h3>
+<p>No need to stop a release if the bug doesn&#39;t have any consequences.</p>
+<h2 id="self-service-hotlists-for-vrp-reporters">Self-Service hotlists for VRP Reporters</h2>
+<p>VRP reporters can set the following hotlists if they are a member of the low
+volume announce list <a href="mailto:vrp-reporters@chromium.org">vrp-reporters@chromium.org</a>. The purpose of each hotlist
+is described in their issue tracker configuration.</p>
+<ul>
+<li><a href="https://issues.chromium.org/hotlists/8059017/edit">Security-Fixed-Issue-Request</a></li>
+<li><a href="https://issues.chromium.org/hotlists/8059196/edit">Security-Severity-Reassessment-Request</a></li>
+</ul>
+<h2 id="an-example">An Example</h2>
+<p>Given the importance and volume of field, hotlists, and visiblity settings,
+an example might be useful.</p>
+<ol>
+<li>An external researcher files a security bug, with a repro that demonstrates
+memory corruption against the latest (e.g.) M123 dev channel. The will present
+as <strong>Type=Vulnerability</strong> and <strong>Visibility / Issue Access level</strong> will be set
+to <strong>Limited Visibility</strong> with <strong><a href="mailto:security@chromium.org">security@chromium.org</a></strong> set as
+<strong>Collaborator</strong>.</li>
+<li>The Security Shepherd triages the issue and uses ClusterFuzz to confirm
+that the bug is a novel and dangerous-looking buffer overflow in the renderer
+process. ClusterFuzz also confirms that all current releases are affected. Since
+M121 is the current Stable release, M120 is Extended Stable, and M122 is in
+Beta, we update the <strong>Found In field</strong> to <strong>120</strong> to reflect Extended Stable as
+the earliest / oldest affected release channel. The severity of a buffer
+overflow in a renderer implies <strong>High (S1) Severity</strong> and <strong>P1 Priority</strong>. Any
+external report for a confirmed vulnerability needs <strong>reward-topanel</strong>. Blintz
+will usually add it automatically once the bug is fixed. The stack trace
+provided by ClusterFuzz suggests that the bug is in the component <strong>Blink&gt;DOM</strong>,
+and such bugs should be labeled as applying to all OSs except iOS (where Blink
+is not used): <strong>OS-</strong>{<strong>Linux</strong>, <strong>Windows</strong>, <strong>Android</strong>, <strong>Chrome</strong>,
+<strong>Fuchsia</strong>}. Blintz will check whether 120 is the current extended stable,
+stable, beta or head milestone; and will add the <strong>Security_Impact-Extended
+hotlist</strong>.</li>
+<li>Within a day or two, the Security Shepherd was able to get the bug assigned
+and — oh joy! — fixed very quickly. When the bug&#39;s status changes to <strong>Fixed</strong>,
+Blintz will update the <strong>Merge field with the appropriate request-MMM</strong> labels,
+and will change update Visibility by changing <strong>Collaborators from
+<a href="mailto:security@chromium.org">security@chromium.org</a> to <a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a></strong>.</li>
+<li>Later that week, the Chrome Security VRP TL does a sweep of all
+<strong>reward-topanel</strong> bugs. This one gets rewarded, so that one reward label is
+replaced with two: <strong>reward-7000</strong> and <strong>reward-unpaid</strong>. Later,
+<strong>reward-unpaid</strong> becomes <strong>reward-inprocess</strong> and is later still removed when
+all is done. Of course, <strong>reward-7000</strong> remains forever. (We use it to track
+total payout!)</li>
+<li>A Chrome Security TPM with the responsibility of doing merge review regularly
+checks the security merge review queue based on Type=Vulnerability issues with
+<strong>Merge fields</strong> updated with *<em>request-MMM</em> or <strong>review-MMM</strong> entries. They
+review this issue and fix, having had enough bake time in Canary and being safe
+to merge, and approve it for merge, updating the Merge fields to
+<strong>Approved-MMM</strong> for each milestone the fix is being approved for backmerge to.
+There are weekly Stable channel updates, and this fix was approved for merge to
+M121, so it will be shipped in the following week&#39;s update of M121.</li>
+<li>Just before the release, a Chrome Security TPM runs a series of scripts
+and verifies the security fixes being shipped in that Stable channel update and
+applies the appropriate <strong>#-M121</strong> tag in the <strong>Release</strong> field. Since the bug
+was externally reported, it will also be issued a CVE ID, and the <strong>CVE</strong> field
+is updated with the appropriate CVE for that issue: <strong>2024-####</strong>.</li>
+<li>30 days after the bug is marked <strong>Fixed</strong>, Blintz updates the <strong>Visibility</strong>
+from <strong>Issue access level -- Limited Visibility</strong> to <strong>Default Visibility</strong> and
+removes <a href="mailto:security-notify@chromium.org">security-notify@chromium.org</a> from Collaborators, making the issue
+publicly visible. There is one crucial exception -- Blintz will not update the
+Visibility or remove <a href="mailto:security@chromium.org">security@chromium.org</a> from Collaborators if the issue is
+on the <strong>SecurityEmbargo</strong> hotlist.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/security-labels.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/security-labels.md</a>
+  </p>
+</div>

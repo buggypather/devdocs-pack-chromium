@@ -1,0 +1,31 @@
+<h1>Loading metrics changes in Chrome 99</h1>
+<h2 id="navigation-optimizations">Navigation optimizations</h2>
+<p>A few changes are being rolled out that may impact loading metrics, such as
+FCP and LCP. Most of these changes are
+<a href="https://blog.chromium.org/2022/03/a-new-speed-milestone-for-chrome.html">browser optimizations</a>
+that should improve those loading metrics for everyone.</p>
+<h2 id="timeorigin-to-take-pre-beforeunload-ipc-into-account"><code>timeOrigin</code> to take pre-<code>beforeUnload</code> IPC into account</h2>
+<p>We also improved the accuracy of the <code>timeOrigin</code> value, on which all loading
+metrics are based. It now <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1288485">takes into account an extra IPC call that happens
+before <code>beforeUnload</code> event handlers</a>.
+In scenarios where traffic to your site is coming from a site with a
+<code>beforeUnload</code> handler, your timeline metrics are likely to slightly change:
+because the <code>timeOrigin</code> value is now earlier, durations relative to
+<code>timeOrigin</code> will appear to be larger.</p>
+<p>Note that the duration of the <code>beforeUnload</code> event itself is not included in
+the <code>timeOrigin</code>, as its semantic meaning is not changed.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>On the whole, users will see significant improvements to both FCP and LCP due
+to this effort.</p>
+<p>The pre-<code>beforeUnload</code> IPC change means that if large parts of the traffic to
+your site are coming from sites with a <code>beforeUnload</code> handler, you may see a
+mix of metric regressions and progressions.
+Otherwise, you&#39;re likely to see your metrics improve.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>This change is being rolled out starting from Chrome 99.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2022_03_lcp_fcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2022_03_lcp_fcp.md</a>
+  </p>
+</div>

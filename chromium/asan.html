@@ -1,0 +1,217 @@
+<h1>AddressSanitizer (ASan)</h1>
+<p><a href="https://github.com/google/sanitizers">AddressSanitizer</a> (ASan) is a fast memory
+error detector based on compiler instrumentation (LLVM). It is fully usable for
+Chrome OS, iOS simulator, Linux, Mac, and 64-bit Windows.
+Additional info on the tool itself is available at
+<a href="https://clang.llvm.org/docs/AddressSanitizer.html">https://clang.llvm.org/docs/AddressSanitizer.html</a>.</p>
+<p>For Android, only &quot;Hardware ASAN&quot; is supported, and only on arm64 (see
+<a href="https://crbug.com/441905843">crbug/441905843</a>).</p>
+<p>For the memory leak detector built into ASan, see
+<a href="https://www.chromium.org/developers/testing/leaksanitizer">LeakSanitizer</a>.
+If you want to debug memory leaks, please refer to the instructions on that page
+instead.</p>
+<h2 id="buildbots-and-trybots">Buildbots and trybots</h2>
+<p>The <a href="https://ci.chromium.org/p/chromium/g/chromium.memory/console">Chromium Memory
+waterfall</a>
+contains buildbots running Chromium tests under ASan on Linux (Linux ASan/LSan
+bots for the regular Linux build, Linux Chromium OS ASan for the chromeos=1
+build running on Linux), macOS, Chromium OS. Linux and Linux Chromium OS bots
+run with --no-sandbox, but there&#39;s an extra Linux bot that enables the sandbox
+(but disables LeakSanitizer).</p>
+<p>The trybots running Chromium tests on Linux and macOS are:</p>
+<ul>
+<li>linux_chromium_asan_rel_ng</li>
+<li>mac_chromium_asan_rel_ng</li>
+<li>linux_chromium_chromeos_asan_rel_ng (the chromeos=1 build running on a
+Linux machine)</li>
+</ul>
+<h2 id="pre-built-chrome-binaries">Pre-built Chrome binaries</h2>
+<p>You can grab fresh Chrome binaries built with ASan
+<a href="https://commondatastorage.googleapis.com/chromium-browser-asan/index.html">here</a>.
+The lists of ASan binaries are <em>very</em> long, but you can filter down to more
+specific releases by specifying a prefix like
+<a href="https://commondatastorage.googleapis.com/chromium-browser-asan/index.html?prefix=linux-debug/asan-linux-debug-83">linux-debug/asan-linux-debug-83</a>.
+This is useful for finding a build for a specific revision, since filenames are of
+the form <code>asan-&lt;platform&gt;-&lt;buildtype&gt;-&lt;revision&gt;</code> (but not every revision has an
+archived ASan build). The
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:tools/get_asan_chrome/get_asan_chrome.py">get_asan_chrome</a>
+helper script is a handy way to download builds; its --help flag provides
+usage instructions.</p>
+<h2 id="build-tests-with-asan">Build tests with ASan</h2>
+<p>Building with ASan is easy. Start by compiling <code>base_unittests</code> to verify the
+build is working for you (see below). Then, you can compile <code>chrome</code>,
+<code>browser_tests</code>, etc.. Make sure to compile release builds.</p>
+<h3 id="configuring-the-build">Configuring the build</h3>
+<p>Create an asan build directory by running:</p>
+<pre data-language="shell">gn args out/asan</pre>
+<p>Enter the following build variables in the editor that will pop up:</p>
+<pre data-language="python">is_asan = true
+is_debug = false  # Release build.</pre>
+<p>Build with:</p>
+<pre data-language="shell">ninja -C out/asan base_unittests</pre>
+<h3 id="remote-execution-build">Remote execution build</h3>
+<p>ASan builds should work seamlessly with remote execution; just add
+<code>use_remoteexec=true</code> in your &quot;gn args&quot;.</p>
+<h3 id="build-options">Build options</h3>
+<p>If you want your stack traces to be precise, you will have to disable inlining
+by setting the GN arg:</p>
+<pre data-language="shell">enable_full_stack_frames_for_profiling = true</pre>
+<p>Note that this incurs a significant performance hit. Please do not do this on
+buildbots.</p>
+<p>If you&#39;re working on reproducing ClusterFuzz reports, you might want to add:</p>
+<pre data-language="shell">v8_enable_verify_heap = true</pre>
+<p>in order to enable the <code>--verify-heap</code> command line flag for v8 in Release builds.</p>
+<h2 id="verify-the-asan-tool-works">Verify the ASan tool works</h2>
+<p><strong>ATTENTION (Linux only)</strong>: These instructions are for running ASan in a way
+that is compatible with the sandbox. However, this is not compatible with
+LeakSanitizer. If you want to debug memory leaks, please use the instructions on
+the
+<a href="https://www.chromium.org/developers/testing/leaksanitizer">LeakSanitizer</a>
+page instead.</p>
+<p>Now, check that the tool works. Run the following:</p>
+<pre data-language="shell">out/asan/base_unittests \
+    --gtest_filter=ToolsSanityTest.DISABLED_AddressSanitizerLocalOOBCrashTest \
+    --gtest_also_run_disabled_tests</pre>
+<p>The test will crash with the following error report:</p>
+<pre data-language="shell">==26552== ERROR: AddressSanitizer stack-buffer-overflow on address \
+0x7fff338adb14 at pc 0xac20a7 bp 0x7fff338adad0 sp 0x7fff338adac8
+WRITE of size 4 at 0x7fff338adb14 thread T0
+    #0 0xac20a7 in base::ToolsSanityTest_DISABLED_AddressSanitizerLocalOOBCrashTest_Test::TestBody() ???:0
+    #1 0xcddbd6 in testing::Test::Run() testing/gtest/src/gtest.cc:2161
+    #2 0xcdf63b in testing::TestInfo::Run() testing/gtest/src/gtest.cc:2338
+... lots more stuff
+Address 0x7fff338adb14 is located at offset 52 in frame \
+base::ToolsSanityTest_DISABLED_AddressSanitizerLocalOOBCrashTest_Test::TestBody()&gt; of T0's stack:
+  This frame has 2 object(s):
+    [32, 52) 'array'
+    [96, 104) 'access'
+==26552== ABORTING
+... lots more stuff</pre>
+<p>Congrats, you have a working ASan build! 🙌</p>
+<h2 id="run-chrome-under-asan">Run chrome under ASan</h2>
+<p>And finally, have fun with the <code>out/Release/chrome</code> binary. The filter script
+<code>tools/valgrind/asan/asan_symbolize.py</code> can be used to symbolize the output,
+although it shouldn&#39;t be necessary on Linux and Windows, where Chrome uses the
+llvm-symbolizer in its source tree by default.</p>
+<p>ASan should perfectly work with Chrome&#39;s sandbox. You should only need to run
+with <code>--no-sandbox</code> on Linux if you&#39;re debugging ASan. To get reports on Windows
+from sandboxed processes you will have to run with both <code>--enable-logging</code> and
+<code>--log-file=d:\valid\path.log</code> then inspect the logfile.</p>
+<p>You may need to run with <code>--disable-gpu</code> on Linux with NVIDIA driver older than
+295.20.</p>
+<p>You will likely need to define environment variable
+<a href="https://developer.gnome.org/glib/unstable/glib-running.html"><code>G_SLICE=always-malloc</code></a>
+to avoid crashes inside gtk.
+<code>NSS_DISABLE_ARENA_FREE_LIST=1</code> and <code>NSS_DISABLE_UNLOAD=1</code> are required as well.</p>
+<p>When filing a bug found by AddressSanitizer, please add a label
+<code>Stability-Memory-AddressSanitizer</code>.</p>
+<h2 id="asan-runtime-options">ASan runtime options</h2>
+<p>ASan&#39;s behavior can be changed by exporting the <code>ASAN_OPTIONS</code> env var. Some of
+the useful options are listed on this page, others can be obtained from running
+an ASanified binary with <code>ASAN_OPTIONS=help=1</code>. Note that Chromium sets its own
+defaults for some options, so the default behavior may be different from that
+observed in other projects.
+See <code>build/sanitizers/sanitizer_options.cc</code> for more details.</p>
+<h2 id="building-on-ios">Building on iOS</h2>
+<p>It&#39;s possible to build and run Chrome tests for iOS simulator (which are x86
+binaries essentially) under ASan. Note that you&#39;ll need a Chrome iOS checkout
+for that. It isn&#39;t currently possible to build iOS binaries targeting ARM.</p>
+<p>Configure your build with <code>is_asan = true</code> as described above. Replace your
+build directory as needed:</p>
+<pre data-language="shell">ninja -C out/Release-iphonesimulator base_unittests
+out/Release-iphonesimulator/iossim -d &quot;iPhone&quot; -s 7.0 \
+    out/Release-iphonesimulator/base_unittests.app/ \
+    --gtest_filter=ToolsSanityTest.DISABLED_AddressSanitizerLocalOOBCrashTest \
+    --gtest_also_run_disabled_tests 2&gt;&amp;1 |
+tools/valgrind/asan/asan_symbolize.py</pre>
+<p>You&#39;ll see the same report as shown above (see the &quot;Verify the ASan tool works&quot;
+section), with a number of iOS-specific frames.</p>
+<h2 id="building-on-android">Building on Android</h2>
+<p>Follow <a href="android_build_instructions">AndroidBuildInstructions</a> with minor
+changes:</p>
+<pre data-language="python">target_os=&quot;android&quot;
+target_cpu=&quot;arm64&quot; # The only supported architecture.
+is_hwasan=true
+is_debug=false</pre>
+<p>Use <code>build/android/asan_symbolize.py</code> to symbolize stack from <code>adb logcat</code>. It
+needs the <code>--output-directory</code> argument and takes care of translating the device
+path to the unstripped binary in the output directory.</p>
+<h2 id="building-with-v8_target_archarm">Building with v8_target_arch=&quot;arm&quot;</h2>
+<p>This is needed to detect addressability bugs in the ARM code emitted by V8 and
+running on an instrumented ARM emulator in a 32-bit x86 Linux Chromium. <strong>You
+probably don&#39;t want this, and these instructions have bitrotted because they
+still reference GYP. If you do this successfully, please update!</strong> See
+<a href="https://crbug.com/324207">https://crbug.com/324207</a> for some context.</p>
+<p>First, you need to install the 32-bit chroot environment using the
+<code>build/install-chroot.sh</code> script (as described in
+<a href="https://code.google.com/p/chromium/wiki/LinuxBuild32On64">https://code.google.com/p/chromium/wiki/LinuxBuild32On64</a>). Second, install the
+build deps:</p>
+<pre data-language="shell">precise32 build/install-build-deps.sh  \
+    # assuming your schroot wrapper is called 'precise32'</pre>
+<p>You&#39;ll need to make two symlinks to avoid linking errors:</p>
+<pre data-language="shell">sudo ln -s $CHROOT/usr/lib/i386-linux-gnu/libc_nonshared.a \
+    /usr/lib/i386-linux-gnu/libc_nonshared.a
+sudo ln -s $CHROOT/usr/lib/i386-linux-gnu/libpthread_nonshared.a \
+    /usr/lib/i386-linux-gnu/libpthread_nonshared.a</pre>
+<p>Now configure and build your Chrome:</p>
+<pre data-language="shell">GYP_GENERATOR_FLAGS=&quot;output_dir=out_asan_chroot&quot; GYP_DEFINES=&quot;asan=1 \
+    disable_nacl=1 v8_target_arch=arm sysroot=/var/lib/chroot/precise32bit/ \
+    chroot_cmd=precise32 host_arch=x86_64 target_arch=ia32&quot; gclient runhooks
+ninja -C out_asan_chroot/Release chrome</pre>
+<p><strong>Note</strong>: <code>disable_nacl=1</code> is needed for now.</p>
+<h2 id="running-on-chrome-os">Running on Chrome OS</h2>
+<p>For the linux-chromeos &quot;emulator&quot; build, run Asan following the instructions
+above, just like you would for Linux.</p>
+<p>For Chromebook hardware, add <code>is_asan = true</code> to your args.gn and build.
+<code>deploy_chrome</code> with <code>--mount</code> and <code>--nostrip</code>. ASan logs can be found in
+<code>/tmp/asan/</code>.</p>
+<p>To catch crashes in gdb:</p>
+<ul>
+<li>Edit <code>/etc/chrome_dev.conf</code> and add <code>ASAN_OPTIONS=abort_on_error=1</code></li>
+<li><code>restart ui</code></li>
+<li>gdb -p 12345  # Find the pid from /var/log/chrome/chrome</li>
+</ul>
+<p>When you trigger the crash, you&#39;ll get a SIGABRT in gdb. <code>bt</code> will show the
+stack.</p>
+<p>See
+<a href="https://chromium.googlesource.com/chromiumos/docs/+/main/stack_traces.md">Chrome OS stack traces</a>
+for more details.</p>
+<h2 id="asancoverage">AsanCoverage</h2>
+<p>AsanCoverage is a minimalistic code coverage implementation built into ASan. For
+general information see
+<a href="https://github.com/google/sanitizers">https://code.google.com/p/address-sanitizer/wiki/AsanCoverage</a>
+To use AsanCoverage in Chromium, add <code>use_sanitizer_coverage = true</code> to your GN
+args. See also the <code>sanitizer_coverage_flags</code> variable for configuring it.</p>
+<p>Chrome must be terminated gracefully in order for coverage to work. Either close
+the browser, or SIGTERM the browser process. Do not do <code>killall chrome</code> or send
+SIGKILL.</p>
+<pre data-language="shell">kill &lt;browser_process_pid&gt;
+ls
+...
+chrome.22575.sancov
+gpu.6916123572022919124.sancov.packed
+zygote.13651804083035800069.sancov.packed
+...</pre>
+<p>The <code>gpu.*.sancov.packed</code> file contains coverage data for the GPU process,
+whereas the <code>zygote.*.sancov.packed</code> file contains coverage data for the
+renderers (but not the zygote process). Unpack them to regular <code>.sancov</code> files
+like so:</p>
+<pre data-language="shell">$ $LLVM/projects/compiler-rt/lib/sanitizer_common/scripts/sancov.py unpack \
+    *.sancov.packed
+sancov.py: unpacking gpu.6916123572022919124.sancov.packed
+sancov.py: extracting chrome.22610.sancov
+sancov.py: unpacking zygote.13651804083035800069.sancov.packed
+sancov.py: extracting libpdf.so.12.sancov
+sancov.py: extracting chrome.12.sancov
+sancov.py: extracting libpdf.so.10.sancov
+sancov.py: extracting chrome.10.sancov</pre>
+<p>Now, e.g., to list the offsets of covered functions in the libpdf.so binary in
+renderer with pid 10:</p>
+<pre data-language="shell">$ $LLVM/projects/compiler-rt/lib/sanitizer_common/scripts/sancov.py print \
+    libpdf.so.10.sancov</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/asan.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/asan.md</a>
+  </p>
+</div>

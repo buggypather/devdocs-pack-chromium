@@ -1,0 +1,243 @@
+<h1>Chromium Updater User Manual</h1>
+<p>This is the user manual for
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/updater/">Chromium Updater</a>.</p>
+<h2 id="overview">Overview</h2>
+<p>Chromium Updater is an out-of-process service that finds and applies updates to
+software. Integrating with Chromium Updater requires:</p>
+<ol>
+<li>Installing Chromium Updater, if it is not present.</li>
+<li>Registering your application for updates with Chromium Updater.</li>
+<li>Performing any necessary server-side configuration to serve updates.</li>
+</ol>
+<p>Additionally, applications should take care to:</p>
+<ol>
+<li>Invoke the updater command line when they uninstall, if possible.</li>
+</ol>
+<h2 id="application-identity">Application Identity</h2>
+<p>Chromium Updater identifies each application by means of an &quot;App ID&quot;. An app ID
+can be any ASCII string. For example, the App ID of Google Chrome (Windows) is
+<code>{8A69D345-D564-463C-AFF1-A69D9E530F96}</code>, and the App ID of Google Chrome
+(macOS) is <code>COM.GOOGLE.CHROME</code>.</p>
+<p>Acquiring a unique App ID is the first step to integrating with the updater.
+Consult your organization&#39;s update server team to obtain an ID.</p>
+<p>App IDs are case-insensitive.</p>
+<h2 id="installing-the-updater">Installing the Updater</h2>
+<p>Chromium Updater can be installed in one of two scopes: system wide, or for the
+current OS user only. System installations are appropriate if the software&#39;s
+installation requires administrative privileges or should be shared between
+multiple OS users. System installations require the user to have admin
+privileges at the time of the installation, but thereafter silently keep the
+software up to date.</p>
+<h3 id="windows">Windows</h3>
+<p>On Windows, applications are most commonly distributed by means of
+UpdaterSetup.exe, a &quot;tagged metainstaller&quot; that first installs the updater,
+then registers the application with the updater and asks the updater to &quot;update&quot;
+(install) it. This has the advantage that even if UpdaterSetup.exe is old, the
+newest version of the application is always installed on the system.
+UpdaterSetup.exe also provides UI and manages integration with the updater.</p>
+<p>UpdaterSetup.exe can also be used to install the updater alone, by running
+<code>UpdaterSetup.exe --install --system</code>. (For user installs, elide <code>--system</code>.)</p>
+<p>By default, if a silent install is triggered (e.g. by passing <code>--silent</code>
+on the command line) and elevation is required, the installer will fail
+silently with <code>UNEXPECTED_ELEVATION_LOOP_SILENT</code> to avoid rendering UAC
+prompts or blocking unattended installations. If prompting for UAC is
+permissible (for instance, allowing a non-elevated user to approve the
+UAC prompt for a silent install), the <code>--silent</code> parameter value can
+be set to <code>allow-uac</code> to explicitly allow elevation:
+<code>UpdaterSetup.exe --install --system --silent=allow-uac</code>.</p>
+<p>For security reasons, applications that install at system scope must install
+into <code>C:\Program Files</code> or a similar path that non-admins don&#39;t have write
+access to. System-scope installers are run with system privileges, and writing
+or deleting paths under user control as system creates a privilege escalation
+vulnerability on the system.</p>
+<p>When an application installer successfully runs, it should write
+<code>(HKCU or HKLM)\SOFTWARE\{Company}\Update\Clients\{AppID}</code> → <code>pv</code> to the version
+that was installed.</p>
+<h3 id="macos">macOS</h3>
+<p>On macOS, applications are most commonly distributed either by means of a PKG
+installer or a &quot;drag-install&quot; experience in a mountable DMG.</p>
+<p>Applications installing via a PKG installer should bundle and install
+{Company}Updater.pkg as part of their installation. Such an installation is
+always system-wide. The application should run a postinstall script registering
+itself with the updater by calling
+<code>/Library/Application Support/{Company}/{Company}Updater/Current/{Company}Updater.app/Contents/Helpers/{Company}SoftwareUpdater.bundle/Contents/Helpers/ksadmin -r -P product_id -v version -x path_to_application_bundle -S</code>.</p>
+<p>Applications installing via a DMG experience must set up the updater during
+first run. These applications should embed the updater in their app bundle as a
+<a href="https://developer.apple.com/documentation/bundleresources/placing_content_in_a_bundle">&quot;Helper&quot;</a>,
+and install by running
+<code>{App Bundle}/Contents/Helpers/{Company}Updater.app/Contents/MacOS/{Company}Updater --install</code>.
+The application should then register itself with the updater by calling
+<code>~/Library/Application Support/{Company}/{Company}Updater/Current/{Company}Updater.app/Contents/Helpers/{Company}SoftwareUpdater.bundle/Contents/Helpers/ksadmin -r -P product_id -v version -x path_to_application_bundle -U</code>.</p>
+<p>If the app is running as root, it must add <code> --system</code> to the install command
+above, use <code>-S</code> instead of <code>-U</code> in the ksadmin command, and use the ksadmin in
+<code>/Library</code> instead of <code>~/Library</code>.</p>
+<p>Additional <a href="functional_spec#keystone-shims">registration arguments</a> are
+available to register additional data and provide alternative ways to track the
+version of a product.</p>
+<p>Repeating the updater installation and app registration is not harmful. To
+make the system more resilient, apps may periodically repeat the installation
+and registration process.</p>
+<h4 id="cruregistration-library">CRURegistration library</h4>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/updater/mac/client_lib"><code>CRURegistration</code></a>
+is an Objective-C library that simplifies interactions with the updater. macOS
+applications can use CRURegistration by bundling an updater ZIP archive in their
+app&#39;s <code>Resources</code> folder and then using <code>installUpdaterWithReply:</code> and
+<code>registerVersion:existenceCheckerPath:serverURLString:reply:</code> to install the
+updater and register. It&#39;s normal to call <code>install...</code> and then immediately
+<code>register...</code> (before waiting for a result) every time the application starts.
+The library will use its internal mechanisms to sequence the tasks and avoid
+unnecessary work.</p>
+<p><strong>Googlers</strong> can find <a href="http://go/cruregistration">CRURegistration here</a> and a
+ready-to-bundle <a href="http://go/googleupdatermacoszip">GoogleUpdater.zip here</a>.</p>
+<h2 id="updating-applications">Updating Applications</h2>
+<p>Serving updates to your application depends on your server integration. Googlers
+should consult the <a href="http://go/omaharelease-getting-started">guide here</a>.</p>
+<p>Updates are delivered as CRX archives containing your application&#39;s installer
+executables. When run, the executables should emplace the new version of your
+software on the disk.</p>
+<p>More details are available:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/updater/win/installer_api.h">Windows details</a>,
+<a href="installer_api_mac">macOS details</a>.</p>
+<h2 id="uninstalling-applications-and-the-updater">Uninstalling Applications and the Updater</h2>
+<p>The updater will uninstall itself automatically when it has no applications to
+manage, but it may need some help to do so in a timely manner.</p>
+<p>On Windows, when an application is uninstalled, it should delete the
+<code>(HKCU or HKLM)\SOFTWARE\{Company}\Update\Clients\{AppID}</code> key and then run
+the command line in
+<code>(HKCU or HKLM)\SOFTWARE\{Company}\Updater</code> → <code>UninstallCmdLine</code>. This will
+notify the updater of the uninstallation.</p>
+<p>On macOS, it is assumed that users uninstall software by deleting the app
+bundle. The updater will notice this on its own in a few hours. However, it
+can be notified earlier by running any
+<code>{Company}Updater.app/Contents/MacOS/{Company}Updater --wake-all</code> (with
+<code>--system</code> for system-scope installs).</p>
+<h2 id="additional-updater-command-lines">Additional Updater Command Lines</h2>
+<p>Command line arguments for the updater client are documented in the <a href="functional_spec#Command-Line">functional spec</a>.</p>
+<h2 id="error-codes">Error codes</h2>
+<p>To allow for the updater metainstaller process exit codes to be meaningful, all
+metainstaller and updater error codes are in a range above 0xFFFF (65535) for
+Windows only, which is the range of Windows error codes.</p>
+<p>Specifically:</p>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/updater/win/installer/exit_code.h">Metainstaller error codes</a>
+are in the 73000 range.</li>
+<li>Error codes
+<a href="https://source.chromium.org/search?q=kCustomInstallErrorBase&amp;sq=&amp;ss=chromium%2Fchromium%2Fsrc:chrome%2Fupdater%2F">funnelled through <code>update_client</code></a>
+are in the 74000 range.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/updater/constants.h?q=%22%2F%2F%20Error%20codes.%22&amp;ss=chromium%2Fchromium%2Fsrc:chrome%2Fupdater%2F">updater error codes</a>
+are in the 75000 range.</li>
+</ul>
+<h2 id="dynamic-install-parameters">Dynamic Install Parameters</h2>
+<p>Windows tagged metainstallers support a number of dynamic install parameters:</p>
+<h3 id="needsadmin"><code>needsadmin</code></h3>
+<p><code>needsadmin</code> is one of the install parameters that can be specified for
+first installs via the
+<a href="https://crsrc.org/c/chrome/updater/tools/tag_main.cc">metainstaller tag</a>.
+<code>needsadmin</code> is used to indicate whether the application needs admin rights to
+install.</p>
+<p>For example, here is a command line for the Updater on Windows that includes:</p>
+<pre>UpdaterSetup.exe --install=&quot;appguid=YourAppID&amp;needsadmin=False&quot;</pre>
+<p>In this case, the updater client understands that the application installer
+needs to install the application on a per-user basis for the current user.</p>
+<p><code>needsadmin</code> has the following supported values:</p>
+<ul>
+<li><code>true</code>: the application supports being installed systemwide and once
+installed, is available to all users on the system.</li>
+<li><code>false</code>: the application supports only user installs.</li>
+<li><code>prefers</code>: the application installation is first attempted systemwide. If the
+user refuses the
+<a href="https://docs.microsoft.com/en-us/windows/security/identity-protection/user-account-control/how-user-account-control-works">UAC prompt</a>
+however, the application is then only installed for the current user. The
+application installer needs to be able to support the installation as system, or
+per-user, or both modes.</li>
+</ul>
+<h3 id="lang"><code>lang</code></h3>
+<p><code>lang</code> is one of the install parameters that can be specified for
+installs via the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/updater/tools/tag.py">metainstaller tag</a>.
+<code>lang</code> is used to indicate the language that the updater installation UI is
+displayed in.</p>
+<p>For example, here is a command line for the Updater on Windows that includes
+<code>lang</code> Arabic:</p>
+<pre>UpdaterSetup.exe --install=&quot;appguid=YourAppID&amp;lang=ar&quot;</pre>
+<p>The full list of supported languages for Chromium and Google Chrome respectively are listed in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/app/chromium_strings.grd">chromium_strings.grd</a>
+and
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/app/google_chrome_strings.grd">google_chrome_strings.grd</a>
+under <code>&lt;translations&gt;</code>.</p>
+<p>For example:</p>
+<pre>&lt;translations&gt;
+    &lt;file path=&quot;resources/chromium_strings_af.xtb&quot; lang=&quot;af&quot; /&gt;
+    ...</pre>
+<p>indicates that <code>lang=af</code> is a valid tag fragment.</p>
+<h3 id="installdataindex"><code>installdataindex</code></h3>
+<p><code>installdataindex</code> is one of the install parameters that can be specified for
+first installs on the command line or via the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/updater/tools/tag.py">metainstaller tag</a>.</p>
+<p>For example, here is a typical command line for the Updater on Windows:</p>
+<pre>UpdaterSetup.exe /install &quot;appguid=YourAppID&amp;appname=YourAppName&amp;needsadmin=False&amp;lang=en&amp;installdataindex =verboselog&quot;</pre>
+<p>In this case, the updater client sends the <code>installdataindex</code> of <code>verboselog</code> to
+the update server.</p>
+<p>The server retrieves the data corresponding to <code>installdataindex=verboselog</code> and
+returns it back to the updater client.</p>
+<p>The updater client writes this data to a temporary file in the same directory as
+the application installer.</p>
+<p>The updater client provides the temporary file as a parameter to the application
+installer.</p>
+<p>Let&#39;s say, as shown above, that the update server responds with these example
+file contents:</p>
+<pre>{&quot;logging&quot;:{&quot;verbose&quot;:true}}</pre>
+<p>The updater client will now create a temporary file, say <code>c:\my path\temporaryfile.dat</code> (assuming the application installer is running from
+<code>c:\my path\YesExe.exe</code>), with the following file contents:</p>
+<pre>\xEF\xBB\xBF{&quot;logging&quot;:{&quot;verbose&quot;:true}}</pre>
+<p>and then provide the file as a parameter to the application installer:</p>
+<pre>&quot;c:\my path\YesExe.exe&quot; --installerdata=&quot;c:\my path\temporaryfile.dat&quot;</pre>
+<ul>
+<li>Notice above that the temp file contents are prefixed with an UTF-8 Byte Order
+Mark of <code>EF BB BF</code>.</li>
+<li>For MSI installers, a property will passed to the installer:
+<code>INSTALLERDATA=&quot;pathtofile&quot;</code>.</li>
+<li>For exe-based installers, as shown above, a command line parameter will be
+passed to the installer: <code>--installerdata=&quot;pathtofile&quot;</code>.</li>
+<li>For Mac installers, an environment variable will be set:
+<code>INSTALLERDATA=&quot;pathtofile&quot;</code>.</li>
+<li>Ownership of the temp file is the responsibility of the application installer.
+The updater will not delete this file.</li>
+<li>This installerdata is not persisted anywhere else, and it is not sent as a
+part of pings to the update server.</li>
+</ul>
+<h2 id="application-commands">Application Commands</h2>
+<p>The Application Command feature allows installed Updater-managed products to
+pre-register and then later run command lines (elevated for system
+applications). The command lines can also include replaceable parameters
+substituted at runtime.</p>
+<p>For more information, please see the
+<a href="functional_spec#Application-Commands">functional spec</a>.</p>
+<h2 id="logging--debugging">Logging &amp; Debugging</h2>
+<p>The updater writes logs to its product directory, whether or not it is
+installed. Note that there are two possible product directories (one for
+system scope and one for user scope), and so there are often two log files.</p>
+<p>See <a href="functional_spec#logging">the functional spec</a> for more details.</p>
+<h2 id="force-updates-to-all-apps">Force updates to all apps</h2>
+<p>Updates can be force-triggered by running the updater as follows for Windows:</p>
+<ul>
+<li>Run the following from a medium <code>cmd</code> prompt for <code>user</code> installs, and from an
+elevated prompt with the <code>--system</code> switch for <code>system</code> installs:
+<code>Start /w \{Company}\{Company}Updater\{latest version}\updater.exe --update-apps {--system}</code>.</li>
+<li>For example, using &quot;Google&quot; as the <code>Company</code>:
+<code>Start /w \Google\GoogleUpdater\142.0.7416.0\updater.exe --update-apps {--system}</code>.</li>
+</ul>
+<p>Similar steps apply for macOS. The example below is using &quot;Google&quot; as the
+<code>Company</code>:</p>
+<ul>
+<li>(macOS, per-user):
+<code>~/Library/Application\ Support/Google/GoogleUpdater/*/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --update-apps</code></li>
+<li>(macOS, system-wide):
+<code>sudo /Library/Application\ Support/Google/GoogleUpdater/*/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --update-apps --system</code></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updater/user_manual.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updater/user_manual.md</a>
+  </p>
+</div>

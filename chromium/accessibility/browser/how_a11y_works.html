@@ -1,0 +1,176 @@
+<h1>How Chrome Accessibility Works</h1>
+<p>This document explains the technical details behind Chrome accessibility
+code by starting at a high level and progressively adding more levels of
+detail.</p>
+<p>Please read the accessibility <a href="../overview">overview</a> first.</p>
+<h2 id="accessibility-for-a-simple-non-browser-application">Accessibility for a simple (non-browser) application</h2>
+<p>As described in the <a href="../overview">overview</a>, every platform has its own
+accessibility APIs that are used by both assistive technology and sometimes
+by automation software. To better understand the challenges of accessibility
+support in Chromium, let&#39;s first explore what it&#39;s like to build an
+accessible application using a standard UI toolkit.</p>
+<p>Examples of standard toolkits would be Win32 UI controls or .NET components
+on Windows, or Cocoa NSViews on macOS, or Android Views via Java or Kotlin.
+When you use such a toolkit to build an application, a lot of accessibility
+comes for free.</p>
+<p>Typically every UI element - including containers and grouping elements - gets
+its own corresponding accessibility element, implementing that platform&#39;s
+accessibility API. So if you add a button, checkbox, scroll container, or
+text field to your application, you don&#39;t need to do any work to make it
+accessible - the built-in UI toolkit has provided all of that already.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/ax_tree.png" alt="Simple accessibility tree"></p>
+<h3 id="changing-accessibility-properties">Changing accessibility properties</h3>
+<p>There are some cases where a bit of extra information may be required on the
+part of the app author. If you add an image button, you may need to ensure
+you provide an accessible label (&quot;alt text&quot;). Other common simple modifications
+might include hiding UI elements from accessibility because they&#39;re primarily
+decorative, or marking a UI element as an alert to ensure it&#39;s announced
+to screen reader users when it appears. However, none of these require
+writing more than a few lines of code.</p>
+<h4 id="windows">Windows</h4>
+<p>The <a href="https://docs.microsoft.com/en-us/windows/win32/winauto/dynamic-annotation-api">dynamic annotation API</a>
+lets you change any accessibility property of a UI element represented by an HWND. Here&#39;s a tiny code
+snippet showing how you could override the accessible name property (PROPID_ACC_NAME) to be the
+text &quot;Accessible Name&quot;:</p>
+<pre data-language="C++">Microsoft::WRL::ComPtr&lt;IAccPropServices&gt; pAccPropSrv;
+CoCreateInstance(CLSID_AccPropServices, nullptr, CLSCTX_ALL,
+                 IID_PPV_ARGS(&amp;pAccPropSrv).CoCreateInstance());
+COleVariant varName(&quot;Accessible Name&quot;);
+pAccPropSrv-&gt;SetHwndProp(hwnd, OBJID_CLIENT, 0, PROPID_ACC_NAME, varName);</pre>
+<h4 id="android">Android</h4>
+<p>On Android, if you don&#39;t want to subclass a View you can just set its accessibility delegate
+as an easy way to override one or more accessibility attributes. In this case we override
+the content description to say &quot;Accessible Name&quot;.</p>
+<pre data-language="Java">view.setAccessibilityDelegate(new AccessibilityDelegate() {
+    public void onInitializeAccessibilityNodeInfo(View host, AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(host, info);
+        info.setContentDescription(&quot;Accessible Name&quot;);
+    }
+});</pre>
+<h3 id="custom-controls-and-subclassing">Custom controls and subclassing</h3>
+<p>When building a custom control, more work is often required. As an example,
+suppose an application is implementing a &quot;cover flow&quot; image picker, such as the
+one found in the original iTunes album picker.  Conceptually the user is picking
+one album from a large list, but visually it&#39;s shown as a horizontally scrolling
+list of album cover images that fly by in three dimensions.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/images/cover_flow.jpg" alt="Screenshot of a cover flow image picker"></p>
+<p>While this control may be implemented as a single UI element, from the
+perspective of accessibility APIs it would typically be represented as
+a parent element with a &quot;list box&quot; role and children with &quot;option&quot; roles.
+This can&#39;t be done using the code snippets above, which are only sufficient
+for overriding some simple accessibility properties. A more complex custom
+control like this requires subclassing.</p>
+<p>To make the CoverFlow accessible, we would need to first need to subclass the
+appropriate accessibility interface, such as IAccessible on Windows or
+AccessibilityDelegate on Android. In addition to setting properties such as the
+name and role (like ComboBox on Windows, or Choice on Android), we&#39;d want to
+override any methods that are used to walk the tree, in order to give this
+object accessible children - one for each option the user can pick.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/cover_flow.png" alt="Figure showing a single CoverFlow control in the UI object tree, and a tree of
+controls in the accessibility tree"></p>
+<p>Each option would be another instance of our subclass of an accessibility
+interface. Each one might need to implement a role, name, and very
+importantly, a bounding box representing the position of that option
+within the view&#39;s bounds.</p>
+<h2 id="a-single-process-browser-for-basic-html-only">A single-process browser for basic HTML only</h2>
+<p>Let&#39;s next discuss what&#39;s needed in order to make a single-process web
+browser accessible. At the time Chrome was first released, this is
+more or less how other browsers such as Safari and Firefox worked.
+However, let&#39;s start with the simplifying assumption that we&#39;re dealing
+with basic HTML only, and no CSS or ARIA.</p>
+<p>From the perspective of accessibility APIs, the web contents is one
+big custom control. Modern web browsers do not build their UI using
+platform UI elements.</p>
+<p>*** note
+Years ago, some browsers may have rendered web pages using
+platform UI elements, but this doesn&#39;t scale well as most UI frameworks
+get bogged down after thousands of UI elements, whereas many web pages
+have hundreds of thousands of elements.</p>
+<p>In addition, note that web form controls support CSS effects
+including unusual ones like 3-D transformations, whereas most
+platform UI controls don&#39;t support, e.g. a 45-degree rotated
+text box.</p>
+<hr>
+<p>The web contents can be represented as a tree of elements.
+For the moment let&#39;s ignore details between the DOM and the
+final rendered layout, and let&#39;s just assume that every DOM node
+corresponds perfectly to one node in the accessibility tree.</p>
+<p>Essentially the web browser needs to create one accessible
+object for every DOM node. The accessible object subclasses
+that platform&#39;s accessibility interface, and its accessible
+role, name, and other properties can all be computed by
+querying the corresponding DOM node. When DOM nodes are created
+or destroyed, the corresponding accessible objects need to
+be updated accordingly.</p>
+<p>Here&#39;s an example of a DOM tree and a corresponding accessibility
+tree. There&#39;s a 1:1 correspondence in this example.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/single_process.png" alt="Figure showing a tree of DOM nodes for a web page and a corresponding
+tree of accessibility nodes"></p>
+<p>Objects in the accessibility tree are sometimes called &quot;wrappers&quot; in this
+design. Each accessible object &quot;wraps&quot; its corresponding DOM element. The DOM
+element contains all of the state, and the accessible object just implements the
+accessibility API based on the DOM element. This design avoids the need for DOM
+code to need to be tightly bound to accessibility code.</p>
+<p>For efficiency, these accessible objects are sometimes built
+lazily. Initially there could just be one accessible object
+for the root of the web contents. If that object is ever
+queried and asked for its children, the accessible objects
+corresponding to the children of the root DOM element could
+be created on-demand, and so on. This is useful because
+many users don&#39;t have any features enabled that use
+accessibility APIs, so very little work would be done
+unless they&#39;re utilized.</p>
+<p>The overall system so far is pretty simple - the DOM tree is used to
+build the accessibility tree, which is used to communicate with the
+platform accessibility APIs.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/single_process_system.png" alt="System diagram showing a browser consisting of a DOM tree that&#39;s used
+to build an accessibility tree, which is used to communicate with
+assistive technology using platform accessibility APIs."></p>
+<h2 id="a-single-process-browser-with-css-and-aria">A single-process browser with CSS and ARIA</h2>
+<p>In the previous example we assumed that there was a 1:1 correspondence
+between a DOM node and an accessible node. Unfortunately that doesn&#39;t
+hold true. Here are some examples of where that assumption doesn&#39;t work.</p>
+<ul>
+<li>CSS can have generated content, like list item markers (bullets or numbers)
+or text inserted before or after an element with pseudoselectors
+like ::before and ::after.</li>
+<li>Some DOM subtrees are never displayed (like &lt;head&gt;) or are hidden using
+display:none</li>
+<li>Some DOM nodes are hidden using visibility:hidden, but it&#39;s possible for
+some of their descendant nodes to be visible</li>
+<li>aria-hidden can hide a subtree from the accessibility tree even if it&#39;s
+displayed visually</li>
+<li>ARIA role=none or role=presentation hides a node but not its subtree</li>
+<li>aria-owns can be used to reparent a node within the accessibility tree</li>
+</ul>
+<p>So in practice, the accessibility tree is similar to the DOM tree, but with
+important differences.  Objects in the accessibility tree usually wrap DOM
+nodes, but occasionally they wrap pseudoelements (like list markers or CSS
+generated content) or other layout objects with no corresponding node (such as
+images that are children of pseudoelements).</p>
+<p>Here&#39;s an example where the DOM tree has list items and the corresponding
+accessibility tree has nodes for the list item markers:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/generated_content.png" alt="Figure showing a DOM tree with an ordered list of two items and the
+accessibility tree containing extra nodes for the generated list items"></p>
+<p>Here&#39;s a different example where some of the content is excluded from the
+accessibility tree using aria-hidden:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/hidden_content.png" alt="Figure showing a DOM tree with a sidebar with aria-hidden=true on it
+and the corresponding accessibility tree where the sidebar isn&#39;t present
+at all"></p>
+<p>This new system diagram reflects the complexity of the system when
+you consider both HTML, CSS, and ARIA all affecting the accessibility
+tree.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/single_process_css_system.png" alt="System diagram showing a browser consisting of a DOM tree that along
+with CSS is used to build a Layout tree, then together the DOM and Layout
+trees build an accessibility tree, which is used to communicate with
+assistive technology using platform accessibility APIs."></p>
+<h2 id="a-multi-process-browser">A multi-process browser</h2>
+<p>In the next section we&#39;ll explore how the system diagram needs to change
+in order to support a multi-process browser.</p>
+<p>See <a href="how_a11y_works_2">How Chrome Accessibility Works, Part 2</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/how_a11y_works.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/how_a11y_works.md</a>
+  </p>
+</div>

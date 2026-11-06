@@ -1,0 +1,446 @@
+<h1>OS Upgrade Playbook for Chromium Builders and Fleets</h1>
+<h2 id="overview--planning">Overview &amp; Planning</h2>
+<p>Upgrading the operating system (OS) of a Chromium builder or an entire machine
+fleet (e.g., Ubuntu 20.04 -&gt; 24.04, macOS 14 -&gt; macOS 15, Windows 10 -&gt; Windows
+11) is a critical infrastructure operation. It ensures the build infrastructure
+remains secure, performant, and supported by upstream vendors.</p>
+<p>To prevent production outages, tree closures, or Commit Queue (CQ) regressions,
+OS upgrades follow a phased rollout strategy.</p>
+<h3 id="pre-flight-checklist">Pre-Flight Checklist</h3>
+<p>Before initiating an OS upgrade:</p>
+<ol>
+<li><strong>File a Parent Tracking Bug:</strong> Create a tracking bug on Buganizer under
+<code>Infra&gt;Client&gt;Chrome</code> to track the overall OS upgrade lifecycle.</li>
+<li><strong>Review Infrastructure Terminology:</strong> If you are new to Chromium build
+infrastructure, consult <a href="glossary"><code>glossary.md</code></a> for definitions of LUCI,
+Swarming, Milo, Starlark, CQ, and CI. For general builder setup, refer to
+<a href="new_builder"><code>new_builder.md</code></a>.</li>
+<li><strong>Notify Tree Sheriffs &amp; Gardeners:</strong> Inform current Chromium Sheriffs /
+Gardeners of the upcoming migration window.</li>
+<li><strong>Determine Hardware Lead Times:</strong> For physical hardware pools (e.g. Macs,
+mobile devices), coordinate early with Fleet Operations via
+<a href="https://goto.google.com/ineedhw"><code>go/ineedhw</code></a> (<em>Google internal</em>).</li>
+</ol>
+<hr>
+<h2 id="phase-1-set-up-a-non-blocking-fyi-builder">Phase 1: Set Up a Non-Blocking FYI Builder</h2>
+<p>Before migrating a production CQ (try) or CI builder to a new OS version,
+engineers first create an <strong>FYI builder</strong>.</p>
+<h3 id="purpose-of-an-fyi-builder">Purpose of an FYI Builder</h3>
+<ul>
+<li><strong>Identical Workload:</strong> Runs the exact same set of compile targets and tests
+as the production builder to be migrated.</li>
+<li><strong>Isolated Target OS:</strong> Configured with swarming dimensions targeting the
+<strong>new</strong> OS version.</li>
+<li><strong>Non-Blocking Signal:</strong><ul>
+<li>Does <strong>NOT</strong> block developer CLs or CQ runs.</li>
+<li>Does <strong>NOT</strong> close the waterfall tree upon test failure.</li>
+<li>Does <strong>NOT</strong> trigger alerts for sheriff rotations or gardeners.</li>
+</ul>
+</li>
+</ul>
+<p>This provides the team with a safe environment to validate compile integrity,
+identify test flakiness or regressions on the new OS, fix missing dependencies,
+and adjust test parameters prior to fleet rollout.</p>
+<h3 id="step-by-step-creating-an-fyi-builder">Step-by-Step: Creating an FYI Builder</h3>
+<ol>
+<li><p><strong>Locate the Builder Group Starlark File</strong>
+FYI builder definitions live under
+<a href="https://github.com/chromium/chromium/blob/HEAD/infra/config/subprojects/chromium/ci/"><code>//infra/config/subprojects/chromium/ci/</code></a>.
+Choose or create the relevant OS-specific FYI Starlark file (e.g.,
+<code>chromium.fyi.star</code>, <code>chromium.linux.star</code>, or <code>chromium.mac.fyi.star</code>).</p>
+</li>
+<li><p><strong>Define the FYI Builder in Starlark</strong>
+For general guidelines on creating builders, see
+<a href="new_builder"><code>new_builder.md</code></a>. Copy the existing production builder
+declaration and adjust the following properties:</p>
+<ul>
+<li><strong><code>name</code></strong>: Choose a descriptive name reflecting the target OS version
+(e.g., <code>&quot;linux-rel-2404-fyi&quot;</code> or <code>&quot;mac-15-rel-fyi&quot;</code>).</li>
+<li><strong><code>builder_group</code></strong>: Set to an FYI group such as <code>&quot;chromium.fyi&quot;</code>,
+<code>&quot;chromium.mac.fyi&quot;</code>, or <code>&quot;chromium.win.fyi&quot;</code>.</li>
+<li><strong><code>os</code></strong>: Specify the new OS swarming dimension using the Starlark helper
+(e.g., <code>os = os.LINUX_UBUNTU_24_04</code> or <code>os = os.MAC_15</code>).</li>
+<li><strong>Mirror Configuration / Targets:</strong> Mirror the original builder&#39;s GN args
+and test bundle targets.</li>
+<li><strong>Tree Closing / Sheriffing:</strong> Omit <code>tree_closing_notifiers</code> and
+<code>gardener_rotations</code> (or set them to <code>None</code>).</li>
+</ul>
+<pre data-language="starlark"># Example: FYI builder for testing Ubuntu 24.04 OS upgrade
+ci.builder(
+    name = &quot;linux-rel-2404-fyi&quot;,
+    builder_group = &quot;chromium.fyi&quot;,
+    os = os.LINUX_UBUNTU_24_04,
+    cores = 32,
+    # Match GN args and target specs of the production &quot;linux-rel&quot; builder
+    gn_args = gn_args.config(
+        # ... matching config ...
+    ),
+    targets = targets.bundle(
+        # ... matching targets ...
+    ),
+    # Ensure no sheriff alerts or tree closing notifications
+    gardener_rotations = None,
+    tree_closing_notifiers = None,
+)</pre>
+</li>
+<li><p><strong>Commit the Starlark Config Changes</strong>
+Submit a CL with the new FYI builder declaration and verify the builder
+appears on Milo to validate build and test health on the target OS.</p>
+</li>
+</ol>
+<h3 id="monitoring-performance--capacity-planning">Monitoring Performance &amp; Capacity Planning</h3>
+<p>Once the FYI builder is running, use it to gather performance metrics and test
+health signals before proceeding to fleet-wide migration.</p>
+<h4 id="1-measure-build--test-speed-regressions">1. Measure Build &amp; Test Speed Regressions</h4>
+<ul>
+<li><strong>Runtime Metrics:</strong> Compare build completion times and test suite execution
+durations against the production builder running on the current OS version.</li>
+<li><strong>Failures &amp; Flakiness:</strong> Identify individual test suites, binary target
+failures, or flakiness specific to the new OS version so fixes can be landed
+early.</li>
+</ul>
+<h4 id="2-capacity-planning--hardware-requests-goineedhw---google-internal">2. Capacity Planning &amp; Hardware Requests (<code>go/ineedhw</code> - Google internal)</h4>
+<p>If build or test execution on the new OS version is slower and the performance
+regression is unavoidable (e.g., due to updated OS security controls, kernel
+changes, or toolchain overhead), you must allocate additional hardware capacity
+to preserve CQ cycle times and CI throughput.</p>
+<ul>
+<li><strong>Estimate Required Capacity:</strong> Use the calculator at
+<a href="https://goto.google.com/estimating-bot-capacity"><code>go/estimating-bot-capacity</code></a>
+(<em>Google internal</em>) to determine the target fleet size.<ul>
+<li><strong>Formula / Example:</strong> If OS version N requires X bots to handle workload
+demand, and OS version N+1 is 20% slower, you will need an extra 20%
+capacity (1.2 * X bots) to maintain identical throughput.</li>
+</ul>
+</li>
+<li><strong>File a Hardware Request:</strong> Request the additional bot capacity via
+<a href="https://goto.google.com/ineedhw"><code>go/ineedhw</code></a> (<em>Google internal</em>). State the
+business justification clearly (e.g., <em>&quot;OS migration for Chromium builder
+<code>&lt;builder_name&gt;</code> from OS N to OS N+1 requires 20% additional bot capacity due
+to observed runtime regressions&quot;</em>).</li>
+</ul>
+<hr>
+<h2 id="phase-2-test-greening--handling-os-specific-failures">Phase 2: Test Greening &amp; Handling OS-Specific Failures</h2>
+<p>When running the FYI builder on the new OS version, it is common for certain
+test suites or individual tests to fail due to OS API changes, updated system
+dependencies, font differences, or updated security policies.</p>
+<p>Before migrating production CI/CQ builders to the new OS version, the FYI
+builder must reach a <strong>&quot;green&quot; (passing) state</strong>.</p>
+<h3 id="workflow-for-handling-test-failures">Workflow for Handling Test Failures</h3>
+<p>If tests or test suites fail on the new OS version, follow this decision
+process:</p>
+<pre>                  ┌──────────────────────────────┐
+                  │  Test Fails on New OS Version│
+                  └──────────────┬───────────────┘
+                                 │
+                   Is the fix obvious or easy?
+                                 │
+                   ┌─────────────┴─────────────┐
+                   │                           │
+                [ YES ]                     [ NO ]
+                   │                           │
+        ┌──────────┴──────────┐     ┌──────────┴──────────┐
+        │ Implement &amp; Submit  │     │ Disable Test ONLY   │
+        │ Code/Fix directly   │     │ on New OS Version   │
+        └─────────────────────┘     └──────────┴──────────┘
+                                               │
+                                    ┌──────────┴──────────┐
+                                    │ File Tracking Bug   │
+                                    │ against Test Owner  │
+                                    └─────────────────────┘</pre>
+<h4 id="1-fix-easy--obvious-failures-directly">1. Fix Easy / Obvious Failures Directly</h4>
+<p>If the root cause is straightforward (e.g., a missing OS package dependency,
+minor flag adjustment, or updated baseline path), the migrating engineer should
+land a fix directly in the codebase.</p>
+<h4 id="2-selective-disabling-on-the-new-os-version">2. Selective Disabling on the New OS Version</h4>
+<p>If the failure is complex, non-obvious, or outside the migrating engineer&#39;s area
+of expertise, <strong>do not let it block the OS upgrade</strong>.
+Instead, <strong>selectively disable</strong> the failing test or test suite <strong>only on the
+new OS version</strong>:</p>
+<ul>
+<li><p><strong>Individual Tests (e.g., Web Tests / Browser Tests / GTest Expectation Files):</strong>
+Use OS-specific expectation tags in the relevant expectation or filter file
+(e.g. <code>TestExpectations</code>, <code>gpu_test_expectations.txt</code>, or <code>filter</code> files) so the
+test continues running and passing on older OS versions while being skipped on
+the new OS version.</p>
+<p><em>Example (Web Tests / GPU Expectations):</em></p>
+<pre data-language="text"># crbug.com/1234567 [ Ubuntu-24.04 ] fast/canvas/draw-image.html [ Failure ]
+# crbug.com/1234568 [ Win11 ] GlTests.SimpleRendering/0 [ Skip ]</pre>
+</li>
+<li><p><strong>Entire Test Suites in Starlark Target Specifications:</strong>
+If an entire binary test suite fails on the new OS version and cannot run,
+temporarily exclude or filter the test suite for the new OS mixin/variant in
+<a href="https://github.com/chromium/chromium/blob/HEAD/infra/config/targets/"><code>//infra/config/targets/</code></a>:</p>
+<pre data-language="starlark"># Example: Exclude a failing suite specifically on the new OS variant/mixin
+targets.matrix_compound_suite(
+    name = &quot;linux_chromeos_gtests&quot;,
+    matrix = {
+        &quot;browser_tests&quot;: {
+            &quot;mixins&quot;: [
+                # ...
+            ],
+            &quot;remove_mixins&quot;: [
+                &quot;ubuntu_24_04&quot;,  # Skip on Ubuntu 24.04 pending crbug.com/1234569
+            ],
+        },
+    },
+)</pre>
+</li>
+</ul>
+<h4 id="3-file-tracking-bugs-against-test-owners">3. File Tracking Bugs against Test Owners</h4>
+<p>For <strong>every</strong> test or test suite disabled on the new OS version:</p>
+<ol>
+<li><strong>File a Bug:</strong> File a tracking bug under the appropriate component for the
+team owning the test/feature.</li>
+<li><strong>Include Context:</strong><ul>
+<li>State the specific OS version upgrade (e.g., <em>&quot;Test <code>FooBrowserTest.Bar</code>
+fails on Ubuntu 24.04 / macOS 15 / Win 11&quot;</em>).</li>
+<li>Attach build logs, stack traces, and links to failing FYI builder runs on
+Milo.</li>
+</ul>
+</li>
+<li><strong>Reference Bug in Code:</strong> Annotate the disabled test expectation or Starlark
+comment with the tracking bug link (<code>crbug.com/XXXXXX</code>).</li>
+<li><strong>Assign / CC Owners:</strong> Assign or CC the component owners so they can
+investigate, fix, and re-enable the test once resolved.</li>
+</ol>
+<hr>
+<h2 id="phase-3-dual-os-dimension-acceptance--fleet-transition">Phase 3: Dual OS Dimension Acceptance &amp; Fleet Transition</h2>
+<p>Once tests run cleanly (&quot;green&quot;) on the new OS version and capacity adjustments
+are planned, you can begin transitioning the target production builder and
+machine fleet to the new OS version.</p>
+<h3 id="dual-os-dimension-strategy">Dual OS Dimension Strategy</h3>
+<p>Rather than performing a hard cutover from the old OS version to the new OS
+version overnight, the standard strategy is to update the builder&#39;s accepted
+swarming dimensions in Starlark to <strong>temporarily accept both OS versions</strong>.</p>
+<h4 id="benefits">Benefits</h4>
+<ul>
+<li><strong>Gradual Fleet Migration:</strong> Lab operations and infrastructure teams can
+progressively re-image or add new machines to the bot pool without disrupting
+running builds.</li>
+<li><strong>Continuous Scheduling:</strong> Swarming automatically assigns tasks to available
+bots running <em>either</em> the current OS version or the new OS version
+(<code>&quot;OS_Old|OS_New&quot;</code>).</li>
+<li><strong>Low Risk:</strong> If an issue occurs during machine re-imaging, tasks seamlessly
+fall back to remaining bots on the existing OS version.</li>
+</ul>
+<h3 id="real-world-starlark-configuration">Real-World Starlark Configuration</h3>
+<p>In Chromium&#39;s infrastructure configuration, builders specify abstract OS
+constants (e.g., <code>os = os.MAC_DEFAULT</code>), while the central LUCI builder
+configuration in <code>main.star</code> and target mixin definitions map these constants to
+Swarming dimension <strong>OR expressions</strong> (<code>&quot;Mac-14|Mac-15&quot;</code>).</p>
+<h4 id="1-builder-definition-infraconfigsubprojects">1. Builder Definition (<code>//infra/config/subprojects/...</code>)</h4>
+<p>Builders reference abstract OS constants rather than hardcoded OS versions:</p>
+<pre data-language="starlark"># Example: Builder referencing os.MAC_DEFAULT
+ci.builder(
+    name = &quot;Mac Builder Siso FYI&quot;,
+    gn_args = &quot;ci/Mac Builder&quot;,
+    os = os.MAC_DEFAULT,
+    cpu = cpu.ARM64,
+)</pre>
+<h4 id="2-central-os-dimension-override-infraconfigmainstar">2. Central OS Dimension Override (<code>//infra/config/main.star</code>)</h4>
+<p>During an OS upgrade (e.g., macOS 14 to macOS 15), update
+<code>os_dimension_overrides</code> in <code>main.star</code> to map <code>os.MAC_DEFAULT</code> to a dual OS
+dimension expression using <code>|</code>:</p>
+<pre data-language="starlark">chromium_luci.configure_builders(
+    enable_alerts_configuration = True,
+    os_dimension_overrides = {
+        # Temporarily accept both Mac-14 and Mac-15 bots during OS migration
+        os.MAC_DEFAULT: &quot;Mac-14|Mac-15&quot;,
+        os.MAC_BETA: &quot;Mac-15&quot;,
+        os.WINDOWS_DEFAULT: os.WINDOWS_10,
+    },
+)</pre>
+<h4 id="3-target-mixins-infraconfigtargetsmixinsstar">3. Target Mixins (<code>//infra/config/targets/mixins.star</code>)</h4>
+<p>Similarly, update relevant test mixins to accept tasks on either OS version:</p>
+<pre data-language="starlark">targets.mixin(
+    name = &quot;mac_arm64&quot;,
+    swarming = targets.swarming(
+        dimensions = {
+            &quot;cpu&quot;: &quot;arm64&quot;,
+            &quot;os&quot;: &quot;Mac-14|Mac-15&quot;,
+        },
+    ),
+)</pre>
+<hr>
+<h3 id="incremental-in-place-fleet-migration">Incremental In-Place Fleet Migration</h3>
+<p>In practice, teams rarely have spare capacity to stand up a parallel fleet of
+new OS bots to replace 100% of an existing builder&#39;s demand upfront. Instead, OS
+upgrades are conducted as an <strong>in-place migration</strong>.</p>
+<p>To avoid capacity bottlenecks, build queuing, or CQ cycle time spikes, bots
+assigned to the builder (or shared testing pool) are removed and upgraded in
+<strong>small increments of 5% or less</strong> of the total fleet size at any given time.</p>
+<pre>┌────────────────────────────────────────────────────────────────────────┐
+│                      Fleet Bot Pool (100% Total)                       │
+└────────────────────────────────────────────────────────────────────────┘
+  │                                                                    │
+  ├── 95%+ Active on Current OS (Serving CQ/CI Workloads)               │
+  │                                                                    │
+  └── &lt;= 5% Quarantined / Re-imaged to New OS (Incremental In-Place)   │</pre>
+<h4 id="a-physical-hardware-fleet-eg-macs-ios-android-devices">A. Physical Hardware Fleet (e.g., Macs, iOS, Android Devices)</h4>
+<p>For bare-metal physical hosts and connected test devices (such as Mac mini
+pools, iOS test beds, or Android device labs):</p>
+<ol>
+<li><strong>Update Configs to Dual OS Acceptance:</strong> Land the Starlark CL setting
+<code>os_dimension_overrides</code> to <code>&quot;Mac-14|Mac-15&quot;</code> (as seen in real-world CLs like
+<a href="https://chrome-internal-review.googlesource.com/c/chrome/src-internal/+/9313101"><code>chrome-internal-review CL 9313101</code></a><ul>
+<li><em>Google internal</em>).</li>
+</ul>
+</li>
+<li><strong>File a Fleet Operations Ticket:</strong> File a ticket with the <strong>Fleet Systems /
+Lab Operations</strong> team requesting an OS upgrade for the target physical device
+pool.</li>
+<li><strong>Quarantine &amp; Re-image in 5% Batches:</strong> Lab operators temporarily place a
+small batch (≤ 5% of the fleet) into quarantine, wipe and re-image the hosts
+with the new OS version (e.g. macOS 15), and reconnect them to Swarming.</li>
+<li><strong>Verify &amp; Repeat:</strong> Once the initial batch passes health checks and
+successfully processes jobs on the new OS version, repeat the process for
+subsequent 5% batches until 100% of the physical hardware fleet is upgraded.</li>
+</ol>
+<h4 id="b-virtual-machine-fleet-gce-bots">B. Virtual Machine Fleet (GCE Bots)</h4>
+<p>For Google Compute Engine (GCE) cloud-based virtual bot pools, bot allocation
+and auto-scaling limits are managed via internal infrastructure configuration
+files in <a href="https://github.com/chromium/chromium/blob/HEAD/infra/config"><code>infradata/config</code></a> (<em>Google internal</em>).</p>
+<ol>
+<li><p><strong>Locate GCE Pool Configuration:</strong> Open the relevant bot pool definition file
+(such as
+<code>data/config/configs/chromium-swarm/starlark/bots/chromium/tests.star</code> in
+<code>infradata/config</code>).</p>
+</li>
+<li><p><strong>Real-World Config Example (e.g., Windows 10 -&gt; Windows 11 Migration):</strong>
+The bot pool (e.g., <code>chromium.tests</code>) defines separate GCE bot declarations
+for each OS version (such as <code>chrome.gce_win10_22h2</code> and
+<code>chrome.gce_win11_24h2</code>).</p>
+<pre data-language="starlark"># Win10 test fleet
+chrome.gce_win10_22h2(
+    prefix = &quot;chrome-windows-10-main&quot;,
+    amount = chrome.robocrop(
+        min_amount = 100,
+        max_amount = 3700,
+    ),
+    resource_group = &quot;chrome-desktop-robocrop&quot;,
+    machine_type = &quot;e2-standard-8&quot;,
+),
+# Win11 test fleet
+chrome.gce_win11_24h2(
+    prefix = &quot;chrome-windows-11&quot;,
+    amount = chrome.robocrop(
+        min_amount = 30,
+        max_amount = 150,
+    ),
+    machine_type = &quot;e2-standard-8&quot;,
+),</pre>
+</li>
+<li><p><strong>Gradually Shift Robocrop Allocation Amounts:</strong>
+To perform an in-place OS migration for builders using this pool, gradually
+<strong>decrease</strong> the bot capacity (<code>min_amount</code> and <code>max_amount</code> in
+<code>chrome.robocrop</code>) assigned to the older OS bot group (Windows 10) by a small
+percentage (≤ 5%), and <strong>increase</strong> the allocation for the new OS bot group
+(Windows 11) by the exact same amount.</p>
+</li>
+<li><p><strong>Land Config &amp; Monitor:</strong> Land the <code>infradata/config</code> CL. The GCE provider /
+Robocrop autoscaler will automatically drain instances running the old OS
+image and spin up replacement instances running the new OS image. Monitor
+Swarming queue times and task success rates before performing the next
+allocation shift.</p>
+</li>
+</ol>
+<hr>
+<h2 id="phase-4-updating-try--cq-builder-mirroring-specifications">Phase 4: Updating Try / CQ Builder Mirroring Specifications</h2>
+<p>Try (Commit Queue) builders pick up their test configurations and compile
+settings by <strong>mirroring</strong> one or more CI builders.</p>
+<h3 id="scenarios-for-os-upgrades">Scenarios for OS Upgrades:</h3>
+<ol>
+<li><p><strong>Generic CI Builder Migration (No Change Needed):</strong>
+If the mirrored CI builder itself is migrated to a new OS version (e.g., via
+central <code>os_dimension_overrides</code> in <code>main.star</code>), no changes are needed in the
+Try builder&#39;s declaration.</p>
+</li>
+<li><p><strong>OS-Versioned CI Builder Migration:</strong>
+Some Try builders specifically mirror CI builders that explicitly target a
+specific OS version.
+<em>Example:</em> The <code>android-x64-rel</code> Try/CQ builder specifically mirrors the
+<code>ci/android-15-x64-rel</code> CI builder. When upgrading the default CQ builder from
+Android 15 to Android 16, the Try builder declaration must be updated to mirror
+<code>ci/android-16-x64-rel</code> instead.</p>
+</li>
+</ol>
+<h3 id="starlark-configuration-example">Starlark Configuration Example</h3>
+<p>In <a href="https://github.com/chromium/chromium/blob/HEAD/infra/config/subprojects/chromium/try/"><code>../../infra/config/subprojects/chromium/try/</code></a>
+(e.g., <code>try.star</code> or <code>try/subproject.star</code>), update the <code>mirrors</code> list and
+<code>gn_args</code> config references:</p>
+<pre data-language="starlark"># Example: Updating try builder android-x64-rel to mirror Android 16 CI builder
+try_.orchestrator_builder(
+    name = &quot;android-x64-rel&quot;,
+    mirrors = [
+        &quot;ci/android-12l-x64-rel-cq&quot;,
+        # Updated from ci/android-15-x64-rel to ci/android-16-x64-rel
+        &quot;ci/android-16-x64-rel&quot;,
+        &quot;ci/android-webview-13-x64-hostside-rel&quot;,
+    ],
+    gn_args = gn_args.config(
+        configs = [
+            # Updated to match new Android 16 CI builder config
+            &quot;ci/android-16-x64-rel&quot;,
+            &quot;release_try_builder&quot;,
+        ],
+    ),
+)</pre>
+<hr>
+<h2 id="phase-5-safe-production-cutover--disabling-gardening-alerts">Phase 5: Safe Production Cutover &amp; Disabling Gardening Alerts</h2>
+<p>When applying OS configuration changes to production CI builders, engineers can
+temporarily place the builder in <strong>experimental mode</strong> or <strong>disable
+gardening/sheriff alerts</strong> until the migration change is verified to be safe on
+live infrastructure.</p>
+<h3 id="1-temporarily-disabling-gardening-alerts--tree-closing">1. Temporarily Disabling Gardening Alerts &amp; Tree Closing</h3>
+<p>To prevent accidental sheriff alerts or waterfall tree closures while verifying
+a production builder on a new OS version:</p>
+<pre data-language="starlark">ci.builder(
+    name = &quot;linux-rel&quot;,
+    # Temporarily set gardener rotations and tree closing to None during OS cutover
+    gardener_rotations = None,
+    tree_closing_notifiers = None,
+    # ...
+)</pre>
+<h3 id="2-experimental-mode">2. Experimental Mode</h3>
+<p>Alternatively, set <code>is_experimental = True</code> (or <code>experimental = True</code>) on the
+builder declaration. Experimental builders continue executing builds and
+publishing results to Milo, but their build status does not affect CQ or sheriff
+rotations.</p>
+<h3 id="3-restoring-sheriff-alerts">3. Restoring Sheriff Alerts</h3>
+<p>Once the builder successfully completes several build cycles on the new OS
+version without infrastructure errors:</p>
+<ol>
+<li>Re-enable <code>gardener_rotations</code> and <code>tree_closing_notifiers</code>.</li>
+<li>Remove experimental flags.</li>
+<li>Submit the Starlark configuration CL.</li>
+</ol>
+<hr>
+<h2 id="phase-6-lock-builders-to-new-os-version--post-migration-cleanup">Phase 6: Lock Builders to New OS Version &amp; Post-Migration Cleanup</h2>
+<p>Once 100% of the bot fleet (physical or virtual) has been re-imaged and verified
+on the new OS version, complete the migration with post-rollout cleanup:</p>
+<ol>
+<li><p><strong>Lock Builder &amp; Mixins to New OS:</strong>
+Update <code>os_dimension_overrides</code> in <code>main.star</code> and mixin definitions in
+<code>mixins.star</code> to point exclusively to the new OS version (e.g., <code>os.MAC_DEFAULT: &quot;Mac-15&quot;</code>).</p>
+</li>
+<li><p><strong>Decommission Temporary FYI Builder:</strong>
+Remove the temporary FYI builder created in Phase 1 (<code>linux-rel-2404-fyi</code>)
+from Starlark.</p>
+</li>
+<li><p><strong>Clean Up Temporary Test Expectations:</strong>
+Audit and remove temporary OS expectation tags (e.g., <code>[ Ubuntu-24.04 ]</code> or
+<code>[ Win11 ]</code>) or mixin exclusions as test component owners land fixes for
+disabled tests.</p>
+</li>
+<li><p><strong>Land Final Cleanup CL:</strong>
+Land the final Starlark configuration CL to complete the OS upgrade
+lifecycle.</p>
+</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/infra/os_upgrade_playbook.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/infra/os_upgrade_playbook.md</a>
+  </p>
+</div>

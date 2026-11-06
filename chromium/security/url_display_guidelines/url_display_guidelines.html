@@ -1,0 +1,258 @@
+<h1>Guidelines for URL Display</h1>
+<p><em>This document covers the best practices and pitfalls for building UI to display URLs in browsers and other apps. It covers the main categories of problems and challenges that we’ve seen in building Chrome. The guidance is intended to be generally applicable, but includes some Chrome-specific notes throughout.</em></p>
+<h2 id="background">Background</h2>
+<p>The <a href="https://url.spec.whatwg.org">URL</a> displayed in a user agent&#39;s address bar is often the only security context directly exposed to users, and therefore in many cases it is the only signal users can reasonably rely upon to determine whether or not they should trust a particular website.</p>
+<h3 id="components-of-urls">Components of URLs</h3>
+<p>A URL is made up of a number of components, the majority of which should not have any impact on security decisions:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/url_components.png" alt="Components of a URL"></p>
+<p>Usually, the security context that the user cares about is the <strong><a href="#registrabledomain">registrable domain</a></strong> of the top-level page’s URL&#39;s origin, even when a given page is made up of components from many different origins. The registrable domain typically consists of a subdomain of an entry on the <a href="https://publicsuffix.org/">Public Suffix list</a>. For instance, bbc.co.uk is a registrable domain under the co.uk public suffix.  The <strong>fully-qualified hostname</strong> consists of a registrable domain, and optionally one or more <strong>subdomain</strong> labels.</p>
+<p>The <strong>scheme</strong> of the URL determines the protocol by which the content from the URL is delivered. If the scheme refers to a non-secure protocol like HTTP, and especially if the protocol traverses an untrusted network, the <strong>registrable domain</strong> information may not accurately describe the true source of the content because the content may have been modified by a <strong>man-in-the-middle</strong> on the network. The <strong>port</strong> number only needs to be specified if it is not the default for the scheme (e.g., 80 for HTTP, 443 for HTTPS).</p>
+<p>Other components of the URL (<strong>subdomain</strong>, <strong>userinfo</strong>, <strong>path</strong>, <strong>query</strong>, and <strong>fragment</strong>) are completely under the control of the website and may be crafted in an attempt to spoof the user by misrepresenting the registrable domain.</p>
+<h3 id="challenges-and-threats">Challenges and Threats</h3>
+<p>Malicious websites are motivated to misrepresent their provenance in order to trick visitors into performing an unsafe action (e.g., phishing, malware install) or to otherwise grant unwarranted trust in the information provided by the site (e.g., &quot;fake news&quot;).</p>
+<p>As the web platform becomes more capable (introducing new features like device access, etc.), the importance of evaluating the source of web content grows more important and the desire to misrepresent its origins by bad actors increases.</p>
+<h2 id="best-practices">Best Practices</h2>
+<h3 id="tldr-advice-on-what-to-display">TL;DR: Advice on What to Display</h3>
+<p><strong>Where possible, avoid displaying URLs</strong>, especially when the user is likely to be making a trust decision. Instead, display only the <strong><a href="#simplify">origin</a></strong>. Additionally, if the connection is <strong>not secure</strong>, add an indicator to that effect:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/not_secure.png" alt="Chrome showing Not Secure indicator"></p>
+<p>If the URL display only applies to secure URLs (for example, a permission prompt that can only be requested by HTTPS pages), omit the scheme and non-default ports (443 for HTTPS).</p>
+<p>More detailed guidance follows.</p>
+<h3 id="show-origins-at-all-times">Show Origins At All Times</h3>
+<p>To avoid spoofing, the current best practice is to always show the
+origin. Whenever the user is interacting with web content, they might be making
+a security decision (&quot;Should I enter my password?&quot;, “Should I trust the
+information on this site?”, etc.) and the origin is what we currently rely on to
+help them make that decision.</p>
+<p>It’s also important to show an origin when Chrome is explicitly asking the user to make a security decision.</p>
+<p>Currently, in Chrome, origins are hidden in the following special cases:</p>
+<ul>
+<li><p>Chrome for Android, when a user scrolls down</p>
+</li>
+<li><p>Fullscreen mode across platforms</p>
+</li>
+<li><p>Installed PWAs on Android</p>
+<ul>
+<li>The origin is shown in the install dialog</li>
+</ul>
+</li>
+<li><p>Installed PWAs on Desktop after animation</p>
+<ul>
+<li>The origin is shown in the install dialog</li>
+</ul>
+</li>
+</ul>
+<h3 id="use-only-security-reviewed-libraries-to-canonicalize-and-parse-strings-into-urls">Use Only Security-Reviewed Libraries to Canonicalize and Parse Strings into URLs</h3>
+<p>Parsing and canonicalization of URLs is extremely <a href="https://www.blackhat.com/docs/us-17/thursday/us-17-Tsai-A-New-Era-Of-SSRF-Exploiting-URL-Parser-In-Trending-Programming-Languages.pdf">error-prone</a>, and mistakes can introduce both spoofing vulnerabilities and lower-level problems that can lead to vulnerabilities as severe as remote code execution.</p>
+<p>Rather than attempting to parse components from a string directly, you should always obtain components of the URL via a trusted object (e.g., GURL/KURL).</p>
+<h3 id="display-urls-in-canonical-form">Display URLs in Canonical Form</h3>
+<p>In virtually all cases, you should display URLs in <strong>canonical</strong> form, and you should rely on trusted libraries to perform such canonicalization. Canonicalization includes a number of steps that help ensure that URLs are in their simplest form and the one a user is most likely to be able to understand.</p>
+<p>Canonicalization includes:</p>
+<ol>
+<li><p>Normalizing the hostname (e.g., convert to lowercase, perform IDN-related normalizations)</p>
+</li>
+<li><p>Stripping default ports</p>
+</li>
+<li><p>Path simplification</p>
+</li>
+<li><p>Unnecessarily-encoded octets are decoded</p>
+</li>
+</ol>
+<p>For example, canonicalization converts <code>https://ExAmPle.com:443/one/%2e./Tw%2fo/</code> to the canonical form, <code>https://example.com/Tw%2fo/</code>.</p>
+<p>Do not attempt to write your own canonicalizer.</p>
+<h3 id="simplify">Simplify URLs Whenever Possible</h3>
+<ul>
+<li><p><a href="https://url.spec.whatwg.org/#url-rendering">Do NOT display the username and password components</a> of URLs (e.g., <code>https://user:password@example.com/</code>) anywhere the user is making a security decision.</p>
+<ul>
+<li>As these credentials may be sensitive, consider omitting them wherever possible (e.g., do not include username and password when generating printouts).</li>
+</ul>
+</li>
+<li><p>When the primary purpose of displaying a URL is to have the user make a security decision, display the <strong>origin</strong>, or if scheme is always HTTPS, just the <strong>domain</strong>. Omit the path, query string, fragment, and any other components of the URL because they provide opportunities for spoofing.</p>
+<ul>
+<li><p>Do not display the scheme if it will always be https://. If the scheme is not https://, prefer to show a security indicator icon (dangerous triangle icon + &quot;Not Secure&quot; string on http://) rather than the scheme itself.</p>
+</li>
+<li><p>In Chrome, we often remove subdomains &quot;www&quot; and “m” as a special case to simplify the origin, except when they are part of the registrable domain. You can use the <a href="https://cs.chromium.org/chromium/src/components/url_formatter/url_formatter.h?q=kFormatUrlOmitTrivial&amp;sq=package:chromium&amp;g=0&amp;l=63"><code>kFormatUrlOmitTrivialSubdomains</code></a> flag for <code>url_formatter::FormatURL</code> (<a href="https://cs.chromium.org/chromium/src/components/history/core/browser/history_backend.cc?type=cs&amp;q=OmitTrivialSubdomains&amp;sq=package:chromium&amp;g=0&amp;l=127">example usage</a>).</p>
+</li>
+<li><p>Omit default ports (80 for http, 443 for https).</p>
+</li>
+<li><p>If in a space-constrained environment, it&#39;s acceptable to use registrable domain instead of the full origin.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="eliding-urls">Eliding URLs</h3>
+<ul>
+<li><p>tl;dr: use <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/url_formatter/elide_url.h;l=40;drc=9bf53ab9128027a4a3df5cc10485e7962ddfad4d;bpv=1;bpt=1?q=url_formatter::ElideUrl&amp;sq=&amp;ss=chromium%2Fchromium%2Fsrc"><code>url_formatter::ElideUrl</code></a></p>
+</li>
+<li><p>When the full hostname cannot be displayed, elide labels starting from the front. (Right-to-Left character support means that the <em>front</em> of the string may not appear at the <em>left</em>). (Note that Chrome&#39;s omnibox behavior on desktop is currently <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=527638">buggy</a> in this respect.)</p>
+</li>
+<li><p>Ensure that at least the registrable domain can be shown, to avoid showing <strong>...paypal.com</strong> when loading <code>https://not-really-paypal.com</code>.</p>
+</li>
+</ul>
+<p> <img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/elision.jpg" alt="URL elision examples"></p>
+<h3 id="highlighting">Highlighting</h3>
+<p>If showing the full URL is deemed necessary, consider highlighting to help the user focus on the most security relevant information in the URL.</p>
+<ul>
+<li>Ideally, consider highlighting only the registrable domain component, to increase awareness of situations where a malicious site uses a misleading subdomain in an attempt to fool the user:</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/highlighting.png" alt="URL highlighting example"></p>
+<p>(Note that Chrome&#39;s omnibox does <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=527638#c6">not</a> currently do this style of highlighting.)</p>
+<h3 id="url-length">URL Length</h3>
+<p>In general, the <em>web platform</em> does not have limits on the length of URLs (although 2^31 is a common limit). <em>Chrome</em> limits URLs to a maximum length of <strong>2MB</strong> for practical reasons and to avoid causing denial-of-service problems in inter-process communication.</p>
+<p>On most platforms, Chrome’s omnibox limits URL display to <strong>32kB</strong> (<code>kMaxURLDisplayChars</code>) although a <strong>1kB</strong> limit is used on VR platforms.</p>
+<p>Ensure that the client behaves reasonably if the length of the URL exceeds any limits:</p>
+<ul>
+<li><p>Origin information appears at the start of the URL, so truncating the end is typically harmless.</p>
+</li>
+<li><p>Rendering a URL as an empty string in edge cases is not ideal, but truncating poorly (or crashing unexpectedly and insecurely) could be worse.</p>
+</li>
+<li><p>Attackers may use long URLs to abuse other parts of the system. <a href="https://en.wikipedia.org/wiki/Domain_Name_System#Domain_name_syntax">DNS syntax</a> limits fully-qualified hostnames to <strong>253 characters</strong> and each <a href="#label">label</a> in the hostname to <strong>63 characters</strong>, but Chromium&#39;s GURL class does not enforce this limit.</p>
+</li>
+</ul>
+<h3 id="display-font">Display Font</h3>
+<p>Selection of fonts can have a meaningful impact on the security of a URL display. Relevant factors include:</p>
+<ul>
+<li>Visual distinctiveness for visually-similar characters and sequences (<strong>0</strong> vs <strong>o</strong>, <strong>1</strong> vs <strong>l</strong>, <strong>w</strong> vs. <strong>vv</strong>, etc.), especially in the ASCII character set:</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/visually_similar.png" alt="Visually similar characters in a URL"></p>
+<ul>
+<li>Glyphs for all necessary characters, including those used in International Domain Names</li>
+</ul>
+<p>If a font is missing a glyph for a character, it may render as a blank, leading to the possibility of a spoofing vulnerability like <a href="https://crbug.com/714196">714196</a>.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/blank_spoofing.png" alt="Spoofing vulnerability from a missing glyph"></p>
+<p>Depending on the platform, font fallback may be used.</p>
+<h3 id="display-of-international-characters">Display of International Characters</h3>
+<p>Non-English characters present a huge attack surface for spoofing attacks but are today <em>relatively</em> uncommon in the host component of URLs worldwide. As global use of the web continues to grow, use of International Domain Names is expected to grow and URL displays should not be overly English-centric.</p>
+<p>The primary threat of non-ASCII text in URLs is a <a href="https://en.wikipedia.org/wiki/Homoglyph">homoglyph attack</a> in which ASCII characters are swapped with visually-identical (or near-identical) characters.</p>
+<h4 id="idn-display-restrictions-in-chrome">IDN Display Restrictions in Chrome</h4>
+<p>To mitigate URL spoofing attacks, Chrome follows a set of <a href="https://www.chromium.org/developers/design-documents/idn-in-google-chrome">rules</a> that determine whether a given International Domain Name is shown in Unicode characters or degrades to show the ASCII <a href="https://en.wikipedia.org/wiki/Punycode">Punycode</a> string (starting with &quot;xn--&quot;). The Punycode string is not intended to be human-readable: display of Punycode is instead only intended to defeat homoglyph attacks.</p>
+<p>Chrome’s <a href="https://cs.chromium.org/chromium/src/components/url_formatter/elide_url.h?q=FormatURLForS&amp;sq=package:chromium&amp;l=108"><code>FormatURLForSecurityDisplay</code></a> function encapsulates this and other behaviors.</p>
+<ul>
+<li><p>Follow Chrome’s rules for <a href="https://www.chromium.org/developers/design-documents/idn-in-google-chrome">IDN Display</a> to avoid homograph attacks.</p>
+</li>
+<li><p>For the benefit of technical users, <em>consider</em> displaying an indicator when a URL contains non-ASCII characters. To date, Chrome has not implemented such an indicator. By way of comparison, Internet Explorer shows an icon in the address bar which opens a bubble that provides more information. An international URL indicator generally <em>should not</em> be positioned as a warning, but should allow the user to get more information about the content of the URL. Security-savvy users may find this UI useful in detecting spoofs and escalating reports to more effective security mechanisms (e.g., SafeBrowsing).</p>
+</li>
+</ul>
+<h4 id="rtl">RTL</h4>
+<ul>
+<li><p>Ensure that URLs are sanitized to prevent abuse by <a href="https://unicode.org/reports/tr9/#Explicit_Directional_Embeddings">Right-to-Left override characters</a>.</p>
+<ul>
+<li><p>In Chrome Views code, a view that solely contains a URL should use <code>DIRECTIONALITY_AS_URL</code>, which handles everything correctly and will be updated if the spec changes.</p>
+</li>
+<li><p>Follow the advice in <a href="#sneakyunicode">Sneaky Unicode Characters</a> below to remove all explicit overrides.</p>
+</li>
+<li><p>Wrap the URL in U+202A ... U+202C, so that it is forced to appear in a LTR paragraph. The URL standard (both <a href="https://www.ietf.org/rfc/rfc3987.txt">RFC 3987</a> and <a href="https://url.spec.whatwg.org">https://url.spec.whatwg.org</a>) mandate that URLs are displayed in LTR paragraphs, no matter what they contain.</p>
+</li>
+</ul>
+</li>
+</ul>
+<p><a name="sneakyunicode"></a></p>
+<h4 id="sneaky-unicode-characters">Sneaky Unicode Characters</h4>
+<p>An attacker may abuse whitespace and line-wrapping characters in order to push the display of their true origin out of view. Such characters should be banned or displayed in %-escaped form.</p>
+<ul>
+<li><p>Non-breaking spaces (U+00A0) and other invisible characters (e.g., U+2000 to U+200A inclusive).</p>
+</li>
+<li><p>Unicode line terminators (e.g., U+2028, U+2029, and U+0085).</p>
+</li>
+<li><p>Unicode explicit directional formatting commands (e.g., U+200E--U+200F, U+202A--U+202E, see the full <a href="https://unicode.org/reports/tr9/#Directional_Formatting_Characters">list</a> and <a href="https://cs.chromium.org/chromium/src/net/base/escape.cc?l=172&amp;rcl=dc22553340d5c4dda162f17a07d706748be44042"><code>ShouldUnescapeCodePoint</code></a>).</p>
+</li>
+<li><p>Characters that look like security UI (e.g., U+1F512 🔒).</p>
+<ul>
+<li>Emoji may be confusing because users are not accustomed to seeing graphics in URL displays and may be misled into believing that they represent claims on the browser’s part (e.g., the Lock emoji). See issue <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=746350">746350</a>.</li>
+</ul>
+</li>
+<li><p>Use of <a href="https://blog.emojipedia.org/fun-emoji-hacks/">Combining characters</a> to create look-alikes.</p>
+</li>
+</ul>
+<p>In Chromium, this is handled by routines in <code>base/strings/escape.h</code>. Outside of Chromium, consult <code>ShouldUnescapeCodePoint</code> in <code>net/base/escape.cc</code> for guidance.</p>
+<h3 id="literal-ip-addresses">Literal IP Addresses</h3>
+<p>A URL may contain an IPv4 or IPv6 literal in the host component instead of a fully-qualified hostname:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/ip_example.png" alt="URL with an IP literal hostname"></p>
+<h4 id="ipv4">IPv4</h4>
+<p>The canonical representation of an IPv4 literal is <a href="https://en.wikipedia.org/wiki/Dot-decimal_notation">dotted-decimal</a> (aka &quot;dotted quad&quot;) notation, but many surfaces will accept a 32-bit decimal integer (or even <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=787361">octal</a> or hex) IP representation:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/decimal_ip.png" alt="URL with a decimal IP literal hostname">
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/hex_ip.png" alt="URL with a hex IP literal hostname"></p>
+<p>IPv4 literals should be converted to canonical form for display. If your code makes any sort of formatting or security decision based on the <a href="https://blogs.msdn.microsoft.com/ieinternals/2014/03/06/browser-arcana-ip-literals-in-urls/">absence of dots within a hostname</a>, be sure that it isn’t fooled by undotted IP literals.</p>
+<h5 id="ipv6">IPv6</h5>
+<p>IPv6 literals use colons as a delimiter and the literal is wrapped in square brackets (this allows disambiguating the colons in the literal from the colon which begins the port component of the URL).</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/ipv6.png" alt="URL with an IPv6 literal hostname"></p>
+<p>If an IPv6 Literal contains a Zone component, the % delimiter must be <a href="https://en.wikipedia.org/wiki/IPv6_address#Use_of_zone_indices_in_URIs">escaped to %25</a>.</p>
+<p>https://[fe80::1ff:fe23:4567:890a%25eth0]/</p>
+<p>Most surfaces will accept non-canonical forms of IPv6 literals:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/noncanonical_ipv6.png" alt="URL with a non-canonical IPv6 literal hostname"></p>
+<p>....but these should be converted to canonical form for display.</p>
+<h3 id="uncommon-schemes-and-virtual-urls">Uncommon Schemes and Virtual URLs</h3>
+<p>While many users have at least <em>some</em> familiarity with HTTP and HTTPS URLs, the browser offers a number of more exotic URL schemes with which users have no experience.</p>
+<p>Where possible, limit acceptance of URLs outside of the most common schemes (e.g., HTTP/HTTPS) to reduce risk.</p>
+<p><a href="https://en.wikipedia.org/wiki/Data_URI_scheme">data:// URIs</a> carry the response data directly within the URL, meaning that they do not need to hit the network. Attackers have tried to spoof users by putting what <em>looks like</em> an origin at the front of the URL string, so Chrome no longer allows websites to navigate directly to Data URIs in the top frame and also labels Data URIs as &quot;Not secure&quot; in the event that a user loads one via other means. filesystem URIs (a Chrome-specific scheme) receive the same treatment.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/notsecure_data_uri.png" alt="data:// URI with a Not Secure label"></p>
+<p>filesystem URIs and blob URIs embed the origin from which they originated as the first component after the URL scheme.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/notsecure_blob_uri.png" alt="blob URI with a Not Secure label"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/notsecure_filesystem_uri.png" alt="filesystem URI with a Not Secure label"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/filesystem_uri.png" alt="filesystem URI"></p>
+<p>In Chrome, file:// schemed URIs do not contain a host component; be sure that your UI accounts for this possibility.</p>
+<p><strong>view-source:</strong> is a special URL scheme which wraps another scheme (e.g., <code>view-source:https://example.com</code>) and displays the document in a special Blink &quot;view-source&quot; mode. For security reasons, web content cannot navigate directly to view-source URLs.</p>
+<p>In Chrome, a <strong>virtual URL</strong> is roughly the URL displayed in the omnibox even though the real url is something different. An example is <code>chrome://newtab/</code> -- under the hood it is either a local version or a remote one but that shouldn’t matter to the user who sees it as the New Tab Page. URL spoofs can easily result if the URL display surface fails to update the URL upon a navigation to a resource which is not intended to be rendered under the virtual URL (e.g., <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=750298">750298</a>).</p>
+<h3 id="-escaping">%-Escaping</h3>
+<p>The <a href="https://url.spec.whatwg.org/#url-rendering">URL Standard</a> suggests that <em>the path, query, and fragment components of the URL should have their sequences of percent-encoded bytes replaced with code points resulting from percent decoding those sequences converted to bytes, unless that renders those sequences invisible.</em></p>
+<p>This is generally a user-experience feature (some sites strive to use human-readable URLs and %-escaped characters are not human readable) but could lead to spoofing attacks if performed incorrectly.</p>
+<p>Chrome’s <a href="https://cs.chromium.org/chromium/src/components/url_formatter/url_formatter.h?l=100&amp;rcl=1deab0dd75a1659e44b8159d60de9cf26dc3dbf0"><code>FormatUrl</code></a> function takes an <a href="https://cs.chromium.org/chromium/src/base/strings/escape.h?l=64&amp;rcl=ecba19472b9290092745e9846edd0d6fd8dcc48b"><code>UnescapeRule</code></a> parameter that determines what components should be decoded for display. As of Chrome 65, we unescape path, query, and fragment components for display.</p>
+<p>Space and other invisible characters should be displayed in encoded form.</p>
+<p>Example URL with space and emoji:</p>
+<pre> https://example.com/ 🍌/? 🍌# 🍌</pre>
+<p>Renders as:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/url_display_guidelines/encode_for_display.png" alt="Rendering of Emojis and spaces in Chrome&#39;s omnibox"></p>
+<h2 id="glossary">Glossary</h2>
+<p>A <strong>homograph</strong> (or <strong>homoglyph</strong>) <strong>attack</strong> occurs when an attacker uses lookalike characters to make one URL resemble another. This can occur purely in ASCII (e.g., <strong>1</strong> looks like <strong>l</strong>, <strong>vv</strong> looks like <strong>w</strong>), or when using Unicode characters via the <strong>International Domain Names</strong> mechanism.</p>
+<p><strong>International Domain Names</strong> is a mechanism for using Unicode characters for hostnames. Under the covers, the Unicode labels are encoded using <strong><a href="https://tools.ietf.org/html/rfc3492">punycode</a></strong> and prefixed with <strong>xn--</strong>. The browser may display the label in Unicode, or in the underlying punycode form. Users are not expected to be able to decode the punycode form: display in this form is intended to foil spoofing attempts.</p>
+<p><a name="label"></a>
+A <strong><a href="https://en.wikipedia.org/wiki/DNS_label#Parts_of_a_domain_name">label</a></strong> is a single component of a <a href="https://en.wikipedia.org/wiki/Domain_name">domain name</a> string, delimited by periods. For instance, &quot;<em>www</em>&quot;, “<em>microsoft</em>”, and “<em>com</em>” are the three labels in the domain name “<em><a href="http://www.microsoft.com">www.microsoft.com</a></em>”.</p>
+<p>A <strong>plain hostname</strong> is an unqualified, single-label hostname like &quot;<em>payroll</em>&quot;, which typically refers to a server on a local intranet.</p>
+<p>A <strong><a href="https://publicsuffix.org/">Public Suffix</a></strong> is the suffix portion of a FQDN under which independent entities may register subdomains. For example, <em>ltd.co.im</em> is a Public Suffix. A Public Suffix contains one or more labels. Sometimes the term &quot;<a href="https://wiki.mozilla.org/Gecko:Effective_TLD_List">effective TLD</a>&quot; is used as a synonym.</p>
+<p><a name="registrabledomain"></a>
+The <strong>registrable domain</strong> is the public suffix plus one additional label. Sometimes eTLD+1 is used as a synonym.</p>
+<h2 id="a-caveat-on-security-sensitive-surfaces">A Caveat on Security Sensitive Surfaces</h2>
+<p>It should be noted that <em>many</em> displays of URLs in the web platform occur on surfaces <a href="https://docs.google.com/document/d/11-SXwzCGBlk8q1cNtb7peZjb2UjRPrKSFhOfZhTOz24/edit#">not deemed securable</a>.</p>
+<p>Any URL displayed below the browser’s &quot;<a href="https://textslashplain.com/2017/01/14/the-line-of-death/">line of death</a>&quot; is usually <em>inherently</em> spoofable (insofar as web content can usually fake the entire UI). In particular, this means that UI helpers like the <a href="https://dev.chromium.org/user-experience/status-bubble#TOC-Lack-of-Security">Status Bubble</a> are inherently untrustworthy.</p>
+<h2 id="out-of-scope-for-this-document">Out-of-Scope for this Document</h2>
+<h3 id="dynamic-displays">Dynamic Displays</h3>
+<p>This document focuses on best practices for &quot;static&quot; display of URLs: that is, the display of a single URL.</p>
+<p>URL spoofing vulnerabilities also include &quot;dynamic&quot; spoofing attacks that rely upon the browser failing to update a URL display (or failing to do so in a timely manner) based on an asynchronous operation.</p>
+<p>If your UI allows for asynchronous operations (e.g., user can interact with one context while another loads), care must be taken to avoid mismatch between the &quot;current&quot; and the “loading” context.</p>
+<p>The most common dynamic attacks rely upon the fact that navigation and script execution are typically asynchronous operations.</p>
+<ul>
+<li><p>An attacker starts on a page with a trusted URL and then navigates that context to malicious content. The user sees the outdated trusted URL and interacts with the malicious content, believing that it is under the control of the trusted site.</p>
+</li>
+<li><p>Alternatively, the attack starts on a malicious page which begins a navigation to a trusted URL. The user sees the pending trusted URL and interacts with the malicious content believing it is under the control of the trusted site.</p>
+</li>
+</ul>
+<p>Dynamic attacks are particularly prevalent and challenging to mitigate in UI surfaces used both for URL input <em>and</em> display, such as the omnibox.</p>
+<p>An additional complexity arises from the fact that some forms of navigation (those which result in a HTTP/204 response or a file download) are not expected to update the URL shown in the omnibox. As a consequence, the precise timing of updates to the URL shown in the omnibox is a critical factor in the security of the system and a common source of vulnerability. Chrome has been discussing possible UI treatments to more clearly differentiate pending and committed URLs in <a href="https://crbug.com/719856">crbug.com/719856</a>.</p>
+<p>However, because dynamic attacks have little in common with static attacks and are generally very tightly tied to the behavior of the URL display surface, they are out of scope for this document.</p>
+<h3 id="misleading-domain-names">Misleading Domain Names</h3>
+<p>The web security model expects the user to recognize which hosts are backed by legitimate organizations (<code>google.com</code>) and which are not (<code>google-update.com</code>).</p>
+<p>For the purposes of this document, we do not concern ourselves with the ability of a website to obtain a misleading domain name that is visually distinctive from a legitimate domain name.</p>
+<p>There exist features, like Safe Browsing and EV certificate display, which may act as a supplement to origin display, but these features are not available in all situations and are often &quot;best effort.&quot; Replacing or augmenting human analysis of origins remains an active topic of research and <a href="https://medium.com/@owencm/rethinking-url-bars-as-primary-browser-ui-e2118339d2c0">brainstorming</a>.</p>
+<h3 id="proxy-domain-names">&quot;Proxy&quot; Domain Names</h3>
+<p>In some cases, a domain owner is willing to supply content from a third-party within their own address space, leading to potential confusion about the ownership and source of the content displayed.</p>
+<p>This is, generally, outside of the client threat-model, although in some cases (e.g., AMP), the client platform may attempt to introduce new UI to clarify the situation.</p>
+<h2 id="testing-url-displays">Testing URL Displays</h2>
+<p>Chromium&#39;s open-source <a href="https://github.com/chromium/trickuri">Trickuri</a> tool is a Go-based proxy server designed to enable manual testing of URL display behavior.</p>
+<h2 id="further-reading">Further Reading</h2>
+<ul>
+<li><p><a href="https://docs.google.com/presentation/d/1Nr47m1qlLjV8xZfw03jVKU3GQpSwbC0PWLHhXcyMcQM/">The Trouble with URLs</a> (LocoMoco Sec Conference talk)</p>
+</li>
+<li><p><a href="https://noncombatant.org/2017/11/07/problems-of-urls/">Chris Palmer’s Problems of URLs</a></p>
+</li>
+<li><p><a href="https://medium.com/@owencm/rethinking-url-bars-as-primary-browser-ui-e2118339d2c0">Rethinking URL bars</a></p>
+</li>
+<li><p><a href="https://cs.chromium.org/chromium/src/components/url_formatter/url_formatter.cc">Chromium’s URL Formatter Component (C++)</a></p>
+</li>
+<li><p><a href="https://github.com/bagder/docs/blob/master/URL-interop.md">URL interop issues across specs</a></p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/url_display_guidelines/url_display_guidelines.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/url_display_guidelines/url_display_guidelines.md</a>
+  </p>
+</div>

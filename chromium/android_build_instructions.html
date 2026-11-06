@@ -1,0 +1,344 @@
+<h1>Checking out and building Chromium for Android</h1>
+<p>There are instructions for other platforms linked from the
+<a href="get_the_code">get the code</a> page.</p>
+<h2 id="instructions-for-google-employees">Instructions for Google Employees</h2>
+<p>Are you a Google employee? See
+<a href="https://goto.google.com/building-android-chrome">go/building-android-chrome</a>
+instead.</p>
+<h2 id="system-requirements">System requirements</h2>
+<ul>
+<li>An x86-64 machine running Linux with at least 8GB of RAM. More than 16GB is
+highly recommended.</li>
+<li>At least 100GB of free disk space.</li>
+<li>You must have Git and Python installed already.</li>
+</ul>
+<p>Most development is done on Ubuntu. Other distros may or may not work;
+see the <a href="linux/build_instructions">Linux instructions</a> for some suggestions.</p>
+<p>Building the Android client on Windows or Mac is not supported and doesn&#39;t work.</p>
+<h2 id="install-depot_tools">Install depot_tools</h2>
+<p>Clone the <code>depot_tools</code> repository:</p>
+<pre data-language="shell">git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git</pre>
+<p>Add <code>depot_tools</code> to the end of your PATH (you will probably want to put this
+in your <code>~/.bashrc</code> or <code>~/.zshrc</code>). Assuming you cloned <code>depot_tools</code>
+to <code>/path/to/depot_tools</code>:</p>
+<pre data-language="shell">export PATH=&quot;$PATH:/path/to/depot_tools&quot;</pre>
+<h2 id="get-the-code">Get the code</h2>
+<p>Create a <code>chromium</code> directory for the checkout and change to it (you can call
+this whatever you like and put it wherever you like, as
+long as the full path has no spaces):</p>
+<pre data-language="shell">mkdir ~/chromium &amp;&amp; cd ~/chromium
+fetch --nohooks android</pre>
+<p>If you don&#39;t want the full repo history, you can save a lot of time by
+adding the <code>--no-history</code> flag to <code>fetch</code>.</p>
+<p>You can make this much faster by passing <code>--git-cache</code> to <code>fetch</code>, which
+seeds the checkout from a shared, prebuilt snapshot instead of cloning from
+scratch (and, unlike <code>--no-history</code>, keeps the full history):</p>
+<pre data-language="shell">fetch --git-cache android</pre>
+<p>The cache directory is chosen automatically (override with <code>$GIT_CACHE_PATH</code>).
+It mirrors every repo it fetches (~30 GB for Chromium) and is shared by all
+checkouts on the machine: working trees reference it instead of copying the
+objects, so the per-checkout <code>.git</code> stays small.</p>
+<p>Expect the command to take 30 minutes on even a fast connection, and many
+hours on slower ones.</p>
+<p>If you&#39;ve already installed the build dependencies on the machine (from another
+checkout, for example), you can omit the <code>--nohooks</code> flag and <code>fetch</code>
+will automatically execute <code>gclient runhooks</code> at the end.</p>
+<p>When <code>fetch</code> completes, it will have created a hidden <code>.gclient</code> file and a
+directory called <code>src</code> in the working directory. The remaining instructions
+assume you have switched to the <code>src</code> directory:</p>
+<pre data-language="shell">cd src</pre>
+<h3 id="converting-an-existing-linux-checkout">Converting an existing Linux checkout</h3>
+<p>If you have an existing Linux checkout, you can add Android support by
+appending <code>target_os = [&#39;linux&#39;, &#39;android&#39;]</code> to your <code>.gclient</code> file (in the
+directory above <code>src</code>):</p>
+<pre data-language="shell">echo &quot;target_os = [ 'linux', 'android' ]&quot; &gt;&gt; ../.gclient</pre>
+<p>Then run <code>gclient sync</code> to pull the new Android dependencies:</p>
+<pre data-language="shell">gclient sync</pre>
+<p>(This is the only difference between <code>fetch android</code> and <code>fetch chromium</code>.)</p>
+<h3 id="install-additional-build-dependencies">Install additional build dependencies</h3>
+<p>Once you have checked out the code, run</p>
+<pre data-language="shell">build/install-build-deps.sh</pre>
+<p>to get all of the dependencies you need to build on Linux, <em>plus</em> all of the
+Android-specific dependencies (you need some of the regular Linux dependencies
+because an Android build includes a bunch of the Linux tools and utilities).</p>
+<p>NOTE: For 32-bit builds, the <code>--lib32</code> command line switch could be used.
+You may run into issues where <code>gperf</code> or <code>pkgconf</code> don&#39;t get installed,
+without it. To remedy this, and potentially other missing packages, you will
+have to install them manually using:</p>
+<pre data-language="shell">sudo apt-get install {missing_pkg}</pre>
+<h3 id="run-the-hooks">Run the hooks</h3>
+<p>Once you&#39;ve run <code>install-build-deps</code> at least once, you can now run the
+Chromium-specific hooks, which will download additional binaries and other
+things you might need:</p>
+<pre data-language="shell">gclient runhooks</pre>
+<p><em>Optional</em>: You can also <a href="https://www.chromium.org/developers/how-tos/api-keys">install API
+keys</a> if you want your
+build to talk to some Google services, but this is not necessary for most
+development and testing purposes.</p>
+<h2 id="setting-up-the-build">Setting up the build</h2>
+<p>Chromium uses <a href="https://pkg.go.dev/go.chromium.org/build/siso#section-readme">Siso</a>
+as its main build tool along with
+a tool called <a href="https://gn.googlesource.com/gn/+/main/docs/quick_start.md">GN</a>
+to generate <code>.ninja</code> files. You can create any number of <em>build directories</em>
+with different configurations. To create a build directory which builds Chrome
+for Android, run <code>gn args out/Default</code> and edit the file to contain the
+following arguments:</p>
+<pre data-language="gn">target_os = &quot;android&quot;
+target_cpu = &quot;arm64&quot;  # See &quot;Figuring out target_cpu&quot; below
+use_remoteexec = true  # Enables distributed builds. See &quot;Faster Builds&quot;.</pre>
+<ul>
+<li>You only have to run this once for each new build directory, Siso will
+update the build files as needed.</li>
+<li>You can replace <code>Default</code> with another name, but
+it should be a subdirectory of <code>out</code>.</li>
+<li>For other build arguments, including release settings, see <a href="https://www.chromium.org/developers/gn-build-configuration">GN build
+configuration</a>.</li>
+<li>For more info on GN, run <code>gn help</code> on the command line or read the
+<a href="https://gn.googlesource.com/gn/+/main/docs/quick_start.md">quick start guide</a>.</li>
+</ul>
+<p>Also be aware that some scripts (e.g. <code>tombstones.py</code>, <code>adb_gdb.py</code>)
+require you to set <code>CHROMIUM_OUTPUT_DIR=out/Default</code>.</p>
+<h3 id="figuring-out-target_cpu">Figuring out target_cpu</h3>
+<p>The value of
+<a href="https://gn.googlesource.com/gn/+/main/docs/reference.md#var_target_cpu"><code>target_cpu</code></a>
+determines what instruction set to use for native code. Given a device (or
+emulator), you can determine the correct instruction set with <code>adb shell getprop ro.product.cpu.abi</code>:</p>
+<table>
+<thead>
+<tr>
+<th><code>getprop ro.product.cpu.abi</code> output</th>
+<th><code>target_cpu</code> value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>arm64-v8a</code></td>
+<td><code>arm64</code></td>
+</tr>
+<tr>
+<td><code>armeabi-v7a</code></td>
+<td><code>arm</code></td>
+</tr>
+<tr>
+<td><code>x86</code></td>
+<td><code>x86</code></td>
+</tr>
+<tr>
+<td><code>x86_64</code></td>
+<td><code>x64</code></td>
+</tr>
+</tbody></table>
+<p>*** promo
+<code>arm</code> and <code>x86</code> may optionally be used instead of <code>arm64</code> and <code>x64</code> for
+non-WebView targets.</p>
+<hr>
+<h2 id="build-chromium">Build Chromium</h2>
+<p>Build Chromium with Siso or Ninja using the command:</p>
+<pre data-language="shell">autoninja -C out/Default chrome_public_apk</pre>
+<p>(<code>autoninja</code> is a wrapper that automatically provides optimal values for the
+arguments passed to <code>siso</code> or <code>ninja</code>.)</p>
+<p>You can get a list of all of the other build targets from GN by running <code>gn ls out/Default</code> from the command line. To compile one, pass the GN label to Ninja
+with no preceding &quot;//&quot; (so, for <code>//chrome/test:unit_tests</code> use <code>autoninja -C out/Default chrome/test:unit_tests</code>).</p>
+<h3 id="multiple-chrome-targets">Multiple Chrome Targets</h3>
+<p>The Google Play Store allows apps to send customized bundles (<code>.aab</code> files)
+depending on the version of Android running on a device. Chrome uses this
+feature to package optimized versions for different OS versions.</p>
+<ol>
+<li><code>chrome_public_bundle</code> &amp; <code>chrome_public_apk</code> (<code>ChromePublic.aab</code>, <code>ChromePublic.apk</code>)<ul>
+<li><code>minSdkVersion=29</code> (Android 10).</li>
+<li>Used for local development.</li>
+<li>WebView packaged independently (<code>system_webview_bundle</code> / <code>system_webview_apk</code>).</li>
+</ul>
+</li>
+<li><code>trichrome_chrome_bundle</code> (<code>TrichromeChrome.aab</code>)<ul>
+<li><code>minSdkVersion=29</code> (Android 10).</li>
+<li>Native code shared with WebView through a &quot;Static Shared Library APK&quot;: <code>trichrome_library_apk</code></li>
+</ul>
+</li>
+</ol>
+<p>*** note
+<strong>Notes:</strong></p>
+<ul>
+<li>These instructions use <code>chrome_public_apk</code>, but any of the other targets can
+be substituted.</li>
+<li>For more about bundles, see <a href="android_dynamic_feature_modules">android_dynamic feature modules.md</a>.</li>
+<li>For more about native library packaging &amp; loading, see <a href="android_native_libraries">android_native_libraries.md</a>.</li>
+<li>There are closed-source equivalents to these targets (for Googlers), which
+are identical but link in some extra code.</li>
+</ul>
+<hr>
+<h2 id="updating-your-checkout">Updating your checkout</h2>
+<p>To update an existing checkout, you can run</p>
+<pre data-language="shell">$ git rebase-update
+$ gclient sync</pre>
+<p>The first command updates the primary Chromium source repository and rebases
+any of your local branches on top of tip-of-tree (aka the Git branch
+<code>origin/main</code>). If you don&#39;t want to use this script, you can also just use
+<code>git pull</code> or other common Git commands to update the repo.</p>
+<p>The second command syncs dependencies to the appropriate versions and re-runs
+hooks as needed.</p>
+<h2 id="installing-and-running-chromium-on-a-device">Installing and Running Chromium on a device</h2>
+<h3 id="plug-in-your-android-device">Plug in your Android device</h3>
+<p>Make sure your Android device is plugged in via USB, and USB Debugging
+is enabled.</p>
+<p>To enable USB Debugging:</p>
+<ul>
+<li>Navigate to Settings &gt; About Phone &gt; Build number</li>
+<li>Click &#39;Build number&#39; 7 times</li>
+<li>Now navigate back to Settings &gt; Developer Options</li>
+<li>Enable &#39;USB Debugging&#39; and follow the prompts</li>
+</ul>
+<p>You may also be prompted to allow access to your PC once your device is
+plugged in.</p>
+<p>You can check if the device is connected by running:</p>
+<pre data-language="shell">third_party/android_sdk/public/platform-tools/adb devices</pre>
+<p>Which prints a list of connected devices. If not connected, try
+unplugging and reattaching your device.</p>
+<h3 id="enable-apps-from-unknown-sources">Enable apps from unknown sources</h3>
+<p>Allow Android to run APKs that haven&#39;t been signed through the Play Store:</p>
+<ul>
+<li>Enable &#39;Unknown sources&#39; under Settings &gt; Security</li>
+</ul>
+<p>In case that setting isn&#39;t present, it may be possible to configure it via
+<code>adb shell</code> instead:</p>
+<pre data-language="shell">third_party/android_sdk/public/platform-tools/adb shell settings put global verifier_verify_adb_installs 0</pre>
+<h3 id="build-the-full-browser">Build the full browser</h3>
+<pre data-language="shell">autoninja -C out/Default chrome_public_apk</pre>
+<p>And deploy it to your Android device:</p>
+<pre data-language="shell">out/Default/bin/chrome_public_apk install</pre>
+<p>The app will appear on the device as &quot;Chromium&quot;.</p>
+<h3 id="build-content-shell">Build Content shell</h3>
+<p>Wraps the content module (but not the /chrome embedder). See
+<a href="https://www.chromium.org/developers/content-module">https://www.chromium.org/developers/content-module</a>
+for details on the content module and content shell.</p>
+<pre data-language="shell">autoninja -C out/Default content_shell_apk
+out/Default/bin/content_shell_apk install</pre>
+<p>this will build and install an Android apk under
+<code>out/Default/apks/ContentShell.apk</code>.</p>
+<h3 id="build-webview">Build WebView</h3>
+<p><a href="https://developer.android.com/reference/android/webkit/WebView.html">Android WebView</a>
+is a system framework component. Since Android KitKat, it is implemented using
+Chromium code (based off the <a href="https://dev.chromium.org/developers/content-module">content module</a>).</p>
+<p>If you want to build the complete Android WebView framework component and test
+the effect of your chromium changes in Android apps using WebView, you should
+follow the <a href="https://www.chromium.org/developers/how-tos/build-instructions-android-webview">Android AOSP + chromium WebView
+instructions</a></p>
+<h3 id="running">Running</h3>
+<p>For Content shell:</p>
+<pre data-language="shell">out/Default/bin/content_shell_apk launch [--args='--foo --bar'] http://example.com</pre>
+<p>For Chrome public:</p>
+<pre data-language="shell">out/Default/bin/chrome_public_apk launch [--args='--foo --bar'] http://example.com</pre>
+<h3 id="logging-and-debugging">Logging and debugging</h3>
+<p>Logging is often the easiest way to understand code flow. In C++ you can print
+log statements using the LOG macro. In Java, refer to
+<a href="android_logging">android_logging.md</a>.</p>
+<p>You can see these log via <code>adb logcat</code>, or:</p>
+<pre data-language="shell">out/Default/bin/chrome_public_apk logcat</pre>
+<p>Logcat supports an additional feature of filtering and highlighting user-defined patterns. To use
+this mechanism, define a shell variable: <code>CHROMIUM_LOGCAT_HIGHLIGHT</code> and assign your desired
+pattern. The pattern will be used to search for any substring (ie. no need to prefix or suffix it
+with <code>.*</code>), eg:</p>
+<pre data-language="shell">export CHROMIUM_LOGCAT_HIGHLIGHT='(WARNING|cr_Child)'
+out/Default/bin/chrome_public_apk logcat
+# Highlights messages/tags containing WARNING and cr_Child strings.</pre>
+<p>Note: both <em>Message</em> and <em>Tag</em> portion of logcat are matched against the pattern.</p>
+<p>To debug C++ code, use one of the following commands:</p>
+<pre data-language="shell">out/Default/bin/content_shell_apk gdb
+out/Default/bin/chrome_public_apk gdb</pre>
+<p>See <a href="android_debugging_instructions">Android Debugging Instructions</a>
+for more on debugging, including how to debug Java code.</p>
+<h3 id="testing">Testing</h3>
+<p>For information on running tests, see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_test_instructions.md">Android Test Instructions</a></p>
+<h2 id="faster-builds">Faster Builds</h2>
+<h3 id="gn-args">GN Args</h3>
+<p>Args that affect build speed:</p>
+<ul>
+<li><code>use_remoteexec = true</code> <em>(default=false)</em><ul>
+<li>What it does: Enables distributed builds with remote exec API.</li>
+</ul>
+</li>
+<li><code>symbol_level = 0</code> <em>(default=1)</em><ul>
+<li>What it does: Disables most debug information in native code.<ul>
+<li>Stack traces will still show, but be missing frames for inlined functions and source lines.</li>
+</ul>
+</li>
+<li>Mostly impacts link time. Lower settings ==&gt; faster links.</li>
+<li>To disable symbols only in Blink / V8: <code>blink_symbol_level = 0</code>, <code>v8_symbol_level = 0</code></li>
+</ul>
+</li>
+<li><code>is_java_debug = true</code> <em>(default=<code>is_debug</code>)</em><ul>
+<li>What it does: Disables R8 (whole-program Java optimizer)</li>
+</ul>
+</li>
+<li><code>treat_warnings_as_errors = false</code> <em>(default=<code>true</code>)</em><ul>
+<li>Causes any compiler warnings or lint checks to not fail the build.</li>
+<li>Allows you to iterate without needing to satisfy static analysis checks.</li>
+</ul>
+</li>
+<li><code>android_static_analysis = &quot;build_server&quot;</code> <em>(default=<code>&quot;on&quot;</code>)</em><ul>
+<li>Offloads static analysis steps to the build server. Explained below.</li>
+<li>Set this to <code>&quot;off&quot;</code> if you want to turn off static analysis altogether.</li>
+</ul>
+</li>
+<li><code>enable_chrome_android_internal = false</code> <em>(Googlers only)</em><ul>
+<li>Disables non-public code, which exists even when building public targets.</li>
+<li>Use this is you do not need to test internal-only things.</li>
+</ul>
+</li>
+</ul>
+<h3 id="asynchronous-static-analysis">Asynchronous Static Analysis</h3>
+<p>Normally analysis build steps like Lint and Error Prone will run as normal build
+steps. The build will then wait for all analysis steps to complete successfully.
+By offloading analysis build steps to a separate build server to be run lazily at
+a low priority, the actual build can complete much faster.</p>
+<p><strong>Note</strong>: Since the build completes before the analysis checks finish, the build
+will not fail if an analysis check fails.</p>
+<p>To enable this mode, add the gn args:</p>
+<pre data-language="gn">android_static_analysis = &quot;build_server&quot;</pre>
+<p>Command output will show up on the terminal that ran the build, as well as in
+<code>out/Debug/buildserver.log.0</code>.</p>
+<p>See the status of the server at any time via:</p>
+<pre>build/android/fast_local_dev_server.py --print-status-all</pre>
+<h3 id="use-remote-execution">Use Remote Execution</h3>
+<p>*** note
+<strong>Warning:</strong> If you are a Google employee, do not follow the instructions
+in this section. Set up remote execution as described in
+<a href="https://goto.google.com/building-android-chrome">go/building-android-chrome</a>
+instead.</p>
+<hr>
+<p>Chromium&#39;s build can be sped up significantly by using a remote execution system
+compatible with <a href="https://github.com/bazelbuild/remote-apis">REAPI</a>. This allows
+you to benefit from remote caching and executing many build actions in parallel
+on a shared cluster of workers.</p>
+<p>To use Remote Execution, follow the corresponding
+<a href="linux/build_instructions#use-remote-execution">Linux build instructions</a>.</p>
+<h2 id="installing-and-running-chromium-on-an-emulator">Installing and Running Chromium on an Emulator</h2>
+<p>Running on an emulator is the same as on a device. Refer to
+<a href="android_emulator">android_emulator.md</a> for setting up emulators.</p>
+<h2 id="tips-tricks-and-troubleshooting">Tips, tricks, and troubleshooting</h2>
+<h3 id="rebuilding-libchromeso-for-a-particular-release">Rebuilding libchrome.so for a particular release</h3>
+<p>These instructions are only necessary for Chrome 51 and earlier.</p>
+<p>In the case where you want to modify the native code for an existing
+release of Chrome for Android (v25+) you can do the following steps.
+Note that in order to get your changes into the official release, you&#39;ll
+need to send your change for a codereview using the regular process for
+committing code to chromium.</p>
+<ol>
+<li>Open Chrome on your Android device and visit chrome://version</li>
+<li>Copy down the id listed next to &quot;Build ID:&quot;</li>
+<li>Go to
+<a href="http://storage.googleapis.com/chrome-browser-components/BUILD_ID_FROM_STEP_2/index.html">http://storage.googleapis.com/chrome-browser-components/BUILD_ID_FROM_STEP_2/index.html</a></li>
+<li>Download the listed files and follow the steps in the README.</li>
+</ol>
+<h3 id="building-with-docker">Building with Docker</h3>
+<p>To build Chromium for Android using Docker, please follow the
+instructions in the <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/build_instructions.md#docker">Docker in Linux build instructions</a>.</p>
+<p>*** note
+<strong>Note:</strong> You need install the <a href="#install-additional-build-dependencies">Android dependencies</a> after setting up the <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/build_instructions.md#install-additional-build-dependencies">Build dependencies</a>.</p>
+<hr>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_build_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/android_build_instructions.md</a>
+  </p>
+</div>

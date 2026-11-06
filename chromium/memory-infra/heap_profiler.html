@@ -1,0 +1,142 @@
+<h1>Heap Profiling with MemoryInfra</h1>
+<p>As of Chrome 48, MemoryInfra supports heap profiling. Chrome will track all live
+allocations (calls to new or malloc without a subsequent call to delete or free)
+along with sufficient metadata to identify the code that made the allocation.</p>
+<p>By default, MemoryInfra traces will not contain heap dumps. Heap profiling must
+be enabled via chrome://memory-internals or about://flags.</p>
+<h2 id="how-to-obtain-a-heap-dump-m66-linux-macos-windows">How to obtain a heap dump (M66+, Linux, macOS, Windows)</h2>
+<ol>
+<li>Navigate to chrome://memory-internals.<ul>
+<li>There will be an error message at the top if heap-profiling is not
+supported on the current configuration</li>
+</ul>
+</li>
+<li>Enable heap profiling for the relevant processes. Future allocations will be
+tracked. Refresh the page to view tracked processes.<ul>
+<li>To enable tracking at process start, navigate to chrome://flags and search
+for <code>memlog</code>.</li>
+</ul>
+</li>
+<li>To take a heap dump, click <code>save dump</code>. This is stored as a
+<a href="memory-infra">MemoryInfra</a> trace.</li>
+<li>To symbolize the trace:</li>
+</ol>
+<ul>
+<li>Windows only: build <code>addr2line-pdb</code> from the chromium repository. For subsequent commands, add the flag <code>--addr2line-executable=&lt;path_to_addr2lin-pdb&gt;</code></li>
+<li>If this is a local build, run the command <code>./third_party/catapult/tracing/bin/symbolize_trace --is-local-build &lt;path_to_trace&gt;</code></li>
+<li>If this is an official Chrome build,  run <code>./third_party/catapult/tracing/bin/symbolize_trace &lt;path_to_trace&gt;</code>. This will request authentication with google cloud storage to obtain symbol files [googlers only].</li>
+<li>If this is an official macOS or Linux Chrome build, add the flag <code>--use-breakpad-symbols</code>.</li>
+<li>If the trace is from a different device on the same operating system, add the flag
+<code>--only-symbolize-chrome-symbols</code>.</li>
+<li>If you run into the error &quot;Nothing to symbolize&quot; then backtraces are not
+working properly. There are two mechanisms that Chrome attempts to use:
+frame pointers if they&#39;re present, and backtrace lib. The former can be
+forced on with enable_frame_pointers gn arg. This should work on all architectures except for
+arm 32. The latter depends on unwind tables.</li>
+</ul>
+<ol start="5">
+<li>Load the (now symbolized) trace in chrome://tracing.</li>
+</ol>
+<h2 id="how-to-obtain-a-heap-dump-m66-android">How to obtain a heap dump (M66+, Android)</h2>
+<p>On arm64 and x86-64, you can build chrome normally and follow steps above to
+obtain heap dumps.</p>
+<p>To obtain native heap dumps on arm32, you will need a custom build of Chrome
+with the GN arguments <code>enable_profiling = true</code>, <code>arm_use_thumb = false</code>,
+<code>is_component_build = false</code> and <code>symbol_level=1</code>. All other steps are the same.</p>
+<p>Alternatively, if you want to use an official build of Chrome, use
+<code>is_official_build = true</code> for arm32. If you want to use a released build,
+profiling only works on Dev and Canary on arm, and all channels on x86-64. In
+this case, you also need to fetch symbols manually and pass to the
+symbolize_trace script above.</p>
+<h2 id="how-to-obtain-a-heap-dump-m65-and-older">How to obtain a heap dump (M65 and older)</h2>
+<p>For the most part, the setting <code>enable-heap-profiling</code> in <code>chrome://flags</code> has a
+similar effect to the various <code>memlog</code> flags.</p>
+<h2 id="how-to-manually-browse-a-heap-dump">How to manually browse a heap dump</h2>
+<ol>
+<li><p>Select a heavy memory dump indicated by a purple <img src="https://storage.googleapis.com/chromium-docs.appspot.com/d7bdf4d16204c293688be2e5a0bcb2bf463dbbc3" alt="M"> dot.</p>
+</li>
+<li><p>In the analysis view, cells marked with a triple bar icon (☰) contain heap
+dumps. Select such a cell.</p>
+<p>  <img src="https://storage.googleapis.com/chromium-docs.appspot.com/a24d80d6a08da088e2e9c8b2b64daa215be4dacb" alt="Cells containing a heap dump"></p>
+</li>
+<li><p>Scroll down all the way to <em>Heap Details</em>.</p>
+</li>
+<li><p>To navigate allocations, select a frame in the right-side pane and press
+Enter/Return. To pop up the stack, press Backspace/Delete.</p>
+</li>
+</ol>
+<h2 id="how-to-automatically-extract-large-allocations-from-a-heap-dump">How to automatically extract large allocations from a heap dump</h2>
+<ol>
+<li><p>Run <code>python ./third_party/catapult/experimental/tracing/bin/diff_heap_profiler.py &lt;path_to_trace&gt;</code></p>
+</li>
+<li><p>This produces a directory <code>output</code>, which contains a JSON file.</p>
+</li>
+<li><p>Load the contents of the JSON file in any JSON viewer, e.g.
+<a href="http://jsonviewer.stack.hu/">jsonviewer</a>.</p>
+</li>
+<li><p>The JSON files shows allocations segmented by stacktrace, sorted by largest
+first.</p>
+</li>
+</ol>
+<h2 id="heap-details">Heap Details</h2>
+<p>The heap details view contains a tree that represents the heap. The size of the
+root node corresponds to the selected allocator cell.</p>
+<p>*** aside
+The size value in the heap details view will not match the value in the selected
+analysis view cell exactly. There are three reasons for this. First, the heap
+profiler reports the memory that <em>the program requested</em>, whereas the allocator
+reports the memory that it <em>actually allocated</em> plus its own bookkeeping
+overhead. Second, allocations that happen early --- before Chrome knows that
+heap profiling is enabled --- are not captured by the heap profiler, but they
+are reported by the allocator. Third, tracing overhead is not discounted by the
+heap profiler.</p>
+<hr>
+<p>The heap can be broken down in two ways: by <em>backtrace</em> (marked with an ƒ), and
+by <em>type</em> (marked with a Ⓣ). When tracing is enabled, Chrome records trace
+events, most of which appear in the flame chart in timeline view. At every
+point in time these trace events form a pseudo stack, and a vertical slice
+through the flame chart is like a backtrace. This corresponds to the ƒ nodes in
+the heap details view.  Hence enabling more tracing categories will give a more
+detailed breakdown of the heap.</p>
+<p>The other way to break down the heap is by object type. At the moment this is
+only supported for PartitionAlloc.</p>
+<p>*** aside
+In official builds, only the most common type names are included due to binary
+size concerns. Development builds have full type information.</p>
+<hr>
+<p>To keep the trace log small, uninteresting information is omitted from heap
+dumps. The long tail of small nodes is not dumped, but grouped in an <code>&lt;other&gt;</code>
+node instead. Note that although these small nodes are insignificant on their
+own, together they can be responsible for a significant portion of the heap. The
+<code>&lt;other&gt;</code> node is large in that case.</p>
+<h2 id="example">Example</h2>
+<p>In the trace below, <code>ParseAuthorStyleSheet</code> is called at some point.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/058e50350836f55724e100d4dbbddf4b9803f550" alt="ParseAuthorStyleSheet pseudo stack"></p>
+<p>The pseudo stack of trace events corresponds to the tree of ƒ nodes below. Of
+the 23.5 MiB of memory allocated with PartitionAlloc, 1.9 MiB was allocated
+inside <code>ParseAuthorStyleSheet</code>, either directly, or at a deeper level (like
+<code>CSSParserImpl::parseStyleSheet</code>).</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/ec61c5f15705f5bcf3ca83a155ed647a0538bbe1" alt="Memory Allocated in ParseAuthorStyleSheet"></p>
+<p>By expanding <code>ParseAuthorStyleSheet</code>, we can see which types were allocated
+there. Of the 1.9 MiB, 371 KiB was spent on <code>ImmutableStylePropertySet</code>s, and
+238 KiB was spent on <code>StringImpl</code>s.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/2236e61021922c0813908c6745136953fa20a37b" alt="ParseAuthorStyleSheet broken down by type"></p>
+<p>It is also possible to break down by type first, and then by backtrace. Below
+we see that of the 23.5 MiB allocated with PartitionAlloc, 1 MiB is spent on
+<code>Node</code>s, and about half of the memory spent on nodes was allocated in
+<code>HTMLDocumentParser</code>.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/c5367dde11476bdbf2d5a1c51674148915573d11" alt="The PartitionAlloc heap broken down by type first and then by backtrace"></p>
+<p>Heap dump diffs are fully supported by trace viewer. Select a heavy memory dump
+(a purple dot), then with the control key select a heavy memory dump earlier in
+time. Below is a diff of theverge.com before and in the middle of loading ads.
+We can see that 4 MiB were allocated when parsing the documents in all those
+iframes, almost a megabyte of which was due to JavaScript. (Note that this is
+memory allocated by PartitionAlloc alone, the total renderer memory increase was
+around 72 MiB.)</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/802141906869cd533bb613da5f91bd0b071ceb24" alt="Diff of The Verge before and after loading ads"></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/heap_profiler.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/heap_profiler.md</a>
+  </p>
+</div>

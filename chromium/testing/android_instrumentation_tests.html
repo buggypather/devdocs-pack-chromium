@@ -1,0 +1,218 @@
+<h1>Android Instrumentation Tests</h1>
+<p>Instrumentation tests are JUnit 4 tests that run on devices or emulators. They
+can be either unit tests or integration test.</p>
+<h2 id="unit-vs-integration-tests">Unit vs Integration Tests</h2>
+<p><strong>When the code under test is library-like code</strong>, mainly defined by its
+contract, intended to be used in many contexts, internally complex, and related
+bugs are more likely to be introduced to the logic inside it than due to
+interactions with other code, <strong>write unit tests</strong>. Unit tests are mostly
+Robolectric (<code>junit</code> build targets), but some are Instrumentation tests
+(<code>unit_device_javatests</code> build targets).</p>
+<p><strong>When the code under test is application-like code</strong>, mainly defined by its
+behavior, intended to be used in a small number of contexts (often only one),
+internally simple, and related bugs are more likely to be in how/when it is
+called or due to interactions with other code rather its internal business
+logic, <strong>write integration tests</strong>. Integration tests are all Instrumentation
+tests (<code>javatests</code> build targets).</p>
+<h2 id="robolectric-workstation-vs-instrumentation-on-device-tests">Robolectric (workstation) vs Instrumentation (on-device) Tests</h2>
+<p>When a unit test doesn&#39;t require rendering or interacting with the native
+library, Robolectric tests, which run on workstations, are preferable to
+instrumentation tests, which run on devices and emulators. Robolectric tests are
+faster to compile and run.</p>
+<p>See [android_robolectric_tests.md] for more info on Robolectric tests.</p>
+<p>For integration app-like tests, use an Instrumentation test.</p>
+<p>Where supported, use the existing <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/test/android/javatests/src/org/chromium/chrome/test/transit">Transit
+Layer</a>
+to navigate through the app.</p>
+<p>Where not supported yet, expand the Transit Layer by defining the expected app
+behavior. See the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/transit/README.md">Public Transit README.md</a>
+and follow examples in the Transit Layer.</p>
+<h2 id="examples-of-instrumentation-tests">Examples of Instrumentation Tests</h2>
+<ul>
+<li>Instrumentation Integration test example:
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/android/javatests/src/org/chromium/chrome/browser/ExampleFreshCtaTest.java">ExampleFreshCtaTest</a></li>
+<li>Instrumentation Unit test example:
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/android/javatests/src/org/chromium/chrome/browser/ExampleOnDeviceUnitTest.java">ExampleOnDeviceUnitTest</a></li>
+</ul>
+<h2 id="tracing">Tracing</h2>
+<p>Enabling tracing during a test run allows all the function calls involved to be
+observed in a visual display (using Chrome&#39;s built-in chrome://tracing feature).
+To run a test with tracing, add the <code>--trace-output</code> flag to the command used to
+call the instrumentation test (either running the test_runner.py script, or a
+generated binary such as <code>run_chrome_public_test_apk</code>). The <code>--trace-output</code>
+flag takes a filename, which, after the test run, will contain a JSON file
+readable by chrome://tracing.</p>
+<p>By default, the trace includes only certain function calls important to the test
+run, both within the Python test runner framework and the Java code running on
+the device. For a more detailed look, add the (no-argument) <code>--trace-all</code> flag.
+This causes every function called on the Python side to be added to the trace.</p>
+<h2 id="test-batching-annotations">Test Batching Annotations</h2>
+<p>In Robolectric, all tests are effectively batched.</p>
+<p>For Instrumentation tests, see [batching_instrumentation_tests.md] or the summary below:</p>
+<p>The
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/Batch.java"><code>@Batch</code></a>
+annotation is used to run all tests with the same batch group name in the same
+instrumentation invocation. In other words, the browser process is not restarted
+between these tests, and so most changes to global state, like launching an
+Activity, may persist between tests within a batch group. The benefit of this is
+that these tests run significantly faster - the per-test cost of restarting the
+process can be as high as 10 seconds (usually around 2 seconds), and that
+doesn&#39;t count the cost of starting an Activity like ChromeTabbedActivity.</p>
+<h2 id="size-annotations">Size Annotations</h2>
+<p>Size annotations are <a href="https://source.chromium.org/search?q=file:local_device_instrumentation_test_run.py%20symbol:TIMEOUT_ANNOTATIONS&amp;sq=&amp;ss=chromium">used by the test runner</a> to determine the length of time
+to wait before considering a test hung (i.e., its timeout duration), however the
+limits aren&#39;t very different currently because all tests get a 60s timeout
+added.</p>
+<p>Annotations from <code>androidx.test.filters</code>:</p>
+<ul>
+<li><a href="https://developer.android.com/reference/androidx/test/filters/SmallTest.html"><code>@SmallTest</code></a> (timeout: <strong>10 (+60) seconds</strong>)</li>
+<li><a href="https://developer.android.com/reference/androidx/test/filters/MediumTest.html"><code>@MediumTest</code></a> (timeout: <strong>30 (+60) seconds</strong>)</li>
+<li><a href="https://developer.android.com/reference/androidx/test/filters/LargeTest.html"><code>@LargeTest</code></a> (timeout: <strong>2 (+1) minutes</strong>)</li>
+</ul>
+<p>Annotations from <code>//base</code>:</p>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/EnormousTest.java"><code>@EnormousTest</code></a>
+(timeout: <strong>5 (+1) minutes</strong>) Typically used for tests that require WiFi.</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/IntegrationTest.java"><code>@IntegrationTest</code></a>
+(timeout: <strong>10 (+1) minutes</strong>) Used for tests that run against real services.</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/Manual.java"><code>@Manual</code></a>
+(timeout: <strong>10 hours</strong>) Used for manual tests.</li>
+</ul>
+<h2 id="annotations-that-disable-tests">Annotations that Disable Tests</h2>
+<p>There are several annotations that control whether or not a test runs.
+Some are conditional, others are not.</p>
+<h3 id="unconditional-disabling">Unconditional Disabling</h3>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/DisabledTest.java"><strong>@DisabledTest</strong></a>
+unconditionally disables a test.</p>
+<pre data-language="java">@DisabledTest(
+    // Describes why the test is disabled. Typically includes a crbug link.
+    message = &quot;&quot;
+)</pre>
+<h3 id="conditional-disabling">Conditional Disabling</h3>
+<p>There are two primary annotation categories that conditionally disable tests:
+<strong>@DisableIf</strong> and <strong>@Restriction</strong>. The <strong>@DisableIf</strong> annotations are intended
+to temporarily disable a test in certain scenarios where it <em>should</em> work but
+doesn&#39;t. In contrast, the <strong>@Restriction</strong> annotation is intended to
+permanently limit a test to specific configurations. It signifies that the test
+was not, is not, and will not be intended to run beyond those configurations.
+In both cases, conditional disabling manifests as a skipped test.</p>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/DisableIf.java#25"><strong>@DisableIf.Build</strong></a>
+allows for conditional test disabling based on values in
+<a href="https://developer.android.com/reference/android/os/Build.html"><code>android.os.Build</code></a>:</p>
+<pre data-language="java">@DisableIf.Build(
+
+    // Describes why the test is disabled.
+    message = &quot;&quot;,
+
+    // Disables the test on SDK levels that match the given conditions.
+    // Checks against Build.VERSION.SDK_INT.
+    sdk_is_greater_than = 0,
+    sdk_is_less_than = Integer.MAX_VALUE,
+
+    // Disables the test on devices that support the given ABI
+    // (e.g. &quot;arm64-v8a&quot;). Checks against:
+    //  - Build.SUPPORTED_ABIS on L+
+    //  - Build.CPU_ABI and Build.CPU_ABI2 otherwise
+    supported_abis_includes = &quot;&quot;,
+
+    // Disables the test on devices with hardware that matches the given
+    // value. Checks against Build.HARDWARE.
+    hardware_is = &quot;&quot;,
+
+    // Disables the test on devices with product names that contain the
+    // given value. Checks against Build.PRODUCT.
+    product_name_includes = &quot;&quot;,
+
+)</pre>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/DisableIf.java#40"><strong>@DisableIf.Device</strong></a>
+allows for conditional test disabling based on whether
+a device is a phone, a tablet, or a &quot;large tablet&quot; as determined by
+<a href="https://chromium.googlesource.com/chromium/src/+/main/ui/android/java/src/org/chromium/ui/base/DeviceFormFactor.java">org.chromium.ui.base.DeviceFormFactor</a>.
+This is available to tests in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/ui/">//ui</a>
+or code that uses //ui.</p>
+<pre data-language="java">@DisableIf.Device(
+    // Disables the test on devices that match the given type(s) as described
+    // above.
+    type = {}
+)</pre>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/Restriction.java"><strong>@Restriction</strong></a>
+currently allows for conditional test disabling based on device
+type, device performance, internet connectivity, whether Google Play Services is
+up to date, and whether the build was an official one.</p>
+<pre data-language="java">@Restriction(
+    // Possible values include:
+    //
+    // base:
+
+
+    //
+    //  - Restriction.RESTRICTION_TYPE_INTERNET
+    //    Restricts the test to devices that have an internet connection.
+    //
+    // chrome:
+    //  - ChromeRestriction.RESTRICTION_TYPE_GOOGLE_PLAY_SERVICES
+    //    Restricts the test to devices with up-to-date versions of Google Play Services.
+    //
+    //  - ChromeRestriction.RESTRICTION_TYPE_OFFICIAL_BUILD
+    //    Restricts the test to official builds as determined by ChromeVersionInfo.isOfficialBuild().
+    //
+    // ui:
+    //  - UiRestriction.RESTRICTION_TYPE_PHONE
+    //    Restricts the test to phones as determined by DeviceFormFactor.
+    //
+    //  - UiRestriction.RESTRICTION_TYPE_TABLET
+    //    Restricts the test to tablets as determined by DeviceFormFactor.
+    value = {}
+)</pre>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/MinAndroidSdkLevel.java"><strong>@MinAndroidSdkLevel</strong></a>
+is similar to <strong>@Restriction</strong> in purpose in that it&#39;s
+intended to permanently limit a test to only recent versions of Android.</p>
+<pre data-language="java">@MinAndroidSdkLevel(
+    // The minimum SDK level at which this test should be executed. Checks
+    // against Build.VERSION.SDK_INT.
+    value = 0
+)</pre>
+<h2 id="command-line-flags-annotations">Command-Line Flags Annotations</h2>
+<p>Several annotations affect how a test is run in interesting or nontrivial ways.</p>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/CommandLineFlags.java#46"><strong>@CommandLineFlags.Add</strong></a>
+and
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/CommandLineFlags.java#58"><strong>@CommandLineFlags.Remove</strong></a>
+manipulate Chrome&#39;s
+command-line flags on a per-test basis (i.e., the flags handled by
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/android/java/src/org/chromium/base/CommandLine.java"><code>org.chromium.base.CommandLine</code></a> and
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/command_line.h"><code>base::CommandLine</code></a>).</p>
+<pre data-language="java">@CommandLineFlags.Add(
+    // The flags to add to the command line for this test. These can be
+    // anything and typically should include the leading dashes (e.g. &quot;--foo&quot;).
+    value = {}
+)
+
+@CommandLineFlags.Remove(
+    // The flags to remove from the command line for this test. These can only
+    // be flags added via @CommandLineFlags.Add. Flags already present in the
+    // command-line file on the device are only present in the native
+    // CommandLine object and cannot be manipulated.
+    value = {}
+)</pre>
+<h2 id="feature-annotations">Feature Annotations</h2>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/base/test/android/javatests/src/org/chromium/base/test/util/Feature.java"><strong>@Feature</strong></a>
+has been used inconsistently in Chromium to group tests across
+test cases according to the feature they&#39;re testing.</p>
+<pre data-language="java">@Feature(
+    // The features associated with this test. These can be anything.
+    value = {}
+)</pre>
+<p>@Feature doesn&#39;t have an inherent function, but it can be used to filter tests
+via the test runner&#39;s
+<code>-A/--annotation</code> and <code>-E/--exclude-annotation</code> flags. For example, this would
+run only the tests with @Feature annotations containing at least &quot;Sync&quot; in
+<code>chrome_public_test_apk</code>:</p>
+<pre data-language="bash">out/Debug/bin/run_chrome_public_test_apk -A Feature=Sync</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_instrumentation_tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_instrumentation_tests.md</a>
+  </p>
+</div>

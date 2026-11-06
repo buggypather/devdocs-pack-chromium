@@ -1,0 +1,47 @@
+<h1>The eSpeak-NG speech synthesis engine on ChromeOS</h1>
+<p>ChromeOS comes with a port of the open-source eSpeak-NG speech synthesis
+engine. eSpeak-NG is lower quality than Google&#39;s &quot;PATTS&quot; speech engine,
+but it&#39;s faster, uses less resources, and supports more languages.</p>
+<p><a href="../browser/tts">Read more about Text-to-Speech in Chrome</a>.</p>
+<p><a href="patts">See also Google&#39;s &quot;PATTS&quot; speech engine</a>.</p>
+<h2 id="about-espeak-ng">About eSpeak-NG</h2>
+<p>eSpeak-NG is an open-source project, released under the
+<a href="https://www.gnu.org/licenses/gpl-3.0.en.html">GPL v3</a> license.
+The current home of the project is on GitHub:</p>
+<p>  <a href="https://github.com/espeak-ng">https://github.com/espeak-ng</a></p>
+<p>NG stands for Next Generation. It&#39;s a fork of the eSpeak engine created by
+Jonathan Duddington.</p>
+<p>Eitan Isaacson of Mozilla wrote the initial port of eSpeak to JavaScript
+using emscripten in April 2015. Alberto Pettarin adapted that to work
+with eSpeak-NG in October 2016.</p>
+<p>The ChromeOS port is heavily based on the emscripten port, but targets
+WebAssembly instead of asm.js, and uses a completely rewritten JavaScript
+glue layer that implements Chrome&#39;s
+<a href="https://developer.chrome.com/extensions/ttsEngine">TTS Engine Extension API</a>
+and outputs audio using an AudioWorklet from the Web Audio API.</p>
+<h2 id="why-we-include-espeak-ng-in-chromeos">Why we include eSpeak-NG in ChromeOS</h2>
+<p>There are two reasons we include eSpeak-NG in ChromeOS:</p>
+<ol>
+<li>To maximize our language coverage for text-to-speech and ensure
+that ChromeOS is accessible to as many users as possible out of the box.</li>
+<li>As a secondary goal, to provide an alternative speech engine for screen
+reader users that&#39;s maximally responsive and works at the highest rates of
+speed.</li>
+</ol>
+<h2 id="building-deploying-and-releasing-from-source">Building, deploying, and releasing from source</h2>
+<p>The source code to the ChromeOS port of eSpeak-NG can be found in
+<a href="http://cs/google3/third_party/espeak_ng/">google3</a></p>
+<p>The google3 repository automatically syncs its changes to the <a href="https://chromium.googlesource.com/chromiumos/third_party/espeak-ng">googlesource
+repository</a>
+via copybara. All of the Chrome-specific changes are in the &quot;chrome&quot; branch.</p>
+<p>For instructions for building, deploying, and releasing eSpeak-NG see the
+<a href="http://cs/google3/third_party/espeak_ng/README.chrome">README in google3</a></p>
+<h2 id="running-on-chromeos-on-desktop-linux">Running on ChromeOS on Desktop Linux</h2>
+<p>See <a href="chromevox_on_desktop_linux#speech">Chromevox on Desktop Linux</a> for more
+how to use eSpeak&#39;s speech engine on ChromeOS emulated on desktop Linux.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/espeak.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/espeak.md</a>
+  </p>
+</div>

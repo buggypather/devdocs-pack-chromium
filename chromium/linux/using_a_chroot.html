@@ -1,0 +1,76 @@
+<h1>Using a chroot</h1>
+<p>If you want to run web tests and you&#39;re not running Lucid, you&#39;ll get errors
+due to version differences in libfreetype. To work around this, you can use a
+chroot.</p>
+<h2 id="basic-instructions">Basic Instructions</h2>
+<ul>
+<li>Run <code>build/install-chroot.sh</code>. On the prompts, choose to install a 64-bit
+Lucid chroot and activate all your secondary mount points.</li>
+<li>sudo edit <code>/etc/schroot/mount-lucid64bit</code> and uncomment <code>/run</code> and
+<code>/run/shm</code>.  Verify that your mount points are correct and uncommented: for
+example, if you have a second hard drive at <code>/src</code>, you should have an entry
+like <code>/src /src none rw,bind 0 0</code>.</li>
+<li>Enter your chroot as root with <code>sudo schroot -c lucid64</code>.
+Run <code>build /install-build-deps.sh</code>, then exit the rooted chroot.</li>
+<li>Delete your out/ directory if you had a previous non-chrooted build.</li>
+<li>To enter your chroot as normal user, run <code>schroot -c lucid64</code>.</li>
+<li>Now compile and run DumpRenderTree within chroot.</li>
+</ul>
+<h2 id="tips-and-tricks">Tips and Tricks</h2>
+<h3 id="nfs-home-directories">NFS home directories</h3>
+<p>The chroot install will be installed by default in /home/$USER/chroot. If your
+home directory is inaccessible by root (typically because it is mounted on NFS),
+then move this directory onto your local disk and change the corresponding entry
+in <code>/etc/schroot/mount-lucid64bit</code>.</p>
+<h3 id="remote-execution-builds">Remote execution builds</h3>
+<p>If you get mysterious compile errors (glibconfig.h or dbus header error), don&#39;t
+use remote execution for builds inside the chroot.</p>
+<h3 id="different-color-prompt">Different color prompt</h3>
+<p>I use the following code in my .zshrc file to change the color of my prompt in
+the chroot.</p>
+<pre data-language="shell"># load colors
+autoload colors zsh/terminfo
+if [[ &quot;$terminfo[colors]&quot; -ge 8 ]]; then
+  colors
+fi
+for color in RED GREEN YELLOW BLUE MAGENTA CYAN WHITE; do
+  eval PR_$color='%{$terminfo[bold]$fg[${(L)color}]%}'
+  eval PR_LIGHT_$color='%{$fg[${(L)color}]%}'
+done
+PR_NO_COLOR=&quot;%{$terminfo[sgr0]%}&quot;
+
+# set variable identifying the chroot you work in (used in the prompt below)
+if [ -z &quot;$debian_chroot&quot; ] &amp;&amp; [ -r /etc/debian_chroot ]; then
+  debian_chroot=$(cat /etc/debian_chroot)
+fi
+
+if [ &quot;xlucid64&quot; = &quot;x$debian_chroot&quot; ]; then
+    PS1=&quot;%n@$PR_GREEN% lucid64$PR_NO_COLOR %~ %#&quot;
+else
+    PS1=&quot;%n@$PR_RED%m$PR_NO_COLOR %~ %#&quot;
+fi</pre>
+<h3 id="running-x-apps">Running X apps</h3>
+<p>I also have <code>DISPLAY=:0</code> in my <code>$debian_chroot</code> section so I can run test_shell
+or web tests without manually setting my display every time.  Your display
+number may vary (<code>echo $DISPLAY</code> outside the chroot to see what your display
+number is).</p>
+<p>You can also use <code>Xvfb</code> if you only want to
+<a href="../testing/web_tests_linux#Using-an-embedded-X-server">run tests headless</a>.</p>
+<h3 id="having-web-test-results-open-in-a-browser">Having web test results open in a browser</h3>
+<p>After running web tests, you should get a new browser tab or window that
+opens results.html.  If you get an error &quot;Failed to open
+file:///path/to/results.html, check the
+following conditions.</p>
+<ol>
+<li>Make sure <code>DISPLAY</code> is set. See the
+<a href="#Running-X-apps">Running X apps</a> section above.</li>
+<li>Install <code>xdg-utils</code>, which includes <code>xdg-open</code>, a utility for finding the
+right application to open a file or URL with.</li>
+<li>Install <a href="https://www.google.com/intl/en/chrome/browser/">Chrome</a>.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/using_a_chroot.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/using_a_chroot.md</a>
+  </p>
+</div>

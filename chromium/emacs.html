@@ -1,0 +1,254 @@
+<h1>Emacs</h1>
+<h2 id="use-googles-c-style">Use Google&#39;s C++ style!</h2>
+<p>We have an emacs module,
+<a href="https://raw.githubusercontent.com/google/styleguide/gh-pages/google-c-style.el">google-c-style.el</a>,
+which adds c-mode formatting. Then add to your .emacs:</p>
+<pre data-language="el">(load &quot;/&lt;path/to/chromium&gt;/src/third_party/clang-format/script/clang-format.el&quot;)
+(add-hook 'c-mode-common-hook
+    (function (lambda () (local-set-key (kbd &quot;TAB&quot;) 'clang-format-region))))</pre>
+<p>Now, you can use the</p>
+<p>&lt;Tab&gt;</p>
+<p>key to format the current line (even a long line) or region.</p>
+<h2 id="git-tools">git tools</h2>
+<p>We&#39;re collecting Chrome-specific tools under <code>tools/emacs</code>. See the files there
+for details.</p>
+<ul>
+<li><code>trybot.el</code>: import Windows trybot output into a <code>compilation-mode</code> buffer.</li>
+</ul>
+<h3 id="syntax-error-highlighting">Syntax-error Highlighting</h3>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/0e94f26e8/docs/ninja_build.md">Ninja</a>
+users get in-line highlighting of syntax errors using <code>flymake.el</code> on each
+buffer-save:</p>
+<pre data-language="el">(load &quot;/&lt;path/to/chromium&gt;/src/tools/emacs/flymake-chromium.el&quot;)</pre>
+<h3 id="buildgn-and-gni-files">BUILD.gn and .gni files</h3>
+<p>BUILD.gn and gni files are supported by the official gn-mode which can
+be enabled with:</p>
+<pre data-language="el">(load &quot;/&lt;path/to/chromium&gt;/src/tools/emacs/gn.el&quot;)</pre>
+<h3 id="mojom-idl-mojom-files">Mojom IDL (.mojom files)</h3>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/tools/bindings/README.md">Mojom</a>
+files are supported by mojom-mode, which can be enabled with:</p>
+<pre data-language="el">(load &quot;/&lt;path/to/chromium&gt;/src/tools/emacs/mojom-mode.el&quot;)</pre>
+<p>Alternatively, you can <code>require</code> the feature.
+(See emacs documentation on
+<a href="https://www.gnu.org/software/emacs/manual/html_node/elisp/Named-Features.html">Named Features</a>.)</p>
+<pre data-language="el">(add-to-list 'load-path &quot;/&lt;path/to/chromium&gt;/src/tools/emacs/&quot;)
+(require 'mojom-mode)</pre>
+<h2 id="debugging">Debugging</h2>
+<p><a href="linux/debugging">Linux Debugging</a> has some Emacs-specific debugging tips.</p>
+<h2 id="ycmd-youcompleteme--flycheck"><a href="https://github.com/Valloric/ycmd">ycmd</a> (YouCompleteMe) + flycheck</h2>
+<p><a href="https://github.com/abingham/emacs-ycmd">emacs-ycmd</a> in combination with
+flycheck provides:</p>
+<ul>
+<li>advanced code completion</li>
+<li>syntax checking</li>
+<li>navigation to declarations and definitions (using <code>ycmd-goto</code>) based on
+on-the-fly processing using clang. A quick demo video showing code
+completion and flycheck highlighting a missing semicolon syntax error:</li>
+</ul>
+<h3 id="requirements">Requirements</h3>
+<ul>
+<li>Your build system is set up for building with clang or wrapper+clang</li>
+</ul>
+<h3 id="setup">Setup</h3>
+<ol>
+<li>Clone, update external git repositories and build.sh ycmd from
+<a href="https://github.com/ycm-core/YouCompleteMe">https://github.com/ycm-core/YouCompleteMe</a> into a directory, e.g. <code>~/dev/ycmd</code><ul>
+<li>The ycmd packaging changed, the server is in a different location. To
+ build it, run:</li>
+</ul>
+<pre data-language="shell"> cd ~/dev/ycmd
+ git submodule update --init --recursive
+ python3 install.py --clang-completer</pre>
+</li>
+<li>Test <code>ycmd</code> by running <code>~/dev/ycmd$ python third_party/ycmd/__main__.py --options_file /tmp/test.json</code>. The options file can be created with e.g. <code>echo &#39;{&quot;hmac_secret&quot;: &quot;1234567812345678&quot;}&#39; &gt; /tmp/test.json</code>. The server should start normally.</li>
+<li>Install the following packages to emacs, for example from melpa:<ul>
+<li><code>ycmd</code></li>
+<li><code>company-ycmd</code></li>
+<li><code>flycheck-ycmd</code></li>
+</ul>
+</li>
+<li><a href="https://github.com/abingham/emacs-ycmd#quickstart">More info on configuring emacs-ycmd</a><ol>
+<li><p>Assuming your checkout of Chromium is in <code>~/dev/blink</code>, i.e. this is the
+directory in which you find the <code>src</code>folder, create a symbolic link as
+follows:</p>
+<pre data-language="shell">cd ~/dev/blink
+ln -s src/tools/vim/chromium.ycm_extra_conf.py .ycm_extra_conf.py</pre>
+</li>
+<li><p>Add something like the following to your <code>init.el</code></p>
+</li>
+</ol>
+</li>
+</ol>
+<pre data-language="el">;; ycmd
+
+(require 'ycmd)
+(require 'company-ycmd)
+(require 'flycheck-ycmd)
+
+(company-ycmd-setup)
+(flycheck-ycmd-setup)
+
+;; Show completions after 0.15 seconds
+(setq company-idle-delay 0.15)
+
+;; Activate for editing C++ files
+(add-hook 'c++-mode-hook 'ycmd-mode)
+(add-hook 'c++-mode-hook 'company-mode)
+(add-hook 'c++-mode-hook 'flycheck-mode)
+
+;; Replace the directory information with where you downloaded ycmd to
+(set-variable 'ycmd-server-command (list &quot;python3&quot; (substitute-in-file-name &quot;$HOME/dev/ycmd/third_party/ycmd/ycmd/__main__.py&quot;)))
+
+;; Edit according to where you have your Chromium/Blink checkout
+(add-to-list 'ycmd-extra-conf-whitelist (substitute-in-file-name &quot;$HOME/dev/blink/.ycm_extra_conf.py&quot;))
+
+;; Show flycheck errors in idle-mode as well
+(setq ycmd-parse-conditions '(save new-line mode-enabled idle-change))
+
+;; Makes emacs-ycmd less verbose
+(setq url-show-status nil)</pre>
+<h3 id="troubleshooting">Troubleshooting</h3>
+<ul>
+<li>If no completions show up or emacs reports errors, you can check the
+<code>*ycmd-server*</code> buffer for errors. See the next bullet point for how to
+handle &quot;OS Error: No such file or directory&quot;</li>
+<li>Launching emacs from an OS menu might result in a different environment so
+that <code>ycmd</code> does not find ninja. In that case, you can use a package like
+<a href="https://github.com/purcell/exec-path-from-shell">exec-path from shell</a> and
+add the following to your <code>init.el</code>:</li>
+</ul>
+<pre data-language="el">(require 'exec-path-from-shell)
+(when (memq window-system '(mac ns x))
+    (exec-path-from-shell-initialize))</pre>
+<ul>
+<li>ycmd depends on the installed version of python. For googlers running gLinux,
+a system update may have changed the python version. In this case, you need to
+recompile ycmd first.</li>
+</ul>
+<h2 id="ff-get-other-file">ff-get-other-file</h2>
+<p>There&#39;s a builtin function called <code>ff-get-other-file</code> which will get the &quot;other
+file&quot; based on file extension. I have this bound to C-o in c-mode
+(<code>(local-set-key &quot;\C-o&quot; &#39;ff-get-other-file)</code>). While &quot;other file&quot; is per-mode
+defined, in c-like languages it means jumping between the header and the source
+file. So I switch back and forth between the header and the source with C-o. If
+we had separate include/ and src/ directories, this would be a pain to setup,
+but this might just work out of the box for you. See the documentation for the
+variable <code>cc-other-file-alist</code> for more information.</p>
+<p>One drawback of ff-get-other-file is that it will always switch to a matching
+buffer, even if the other file is in a different directory, so if you have
+A.cc,A.h,A.cc(2) then ff-get-other-file will switch to A.h from A.cc(2) rather
+than load A.h(2) from the appropriate directory. If you prefer something (C
+specific) that always finds, try this:</p>
+<pre data-language="el">(defun cc-other-file()
+  &quot;Toggles source/header file&quot;
+  (interactive)
+  (let ((buf (current-buffer))
+        (name (file-name-sans-extension (buffer-file-name)))
+	(other-extens
+	 (cadr (assoc (concat &quot;\\.&quot;
+			      (file-name-extension (buffer-file-name))
+			      &quot;\\'&quot;)
+		      cc-other-file-alist))))
+    (dolist (e other-extens)
+      (if (let ((f (concat name e)))
+	    (and (file-exists-p f) (find-file f)))
+	  (return)))
+    )
+  )</pre>
+<p><em>Note: if you know an easy way to change the ff-get-other-file behavior, please
+replace this hack with that solution! - <a href="mailto:stevenjb@chromium.org">stevenjb@chromium.org</a></em></p>
+<h2 id="highlight-long-lines">Highlight long lines</h2>
+<p>One nice way to highlight long lines and other style issues:</p>
+<pre data-language="el">(require 'whitespace)
+(setq whitespace-style '(face indentation trailing empty lines-tail))
+(setq whitespace-line-column nil)
+(set-face-attribute 'whitespace-line nil
+                    :background &quot;purple&quot;
+                    :foreground &quot;white&quot;
+                    :weight 'bold)
+(global-whitespace-mode 1)</pre>
+<p>Note: You might need to grab the latest version of
+<a href="https://www.emacswiki.org/emacs/download/whitespace.el">whitespace.el</a>.</p>
+<h2 id="deep-nesting">deep nesting</h2>
+<p>A couple of helpers that show a summary of where you are; the first by tracing
+the indentation hierarchy upwards, the second by only showing <code>#if</code>s and
+<code>#else</code>s that are relevant to the current line:</p>
+<pre data-language="el">(defun ami-summarize-indentation-at-point ()
+  &quot;Echo a summary of how one gets from the left-most column to
+  POINT in terms of indentation changes.&quot;
+  (interactive)
+  (save-excursion
+    (let ((cur-indent most-positive-fixnum)
+          (trace '()))
+      (while (not (bobp))
+        (let ((current-line (buffer-substring (line-beginning-position)
+                                              (line-end-position))))
+          (when (and (not (string-match &quot;^\\s-*$&quot; current-line))
+                     (&lt; (current-indentation) cur-indent))
+            (setq cur-indent (current-indentation))
+            (setq trace (cons current-line trace))
+            (if (or (string-match &quot;^\\s-*}&quot; current-line)
+                    (string-match &quot;^\\s-*else &quot; current-line)
+                    (string-match &quot;^\\s-*elif &quot; current-line))
+                (setq cur-indent (1+ cur-indent)))))
+        (forward-line -1))
+      (message &quot;%s&quot; (mapconcat 'identity trace &quot;\n&quot;)))))
+
+(require 'cl)
+  (defun ami-summarize-preprocessor-branches-at-point ()
+    &quot;Summarize the C preprocessor branches needed to get to point.&quot;
+    (interactive)
+    (flet ((current-line-text ()
+              (buffer-substring (line-beginning-position) (line-end-position))))
+      (save-excursion
+        (let ((eol (or (end-of-line) (point)))
+              deactivate-mark directives-stack)
+          (goto-char (point-min))
+          (while (re-search-forward &quot;^#\\(if\\|else\\|endif\\)&quot; eol t)
+            (if (or (string-prefix-p &quot;#if&quot; (match-string 0))
+                    (string-prefix-p &quot;#else&quot; (match-string 0)))
+                (push (current-line-text) directives-stack)
+            (if (string-prefix-p &quot;#endif&quot; (match-string 0))
+                 (while (string-prefix-p &quot;#else&quot; (pop directives-stack)) t))))
+          (message &quot;%s&quot; (mapconcat 'identity (reverse directives-stack) &quot;\n&quot;))))))</pre>
+<h2 id="find-things-fast">find-things-fast</h2>
+<p>erg wrote a suite of tools that do common operations from the root of your
+repository, called
+<a href="https://github.com/eglaysher/find-things-fast">Find Things Fast</a>. It contains
+ido completion over <code>git ls-files</code> (or the svn find equivalent) and <code>grepsource</code>
+that only git greps files with extensions we care about (or the equivalent the
+<code>find | xargs grep</code> statement in non-git repos.)</p>
+<h2 id="vc-mode-and-find-file-performance">vc-mode and find-file performance</h2>
+<p>When you first open a file under git control, vc mode kicks in and does a high
+level stat of your git repo. For huge repos, especially WebKit and Chromium,
+this makes opening a file take literally seconds. This snippet disables VC git
+for chrome directories:</p>
+<pre data-language="el">; Turn off VC git for chrome
+(when (locate-library &quot;vc&quot;)
+(defadvice vc-registered (around nochrome-vc-registered (file))
+(message (format &quot;nochrome-vc-registered %s&quot; file))
+(if (string-match &quot;.*chrome/src.*&quot; file)
+(progn
+(message (format &quot;Skipping VC mode for %s&quot; % file))
+(setq ad-return-value nil)
+)
+ad-do-it)
+)
+(ad-activate 'vc-registered)
+)</pre>
+<h2 id="compilation-with-m-x-compile">Compilation with M-x compile</h2>
+<p>It&#39;s usually useful to first find the top directory with locate-dominating-file,
+and run <code>M-x compile</code></p>
+<pre data-language="lisp">(defun chromium-compile ()
+  &quot;Run compile for chromium.&quot;
+  (interactive)
+  (let ((chrome-dir (locate-dominating-file &quot;.&quot; &quot;chrome/BUILD.gn&quot;)))
+    (when chrome-dir
+      (let* ((default-directory chrome-dir))
+        (compile &quot;ninja -C out/Debug chrome chrome_sandbox &quot;)))))</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/emacs.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/emacs.md</a>
+  </p>
+</div>

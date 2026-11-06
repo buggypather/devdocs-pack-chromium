@@ -1,0 +1,302 @@
+<h1>Optimizing Chrome's Binary Size</h1>
+<p>Read first: <a href="binary_size_explainer">binary_size_explainer.md</a></p>
+<blockquote>
+<p>This document primarily focuses on Android and Chrome OS where image size
+is especially important.</p>
+</blockquote>
+<h2 id="general-advice">General Advice</h2>
+<ul>
+<li>Chrome image size on Android and Chrome OS is tightly limited.</li>
+<li>Non trivial increases to the Chrome image size need to be included in the
+<a href="http://www.chromium.org/developers/new-features">Feature proposal process</a>.</li>
+<li>Use <a href="#Compressed-resources">Compressed resources</a> wherever possible. This is particularly important
+for images and WebUI resources, which can be substantial.</li>
+<li>Recently a <a href="http://go/cros-image-size-code-mauve">CrOS Image Size Code Mauve</a> (googlers only) was called due to
+growth concerns.</li>
+</ul>
+<h3 id="size-optimization-help">Size Optimization Help</h3>
+<p>Feel free to email <a href="https://groups.google.com/a/chromium.org/forum/#!forum/binary-size">binary-size@chromium.org</a>.</p>
+<h3 id="compressed-resources">Compressed resources</h3>
+<p><a href="https://www.chromium.org/developers/tools-we-use-in-chromium/grit">Grit</a> supports gzip and brotli compression for resources in the .grd files
+used to build the <code>resources.pak</code> file.</p>
+<p>Note that <code>compress=&quot;gzip&quot;</code> is already the default behavior for HTML, JS, CSS
+and SVG files, when the <code>compress</code> attribute is not specified.</p>
+<ul>
+<li>Choose between gzip (default) or brotli (with <code>compress=&quot;brotli&quot;</code>) as
+follows<ul>
+<li>gzip compression for highly-compressible data typically has minimal
+impact on load times (but it is worth measuring this, see
+<a href="https://cs.corp.google.com/eureka_internal/chromium/src/chrome/browser/ui/webui/webui_load_timer.cc">webui_load_timer.cc</a> for an example of measuring load times).</li>
+<li>Brotli compresses more but is much slower to decompress. Use brotli only
+when performance doesn&#39;t matter (e.g. internals pages).</li>
+</ul>
+</li>
+<li><strong>Android</strong>: Look at the SuperSize reports from the android-binary-size
+  trybot to look for unexpected resources, or unreasonably large symbols.</li>
+</ul>
+<h3 id="chrome-binary-size">Chrome binary size</h3>
+<p>Changes that will significantly increase the <a href="https://drive.google.com/a/google.com/open?id=1aeIxj8jPOimmlnqD7PvS6np51DZa96dcF72N6CtO6N8">Chrome binary size</a> should be
+made with care and consideration:</p>
+<ul>
+<li>Changes that introduce new libraries can have significant impact and should
+go through the <a href="http://www.chromium.org/developers/new-features">Feature proposal process</a>.</li>
+<li>Changes intended to replace existing functionality with significant new code
+should include a deprecation plan for the code being replaced.</li>
+</ul>
+<h2 id="chrome-os-focused-advice">Chrome OS Focused Advice</h2>
+<h3 id="compressed-l10n-strings">Compressed l10n Strings</h3>
+<p>Strings do not compress well individually, but an entire l10n file compresses
+very well.</p>
+<p>There are two mechanisms for compressing Chrome l10n files.</p>
+<ol>
+<li>Compressed .pak files<ul>
+<li>For desktop Chrome, string resource files generate individual .pak
+files, e.g. <code>generated_resources_en.pak</code>.<br/>
+These get combined into locale specific .pak files, e.g.
+<code>locales/en-US.pak</code></li>
+<li>On Chrome OS, we set<code>&#39;compress = true</code> in <a href="https://cs.chromium.org/chromium/src/chrome/chrome_repack_locales.gni">chrome_repack_locales.gni</a>,
+which causes these .pak files to be gzip compressed.<br/>
+(Chrome identifies them as compressed by parsing the file header).</li>
+<li>So, <em>Chrome strings on Chrome OS will be compressed by default</em>,
+nothing else needs to be done!</li>
+</ul>
+</li>
+<li>Compressing .json l10n files<ul>
+<li>Extensions and apps store l10n strings as <code>messages.json</code> files in
+<code>{extension dir}/_locales/{locale}</code>.<ul>
+<li>For Chrome OS component extensions (e.g. ChromeVox), we include
+these extensions as part of the Chrome image.</li>
+<li>These strings get localized across 50+ languages, so it is
+important to compress them.</li>
+</ul>
+</li>
+<li>For <em>component extensions only</em>, these files can be gzip compressed
+(and named <code>messages.json.gz</code>) as part of their build step.</li>
+<li>For extensions using GN:<ol>
+<li>Specify <code>type=&quot;chrome_messages_json_gzip&quot;</code> for each <code>&lt;output&gt;</code>
+entry in the .grd file.</li>
+<li>Name the outputs <code>messages.json.gz</code> in the .grd and strings.gni
+files.</li>
+</ol>
+</li>
+<li>See <a href="https://crbug.com/1023568">https://crbug.com/1023568</a> for details and an example CL.</li>
+</ul>
+</li>
+</ol>
+<h3 id="chromeos-assets">chromeos-assets</h3>
+<ul>
+<li>Input methods, speech synthesis, and apps consume a great deal of disk space
+on the Chrome OS rootfs partition.</li>
+<li>These assets are not part of the chromium repository, however they do
+affect <a href="https://docs.google.com/document/d/1d3Y2ngMGEP_yfxBFrgOE-dinDILfyAUY9LT0JLlq6zg/edit?usp=sharing">rootfs size</a> on devices.</li>
+<li>Proposed additions or increases to chromeos-assets should go through the
+<a href="http://www.chromium.org/developers/new-features">Feature proposal process</a> and should consider using some form of
+<a href="https://docs.google.com/presentation/d/1wM-eDX-BQavecQz20gPxRF6CxWp1k1sh7zSKMxz4BLI/edit?usp=sharing">Downloadable Content</a> if possible.</li>
+</ul>
+<h2 id="android-focused-advice">Android Focused Advice</h2>
+<h3 id="optimizing-translations-strings">Optimizing Translations (Strings)</h3>
+<ul>
+<li>Use <a href="https://developer.android.com/reference/android/R.string.html">Android System strings</a> where appropriate</li>
+<li>Ensure that strings in .grd files need to be there. For strings that do
+not need to be translated, put them directly in source code.</li>
+</ul>
+<h3 id="optimizing-images">Optimizing Images</h3>
+<ul>
+<li>Would a vector image work?<ul>
+<li>Images that can be described by a series of paths should generally be
+stored as vectors.</li>
+<li>For images used in native code: <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/components/vector_icons/README.md">VectorIcon</a>.</li>
+<li>For Android drawables: <a href="https://developer.android.com/guide/topics/graphics/vector-drawable-resources">VectorDrawable</a>.<ul>
+<li>Convert from <code>.svg</code> following <a href="https://developer.android.com/studio/write/vector-asset-studio.html#svg">this guide</a>.</li>
+<li>(Googlers): Find most icons as .svg at <a href="https://goto.google.com/icons">go/icons</a>.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Would <strong>lossy</strong> compression make sense (often true for large images)?<ul>
+<li>If so, <a href="https://codereview.chromium.org/2615243002/">use lossy webp</a>.</li>
+<li>And omit some densities (e.g. add only an xxhdpi version).</li>
+</ul>
+</li>
+<li>For lossless <code>.png</code> images, see how few unique colors you can use without a
+noticeable difference.<ul>
+<li>This can often reduce an already optimized .png by 33%-50%.</li>
+<li><a href="https://pngquant.org">Use pngquant</a> to try this out.<ul>
+<li>Requires trial and error for each number of unique colors.</li>
+<li>Use one of the GUI tools linked from the website to do this easily.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Finally - Ensure .png files are fully optimized.<ul>
+<li>Use <a href="https://cs.chromium.org/chromium/src/tools/resources/optimize-png-files.sh">tools/resources/optimize-png-files.sh</a>.</li>
+<li>There is some <a href="https://goto.google.com/clank/engineering/best-practices/adding-image-assets">Googler-specific guidance</a> as well.</li>
+</ul>
+</li>
+</ul>
+<h4 id="what-build-time-image-optimizations-are-there">What Build-Time Image Optimizations are There?</h4>
+<ul>
+<li>For non-ninepatch images, <code>drawable-xxxhdpi</code> are omitted (they are not
+perceptibly different from xxhdpi in most cases).</li>
+<li>For non-ninepatch images within res/ directories (not for .pak file images),
+they are converted to webp.<ul>
+<li>Use the <code>android-binary-size</code> trybot to see the size of the images as webp,
+or just build <code>ChromePublic.apk</code> and use <code>unzip -l</code> to see the size of the
+images within the built apk.</li>
+</ul>
+</li>
+</ul>
+<h3 id="optimizing-android-resources">Optimizing Android Resources</h3>
+<ul>
+<li>Use config-specific resource directories sparingly.<ul>
+<li>Introducing a new config has <a href="https://medium.com/androiddevelopers/smallerapk-part-3-removing-unused-resources-1511f9e3f761#0b72">a large cost</a>.</li>
+</ul>
+</li>
+</ul>
+<h3 id="optimizing-code">Optimizing Code</h3>
+<p>In most parts of the codebase, you should try to optimize your code for binary
+size rather than performance. Most code runs &quot;fast enough&quot; and only needs to be
+performance-optimized if identified as a hot spot. Individual code size affects
+overall binary size no matter the utility of the code.</p>
+<p>What this <em>could</em> mean in practice?</p>
+<ul>
+<li>Use a linear search over an array rather than a binary search over a sorted
+one.</li>
+<li>Reuse common code rather than writing optimized purpose-specific code.</li>
+</ul>
+<p>Practical advice:</p>
+<ul>
+<li>When making changes, look at symbol breakdowns with SuperSize reports from
+the <a href="https://chromium.googlesource.com/chromium/src/+/main/tools/binary_size/README.md#Binary-Size-Trybot-android_binary_size">android-binary-size trybot</a>.<ul>
+<li>Or use <a href="https://chromium.googlesource.com/chromium/src/+/main/tools/binary_size/README.md#diagnose_bloat_py">//tools/binary_size/diagnose_bloat.py</a> to create
+diffs locally.</li>
+</ul>
+</li>
+<li>Ensure no symbols exist that are used only by tests.</li>
+<li>Be concise with strings used for error handling.<ul>
+<li>Identical strings throughout the codebase are de-duped. Take advantage of
+this for log strings and exception messages.</li>
+<li>For exceptions, prefer to omit a message altogether unless it provides
+more detail than the stack trace will.</li>
+</ul>
+</li>
+</ul>
+<h4 id="optimizing-native-code">Optimizing Native Code</h4>
+<ul>
+<li>If there&#39;s a notable increase in <code>.data.rel.ro</code>:<ul>
+<li>Ensure there are not <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/native_relocations.md">excessive relocations</a>.</li>
+</ul>
+</li>
+<li>If there&#39;s a notable increase in <code>.rodata</code>:<ul>
+<li>See if it would make sense to compress large symbols here by moving them to
+.pak files.</li>
+<li>Gut-check that all unique string literals being added are actually useful.</li>
+</ul>
+</li>
+<li>If there&#39;s a notable increase in <code>.text</code>:<ul>
+<li>If there are a lot of symbols from C++ templates:<ul>
+<li>Try moving parts of the templatized function that don&#39;t use the template
+parameters to <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=716393">non-templated helper functions</a>).</li>
+<li>Or see if the signature can be re-worked such that there are
+<a href="https://github.com/chromium/chromium/blob/HEAD/docs/speed/binary_size/template_bloat_two">fewer variants of template parameters</a>.</li>
+</ul>
+</li>
+<li>Try to leverage identical-code-folding as much as possible by making the
+shape of your code consistent.<ul>
+<li>E.g. Use PODs wherever possible, and especially in containers. They will
+likely compile down to the same code as other pre-existing PODs.<ul>
+<li>Try also to use consistent field ordering within PODs.</li>
+</ul>
+</li>
+<li>E.g. a <code>std::vector</code> of bare pointers will very likely be ICF&#39;ed, but one
+that uses smart pointers gets type-specific destructor logic inlined into
+it.</li>
+<li>This advice is especially applicable to generated code.</li>
+</ul>
+</li>
+<li>If symbols are larger than expected, use the <code>Disassemble()</code> feature of
+<a href="https://chromium.googlesource.com/chromium/src/+/main/tools/binary_size/README.md#Usage_console"><code>supersize console</code></a> to see what is going on.<ul>
+<li>Watch out for inlined constructors &amp; destructors. E.g. having parameters
+that are passed by value forces callers to construct objects before
+calling.<ul>
+<li>E.g. For frequently called functions, it can make sense to provide
+separate <code>const char *</code> and <code>const std::string&amp;</code> overloads rather than
+a single <code>std::string_view</code>.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="optimizing-java-code">Optimizing Java Code</h4>
+<ul>
+<li>If you&#39;re adding a new feature, see if it makes sense for it to be packaged
+into its own <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_dynamic_feature_modules.md">feature split</a>. E.g.:<ul>
+<li>Has a non-trivial amount of Dex (&gt;50kb)</li>
+<li>Not needed on startup</li>
+<li>Has a small integration surface (calls into it must be done with
+reflection).</li>
+</ul>
+</li>
+<li>Prefer fewer large JNI calls over many small JNI calls.</li>
+<li>Minimize the use of class initializers (<code>&lt;clinit&gt;()</code>).<ul>
+<li>If R8 cannot determine that they are &quot;trivial&quot;, they will prevent
+inlining of static members on the class.</li>
+<li>In C++, static objects are created at compile time, but in Java they
+are created by executing code within <code>&lt;clinit&gt;()</code>. There is often little
+advantage to initializing class fields statically vs. upon first use.</li>
+</ul>
+</li>
+<li>Try to use default values for fields rather than explicit initialization.<ul>
+<li>E.g. Name booleans such that they start as &quot;false&quot;.</li>
+<li>E.g. Use integer sentinels that have initial state as 0.</li>
+</ul>
+</li>
+<li>Minimize the number of callbacks / lambdas that each API requires.<ul>
+<li>Each callback / lambda is syntactic sugar for an anonymous class, and all
+classes have a constructor in addition to the callback method.</li>
+<li>E.g. rather than have <code>onFailure()</code> vs <code>onSuccess()</code>, have an
+<code>onFinished(bool)</code>.</li>
+<li>E.g. rather than have <code>onTextChanged(newValue)</code>, <code>onDateChanged(newValue)</code>,
+..., have a single <code>onChanged()</code>, where callbacks use getters to retrieve
+the new values.<ul>
+<li>This design allows classes to use a shared callback for multiple listeners.</li>
+<li>This design simplifies data flow by forcing the use of getters (assuming
+getters exist in the first place).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Do not override <code>equals()</code>, <code>toString()</code>, <code>hashCode()</code> unless necessary. Since
+these methods are defined on <code>Object</code>, R8 can basically never remove them.</li>
+<li>Ensure unused code is optimized away by R8.<ul>
+<li>See <a href="https://chromium.googlesource.com/chromium/src/+/main/build/android/docs/java_optimization.md">here</a> for more info on how Chrome uses ProGuard.</li>
+<li>Add <code>@CheckDiscard</code> to methods or classes that you expect R8 to inline.</li>
+<li>Guard code with <code>BuildConfig.ENABLE_ASSERTS</code> to strip it in release builds.</li>
+<li>Use <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/r8/playground">//third_party/r8/playground</a> to figure out how various
+coding patterns are optimized by R8.</li>
+<li>Build with <code>enable_proguard_obfuscation = false</code> and use
+<code>//third_party/android_sdk/public/build-tools/*/dexdump</code> to see how code was
+optimized directly in apk / bundle targets.</li>
+</ul>
+</li>
+</ul>
+<h3 id="optimizing-third-party-android-dependencies">Optimizing Third-Party Android Dependencies</h3>
+<ul>
+<li>Look through SuperSize symbols to see whether unwanted functionality
+is being pulled in.<ul>
+<li>Use ProGuard&#39;s <a href="https://r8-docs.preemptive.com/#keep-rules">-whyareyoukeeping</a> to see why unwanted symbols are kept
+(e.g. to <a href="https://chromium.googlesource.com/chromium/src/+/main/base/android/proguard/chromium_apk.flags">//base/android/proguard/chromium_apk.flags</a>).</li>
+<li>Try adding <a href="https://r8-docs.preemptive.com/#general-rules">-assumenosideeffects</a> rules to strip out unwanted calls.</li>
+</ul>
+</li>
+<li>Consider removing all resources via <code>strip_resources = true</code>.</li>
+<li>Remove specific drawables via <code>resource_exclusion_regex</code>.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/optimization_advice.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/optimization_advice.md</a>
+  </p>
+</div>

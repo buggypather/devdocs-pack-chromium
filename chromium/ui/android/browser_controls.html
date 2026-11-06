@@ -1,0 +1,277 @@
+<h1>Browser Controls</h1>
+<p>The browser controls system provides a way to move the core browser UI synchronously with the changes in the web content size and offset. The primary goal of this system is to maximize the web content the user can see by hiding the UI components smoothly when the user is scrolling through the website and showing them smoothly when the user needs them again. The interactions of the Java Android views (the core UI) with the web content are accommodated by this system. The browser controls system is dynamic, and it interacts with the web contents to position the controls.  This is one of the reasons why these seemingly simple browser controls are complicated and difficult to work with.</p>
+<h2 id="android-views-and-composited-textures">Android views and composited textures</h2>
+<p>There are two components to the browser controls: an Android view that handles the user interaction and a composited texture that is used for scrolling. When the browser controls are fully visible on the screen, what the user sees is an Android view, but the moment the user starts scrolling down on the web page, the Android views are hidden (i.e. visibility set to View#INVISIBLE), exposing the visually identical composited texture behind it. The composited texture follows the web contents throughout the scrolling gesture and can be scrolled off the screen completely.</p>
+<h3 id="why-a-composited-texture">Why a composited texture?</h3>
+<p>The browser controls need to be in sync with the web contents when scrolling. Android views and web contents are drawn on different surfaces that are updated at different times. So, even if we were to observe the web contents and update the Android view positions accordingly (i.e. View#setTranslationY()), the browser controls would still be out of sync with the web contents.  Android 10 provides a <a href="https://developer.android.com/about/versions/10/features#surface">SurfaceControl</a> API that might solve this issue without having to use composited textures; but no effort has been made towards adopting the usage for browser controls.</p>
+<h3 id="how-does-it-work">How does it work?</h3>
+<p>There are several classes that are used to draw composited textures:</p>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/browser_ui/widget/android/java/src/org/chromium/components/browser_ui/widget/ViewResourceFrameLayout.java">ViewResourceFrameLayout</a>: A view group that can easily be transformed into a texture used by the compositor system.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/layouts/scene_layer.h">SceneLayer (native)</a>: A wrapper that provides a <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/layers/layer.h">cc::Layer</a> and dictates how that layout is supposed to interact with the layout system.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/layouts/java/src/org/chromium/chrome/browser/layouts/scene_layer/SceneLayer.java">SceneLayer</a>: The Java representation of SceneLayer.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/layouts/java/src/org/chromium/chrome/browser/layouts/SceneOverlay.java">SceneOverlay</a>: An interface that allows for other texture-like things to be drawn on a layout without being a layout itself.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/layouts/java/src/org/chromium/chrome/browser/layouts/scene_layer/SceneOverlayLayer.java">SceneOverlayLayer</a>: Extends SceneLayer for SceneOverlay.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/layouts/java/src/org/chromium/chrome/browser/layouts/LayoutManager.java">LayoutManager</a>: The class that manages the Layouts. In the browser controls context, this is the manager that adds the SceneOverlay to the Layout to be drawn.</li>
+</ul>
+<p>The Android view is wrapped in a <code>ViewResourceFrameLayout</code>. If we look at <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/toolbar/java/res/layout/bottom_control_container.xml">bottom_control_container.xml</a>, the xml layout for the bottom controls, the views are wrapped in <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/bottom/ScrollingBottomViewResourceFrameLayout.java">ScrollingBottomViewResourceFrameLayout</a>.</p>
+<p>A scene layer (<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/bottom/ScrollingBottomViewSceneLayer.java">ScrollingBottomViewSceneLayer</a> and its native counterpart <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/android/compositor/scene_layer/scrolling_bottom_view_scene_layer.cc">scrolling_bottom_view_scene_layer.cc</a> in this example) is responsible for creating a compositor layer using the view resource. <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/compositor/layouts/LayoutManager.java">LayoutManager</a> adds the scene layer to the global layout.</p>
+<p>See these example CLs <a href="https://chromium-review.googlesource.com/c/chromium/src/+/1769631">adding a scene layer</a> and <a href="https://chromium-review.googlesource.com/c/chromium/src/+/1809813">adding the Android view to use as a resource</a>.</p>
+<h2 id="how-does-the-browser-controls-system-work">How does the browser controls system work?</h2>
+<p>There are two paths involved:</p>
+<ul>
+<li>The default path, which spans across two processes (browser and renderer) and is responsible for moving the browser controls when they are not scrollable.</li>
+<li>The fast path, which spans across all three processes (browser, renderer and gpu) and is responsible for moving the browser controls when they are scrollable (see Browser controls in viz section below for more details)
+The browser process controls some properties of the browser controls such as height and min-height and provides them to the renderer. The renderer manages the positioning of the controls in response to the scroll events from the user and changes in the properties provided by the browser process. In the default path, the browser controls state information is sent to the browser process. In the fast path, some information is also sent to the gpu. In cases where it isn’t possible to have a renderer process manage the positioning of the controls, the browser process also manages the positioning. See <a href="#browser-controls-when-there-is-no-web-contents">here</a>.</li>
+</ul>
+<p>Browser controls properties:</p>
+<ul>
+<li>{Top|Bottom}ControlsHeight: Total height of the controls.</li>
+<li>{Top|Bottom}ControlsMinHeight: Minimum visible height of the controls.</li>
+<li>AnimateBrowserControlsHeightChanges: Whether the changes in browser controls heights should be animated.</li>
+</ul>
+<p>Browser controls state/positioning information:</p>
+<ul>
+<li>{Top|Bottom}ControlOffset: Vertical displacement of the controls relative to their resting (or fully shown) position.</li>
+<li>{Top|Bottom}ContentOffset: Content offset from the edge of the screen or the visible height of the controls.</li>
+<li>{Top|Bottom}ControlsMinHeightOffset: Current min-height, useful when the min-height is changed with animation.</li>
+</ul>
+<p>The browser controls system also plays an important part in viewport sizing and scroll performance. In Blink, the viewport size is determined in <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/local_frame_view.cc;l=945?q=-file:%5Eout%2F%20file:%5Ethird_party%2F%20LocalFrameView::LargeViewportSizeForViewportUnits&amp;ss=chromium%2Fchromium%2Fsrc">LocalFrameView::LargeViewportSizeForViewportUnits</a>. For viewport on mobile, since browser controls has different total height and minHeight, the viewport size will change as user scroll on the content. To ensure performance, the viewport size is typically locked during active scrolling or animations to prevent expensive layout reflows, resizing only when the controls are idle. See <a href="https://developer.chrome.com/blog/url-bar-resizing">URL Bar Resizing</a> for more details.</p>
+<p>Relevant classes:</p>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/browser_controls_offset_manager.h">cc::BrowserControlsOffsetManager</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/browser_controls.h">blink::BrowserControls</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/BrowserControlsUtils.java">BrowserControlsUtils#controlsResizeView</a></li>
+</ul>
+<h3 id="browser-controls-in-the-browser-process">Browser controls in the browser process</h3>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java">BrowserControlsManager</a> is the class that manages the browser controls properties and responds to the browser controls related information that comes from the renderer process. It provides an interface, <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/BrowserControlsStateProvider.java">BrowserControlsStateProvider</a>, that can be used to get/set browser controls properties. BrowserControlsStateProvider in addition provides an Observer interface for observing changes in browser controls properties and offsets.</p>
+<h3 id="browser-controls-in-the-renderer-cc-and-blink">Browser controls in the renderer: cc and Blink</h3>
+<p>There are 2 classes that are responsible for calculating the browser controls offsets in the renderer: <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/browser_controls_offset_manager.cc">cc::BrowserControlsOffsetManager</a> and <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/browser_controls_offset_manager.cc">blink::BrowserControls</a>. These two classes are almost identical in behavior except for some small differences:</p>
+<ul>
+<li><p>Both classes calculate browser controls offsets during scroll events. Both classes have functions ScrollBegin(), ScrollBy(), and ScrollEnd() that notify the class of the changes in scrolling state. The biggest difference here is that cc::BrowserControlsOffsetManager calculates the offsets when the scroll happens on the cc thread (or impl thread, more on that in <a href="https://source.chromium.org/chromium/chromium/src/+/main:docs/how_cc_works.md">this doc</a>) while blink::BrowserControls calculates the offsets for main thread scrolling. Today, most of the scrolling happens on the impl thread and the main thread scrolling is used only as a fallback.</p>
+</li>
+<li><p>Animations are only handled by <code>cc::BrowserControlsOffsetManager</code>. Animation in this context means changing the browser controls offsets gradually without user action. There are two types of animations that are handled by this class:</p>
+<ul>
+<li>Show/hide animations: All these animations do is to completely hide or show the browser controls smoothly, e.g. when a scroll event leaves the controls half shown or the browser controls state changes. Examples of state change include setting the controls state to shown when navigating to a site and setting it to hidden when a fullscreen video is playing. The browser controls states are defined in <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/browser_controls_state.h;drc=23f61cb65a94208dc2c4728e895e87d47f64a8b6;l=10">browser_controls_state.h</a>.</li>
+<li>Height-change animations: These animations make a change in browser controls height smooth. They use the same logic/path as the show/hide animations. However, height-change animations are set up in the <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/browser_controls_state.h;drc=23f61cb65a94208dc2c4728e895e87d47f64a8b6;l=10">BrowserControlsOffsetManager::OnBrowserControlsParamsChanged</a> function using the old and new params and the current state of the controls.</li>
+</ul>
+</li>
+</ul>
+<p>Any discrepancy between the values from the cc and the blink versions of the browser controls classes are resolved using <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/base/synced_property.h">SyncedProperty</a>.</p>
+<h4 id="scrolling-ratios-offsets">Scrolling, ratios, offsets</h4>
+<p><code>cc::BrowserControlsOffsetManager</code> has 3 functions responsible for handling the scroll gestures: <code>::ScrollBegin(), ::ScrollBy(), and ::ScrollEnd()</code>. <code>::ScrollBy()</code> is called with the pending scroll delta during the scroll and calculates how much of the browser controls should be visible after this scroll event. This class uses &quot;shown ratio&quot; instead of offsets (though it should probably be raw pixel offsets). In normal operation, the shown ratio is in the range [0, 1], 0 being completely hidden and 1 being completely visible. The only time it will be outside of this range is when computing height-change animations. Also, if the min-height is set to a value larger than 0, the lower end of this range will be updated accordingly. This is called ‘MinShownRatio’ in code and is equal to <code>MinHeight / ControlsHeight</code>.</p>
+<p>A shown ratio is calculated for the top and bottom controls separately. Even though the top and bottom controls are currently connected, they don&#39;t have to share the same shown ratio (especially true with min height animations). The shown ratios that are calculated in the renderer process are sent to the browser process in a <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/trees/render_frame_metadata.h">RenderFrameMetadata</a> struct, alongside the controls heights and min-height offsets.</p>
+<p>These ratios are used to calculate the visible height and the controls offsets in the browser process so that the composited texture for the browser controls is displayed in the right place.</p>
+<h3 id="how-are-the-browser-controls-properties-sent-from-the-browser-to-the-renderer">How are the browser controls properties sent from the browser to the renderer?</h3>
+<p>Path for the top controls height (other properties follow a similar one):</p>
+<ul>
+<li><code>BrowserControlsSizer#setTopControlsHeight()</code> (Implemented in BrowserControlsManager.java)</li>
+<li>Calls <code>BrowserControlsStateProvider#Observer#onTopControlsHeightChanged()</code> (Implemented in CompositorViewHolder.java)</li>
+<li>Calls <code>WebContents#notifyBrowserControlsHeightChanged()</code> (Implemented in WebContentsImpl.java)</li>
+<li>Calls <code>WebContentsAndroid::NotifyBrowserControlsHeightChanged()</code> (Native)</li>
+<li>Calls <code>ViewAndroid::OnBrowserControlsHeightChanged()</code></li>
+<li>Calls <code>EventHandlerAndroid::OnBrowserControlsHeightChanged()</code> (Implemented in web_contents_view_android.cc)</li>
+<li>Calls <code>RenderWidgetHostViewAndroid::SynchronizeVisualProperties()</code></li>
+<li>Calls <code>RenderWidgetHostImpl::SynchronizeVisualProperties()</code><ul>
+<li>Calls <code>RenderWidgetHostImpl::GetVisualProperties()</code> to fill the <code>blink::VisualProperties</code> struct. Browser controls properties are put in the <code>cc::BrowserControlsParams</code> struct</li>
+<li>To pull the browser controls properties:<ul>
+<li>Calls <code>RenderViewHostDelegateView::GetTopControlsHeight()</code> (implemented in web_contents_view_android.cc)</li>
+<li>Calls <code>WebContentsDelegate::GetTopControlsHeight()</code> (implemented in web_contents_delegate_android.cc)</li>
+<li>Calls <code>WebContentsDelegateAndroid#getTopControlsHeight()</code> (Java, implemented in ActivityTabWebContentsDelegateAndroid.java)</li>
+<li>Calls <code>BrowserControlsStateProvider#getTopControlsHeight()</code> (implemented in BrowserControlsManager.java)</li>
+<li><code>BrowserControlsManager</code> is the source of truth for the browser controls properties</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Calls <code>blink::mojom::Widget::UpdateVisualProperties() // blink_widget_</code> with the filled <code>VisualProperties</code> to send the properties to the renderer.</li>
+<li><code>WidgetBase</code> in blink receives the message (through the <code>UpdateVisualProperties</code> override of the widget mojo interface).</li>
+<li>Calls <code>LayerTreeHost::SetBrowserControlsParams()</code> (this is for the impl thread)<ul>
+<li><code>LayerTreeHost</code> caches the <code>BrowserControlsParams</code> then calls <code>SetNeedsCommit()</code>.</li>
+<li>When the properties are pushed to the active tree and <code>LayerTreeImpl::SetBrowserControlsParams</code> is called, <code>BrowserControlsOffsetManager::OnBrowserControlsParamsChanged()</code> is called as a result.</li>
+<li><code>BrowserControlsOffsetManager</code> then updates the shown ratios and/or sets up animations depending on the new and old properties.</li>
+</ul>
+</li>
+<li>Also calls <code>WidgetBaseClient::UpdateVisualProperties()</code> (this is for the main thread)<ul>
+<li>Implemented in web_frame_widget_base.cc</li>
+<li>Calls <code>WebWidgetClient</code> implemented in render_widget.cc</li>
+<li>Calls <code>RenderWidget::ResizeWebWidget()</code></li>
+<li>Calls <code>RenderWidgetDelegate::ResizeWebWidgetForWidget()</code> implemented in render_view_impl.cc</li>
+<li>Calls <code>WebView::ResizeWithBrowserControls()</code> implemented in web_view_impl.cc</li>
+<li>Calls <code>blink::BrowserControls::SetParams()</code></li>
+</ul>
+</li>
+</ul>
+<p><a href="https://crrev.com/c/1918262">Example CL that wires the browser controls params</a></p>
+<h3 id="how-are-the-browser-controls-shown-ratios-and-offsets-sent-from-the-renderer-to-the-browser">How are the browser controls shown ratios and offsets sent from the renderer to the browser?</h3>
+<p>Path for the top controls shown ratio (other ratios, heights and offsets follow a similar one):</p>
+<ul>
+<li>When a compositor frame is being drawn, <code>LayerTreeHostImpl::MakeRenderFrameMetadata()</code> is called to get the filled <code>RenderFrameMetadata</code> struct.</li>
+<li><code>LayerTreeHostImpl</code> then calls <code>RenderFrameMetadataObserver::OnRenderFrameSubmission()</code> (implemented in render_frame_metadata_observer_impl.cc) with the filled <code>RenderFrameMetadata</code> struct</li>
+<li>Calls <code>mojom::RenderFrameMetadataObserverClient::OnRenderFrameMetadataChanged</code> to send the metadata to the browser</li>
+<li><code>RenderFrameMetadataProviderImpl</code> receives the message (through the <code>OnRenderFrameMetadataChanged</code> override of the <code>RenderFrameMetadataObserverClient</code> mojo interface)</li>
+<li>Calls <code>RenderFrameMetadataProvider::Observer::OnRenderFrameMetadataChangedBeforeActivation</code> overridden by <code>RenderWidgetHostViewBase</code> and implemented in render_widget_host_view_android.cc</li>
+<li>Calls <code>RenderWidgetHostViewAndroid::UpdateControls</code><ul>
+<li>Here, the shown ratio and the controls height are converted to controls offset.</li>
+</ul>
+</li>
+<li>Calls <code>ViewAndroid::OnTopControlsChanged()</code> with the calculated offsets</li>
+<li>Calls <code>ViewAndroidDelegate#onTopControlsChanged()</code> (Java) implemented in TabViewAndroidDelegate.java</li>
+<li>Calls <code>TabBrowserControlsOffsetHelper#setTopOffset()</code></li>
+<li>Calls <code>TabObserver#onBrowserControlsOffsetChanged()</code> implemented in BrowserControlsManager.java</li>
+</ul>
+<p><a href="https://crrev.com/c/2003869">Example CL that wires the browser controls min-height offsets</a></p>
+<h2 id="browser-controls-in-viz-bciv">Browser controls in viz (BCIV)</h2>
+<p>This is a new fast path for scrolling/animating browser controls that made scrolling more responsive and less janky, and launched in June 2025. A high level description of individual components/items are provided first. A detailed sequence of events that happen during scrolls and animations will follow.</p>
+<h3 id="summarizing-what-happens-in-the-default-path">Summarizing what happens in the default path</h3>
+<ol>
+<li>Browser handles touch events, and dispatches them to the renderer.</li>
+<li>Renderer calculates the new offset, submits a frame that updates the position of the content layer and notifies the browser of the new offset.</li>
+<li>Browser updates its property models with the new offset and submits a frame that updates the positions of the browser controls.</li>
+<li>Viz draws once it receives both frames.</li>
+</ol>
+<h3 id="core-items-to-implement-for-bciv">Core items to implement for BCIV</h3>
+<h4 id="capturing-earlier">Capturing earlier</h4>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/java/src/org/chromium/ui/resources/dynamics/ViewResourceAdapter.java;l=52;drc=2d6c94396f33fe6c4a95c11db6c48f45302a4ab2;bpv=1;bpt=1">Capturing</a> refers to converting an android view to a bitmap. While scrolling, parts of the composited UI pull <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/layers/ui_resource_layer.h;l=33?q=uiresourcelayer&amp;ss=chromium%2Fchromium%2Fsrc">resources</a> from the captured bitmap, which determines what that layer draws to the screen. This means we must have a capture of the most recent state of the browser controls before scrolling. Otherwise, the screen might display an older version of the UI (ex. the toolbar could show an old url instead of the current one) or a blank layer (in the case where there is no capture.)</p>
+<p>Currently, there are cases where capturing is initiated by scrolling. But captures can be slow, so this could cause a noticeable delay in the start of the scroll. Capturing also causes a browser frame to be submitted, which doesn’t align with the goal of BCIV. To fix this problem, we capture at an earlier point in time. For the following reasons, we decide to capture when page load finishes:</p>
+<ul>
+<li>Capturing before page load finishes would introduce non-trivial work on the browser, which would delay navigation/page load.</li>
+<li>The visual appearance of browser controls could change before page load finishes (for example security state, theme color, optional buttons appearing, etc.) so it’s possible the first capture was wasted work and we would have to capture again.</li>
+<li>After page load, the controls are locked for 3 seconds. During this window, the controls aren’t scrollable, and there should be more than enough time for the capture to finish.</li>
+</ul>
+<h4 id="removing-surface-sync">Removing surface sync</h4>
+<p>SurfaceSync is a mechanism used during scrolling to ensure that both the browser and renderer frames are received before attempting to draw. The browser updates the positions of the browser controls, while the renderer updates the position of the content layer. So we need SurfaceSync to make sure the controls and content layer move together. But when scrolling with BCIV, there won’t be a browser frame anymore, so we <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/trees/layer_tree_host_impl.cc;l=2734?q=allocate_%20inviz%20f:cc&amp;ss=chromium%2Fchromium%2Fsrc">don’t trigger SurfaceSync</a> in this case. For animations, SurfaceSync is sometimes still needed (see Stack trace for animations section below for more details.)</p>
+<h4 id="creating-and-distributing-offsettag-and-offsettagvalues">Creating and distributing OffsetTag and OffsetTagValues</h4>
+<p>An <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/android/java/src/org/chromium/cc/input/OffsetTag.java;l=17?q=offsettag&amp;ss=chromium%2Fchromium%2Fsrc">OffsetTag</a> is a wrapper for an UnguessableToken. We tag a slim::Layer with an OffsetTag to indicate that viz is able to move it.</p>
+<p>An <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/viz/common/quads/offset_tag.h;l=65?q=offsettagvalue%20-f:out&amp;ss=chromium%2Fchromium%2Fsrc">OffsetTagValue</a> associates an OffsetTag with an offset, which represents how far the layers with this tag should be offset by.</p>
+<p> Tags need to be distributed to 3 areas:</p>
+<ol>
+<li>The <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/slim/layer.h;l=174?q=offsettag%20f:layer%20-f:out&amp;ss=chromium%2Fchromium%2Fsrc">slim::Layers</a> of all browser UI that need to be moved by viz. This gets included in the compositor frame’s metadata when the frame is submitted to viz, which is how viz knows which layers to move. For a given tag, viz will apply the same translation to all layers with that tag. This means that layers that need to move differently will need their own unique tag (ex. bottom controls move in the opposite direction as top controls, so they must use different tags.)</li>
+<li>The SurfaceLayer in <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/delegated_frame_host_android.h;l=220;drc=4834462d69ddf6e0ac6b27572618e4436de4a2f3;bpv=0;bpt=1">DelegatedFrameHostAndroid</a>, so viz knows <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/viz/service/display/surface_aggregator.cc;l=722?q=offset_tag%20f:surface_ag&amp;ss=chromium">what tag to look for</a> when <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/viz/service/display/resolved_frame_data.cc;l=400;drc=b97f6486e3ccf883f2e2f085abfb4829d8ca6f8d">iterating through quad states</a> in its specified SurfaceRange.</li>
+<li>The renderer, which will calculate the offset for each frame during a scroll and create an <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/trees/layer_tree_host_impl.cc;l=2561?q=f:layer_tree%20offsettag%20metadata">OffsetTagValue</a>. This gets included in the compositor frame’s metadata when the frame is submitted to viz, which is how viz knows what translation to apply.</li>
+</ol>
+<p>Currently, we have 3 OffsetTags, one tag for each group: top controls, content layer, bottom controls. As mentioned, the content layer and top controls move in the opposite direction as bottom controls, so they need to have different tags. However, due to the toolbar’s shadow, the top controls and content layer must also have a different tag. The shadow is a visual effect that is z-indexed on top of the content layer. When the toolbar is moved off screen, the shadow needs to immediately disappear. Prior to BCIV, the visibility of the shadow’s layer was toggled, but this would incur a browser frame. To accomplish this with BCIV, we just offset the toolbar additionally by the shadow’s height when it goes off screen (this is done with the bottom controls as well, since it also has a shadow.)</p>
+<h4 id="updating-offsettags">Updating OffsetTags</h4>
+<p>The existence/absence of an OffsetTag on a layer depends on whether that layer is moveable during a scroll/animation. The browser process controls whether or not the browser controls can be scrolled via <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/browser_ui/util/android/java/src/org/chromium/components/browser_ui/util/BrowserControlsVisibilityDelegate.java;l=11;bpv=1;bpt=1?q=BrowserControlsVisibilityDelegate&amp;ss=chromium%2Fchromium%2Fsrc">BrowserControlsVisibilityDelegate</a>. This is an ObservableSupplier that can be set with a <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/browser_controls_state.h;l=12?q=browsercontrolsstate&amp;ss=chromium%2Fchromium%2Fsrc">BrowserControlsState</a> value:</p>
+<ul>
+<li>kShown/kHidden means the browser is forcing the toolbar to be fully shown/hidden. The browser controls are not allowed to be scrolled, so we remove all tags from all layers to prevent viz from moving them. In this state, any behavior that results in browser controls being moved will not involve BCIV.</li>
+<li>kBoth means the renderer is able to control the browser controls. The browser controls are able to be scrolled, so we create new tags and distribute them to the necessary areas.</li>
+</ul>
+<p>These updates are done in <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/tab/TabBrowserControlsConstraintsHelper.java;l=287;drc=3a35ef8d20836722c95b230f7248c73faea599e7">TabBrowserControlsConstraintsHelper</a> when the visibility constraint changes.</p>
+<p>We also update the tags when the tab becomes <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/tab/TabBrowserControlsConstraintsHelper.java;l=161;drc=3a35ef8d20836722c95b230f7248c73faea599e7;bpv=0;bpt=1">hidden/shown</a>. This is because there are times where the BrowserControlsState changes while the tab is hidden/uninteractable (ex. when the grid tab switcher is overlaid above the UI) which results in the TabBrowserControlsConstraintsHelper not getting notified. If we don’t update the tags, the controls could either remain unscrollable, or become scrollable when it’s not supposed to be, which is a security concern.</p>
+<h4 id="offsettagconstraints">OffsetTagConstraints</h4>
+<p>An <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/viz/common/quads/offset_tag.h;l=76;drc=3a35ef8d20836722c95b230f7248c73faea599e7">OffsetTagConstraint</a> contains a min and max for both x and y directions, which represents the valid range the layers can move in. If an OffsetTagValue indicates to move a layer outside of the valid range, the position of the layer will be clamped to the range’s boundary.</p>
+<p>While scrolling, the constraints for each layer will be set to allow the layer to be positioned anywhere between its min_height and height. Nothing special here, this just means the layer is allowed to move freely within its scrollable range (from being completely visible to completely off screen.)</p>
+<p>When there’s an animation caused by a height change, the offsets from the renderer are calculated based on the new height. In certain cases, the constraints must allow for the layer to move past its scrollable range. (For example, consider when the top toolbar is fully visible and a height decrease is being animated. The new height is smaller than the old height, so throughout the animation, the toolbar is positioned past its fully visible position.) Constraints are <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java;l=497;drc=2d6c94396f33fe6c4a95c11db6c48f45302a4ab2;bpv=0;bpt=1">updated</a> when height changes (this includes when the toolbar <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/BrowserControlsSizer.java;l=74;drc=2d6c94396f33fe6c4a95c11db6c48f45302a4ab2;bpv=1;bpt=1">changes its position</a>.)</p>
+<h3 id="logic-after-bciv">Logic after BCIV</h3>
+<p>These assumptions must hold before browser controls become scrollable/animatable:</p>
+<ul>
+<li>There is always a period of time where the BrowserControlsState is kShown or kHidden.</li>
+<li>Viz has already received a browser frame with the capture of the latest UI state.</li>
+</ul>
+<h4 id="stack-trace-for-scrolling">Stack trace for scrolling</h4>
+<ol>
+<li>[Visibility constraint changes] <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/tab/TabBrowserControlsConstraintsHelper.java;l=274?q=generateoffsettag&amp;ss=chromium%2Fchromium%2Fsrc">TabBrowserControlsConstraintsHelper</a> gets notified that the constraint has changed to kBoth. This indicates that the controls are now scrollable.</li>
+<li>[Generate new OffsetTags] Create a <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/BrowserControlsOffsetTagsInfo.java;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1;l=20">BrowserControlsOffsetTagsInfo</a> (container class that bundles together OffsetTag related objects to make it more convenient to pass around in java) and supplies it with newly <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/tab/TabBrowserControlsConstraintsHelper.java;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=1;bpt=1;l=242?q=generateoffsettag&amp;ss=chromium%2Fchromium%2Fsrc">generated</a> OffsetTags.</li>
+<li>[Tag cc::Layers with new OffsetTags] <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java;l=300;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1">BrowserControlsManager</a> gets notified of the new tags and supplies BrowserControlsOffsetTagsInfo with:<ul>
+<li>mTopControlsAdditionalHeight and mBottomControlsAdditionalHeight (for making the shadow disappear.)</li>
+<li>OffsetTagConstraints for the top controls and content layer.
+It also <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1;l=972">notifies</a> its own observers of the change:</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/compositor/layouts/StaticLayout.java;l=170;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8">StaticLayout</a>, to tag the content layer with the new content OffsetTag.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/TopToolbarOverlayMediator.java;l=231;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8">TopToolbarOverlayMediator</a>, to tag the toolbar with the appropriate OffsetTag depending on where it’s positioned (either top or bottom.)</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/BottomControlsStacker.java;l=370;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1">BottomControlsStacker</a>, to tag the bottom controls (currently consists of <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/bottom/BottomControlsMediator.java;l=356;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8">tabgroup strip</a> and <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/edge_to_edge/internal/java/src/org/chromium/chrome/browser/ui/edge_to_edge/EdgeToEdgeBottomChinMediator.java;l=321;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1">bottom chin</a>) with the new bottom controls OffsetTag. Also updates mBottomControlsAdditionalHeight in BrowserControlsManager so that it can be supplied to BrowserControlsOffsetTagsInfo.</li>
+</ul>
+</li>
+<li>[Pass OffsetTags to DelegatedFrameHostAndroid] BrowserControlsManager creates a <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/java/src/org/chromium/ui/BrowserControlsOffsetTagDefinitions.java;l=20;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=0">BrowserControlsOffsetTagDefinitions</a> (container class that bundles together tags and constraints, which are the only things the frame host needs) and passes it via <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java;l=1244;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=1;bpt=1">updateOffsetTagDefinitions</a>. This eventually calls <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/delegated_frame_host_android.cc;l=132;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1">registerOffsetTags</a>. The tag definitions and will get passed to viz as part of the <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/slim/layer_tree_impl.cc;l=497;drc=2d6c94396f33fe6c4a95c11db6c48f45302a4ab2">metadata</a> when the browser compositor frame is submitted.</li>
+<li>[Pass OffsetTags to renderer] TabBrowserControlsConstraintsHelper creates a <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/android/java/src/org/chromium/cc/input/BrowserControlsOffsetTagModifications.java;l=16;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8">BrowserControlsOffsetTagModifications</a> (container class that bundles together tags and top+bottom additional heights, which are the only things the renderer needs) and passes it via <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/tab/TabBrowserControlsConstraintsHelper.java;l=305">updateState</a>, which eventually calls <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/browser_controls_offset_manager.cc;l=190?q=UpdateBrowserControlsState%20f:cc&amp;ss=chromium%2Fchromium%2Fsrc">BrowserControlsOffsetManager::UpdateBrowserControlsState</a>.</li>
+<li>[Initiating a scroll] Browser main thread still handles the touch events, and dispatches them to the renderer.</li>
+<li>[Create OffsetTagValues] The renderer’s LayerTreeHostImpl calculates the offset of the browser controls for the next frame in the scroll, applying the additional offset for the top/bottom shadow if needed. The offset is then converted into an OffsetTagValue and will get passed to viz as part of the <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/trees/layer_tree_host_impl.cc;l=2561?q=additionalheight%20f:layer_tree%20&amp;ss=chromium%2Fchromium%2Fsrc">metadata</a> when the renderer compositor frame is submitted.</li>
+<li>[Notify browser of offset change] The renderer notifies the browser via <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java;l=936;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1">onControlsOffsetChanged</a>. Without BCIV, each observer would set their property models’ y-offset to height+offset. This is what incurs a browser frame and results in jank. With BCIV, we always set the y-offset to the height. This is a no-op when scrolling, but is necessary for animations. Since the property model didn’t change, the browser won’t submit a new frame.</li>
+<li>[Producing a frame] Viz will try to (modulo any scheduling issues) produce a frame as soon as the renderer frame from step 7 is received. Viz aggregates this renderer frame with the browser frame it received before the scroll began. The browser frame contains the browser controls, the renderer frame contains everything else. The frames get decomposed into quads, some of which will be tagged. For all tagged quads, viz looks for an OffsetTagValue with a matching tag, and will apply the appropriate translation on the quad.</li>
+</ol>
+<h4 id="stack-trace-for-animations">Stack trace for animations</h4>
+<ol>
+<li>[Generate and distribute OffsetTag and other objects] Steps 1-5 for scrolling with BCIV.</li>
+<li>[Initiating an animation] All animations are initiated by one of the following:<ul>
+<li>A change in the visibility constraints that forces the controls to be shown or hidden (for example, the controls are scrolled offscreen, but starting a navigation would force the controls to be fully visible.)</li>
+<li>A height and/or min height <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java;l=520;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1">change</a> (for example, losing wifi and having the status indicator increase the height and min height by pushing down the top toolbar.)</li>
+</ul>
+</li>
+<li>[Adjusting OffsetTagConstraints] For an animation caused by visibility constraints changing, nothing needs to be done here, the controls don’t need to move outside its scrollable range to satisfy the animation. For animations caused by height changes, the constraints must be <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1;l=497">adjusted</a>, as they need to move outside their scrollable range.</li>
+<li>[Renderer creates the Animation] BrowserControlsOffsetManager is responsible for handling all animations. Height change animations are created <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/browser_controls_offset_manager.cc;l=746;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=0;bpt=1">here</a>.</li>
+<li>[Animation tick] The animation <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/input/browser_controls_offset_manager.cc;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=1;bpt=1;l=842">ticks</a> until it is completed. During each tick, the renderer calculates the new offset and converts it to an OffsetTagValue (same as step 7 for scrolling) and notifies the browser of the offset change (same as step 8 for scrolling.) It is important to note that the offset is calculated based on the final height of the layer, so viz must apply the offset on a frame with the controls positioned at the new height. For this to happen, the browser must update its property models with the new height and submit a new frame (SurfaceSync will be applied here, because the OffsetTagValues from the renderer&#39;s frame must be applied on this frame). Incurring an extra browser frame here is ok for now (we aren’t measuring how janky animations are, and this is still a net improvement.) The call to onBrowserControlsOffsetChanged after the first tick must be the exact time the property models are set with the new height. Otherwise, one of the following occurs and the animation will flicker/jump:</li>
+</ol>
+<ul>
+<li>Property models are updated too early, causing viz to receive the browser frame before the renderer frame, resulting in drawing a frame with the correct height but old offset.<ul>
+<li>Property models are updated too late, causing viz will receive the renderer frame before the browser frame, resulting in drawing a frame with the correct offset, but old height.</li>
+</ul>
+</li>
+</ul>
+<ol start="10">
+<li>[Animation completes] After the final onBrowserControlsOffsetChanged, we <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java;l=508;drc=39ba0aa0c66c5d257ff955964f8c10d654f964e8;bpv=1;bpt=1">update</a> the constraints again to confine the controls within their scrollable range.</li>
+</ol>
+<h3 id="adding-a-new-browser-control-for-bciv">Adding a new browser control for BCIV</h3>
+<p>Currently, only the top+bottom controls and content layer are moved by BCIV because they are usually always present during a scroll/animation. If there is a new/existing browser control that appears frequently and needs to be scrolled/animated, it should be moved with BCIV.</p>
+<ol>
+<li>Determine if any existing OffsetTags can be used. If not, create a new tag and add it to BrowserControlsOffsetTags (would probably involve some refactoring of other relevant OffsetTag objects.) If a new tag is added:<ul>
+<li>Make sure it is properly propagated and registered everywhere. Follow the stacks for scrolling and animations to check where tags are used, and make sure the new tag is accounted for in those locations.</li>
+<li>Update the renderer to correctly compute the OffsetTagValue.</li>
+</ul>
+</li>
+<li>Make sure the browser updates its property model with the height. This ensures that animations will function correctly, and not introduce unnecessary browser frames.</li>
+<li>Test that the new browser control works with existing browser controls implemented with BCIV. In particular, check that:<ul>
+<li>There are no unnecessary browser frames being produced during a scroll. The easiest way is probably to add a log <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/slim/frame_sink_impl.cc;l=364?q=frame_sink_impl&amp;ss=chromium%2Fchromium%2Fsrc">here</a> and scroll a webpage while monitoring logcat. It is normal to see a frame in these cases, but there should be zero frames at all times during the scroll.<ul>
+<li>When the visibility constraints change and controls become scrollable.</li>
+<li>A few seconds after the controls become scrollable (from delayed tasks updating the UI)</li>
+<li>At the end of a scroll (after lifting up the finger/tool used for the scroll)</li>
+</ul>
+</li>
+<li>There are no visible jumping/flickering during scrolls and animations. If you see jumping/flickering, this usually means that there are short windows of time where the offset is incorrect. Some common animations include:<ul>
+<li>Hiding the browser controls and then initiating a navigation. This should animate the controls back to their fully visible state.</li>
+<li>Turning off/on wifi, which animates in/out a StatusIndicator on the top of the screen. The top controls should be animated to move along with the indicator.</li>
+<li>Changing the position of the toolbar. The toolbar should hide instantly, and animate to its fully visible state.</li>
+<li>Entering and exiting fullscreen works. Easiest way is probably to navigate to permission.site and tapping &quot;Fullscreen&quot;.</li>
+</ul>
+</li>
+<li>If your new browser control is stackable with other controls, check all of the above when the new control is by itself and when stacked with other controls.</li>
+</ul>
+</li>
+</ol>
+<p>Here are some example CLs for the bottom tabgroup strip that <a href="https://chromium-review.googlesource.com/c/chromium/src/+/6001144">adds and distributes OffsetTag related objects</a>, and <a href="https://chromium-review.googlesource.com/c/chromium/src/+/6018885">makes it move with BCIV and prevent other sources from unnecessarily submitting frames</a>.</p>
+<h2 id="managing-multiple-layers-browser-controls-stackers">Managing multiple layers: Browser Controls Stackers</h2>
+<p>As the browser UI evolved, the need to support multiple layers of controls within the top or bottom areas arose (e.g., Toolbar, Tab Strip, Bookmark Bar, Progress Bar). <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/TopControlsStacker.java">TopControlsStacker</a> and <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/BottomControlsStacker.java">BottomControlsStacker</a> were introduced to manage these layers. The goal of the stacker and layers is meant to act as a source of truth of what&#39;s inside of the browser control box, so current / new browser control layers will not have to build direct dependencies over other layers.</p>
+<p>These stackers act as coordinators that:</p>
+<ol>
+<li><strong>Manage Layers:</strong> They maintain a registry of UI layers (<code>TopControlLayer</code> / <code>BottomControlLayer</code>).</li>
+<li><strong>Calculate Heights:</strong> They compute the total <code>height</code> and <code>minHeight</code> for the browser controls by aggregating the properties of visible layers.<ul>
+<li><strong>Scroll Behavior:</strong> Layers can be defined as scrollable (contribute to total height but can be scrolled off) or non-scrollable (contribute to minHeight and stay visible).</li>
+<li><strong>Contribute to height:</strong> This offers layers to draw and position together with browser controls while not taking up spaces (e.g. progress bar)</li>
+</ul>
+</li>
+<li><strong>Position Layers:</strong> They calculate the Y-offset for each layer based on the current browser controls offset (how much is scrolled off) and the fixed stack order.<ul>
+<li><strong>Stack Order:</strong> The order of layers is predefined using enums (e.g. Tab Strip -&gt; Toolbar -&gt; Bookmark bar).</li>
+</ul>
+</li>
+<li><strong>Managing offset tags:</strong> The stackers are implemented with the support of BCIV, and manages when to add / remove offset tags.</li>
+<li><strong>Handle Animations:</strong> They manage complex transitions where layers might be showing or hiding, ensuring that neighboring layers shift appropriately.</li>
+</ol>
+<p>This centralized management allows different features to add their UI to the browser controls without manually calculating offsets or colliding with other features.</p>
+<p>See each layer&#39;s definition to see how to define a new browser control layers. As for Jan 2026, the top / bottom layers have separate definition. The effort to converge the layer definition is in <a href="https://crbug.com/450072689">https://crbug.com/450072689</a></p>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/TopControlLayer.java">TopControlLayer</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/BottomControlsLayer.java">BottomControlsLayer</a></li>
+</ul>
+<h2 id="browser-controls-when-there-is-no-web-contents">Browser controls when there is no web contents</h2>
+<p>When there is no web contents the browser controls can/should interact with, the browser controls will always be fully shown. This is currently the case for native pages such as NTP and other surfaces such as the tab switcher. However, the browser controls heights can still change, even without web contents. In this case, the transition animations are run by <code>BrowserControlsManager</code> in the browser process. See <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java;drc=5b029d1b98e2b7b35fff59b50a54af5d47689de9;l=725">BrowserControlsManager.java</a>. <code>BrowserControlsManager</code> animates the height changes by updating the controls offsets and the content offset over time. For every frame, <code>BrowserControlsStateProvider#Observer</code>s are notified through <code>#onControlsOffsetChanged()</code>.</p>
+<h2 id="making-sure-your-surface-works-in-harmony-with-the-browser-controls">Making sure your surface works in harmony with the browser controls</h2>
+<ul>
+<li>Surfaces where the browser controls are visible should never use a dimen resource (a common example is R.dimen.toolbar_height_no_shadow) to position its contents.</li>
+<li>If a surface needs to pad, margin or offset its contents, using the <code>BrowserControlsStateProvider</code> interface will be the best way most of the time.</li>
+<li>Surfaces should also be aware that the controls heights or the content offsets can change at any time. The <code>BrowserControlsStateProvider#Observer</code> interface can be used for this purpose. Also, a height change is very likely to be followed by content/controls offset updates over time. In this case, basing any margin/padding/offset updates on <code>Observer#onTopControlsHeightChanged</code> calls might cause a jump instead of a smooth animation.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/browser_controls.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/browser_controls.md</a>
+  </p>
+</div>

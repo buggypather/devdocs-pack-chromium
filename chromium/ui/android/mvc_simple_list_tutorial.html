@@ -1,0 +1,159 @@
+<h1>Simple Lists in MVC Land</h1>
+<h3 id="overview">Overview</h3>
+<p>This tutorial is intended to go over a basic implementation of lists in the Chrome on Android MVC
+framework. If you&#39;re not sure what MVC is, see <a href="#Additional-Resources">Additional Resources</a>.</p>
+<p>In this example we&#39;ll be creating a simple menu list where each list item consists of an icon and
+label.</p>
+<h3 id="additional-resources">Additional Resources</h3>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/ui/android/mvc_architecture_tutorial.md">Introductory MVC tutorial</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/ui/android/mvc_simple_recycler_view_tutorial.md">Expanding to RecyclerViews in MVC</a></li>
+</ul>
+<h3 id="file-structure">File Structure</h3>
+<p>The file structure of our component will be the following:</p>
+<ul>
+<li>./chrome/android/java/src/org/chromium/chrome/browser/simple_menu/<ul>
+<li><a href="#SimpleMenuCoordinator"><code>SimpleMenuCoordinator.java</code></a></li>
+<li><a href="#SimpleMenuMediator"><code>SimpleMenuMediator.java</code></a></li>
+<li><a href="#SimpleMenuItemViewBinder"><code>SimpleMenuItemViewBinder.java</code></a></li>
+<li><a href="#SimpleMenuProperties"><code>SimpleMenuProperties.java</code></a></li>
+</ul>
+</li>
+<li>./chrome/android/java/res/layout/<ul>
+<li><a href="#simple_menu_item_xml"><code>simple_menu_item.xml</code></a></li>
+</ul>
+</li>
+</ul>
+<h3 id="simplemenucoordinator">SimpleMenuCoordinator</h3>
+<p>This class will own the <code>ModelListAdapter</code> that knows how to show <code>PropertyModels</code>. In
+this example we&#39;ll be combining the responsibilities of what would otherwise be the coordinator
+and mediator for simplicity.</p>
+<pre data-language="java">public class SimpleMenuCoordinator {
+
+    private SimpleMenuMediator mMediator;
+
+    public SimpleMenuCoordinator(Context context, ListView listView) {
+        ModelList listItems = new ModelList();
+
+        // Once this is attached to the ListView, there is no need to hold a reference to it.
+        ModelListAdapter adapter = new ModelListAdapter(listItems);
+
+        // If this is a heterogeneous list, register more than one type.
+        adapter.registerType(
+                ListItemType.DEFAULT,
+                () -&gt; LayoutInflater.from(context).inflate(R.layout.simple_menu_item, null),
+                SimpleMenuItemViewBinder::bind);
+
+        listView.setAdapter(adapter);
+
+        mMediator = new SimpleMenuMediator(context, listItems);
+    }
+}</pre>
+<h3 id="simplemenumediator">SimpleMenuMediator</h3>
+<p>This class is responsible for pushing updates into the <code>ModelList</code>. Updates to that
+object are automatically pushed and bound to the list view. For a more complex system, the
+<code>ModelList</code> may be part of a larger <code>PropertyModel</code> that the mediator maintains.</p>
+<pre data-language="java">class SimpleMenuMediator {
+
+    private ModelList mModelList;
+
+    SimpleMenuMediator(Context context, ModelList modelList) {
+        mModelList = modelList;
+        PropertyModel itemModel = generateListItem(
+                ApiCompatibilityUtils.getDrawable(context.getResources(), R.drawable.icon),
+                context.getResources().getString(R.string.label));
+        mModelList.add(new ModelListAdapter.ListItem(ListItemType.DEFAULT, itemModel));
+    }
+
+    private PropertyModel generateListItem(Drawable icon, String text) {
+        return new PropertyModel.Builder(SimpleMenuProperties.ALL_KEYS)
+                .with(SimpleMenuProperties.ICON, icon)
+                .with(SimpleMenuProperties.LABEL, text)
+                .with(SimpleMenuProperties.CLICK_LISTENER, (view) -&gt; handleClick(view))
+                .build();
+    }
+
+    private void handleClick(View view) {
+        // Do some click logic here. This would typically be done in the mediator.
+    }
+}</pre>
+<h3 id="simplemenuproperties">SimpleMenuProperties</h3>
+<p>These are the types of data that we want to apply to each list item in our menu.</p>
+<pre data-language="java">class SimpleMenuProperties {
+    @IntDef({ListItemType.DEFAULT})
+    @Retention(RetentionPolicy.SOURCE)
+    /**
+     * This can be one or more items depending on if the list is homogeneous. If homogeneous,
+     * this definition can be skipped and 0 can be used in place of that parameter.
+     */
+    public @interface ListItemType {
+        int DEFAULT = 0;
+    }
+
+    /** The icon for the list item. */
+    public static final WritableObjectPropertyKey&lt;Drawable&gt; ICON =
+            new WritableObjectPropertyKey&lt;&gt;();
+
+    /** The text shown next to the icon. */
+    public static final WritableObjectPropertyKey&lt;String&gt; LABEL =
+            new WritableObjectPropertyKey&lt;&gt;();
+
+    /** The action that occurs when the list item is tapped. */
+    public static final WritableObjectPropertyKey&lt;OnClickListener&gt; CLICK_LISTENER =
+            new WritableObjectPropertyKey&lt;&gt;();
+
+    public static final PropertyKey[] ALL_KEYS = {ICON, LABEL, CLICK_LISTENER};
+}</pre>
+<h3 id="simplemenuitemviewbinder">SimpleMenuItemViewBinder</h3>
+<p>As per the MVC architecture, this class is responsible for taking a model and applying that
+information in to to a provided view.</p>
+<pre data-language="java">class SimpleMenuItemViewBinder {
+
+    // This can optionally be in the coordinator file depending on the complexity.
+    public static void bind(PropertyModel model, View view, PropertyKey propertyKey) {
+        if (SimpleMenuProperties.ICON == propertyKey) {
+            ((ImageView) view.findViewById(R.id.simple_menu_icon)).setImageDrawable(
+                    model.get(SimpleMenuProperties.ICON));
+
+        } else if (SimpleMenuProperties.LABEL == propertyKey) {
+            ((TextView) view.findViewById(R.id.simple_menu_label)).setText(
+                    model.get(SimpleMenuProperties.LABEL));
+
+        } else if (SimpleMenuProperties.CLICK_LISTENER == propertyKey) {
+            view.setOnClickListener(model.get(SimpleMenuProperties.CLICK_LISTENER));
+        }
+    }
+}</pre>
+<h3 id="simple_menu_itemxml">simple_menu_item.xml</h3>
+<pre data-language="xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;!-- Copyright 2019 The Chromium Authors
+     Use of this source code is governed by a BSD-style license that can be
+     found in the LICENSE file. --&gt;
+&lt;LinearLayout
+    xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;
+    android:layout_width=&quot;match_parent&quot;
+    android:layout_height=&quot;wrap_content&quot;
+    android:orientation=&quot;horizontal&quot;
+    android:background=&quot;@color/modern_primary_color&quot;&gt;
+
+    &lt;ImageView
+        android:id=&quot;@+id/simple_menu_icon&quot;
+        android:layout_width=&quot;18dp&quot;
+        android:layout_height=&quot;18dp&quot;
+        android:layout_gravity=&quot;center_vertical&quot;
+        android:scaleType=&quot;centerInside&quot;/&gt;
+
+    &lt;TextView
+        android:id=&quot;@+id/simple_menu_label&quot;
+        android:layout_width=&quot;wrap_content&quot;
+        android:layout_height=&quot;wrap_content&quot;
+        android:gravity=&quot;center_vertical&quot;
+        android:textAppearance=&quot;@style/TextAppearance.BlackBody&quot;/&gt;
+
+&lt;/LinearLayout&gt;</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/mvc_simple_list_tutorial.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/mvc_simple_list_tutorial.md</a>
+  </p>
+</div>

@@ -1,0 +1,70 @@
+<h1>Filing Memory Bugs</h1>
+<p>This page describes the common set of steps for filing a memory bug.</p>
+<ol>
+<li>Grab platform-specific measurements.<ul>
+<li><a href="#macOS">macOS</a></li>
+<li><a href="#Windows">Windows</a></li>
+<li><a href="#Linux">Linux</a></li>
+</ul>
+</li>
+<li>Grab a <a href="#memory-infra">memory-infra</a> trace.</li>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/entry?template=Memory%20usage">File a
+bug</a>
+on crbug.com. Attach screenshots and traces from previous steps.</li>
+</ol>
+<h2 id="windows">Windows</h2>
+<h3 id="task-manager">Task Manager</h3>
+<ul>
+<li>Open Task Manager.</li>
+<li>Select the <strong>Details</strong> pane.</li>
+<li>Right click the first row with column names. Select <strong>Select Columns</strong>.<ul>
+<li>Select <strong>Memory (private working set)</strong></li>
+<li>Select <strong>Memory (shared working set)</strong></li>
+<li>Select <strong>Commit size</strong></li>
+</ul>
+</li>
+<li>Sort processes with highest <strong>Memory (private working set)</strong> first by clicking
+once on the column name.</li>
+<li>Take a screenshot using <a href="https://support.microsoft.com/en-us/help/13776/windows-use-snipping-tool-to-capture-screenshots">Snipping
+Tool</a></li>
+</ul>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/memory_windows_task_manager.png" alt="Task Manager View"></p>
+<h2 id="macos">macOS</h2>
+<h3 id="step-1---activity-monitor">Step 1 - Activity Monitor</h3>
+<ul>
+<li>Open Activity Monitor, Select the Memory Tab.</li>
+<li>Under the <strong>View</strong> Menu, select the <strong>Real Private Memory</strong> and <strong>Real Memory</strong> columns.</li>
+<li>Sort processes with highest <strong>Private Memory</strong> first by clicking once on <strong>Private Memory</strong>.</li>
+<li>Take a screenshot by pressing cmd + shift + 3.</li>
+<li>You can also use cmd + shift + 4 to manually select a region on the screen to save.</li>
+</ul>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/memory_macos_activity_monitor.png" alt="Activity Monitor View"></p>
+<h3 id="step-2---terminal">Step 2 - Terminal</h3>
+<ul>
+<li>Open the Terminal application.</li>
+<li>Run the following command and report the results. <code>vm_stat</code></li>
+</ul>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/memory_macos_terminal_vmstat.png" alt="Terminal View"></p>
+<h2 id="linux">Linux</h2>
+<h3 id="procmeminfo">/proc/meminfo</h3>
+<ul>
+<li>Open a shell.</li>
+<li>Run the command <code>cat /proc/meminfo</code></li>
+<li>Record the results.</li>
+</ul>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/memory_linux_meminfo.png" alt="Terminal View"></p>
+<h2 id="memory-infra-trace"><a name="memory-infra"></a> Memory-Infra Trace</h2>
+<ul>
+<li>Open a new chrome tab and navigate to <strong>chrome://tracing</strong></li>
+<li>Click <strong>Record</strong> in the top left corner.</li>
+<li>Click the button <strong>Manually select settings</strong> and click <strong>None</strong> under the left column to unselect everything.</li>
+<li>Under the right column, select <strong>memory-infra</strong></li>
+<li>Click <strong>Record</strong>. Wait for five seconds. Then click <strong>stop</strong>.</li>
+<li>Click the <strong>Save</strong> button in the top left corner a pick a name for the trace.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/filing_memory_bugs.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory/filing_memory_bugs.md</a>
+  </p>
+</div>

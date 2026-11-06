@@ -1,0 +1,43 @@
+<h1>Prepare for Code Review</h1>
+<ul>
+<li>Use a //chrome/browser/ui/views/OWNERS owner when making substantial UI
+changes in order to ensure consistency with best practices <strong>preferably via
+<a href="mailto:chromium-chrome-browser-ui-views-reviews@google.com">chromium-chrome-browser-ui-views-reviews@google.com</a></strong> for changes in
+``//chrome/browser/ui/views`. Hopefully your reviewer will know when to loop
+them in, but please do so proactively as well. This is good practice even if
+you have OWNERS approval from a subdirectory as that owner may be more
+familiar with the feature than UI best practices.</li>
+<li>If you&#39;re doing something that the framework doesn&#39;t seem to support, or is
+hard/complex, it probably means you shouldn&#39;t do it. Work with your UI dev
+contact at this point to resolve this (if you have one), or ask in the
+<code>#desktop-ui</code> Slack. This may require revisions to mocks if they are doing
+something that should not be supported.</li>
+<li>Hard-coded constants (colors, spacing values, etc.) are code smells; avoid at
+all costs. Become friends with
+<a href="https://chromium.googlesource.com/chromium/src/+/main/ui/base/theme_provider.h">ThemeProvider</a> and
+<a href="https://chromium.googlesource.com/chromium/src/+/main/ui/views/layout/layout_provider.h">LayoutProvider</a>.</li>
+<li>Use a screen reader to navigate through the UI to make sure it&#39;s accessible.
+Make sure all items are correctly labeled / read out by the screenreader.
+<em>TODO(<a href="https://crbug.com/1238153">crbug.com/1238153</a>): Follow up with detailed
+instructions for getting started as part off a11y documentation and link those
+here.</em></li>
+<li>Make sure your UI looks OK in OS dark mode and Incognito (including color
+contrast).</li>
+<li>Make sure your UI doesn&#39;t break if the strings are extra long (as they will be
+in some translations). Easiest way to do this is to modify the strings
+manually to double or triple their length.</li>
+<li>When you post UI code for review, include screenshots. The best way to do this
+is posting before (if relevant) and after screenshots as attachments on the
+linked bug. Mention this in the review.<ul>
+<li>When adding or changing strings, presubmit will prompt you to upload
+screenshots to facilitate translations. The associated hash can be used by
+reviewers to <a href="https://docs.google.com/document/d/1nwYWDny20icMSpLUuV_LgrlbWKrYpbXOERUIZNH636o/edit#heading=h.ndzwtb9u4qzw">view the screenshots</a>.</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/bestpractices/prepare_for_code_review.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/bestpractices/prepare_for_code_review.md</a>
+  </p>
+</div>

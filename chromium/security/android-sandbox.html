@@ -1,0 +1,181 @@
+<h1>Chrome Android Sandbox Design</h1>
+<p>This document discusses the sandbox and process architecture of Chrome on
+Android. Like Chrome&#39;s desktop platforms, Android uses a sandbox to isolate and
+de-privilege untrustworthy computing principals. However, the overall
+architecture is materially different than on desktop platforms, while still
+arriving close to the same end result.</p>
+<h2 id="overall-architecture">Overall Architecture</h2>
+<p>The Chrome Android browser process is the main trusted principal in the system,
+it manages and communicates with a network of processes over inter-process
+communication (IPC). The major features of the security architecture are:</p>
+<ul>
+<li>The browser process is protected by the <a href="https://source.android.com/docs/security/app-sandbox">Android app
+sandbox</a>, which isolates
+each installed application on the system.</li>
+<li>Chrome launches its helper processes as Android
+<a href="https://developer.android.com/reference/android/app/Service">Services</a>.</li>
+<li>For sandboxed helper processes, the sandbox follows a similar bilayer design
+as the desktop Linux sandbox. The layer-one sandbox is provided by the
+<a href="https://developer.android.com/guide/topics/manifest/service-element#isolated"><code>android:isolatedProcess</code></a>
+attribute on the Service&#39;s manifest definition.</li>
+<li>Chrome <a href="https://source.chromium.org/chromium/chromium/src/+/main:sandbox/linux/seccomp-bpf-helpers/seccomp_starter_android.h">applies</a>
+a layer-two sandbox in the form of a Seccomp-BPF system call filter.</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/android-sandbox-diagram.png" alt="Diagram of the Android OS components and the parent/child and IPC relationships"></p>
+<!-- Source: https://docs.google.com/drawings/d/11oVsYx_TCrPMglMMW009IFFCStPrLPFbAIVNPp647Lw/edit --><h2 id="processes">Processes</h2>
+<p>The below sections discuss three IPC transport mechanisms: Binder, UNIX sockets,
+and Mojo. Binder is Android&#39;s primary IPC mechanism, implemented with a kernel
+driver and a user <code>ioctl</code> client. UNIX socket IPC is used between certain
+Android OS components, and it underpins Chrome&#39;s Mojo IPC mechanism. <a href="https://github.com/chromium/chromium/blob/HEAD/mojo/README.md">Mojo
+IPC</a> is the main IPC system used in Chrome to communicate
+between components.</p>
+<h3 id="browser-process">Browser Process</h3>
+<p>The Chrome browser process on Android is unique compared to the security
+architecture of Chrome on other platforms. On desktop systems, all applications
+typically run as the same user principal (UID), and each application often has
+the same view of the global filesystem and equal access to the files within.</p>
+<p>On Android, each installed application is given a distinct user ID (UID) and a
+restricted, scoped storage location. Applications only interact with each other
+using the high-level
+<a href="https://developer.android.com/guide/components/intents-filters">Intents</a> IPC
+system.</p>
+<p>The implications of this are that Chrome on Android should generally be
+less trusting of data coming from other apps. Similarly, Chrome should either
+trust or take care to sanitize data it sends to other apps. For more details see
+<a href="android-ipc">Android IPC Security Considerations</a>.</p>
+<h3 id="helper-processes">Helper Processes</h3>
+<p>Chrome uses helper processes to segment and isolate the work it performs on
+behalf of websites and the user. On desktop platforms, Chrome&#39;s browser process
+has a parent-child relationship to the helper processes. But on Android, all
+process creation goes through the Activity Manager and a zygote. The entrypoint
+in Chrome for these processes is the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/public/android/java/src/org/chromium/content/app/ContentChildProcessService.java;drc=4e1b7bc33d42b401d7d9ad1dcba72883add3e2af"><code>ContentChildProcessService</code></a>,
+which has both privileged (un-sandboxed) and sandboxed subclass variants.</p>
+<p>The zygote architecture is similar to the <a href="../linux/zygote">one used on
+Linux</a>, but the Android OS uses it for all processes on the
+system. This design exists because starting the Android JVM from scratch in each
+new process would be expensive, and the zygote enables cloning the running JVM
+to improve performance and reduce memory usage by sharing non-dirty memory
+pages.</p>
+<p>A consequence of this design is that process creation on Android is more
+involved than on other operating systems. Rather than a system call (or two,
+e.g. <code>fork()</code> + <code>execve()</code>), process creation in Android involves several IPCs
+through the system:</p>
+<ol>
+<li>Browser sends a Binder IPC to Activity Manager for <a href="https://developer.android.com/reference/android/content/Context#bindService(android.content.Intent,%20android.content.Context.BindServiceFlags,%20java.util.concurrent.Executor,%20android.content.ServiceConnection)"><code>Context.bindService()</code></a></li>
+<li>Activity Manager sends the zygote an IPC over a privileged UNIX socket to fork a process</li>
+<li>Zygote responds to Activity Manager with the forked process ID</li>
+<li>New process sends a Binder IPC to Activity Manager to connect with it</li>
+<li>Activity Manager sends a Binder IPC to the new process with information about the APK to load</li>
+<li>Activity Manager sends a Binder IPC channel connecting the new process to the browser process
+process for <a href="https://developer.android.com/reference/android/content/ServiceConnection#onServiceConnected(android.content.ComponentName,%20android.os.IBinder)"><code>ServiceConnection.onServiceConnected</code></a></li>
+</ol>
+<p>In Chrome, after the process is created, the browser process sends a file
+descriptor to the new process over Binder to establish Chrome&#39;s Mojo IPC. From
+then on, Chrome primarily uses Mojo IPC between the browser and the helper
+process. The Binder IPC channel is retained in order to control the lifetime of
+the helper process.</p>
+<h3 id="zygote">Zygote</h3>
+<p>Starting with Android API v29, the OS offers applications the ability to create
+per-app zygotes. An <code>isolatedProcess &lt;service&gt;</code> can be declared with
+<a href="https://developer.android.com/reference/android/R.styleable#AndroidManifestService_useAppZygote"><code>android:useAppZygote</code></a>
+and provide a <a href="https://developer.android.com/reference/android/app/ZygotePreload"><code>ZygotePreload</code></a>
+implementation. This instructs the OS to spawn a new zygote, from the system
+zygote, that will be used to launch all instances of that Service. By giving the
+application the ability to participate via <code>ZygotePreload</code>, the application can
+acquire resources and perform initialization that is common to all future
+processes. This extends the benefits of lower initialization time and greater
+memory sharing from the system zygote to individual applications.</p>
+<p>With greater memory sharing comes greater responsibility.</p>
+<p>When about to fork, the Zygote checks that all its open File Descriptors (FDs)
+are in its allowlist. The allowlist includes useful files like /dev/urandom, IPC
+sockets, config files, system libraries and APKs. Automatically excluding other
+files protects apps against accidental exposure of Android Framework internals
+(like ART).</p>
+<p>One particular risk of exposing open FDs in child processes is that their offset
+position can be changed in isolated processes. A malicious call to <code>lseek(2)</code>
+from an unprivileged context could potentially confuse privileged code reading
+or writing from/to these shared FDs.</p>
+<p>However, FDs open during Zygote Preload are not checked against the allowlist
+above. Chrome is therefore fully responsible for controlling the added shared
+state created during Preload. Keeping an open file descriptor or a memory
+mapping (or a native library loaded) past Zygote Preload makes them shared
+across all isolated processes. There is no automatic protection against
+accidental cross-process leaks like this.</p>
+<p><a href="../android_native_libraries#relro-sharing">RELRO Sharing</a> is one example of
+a readonly memory region (and its FD) created during Preload and shared across
+all process types in Chrome. In this case Preload must make sure to unmap all
+writable mappings and convert the region to readonly (PROT_READ for ashmem,
+F_SEAL_WRITE or F_SEAL_FUTURE_WRITE for memfd).</p>
+<p>Chrome trusts the App Zygote (<code>app_zygote</code> SELinux domain) and its child process
+bootstrap to never host untrusted code or data. Chrome could potentially
+mitigate some kinds of zygote contamination, but these checks would not be
+effective at protecting against leaking web credentials.</p>
+<h2 id="sandboxing">Sandboxing</h2>
+<p>Similar to the <a href="https://github.com/chromium/chromium/blob/HEAD/sandbox/linux/README.md">Linux sandbox design</a>, which uses a
+bilayer sandbox, Chrome on Android also uses two technologies to secure
+low-privilege processes.</p>
+<h3 id="selinux">SELinux</h3>
+<p>The Android OS applies an <a href="https://source.android.com/docs/security/features/selinux">SELinux policy</a>
+to every process on the system. A full explanation of SELinux is outside the
+scope of this document, but at a high-level it is a <a href="https://csrc.nist.gov/glossary/term/mandatory_access_control">mandatory access control
+mechanism</a> that
+enforces a capability sandbox. Every object represented in the kernel has an
+associated security label, and the system policy specifies what subjects can do
+to objects. For Chrome, SELinux acts as the layer-one sandbox.</p>
+<p>System services have per-service policies, but applications and their components
+are usually assigned to one of three domains:</p>
+<ul>
+<li><a href="https://cs.android.com/android/platform/superproject/main/+/main:system/sepolicy/private/untrusted_app.te;drc=4aad91d920ad42a7374e7bbd4cb9a50de4e85efb"><strong>untrusted_app</strong></a>
+is the default policy for most user-installed apps</li>
+<li><a href="https://source.android.com/docs/core/permissions/perms-allowlist"><strong>priv_app</strong></a>
+is the used for system applications that require powerful capabilities (e.g.
+backup/restore)</li>
+<li><a href="https://cs.android.com/android/platform/superproject/main/+/main:system/sepolicy/private/isolated_app.te;drc=941ba723baceac19151560e8a1d2830b9be6493c"><strong>isolated_app</strong></a>
+is a restrictive sandbox that can be applied via the <code>&lt;service android:isolatedProcess=&quot;true&quot;&gt;</code> tag in an application&#39;s manifest</li>
+<li><a href="https://cs.android.com/android/platform/superproject/main/+/main:system/sepolicy/private/app_zygote.te;drc=9128735f1f02603c6c35de40a5c2eeb6e8cdc2e6"><strong>app_zygote</strong></a>
+is similarly restrictive to <code>isolated_app</code>; it is additionally allowed to
+access/open executable and static application files for preload, allowed to
+fork into <code>isolated_app</code></li>
+</ul>
+<p>In Chrome, the browser process runs under the <strong>untrusted_app</strong> SELinux domain,
+which enforces separation between distinct apps on the system.</p>
+<p>Chrome&#39;s sandboxed helper processes (e.g. renderers, utility processes,
+sandboxed Mojo services) run under <strong>isolated_app</strong>. When the Android OS starts
+an <strong>isolated_app</strong> process, it also assigns the process to an ephemeral UID, to
+separate it from other POSIX security principals. The <strong>isolated_app</strong> SELinux
+domain prevents the process from accessing virtually all system services,
+devices, the network, and most of the filesystem.</p>
+<p>Chrome&#39;s un-sandboxed helper processes (e.g. GPU, un-sandboxed Mojo services)
+run under <strong>untrusted_app</strong> and the same UID as the browser process. This means
+there is no privilege separation between un-sandboxed helper processes and the
+browser process.</p>
+<p>A unique difference with Android compared to desktop platforms is that the
+operating system controls the sandbox policy (as a result of it being a
+mandatory access control mechanism). This means that Chrome cannot modify the
+policy, nor create gradations of sandboxes as can be done on other operating
+systems. A process on Android runs at either the same security principal as the
+browser, or in the tightly sandboxed <strong>isolated_app</strong> domain.</p>
+<h3 id="seccomp-bpf">Seccomp-BPF</h3>
+<p><a href="https://www.kernel.org/doc/html/v4.19/userspace-api/seccomp_filter.html">Seccomp-BPF</a>
+is the second layer of the sandbox, which performs kernel attack surface
+reduction. By removing system calls, or filtering specific arguments of system
+calls, some of the complexity provided by the Linux kernel can be walled off
+from a low-privilege process.</p>
+<p>The <a href="https://source.chromium.org/chromium/chromium/src/+/main:sandbox/linux/seccomp-bpf-helpers/baseline_policy_android.h;l=25;drc=f18d3489a59d34c92a8d96ef6a7e7279198a8ec6">policy applied to
+Android</a>
+is based on the desktop Linux policy. But, additional system calls are permitted
+compared to desktop Linux. The major differences are to allow the JVM to
+function properly and to account for differences in Bionic (Android Libc) vs
+Glibc (standard Linux).</p>
+<p>Additionally, the Android OS applies a <a href="https://cs.android.com/android/platform/superproject/main/+/main:bionic/libc/seccomp/seccomp_policy.cpp;l=305;drc=704772bda034448165d071f68b6aeca716f4220e">seccomp-bpf filter to all
+applications</a>.
+This policy is necessarily looser (since it applies to all applications) than
+the one applied by Chrome. But, seccomp-bpf policies stack and can only be made
+more restrictive.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/android-sandbox.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/android-sandbox.md</a>
+  </p>
+</div>

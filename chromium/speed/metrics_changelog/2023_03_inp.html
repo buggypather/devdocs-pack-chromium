@@ -1,0 +1,20 @@
+<h1>Interaction to Next Paint Changes in Chrome 111</h1>
+<h2 id="bug-fix-event-timing-api-no-longer-reports-very-long-durations-when-interaction-leads-to-open-in-new-tab">Bug fix: Event Timing API no longer reports very long durations when interaction leads to &quot;open in new tab&quot;</h2>
+<p>This bug fix causes the Event Timing API to ignore the presentation time if
+the page visibility changed. Before the bug fix, if the interaction caused the
+page to be hidden, the <code>duration</code> in Event Timing would report the time the
+page became visible again. This is technically the &quot;next paint&quot;, but since it
+involves waiting for the user to switch back to the page, it&#39;s not representative
+of performance, so it is now ignored.</p>
+<p>This bug affected the Event Timing API <em>only</em>. The correct data has always been
+reported to the Chrome User Experience report. So this is an issue developers
+may see in real user monitoring analytics.</p>
+<p><a href="https://chromium-review.googlesource.com/c/chromium/src/+/3926369">Source code</a></p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 111 was released the week of March 7, 2023.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_03_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_03_inp.md</a>
+  </p>
+</div>

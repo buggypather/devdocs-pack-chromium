@@ -1,0 +1,62 @@
+<h1>The Difference between Google Chrome and Chromium on Linux</h1>
+<p>Chromium on Linux has two general flavors: You can either get
+<a href="http://www.google.com/chrome?platform=linux">Google Chrome</a> or chromium-browser
+(see <a href="linux/chromium_packages">Linux Chromium Packages</a>).
+This page tries to describe the differences between the two.</p>
+<p>In short, Google Chrome is the Chromium open source project built, packaged, and
+distributed by Google. This table lists what Google adds to the Google Chrome
+builds <strong>on Linux</strong>.</p>
+<h2 id="google-chrome">Google Chrome</h2>
+<ul>
+<li>Colorful logo</li>
+<li><a href="linux/crash_dumping">Reports crashes</a> only if turned on.
+Please include symbolized backtraces in bug reports if you don&#39;t have crash
+reporting turned on.</li>
+<li>User metrics only if turned on</li>
+<li>Video and Audio codecs (may vary by distribution)<ul>
+<li><strong>H.264</strong>, AV1, VP8, and VP9 video codecs.</li>
+<li><strong>AAC</strong>, MP3, Opus, Theora, Vorbis, FLAC, and WAV audio codecs.</li>
+</ul>
+</li>
+<li>Code is tested by Chrome developers</li>
+<li>Sandbox is always on</li>
+<li>Single deb/rpm package</li>
+<li>Profile is kept in <code>~/.config/google-chrome</code></li>
+<li>Cache is kept in <code>~/.cache/google-chrome</code></li>
+<li>New releases are tested before being sent to users</li>
+<li>Google API keys are added by Google</li>
+</ul>
+<h2 id="chromium">Chromium</h2>
+<ul>
+<li>Blue logo</li>
+<li>Does not ever <a href="linux/crash_dumping">report crashes</a>. Please include
+symbolized backtraces in bug reports.</li>
+<li>User metrics are never reported.</li>
+<li>Video and Audio codecs (may vary by distribution)<ul>
+<li>AV1, VP8, and VP9 video codecs.</li>
+<li>MP3, Opus, Theora, Vorbis, FLAC, and WAV audio codecs.</li>
+</ul>
+</li>
+<li>Code may be modified by distributions</li>
+<li>Sandbox depends on the distribution (navigate to about:sandbox to confirm)</li>
+<li>Packaging depends on the distribution</li>
+<li>Profile is kept in <code>~/.config/chromium</code></li>
+<li>Cache is kept in <code>~/.cache/chromium</code></li>
+<li>New release testing depends on the distribution<ul>
+<li>Distributions are encouraged to track stable channel releases: see
+<a href="https://chromereleases.googleblog.com/">https://chromereleases.googleblog.com/</a>,
+<a href="https://chromiumdash.appspot.com/releases?platform=Linux">https://chromiumdash.appspot.com/releases?platform=Linux</a>
+and <a href="https://gsdview.appspot.com/chromium-browser-official/">https://gsdview.appspot.com/chromium-browser-official/</a></li>
+</ul>
+</li>
+<li>Google API keys depend on the distribution<ul>
+<li>See <a href="https://www.chromium.org/developers/how-tos/api-keys">https://www.chromium.org/developers/how-tos/api-keys</a></li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/chromium_browser_vs_google_chrome.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/chromium_browser_vs_google_chrome.md</a>
+  </p>
+</div>

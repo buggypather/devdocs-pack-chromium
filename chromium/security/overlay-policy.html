@@ -1,0 +1,154 @@
+<h1>No Cross-Origin Full-Page Overlays</h1>
+<p>Chrome features should not include cross-origin overlays that fully obscure an
+active web page&#39;s content area, even temporarily.</p>
+<p>If the active page is partially obscured, we should provide sufficient cues to
+the user that the active page is still present and active. Partial overlays can
+be dangerous or confusing as well and should be designed carefully with input
+from security and Chrome UX.</p>
+<h2 id="why">Why?</h2>
+<p>Chrome has had multiple features in the past that attempt to show a full page,
+cross-origin overlay above an active web page.  In practice, these have created
+dangerous situations with a large variety of bugs and security issues that are
+difficult to address in general, so we have adopted a security UX policy that
+disallows full page overlays.</p>
+<p>Features that have used or proposed full page overlays:</p>
+<ul>
+<li><strong>Interstitial Pages</strong>: Security interstitial pages (e.g., for TLS or Safe
+  Browsing warnings, as listed at <code>chrome://interstitials</code>) used an overlay
+  approach for many years, with <a href="https://crbug.com/392354">dozens of bugs</a>
+  due to the active page underneath. This feature eventually migrated to use
+  committed error pages instead in <a href="https://crbug.com/448486">448486</a>, as
+  documented
+  <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/navigation_concepts.md#Interstitial-Pages">here</a>.<ul>
+<li>Example: <a href="https://crbug.com/392354">392354</a>: Interstitials are weird and do
+weird things. This lists 68 dependent bugs (!), spanning a wide variety of
+affected features.</li>
+</ul>
+</li>
+<li><strong>Prerendering v1</strong>: The original version of prerendering loaded the next page
+  in a hidden active state, and it had many challenges with detecting any
+  observable behavior and discarding the page. This created
+  <a href="https://docs.google.com/presentation/d/1Ag_LJW_OoIZI--YcZIvv6JicGjECTmrM5xKk8zd_wZg/edit#slide=id.g146ba3c676_0_2">complexity</a>,
+  <a href="https://docs.google.com/document/d/16VCYGGWau483IMSxODpg5faZny1FJ6vNK2v-BuM5EhU/edit#heading=h.tp04wz80qf7b">maintenance challenges</a>,
+  and posed &quot;a burden requiring constant investment of 1-2 SWEs.&quot; The feature
+  was eventually removed and replaced by Prerendering v2, which uses
+  restricted Mojo interfaces to limit what can occur before it is displayed.<ul>
+<li>Example: <a href="https://crbug.com/439545">439545</a> - Desktop notifications</li>
+<li>Example: <a href="https://crbug.com/520275">520275</a> - Voice synthesis audio</li>
+<li>Example: <a href="https://crbug.com/247848">247848</a> - Infobars</li>
+</ul>
+</li>
+<li><strong>Google Lens screenshots</strong>: Google Lens showed a screenshot overlay above an
+  active page, and encountered security bugs where the page changed
+  underneath the screenshot. This feature changed to semi-transparent masks.<ul>
+<li>Example: <a href="https://crbug.com/1242424">1242424</a>: Lens Screenshot URL spoof. A
+Google Lens screenshot overlay above the active page was not dismissed for
+all types of navigations, creating a mismatch between the displayed
+content&#39;s origin and the URL in the omnibox. Due to a full-page overlay
+concern in comment 4, Lens was changed in
+<a href="https://crbug.com/1247917">1247917</a> to use a semitransparent mask to show
+underlying page content.</li>
+</ul>
+</li>
+<li><strong>Cross-Origin Paint Holding</strong>: Chrome shows the last paint of the previously
+  committed page after a new page commits for up to 4 seconds, until the new
+  page paints. This reduces the amount of time the user is looking at a blank
+  page, but also creates a discrepancy between the address bar and the
+  content shown in the tab. The stale content is not interactive, but it has
+  been used in many URL spoof reports for which we haven&#39;t had a great
+  response. It is also possible for the new active page to show prompts or
+  other disruptive behavior before painting, while the stale paint is still
+  visible (see <a href="https://crbug.com/1447077">1447077</a>). This feature is still
+  enabled, with attempts to mitigate the issues (e.g., disabling input). We
+  may choose whether to continue to mitigate these issues or find a safer way
+  to approach this feature.<ul>
+<li>Discussion of concerns: <a href="https://crbug.com/721145">721145</a></li>
+<li>URL spoofs requiring fixes to the 4 second timer:
+<a href="https://crbug.com/497588">497588</a>, <a href="https://crbug.com/672847">672847</a>,
+<a href="https://crbug.com/739621">739621</a>, <a href="https://crbug.com/844881">844881</a>,
+<a href="https://crbug.com/1152894">1152894</a></li>
+<li>URL spoof reports we choose not to fix: <a href="https://crbug.com/776402">776402</a>
+(comment 14 discusses our desire to find a safer UX),
+<a href="https://crbug.com/755058">755058</a>, <a href="https://crbug.com/784395">784395</a>,
+<a href="https://crbug.com/1218366">1218366</a>, <a href="https://crbug.com/1237742">1237742</a>,
+<a href="https://crbug.com/1304041">1304041</a><ul>
+<li>In several WontFix cases, the bug was exploitable for a year or more
+before the repro independently stopped working, but we had no means of
+addressing it, and the underlying issues remain present even if
+particular repro steps stop working.  In other cases, we had to close
+issues explaining that we can&#39;t do any better due to paint holding, which
+can undermine our credibility with vulnerability reporters.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>Default Navigation Transitions</strong>: Proposed to show a full-page screenshot of
+  a cross-origin page above an active page while a navigation is in progress.
+  Pursuing alternative approaches on most Chrome platforms, though a full
+  screen overlay is currently in use on Chrome for iOS.</li>
+</ul>
+<h2 id="examples-of-overlay-problems">Examples of Overlay Problems</h2>
+<p>There are many things that an active but hidden page can do to pose security or
+functional issues while the overlay is displayed, including but not limited
+to:</p>
+<ul>
+<li>Sensors continue to record<ul>
+<li>Camera and microphone continue to record (sometimes without or with
+inaccurate attribution)</li>
+<li>Geolocation</li>
+</ul>
+</li>
+<li>Input events may be surprisingly sent to the hidden active page</li>
+<li>Prompts may appear above the overlay, out of context</li>
+<li>Popups may appear, if a user activation is available</li>
+<li>Fullscreen mode may activate, obscuring the overlay</li>
+<li>Audio continues to play</li>
+<li>The page may continue to update unexpectedly<ul>
+<li>Videos continue to play past the point the user observed</li>
+</ul>
+</li>
+<li>Built-in Chrome features or extensions may not be aware of the overlay and do
+surprising things<ul>
+<li>Accessibility</li>
+<li>DevTools</li>
+<li>Saving or printing pages</li>
+</ul>
+</li>
+<li>Many Chrome features use content/ APIs to access the last committed URL or
+origin for functional or security purposes, being unaware of the cross-origin
+overlay.</li>
+</ul>
+<p>This list is not exhaustive and the capabilities of web pages continue to expand
+over time, so it is difficult to prevent all observable or dangerous behavior
+while a user is unaware that a page is still present. This would be a fail-open
+approach requiring us to diagnose and fix all problematic cases. Attempts to do
+so in the past (e.g., Prerendering v1) have resulted in an unsustainable
+maintenance burden.</p>
+<p>A hidden active page also affects the user&#39;s mental model: they are more likely
+to think the page has been unloaded, ending up confused if Chrome later reveals
+it has been active but hidden.</p>
+<p>Even temporary cases, such as showing an overlay until a timeout, can pose risks
+to users, such as a &quot;hot mic&quot; situation if a video call appears to end but is
+still in progress.</p>
+<h2 id="comparisons-to-non-overlay-cases">Comparisons to Non-Overlay Cases</h2>
+<p>There are other situations where active web pages may continue to run while not
+visible to the user, such as in a background tab.  Chrome&#39;s UI indicates the
+change of security context to the user in these cases (e.g., using a different
+tab and address bar contents), and continues to indicate the previous page
+exists via the tab strip or tab switcher.  In contrast, full-page overlays
+within a given tab imply to the user that the active page is no longer present,
+even though it continues to run.</p>
+<p>BFcache and Prerendering are two other features that keep pages in a hidden but
+frozen or restricted state.  These pages are not fully active as in the overlay
+case above.  However, not all pages can be put into this frozen or restricted
+state, depending on which APIs are in use, whether the page opts out, which
+other pages are in the same process, etc.  In such cases, BFcache and
+Prerendering evict or discard the page.  As a result, freezing a page is not a
+general technique that can be used when showing an overlay above any arbitrary
+page.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/overlay-policy.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/overlay-policy.md</a>
+  </p>
+</div>

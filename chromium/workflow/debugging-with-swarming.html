@@ -1,0 +1,70 @@
+<h1>Debugging with Swarming</h1>
+<p>This document outlines how to debug a test failure on a specific builder
+configuration on Swarming using the <a href="https://github.com/chromium/chromium/blob/HEAD/tools/utr/README.md">UTR tool</a>
+without needing to repeatedly upload new CL revisions or do CQ dry runs. This
+tool will automatically handle steps like replicating the right GN args,
+building &amp; uploading the test isolate, triggering &amp; collecting the swarming test
+tasks.</p>
+<h2 id="overview--terms">Overview &amp; Terms</h2>
+<p><em>Swarming</em> is a system operated by the infra team that schedules and runs tasks
+under a specific set of constraints, like &quot;this must run on a macOS 10.13 host&quot;
+or &quot;this must run on a host with an intel GPU&quot;. It is somewhat similar to part
+of <a href="https://ai.google/research/pubs/pub43438">Borg</a>, or to <a href="https://kubernetes.io/">Kubernetes</a>.</p>
+<p>An <em>isolate</em> is an archive containing all the files needed to do a specific task
+on the swarming infrastructure. It contains binaries as well as any libraries
+they link against or support data. An isolate can be thought of like a tarball,
+but held by the CAS server and identified by a digest of its contents. The
+isolate also includes the command(s) to run, which is why the command is
+specified when building the isolate, not when executing it. See the
+<a href="../infra/glossary">infra glossary</a> for the definitions of these terms and
+more.</p>
+<p>Normally, when you do a CQ dry run, something like this happens:</p>
+<pre>  for type in builders_to_run:
+    targets = compute_targets_for(type)
+    isolates = use_swarming_to_build(type, targets) # uploads isolates for targets
+    wait_for_swarming_to_be_done()
+
+    for isolate in isolates:
+      use_swarming_to_run(type, isolate) # downloads isolates onto the bots used
+    wait_for_swarming_to_be_done()</pre>
+<p>When you do a CQ retry on a specific set of bots, that simply constrains
+<code>builders_to_run</code> in the pseudocode above. However, if you&#39;re trying to rerun a
+specific target on a specific bot, because you&#39;re trying to reproduce a failure
+or debug, doing a CQ retry will still waste a lot of time - the retry will still
+build and run <em>all</em> targets, even if it&#39;s only for one bot.</p>
+<p>Fortunately, you can manually invoke some steps of this process. What you really
+want to do is:</p>
+<pre>  isolate = use_swarming_to_build(type, target) # can't do this yet, see below
+  use_swarming_to_run(type, isolate)</pre>
+<p>or perhaps:</p>
+<pre>  isolate = upload_to_cas(target_you_built_locally)
+  use_swarming_to_run(type, isolate)</pre>
+<h2 id="a-concrete-example">A concrete example</h2>
+<p>Here&#39;s how to run <code>chrome_public_unit_test_apk</code> on Android devices. By using the
+config of the <code>android-arm64-rel</code> trybot, we can run it on Pixel 3 XLs running
+Android Pie.</p>
+<pre data-language="sh">$ vpython3 tools/utr \
+    -p chromium \
+    -B try \
+    -b android-arm64-rel \
+    -t &quot;chrome_public_unit_test_apk on Android device Pixel 3 XL&quot; \
+    compile-and-test</pre>
+<p>You can find the UTR invocation for any test on the build UI under the step&#39;s
+&quot;reproduction instructions&quot; (displayed by clicking the page icon in the UI).</p>
+<h2 id="other-notes">Other notes</h2>
+<p>If you are looking at a Swarming task page, be sure to check the bottom of the
+page, which gives you commands to:</p>
+<ul>
+<li>Download the contents of the isolate the task used</li>
+<li>Reproduce the task&#39;s configuration locally</li>
+<li>Download all output results from the task locally</li>
+</ul>
+<p>To find out repo checkout, gn args, etc for local compile, you can use
+<a href="../testing/how_to_repro_bot_failures">how to repro bot failures</a>
+as a reference.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/workflow/debugging-with-swarming.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/workflow/debugging-with-swarming.md</a>
+  </p>
+</div>

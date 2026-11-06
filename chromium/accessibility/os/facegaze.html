@@ -1,0 +1,141 @@
+<h1>ChromeOS FaceGaze</h1>
+<p>FaceGaze (publicly named &quot;Face control&quot;) is a ChromeOS accessibility feature
+that allows users to control the cursor with their head and perform various
+actions using facial gestures.</p>
+<h2 id="summary">Summary</h2>
+<h3 id="user-flow">User flow</h3>
+<p>FaceGaze can be enabled either in the accessibility quick settings menu or in
+the ChromeOS settings app under the route Accessibility &gt; Cursor and touchpad &gt;
+Face control. Once FaceGaze is enabled, the face recognition model and backing
+web assembly will be downloaded via DLC (downloadable content). When the
+download succeeds, the face model gets initialized and the webcam is turned on.
+The user can then move the cursor with their head and perform actions with
+facial gestures. When recognized, gestures and their associated actions will be
+posted to the FaceGaze bubble UI, which is a floating UI component positioned at
+the top of the display.</p>
+<p>FaceGaze has several actions that temporarily put FaceGaze into a different
+state. Examples include enter/exit scroll mode, start/end long click, pause/
+resume FaceGaze, and start/stop Dictation. When scroll mode is active, for
+example, head movements will not move the mouse but instead be used to determine
+a scroll direction. When FaceGaze is in an alternate state, it will be
+communicated via the bubble UI.</p>
+<p>Note that if the DLC download fails, FaceGaze will automatically turn off and a
+notification will be shown with a failure message.</p>
+<h3 id="technical-overview">Technical overview</h3>
+<p>FaceGaze is implemented primarily as a Chrome extension in TypeScript. It also
+has a few browser-side components (DLC hook and APIs), as well as ash-side
+components (bubble UI). The high-level components of the feature are:</p>
+<ol>
+<li>The Chrome extension, which is where most of the logic lives</li>
+<li>A hook in the extension to connect to the device&#39;s webcam</li>
+<li>An ML model, called <a href="https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker">FaceLandmarker</a>,
+which processes video frames and returns results containing the location of all
+relevant face points, confidences for facial gestures, and the amount of head
+rotation. This is the technology that makes FaceGaze possible.</li>
+<li>Extension APIs to update the cursor position, send synthetic mouse and key
+events, and interact with the FaceGaze bubble in the browser (among other
+things)</li>
+<li>The ash-side implementation for the bubble UI</li>
+<li>Settings page implementation, where users can configure their cursor
+settings and update their gesture-to-action bindings</li>
+</ol>
+<p>Once FaceGaze is initialized, here&#39;s a high-level flow of how it responds to a
+single camera frame:</p>
+<ol>
+<li>FaceGaze will grab the latest frame from the webcam feed</li>
+<li>The frame is forwarded to the FaceLandmarker, which returns a raw result with
+face points, gesture confidences, and head rotation</li>
+<li>FaceGaze will further interpret this result and convert facial gestures to
+actions (called &quot;macros&quot; in the code) depending on the user&#39;s preferences</li>
+<li>FaceGaze will update the mouse location, perform actions, and update the floating bubble UI</li>
+<li>The above process is repeated many times per second to give the user a
+feeling of responsiveness, e.g. mouse movement responds quickly to head movement</li>
+</ol>
+<p>As mentioned above, FaceGaze utilizes a <a href="https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/third_party/chromiumos-overlay/app-accessibility/facegaze-assets/">DLC</a>
+to supply the FaceLandmarker model and the backing web assembly.</p>
+<h3 id="accessing-the-webcam-feed">Accessing the webcam feed</h3>
+<p>FaceGaze utilizes the <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API">webRTC API</a>,
+specifically the <a href="https://developer.mozilla.org/en-US/docs/Web/API/ImageCapture">ImageCapture API</a>
+to grab video frames and pass them to the FaceLandmarker model.</p>
+<h2 id="code-structure">Code structure</h2>
+<p>The majority of FaceGaze code lives in the <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/chromeos/accessibility/accessibility_common/facegaze/">facegaze/</a> extension directory. Settings code lives in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/ash/settings/os_a11y_page/">chrome/browser/resources/ash/settings/os_a11y_page</a>.
+Code for the bubble UI lives in <a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/system/accessibility/">ash/system/accessibility</a>.</p>
+<h3 id="facegaze-extension-classes">FaceGaze extension classes</h3>
+<p>The <code>facegaze/</code> extension directory contains several noteworthy classes:</p>
+<ul>
+<li><p><code>FaceGaze</code>, which is the main object. It handles setup/teardown, interacts
+with APIs like chrome.settingsPrivate, and owns the other essential classes.</p>
+</li>
+<li><p><code>WebCamFaceLandmarker</code>, which requests the DLC download, initializes the
+FaceLandmarker API, starts the webcam, continually passes frames from the video
+stream into the FaceLandmarker while the video stream is active, and returns
+results to the main <code>FaceGaze</code> object.</p>
+</li>
+<li><p><code>GestureDetector</code>, which computes which gestures were detected, filtering
+out those with low confidence scores. It also transforms raw gestures into
+ones supported by FaceGaze; for example, FaceGaze doesn&#39;t support &quot;blink left
+eye&quot; and &quot;blink right eye&quot; individually. Instead, it supports a compound
+&quot;blink eyes&quot; gesture.</p>
+</li>
+<li><p><code>GestureHandler</code>, which does additional processing of FaceLandmarker results
+and converts recognized gestures into executable macros.</p>
+</li>
+<li><p><code>MouseController</code>, which similarly processes FaceLandmarker results to convert
+recognized face points and rotation into a new cursor location. This class also
+contains logic to smooth cursor movement so that the user gets natural cursor
+movements instead of jumpy cursor movements.</p>
+</li>
+<li><p><code>ScrollModeController</code>, which gives users scroll functionality with FaceGaze.</p>
+</li>
+<li><p><code>BubbleController</code>, which controls all interaction with the FaceGaze bubble
+UI.</p>
+</li>
+</ul>
+<h3 id="facegaze-ash-side-classes">FaceGaze ash-side classes</h3>
+<ul>
+<li><p><code>FaceGazeBubbleController</code> manages the FaceGaze UI from ash and provides an
+entry point for updating/changing the UI.</p>
+</li>
+<li><p><code>FaceGazeBubbleView</code> is the actual implementation of the FaceGaze UI.</p>
+</li>
+</ul>
+<h3 id="facegaze-browser-side-classes">FaceGaze browser-side classes</h3>
+<ul>
+<li><p><code>AccessibilityManager</code> contains logic for setting up/tearing down the
+extension, forwarding requests and results for DLC downloads, and showing
+notifications to the user.</p>
+</li>
+<li><p><code>AccessibilityDlcInstaller</code> performs the install of the facegaze-assets DLC
+and passes the contents through to the extension.</p>
+</li>
+<li><p><code>DragEventRewriter</code> is a common class that helps implement drag and drop for
+Autoclick and FaceGaze. While the class is active, all mouse movement events
+will be rewritten into mouse drag events.</p>
+</li>
+</ul>
+<h3 id="facegaze-settings">FaceGaze settings</h3>
+<p>TODO</p>
+<h3 id="testing">Testing</h3>
+<ul>
+<li><p>See the <code>facegaze/</code> extension directory for all extension tests.</p>
+</li>
+<li><p>See <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ash/accessibility/facegaze_browsertest.cc">facegaze_browsertest.cc</a>
+for C++ integration tests. Note that these tests hook into a JavaScript class
+called <code>FaceGazeTestSupport</code> and allows the C++ tests to execute JavaScript or
+wait for information to propagate to the extension side before continuing.
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ash/accessibility/facegaze_test_utils.cc">facegaze_test_utils.cc</a>
+contains test support for writing tests.</p>
+</li>
+<li><p>See <a href="https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/tast-tests/src/go.chromium.org/tast-tests/cros/local/a11y/facegaze/facegaze.go">facegaze.go</a>
+which provides infrastructure for FaceGaze in tast. Also see <a href="https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/platform/tast-tests/src/go.chromium.org/tast-tests/cros/local/bundles/cros/ui/idle_perf.go">idle_perf.go</a>,
+which runs FaceGaze idly for ten minutes and collects performance metrics across
+many different types of physical devices.</p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/facegaze.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/facegaze.md</a>
+  </p>
+</div>

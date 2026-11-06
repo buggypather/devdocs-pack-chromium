@@ -1,0 +1,106 @@
+<h1>Memory Usage in CC</h1>
+<p>This document gives an overview of memory usage in the CC component, as well as
+information on how to analyze that memory.</p>
+<h2 id="types-of-memory-in-use">Types of Memory in Use</h2>
+<p>CC uses a number of types of memory:</p>
+<ol>
+<li>Malloc Memory - Standard system memory used for all manner of objects in CC.</li>
+<li>Discardable Memory - Memory allocated by the discardable memory system.
+Designed to be freeable by the system at any time (under memory pressure).
+In most cases, only pinned discardable memory should be considered to
+have a cost; however, the implementation of discardable memory is platform
+dependent, and on certain platforms unpinned memory can contribute to
+memory pressure to some degree.</li>
+<li>Shared Memory - Memory which is allocated by the Browser and can safely
+be transferred between processes. This memory is allocated by the browser
+but may count against a renderer process depending on who logically &quot;owns&quot;
+the memory.</li>
+<li>GPU Memory - Memory which is allocated on the GPU and typically does not
+count against system memory. This mainly includes OpenGL objects.</li>
+</ol>
+<h2 id="categories-of-memory">Categories Of Memory</h2>
+<p>Memory-infra tracing will grab dumps of CC memory in several categories.</p>
+<h3 id="cc-category">CC Category</h3>
+<p>The CC category contains resource allocations made by ResourceProvider. All
+resource allocations are enumerated under cc/resource_memory. A subset of
+resources are used as tile memory, and are also enumerated under cc/tile_memory.
+For resources that appear in both cc/tile_memory and cc/resource_memory, the
+size will be attributed to cc/tile_memory (effective_size of cc/resource_memory
+will not include these resources).</p>
+<p>If the one-copy tile update path is in use, the cc category will also enumerate
+staging resources used as intermediates when drawing tiles. These resources are
+like tile_memory, in that they are shared with cc/resource_memory.</p>
+<p>Note that depending on the path being used, CC memory may be either shared
+memory or GPU memory:</p>
+<pre>Path         | Tile Memory Type     | Staging Memory Type
+-------------|-------------------------------------------
+Bitmap       | Shared Memory        | N/A
+One Copy     | GPU Memory           | Shared Memory
+Zero Copy    | GPU or Shared Memory | N/A
+GPU          | GPU Memory           | N/A</pre>
+<p>Note that these values can be determined from a memory-infra dump. For a given
+resource, hover over the small green arrow next to it&#39;s &quot;size&quot;. This will show
+the other allocations that this resource is aliased with. If you see an
+allocation in the GPU process, the memory is generally GPU memory. Otherwise,
+the resource is typically Shared Memory.</p>
+<p>Tile and Staging memory managers are set up to evict any resource not used
+within 1s.</p>
+<h3 id="gpu-category">GPU Category</h3>
+<p>This category lists the memory allocations needed to support CC&#39;s GPU path.
+Despite the name, the data in this category (within a Renderer process) is not
+GPU memory but Shared Memory.</p>
+<p>Allocations tracked here include GL command buffer support allocations such as:</p>
+<ol>
+<li>Command Buffer Memory - memory used to send commands across the GL command
+buffer. This is backed by Shared Memory.</li>
+<li>Mapped Memory - memory used in certain image upload paths to share data
+with the GPU process. This is backed by Shared Memory.</li>
+<li>Transfer Buffer Memory - memory used to transfer data to the GPU - used in
+different paths than mapped memory. Also backed by Shared Memory.</li>
+</ol>
+<h3 id="discardable-category">Discardable Category</h3>
+<p>Cached images make use of Discardable memory. These allocations are managed by
+Skia and a better summary of these allocations can likely be found in the Skia
+category.</p>
+<h3 id="malloc-category">Malloc Category</h3>
+<p>The malloc category shows a summary of all memory allocated through malloc.</p>
+<p>Currently the information here is not granular enough to be useful, and a
+good project would be to track down and instrument any large pools of memory
+using malloc.</p>
+<p>Some Skia caches also make use of malloc memory. For these allocations, a better
+summary can be seen in the Skia category.</p>
+<h3 id="skia-category">Skia Category</h3>
+<p>The Skia category shows all resources used by the Skia rendering system. These
+can be divided into a few subcategories. skia/gpu_resources/* includes all
+resources using GPU memory. All other categories draw from either Shared or
+malloc memory. To determine which type of memory a resource is using, hover
+over the green arrow next to its size. This will show the other allocations
+which the resource is aliased with.</p>
+<h2 id="other-areas-of-interest">Other Areas of Interest</h2>
+<p>Many of the allocations under CC are aliased with memory in the Browser or GPU
+process. When investigating CC memory it may be worth looking at the following
+external categories:</p>
+<ol>
+<li>GPU Process / GPU Category - All GPU resources allocated by CC have a
+counterpart in the GPU/GPU category. This includes GL Textures, buffers, and
+other GPU backed objects such as Native GPU Memory Buffers.</li>
+<li>Browser Process / GpuMemoryBuffer Category - Resources backed by Shared
+Memory GpuMemoryBuffers are allocated by the browser and will be tracked
+in this category.</li>
+<li>Browser Process / SharedMemory Category - Resources backed by Bitmap and
+Shared Memory GpuMemoryBuffer objects are allocated by the browser and will
+also tracked in this category.</li>
+</ol>
+<h2 id="memory-todos">Memory TODOs</h2>
+<p>The following areas have insufficient memory instrumentation.</p>
+<ol>
+<li>DisplayLists - DisplayLists can be quite large and are currently
+un-instrumented. These use malloc memory and currently contribute to
+malloc/allocated_objects/<unspecified>. <a href="https://crbug.com/567465">BUG</a></li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/probe-cc.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/probe-cc.md</a>
+  </p>
+</div>

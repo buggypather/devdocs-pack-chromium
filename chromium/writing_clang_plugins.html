@@ -1,0 +1,133 @@
+<h1>Don't write a clang plugin</h1>
+<p>Make sure you really want to write a clang plugin.</p>
+<ul>
+<li>The clang plugin api is not stable. If you write a plugin, <em>you</em> are
+responsible for making sure it&#39;s updated when we update clang.</li>
+<li>If you&#39;re adding a generally useful warning, it should be added to upstream
+clang, not to a plugin.</li>
+<li>You should not use a clang plugin to do things that can be done in a
+PRESUBMIT check (e.g. checking that the headers in a file are sorted).</li>
+</ul>
+<p>Valid reasons for writing a plugin are for example:</p>
+<ul>
+<li>You want to add a chromium-specific error message.</li>
+<li>You want to write an automatic code rewriter.</li>
+</ul>
+<p>In both cases, please inform
+<a href="https://groups.google.com/a/chromium.org/group/clang/topics">clang@chromium.org</a>
+of your plans before you pursue them.</p>
+<h1 id="having-said-that">Having said that</h1>
+<p>clang currently has minimal documentation on its plugin interface; it&#39;s mostly
+doxygen annotations in the source. This is an attempt to be half map to the
+header files/half tutorial.</p>
+<h1 id="building-your-plugin">Building your plugin</h1>
+<h2 id="just-copy-the-clang-build-system">Just copy the clang build system</h2>
+<p>I suggest you make a new dir in <code>llvm-project/clang/examples/</code> and copy the
+Makefile from <code>PrintFunctionNames</code> there. This way, you&#39;ll just leverage the
+existing clang build system. You can then build your plugin with</p>
+<pre>make -C llvm-project/clang/examples/myplugin</pre>
+<p>See <a href="clang">Using plugins</a> on how to use your plugin while building chromium
+with clang.</p>
+<h2 id="use-the-interface-in-toolsclangpluginschromeclasstesterh">Use the interface in tools/clang/plugins/ChromeClassTester.h</h2>
+<p>Here&#39;s a canned interface that filters code, only passing class definitions in
+non-blacklisted headers. The users of <code>ChromeClassTester</code> are good code to study
+to see what you can do.</p>
+<h2 id="or-if-youre-doing-something-really-different-copy-printfunctionnamescpp">Or if you&#39;re doing something really different, copy PrintFunctionNames.cpp</h2>
+<p><code>PrintFunctionNames.cpp</code> is a plugin in the clang distribution. It is the Hello
+World of plugins. As a most basic skeleton, it&#39;s a good starting point. Change
+all the identifiers that start with <code>PrintFunction</code> to your desired name. Take
+note of the final line:</p>
+<pre data-language="cpp">static FrontendPluginRegistry::Add&lt;PrintFunctionNamesAction&gt;
+X(&quot;print-fns&quot;, &quot;print function names&quot;);</pre>
+<p>This registers your <code>PluginASTAction</code> with a string plugin name that can be
+invoked on the command line. Note that everything else is in an anonymous
+namespace; all other symbols aren&#39;t exported.</p>
+<p>Your <code>PluginASTAction</code> subclass exists just to build your <code>ASTConsumer</code>, which
+receives declarations, sort of like a SAX parser.</p>
+<h2 id="your-astconsumer">Your ASTConsumer</h2>
+<p>There is doxygen documentation on when each <code>ASTConsumer::Handle</code> method is
+called in <code>llvm-project/clang/include/clang/AST/ASTConsumer.h</code>. For this
+tutorial, I&#39;ll assume you only want to look at type definitions (struct, class,
+enum definitions), so we&#39;ll start with:</p>
+<pre data-language="cpp">class TagConsumer : public ASTConsumer {
+  public:
+    virtual void HandleTagDeclDefinition(TagDecl *D) {
+    }
+};</pre>
+<p>The data type passed in is the <code>Decl</code>, which is a giant class hierarchy spanning
+the following files:</p>
+<ul>
+<li><code>llvm-project/clang/include/clang/AST/DeclBase.h</code>: declares the <code>Decl</code>
+class, along with some utility classes you won&#39;t use.</li>
+<li><code>llvm-project/clang/include/clang/AST/Decl.h</code>: declares subclasses of
+<code>Decl</code>, for example, <code>FunctionDecl</code> (a function declaration), <code>TagDecl</code> (the
+base class for struct/class/enum/etc), <code>TypedefDecl</code>, etc.</li>
+<li><code>llvm-project/clang/include/clang/AST/DeclCXX.h</code>: C++ specific types.
+You&#39;ll find most Decl subclasses dealing with templates here,
+along with things like <code>UsingDirectiveDecl</code>, <code>CXXConstructorDecl</code>, etc.</li>
+</ul>
+<p>The interface on these classes is massive; We&#39;ll only cover some of the basics,
+but some basics about source location and errors.</p>
+<h2 id="emitting-errors">Emitting Errors</h2>
+<p>Lots of location information is stored in the <code>Decl</code> tree. Most <code>Decl</code>
+subclasses have multiple methods that return a <code>SourceLocation</code>, but lets use
+<code>TagDecl::getInnerLocStart()</code> as an example. (<code>SourceLocation</code> is defined in
+<code>llvm-project/clang/include/clang/Basic/SourceLocation.h</code>, for reference.)</p>
+<p>Errors are emitted to the user through the <code>CompilerInstance</code>. You will probably
+want to pass the <code>CompilerInstance</code> object passed to
+<code>ASTAction::CreateASTConsumer</code> to your ASTConsumer subclass for reporting. You
+interact with the user through the <code>Diagnostic</code> object. You could report errors
+to the user like this:</p>
+<pre data-language="cpp">void emitWarning(CompilerInstance&amp; instance, SourceLocation loc, const char* error) {
+    FullSourceLoc full(loc, instance.getSourceManager());
+    unsigned id = instance.getDiagnostics().getCustomDiagID(DiagnosticsEngine::Warning, error);
+    DiagnosticBuilder B = instance.getDiagnostics().Report(full, id);
+}</pre>
+<p>(The above is the simplest error reporting. See
+<code>llvm-project/clang/include/clang/Basic/Diagnostic.h</code> for all the things you can
+do, like <code>FixItHint</code>s if you want to get fancy!)</p>
+<h2 id="downcast-early-downcast-often">Downcast early, Downcast often</h2>
+<p>The clang library will give you the most general types possible. For example
+<code>TagDecl</code> has comparably minimal interface. The library is designed so you will
+be downcasting all the time, and you won&#39;t use the standard <code>dynamic_cast&lt;&gt;()</code>
+builtin to do it. Instead, you&#39;ll use llvm-project/clang&#39;s home built RTTI
+system:</p>
+<pre data-language="cpp">  virtual void HandleTagDeclDefinition(TagDecl* tag) {
+    if (CXXRecordDecl* record = dyn_cast&lt;CXXRecordDecl&gt;(tag)) {
+      // Do stuff with |record|.
+    }
+  }</pre>
+<h2 id="a-not-at-all-exhaustive-list-of-things-you-can-do-with-cxxrecorddecl">A (not at all exhaustive) list of things you can do with (CXX)RecordDecl</h2>
+<ul>
+<li>Iterate across all constructors (<code>CXXRecordDecl::ctor_begin()</code>,
+<code>CXXReocrdDecl::ctor_end()</code>)</li>
+<li><code>CXXRecordDecl::isPOD()</code>: is this a Plain Old Datatype (a type that has no
+construction or destruction semantics)?</li>
+<li>Check if certain properties of the class: <code>CXXRecordDecl::isAbstract()</code>,
+<code>CXXRecordDecl::hasTrivialConstructor()</code>,
+<code>CXXRecordDecl::hasTrivialDestructor()</code>, etc.</li>
+<li>Iterate across all fields/member variables (<code>RecordDecl::field_begin()</code>,
+<code>RecordDecl::field_end()</code>)</li>
+<li>Iterate across all of the base classes of a record type
+(<code>CXXRecordDecl::bases_begin()</code>, <code>CXXRecordDecl::bases_end()</code>)</li>
+<li>Get the simple string name <code>NamedDecl::getNameAsString()</code>. (This method is
+deprecated, but the replacement assert()s on error conditions). (If you had
+<code>struct One {}</code>, this method would return &quot;One&quot;.)</li>
+</ul>
+<h2 id="modifying-existing-plugins">Modifying existing plugins</h2>
+<p>If you want to add additional checks to the existing plugins, be sure to add the
+new diagnostic behind a flag (there are several examples of this in the plugins
+already). The reason for this is that the plugin is bundled with clang, and the
+new check will get deployed with the next clang roll. If your check fires, then
+the next clang roll would now be blocked on cleaning up the whole codebase for
+your check – and even if the check doesn&#39;t fire at the moment, maybe that
+regresses until the next clang roll happens. If your new check is behind a flag,
+then the clang roll can happen first, and you can add the flag to enable your
+check after that, and then turn on the check everywhere once you know that the
+codebase is clean.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/writing_clang_plugins.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/writing_clang_plugins.md</a>
+  </p>
+</div>

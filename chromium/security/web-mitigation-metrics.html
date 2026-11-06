@@ -1,0 +1,198 @@
+<h1>Web Mitigation Metrics</h1>
+<p>The web platform offers a number of tools to web developers which enable
+mitigation of a few important threats. In order to understand how these are
+being used in the wild, and evaluate our success at promulgating them, we
+collect some usage statistics; this document outlines those counters and
+points to some helpful graphs.</p>
+<h2 id="content-security-policy">Content Security Policy</h2>
+<p>We believe that a carefully-crafted <a href="https://w3c.github.io/webappsec-csp/">Content Security Policy</a> can help
+protect web applications from injection attacks that would otherwise lead to
+script execution. <a href="https://csp.withgoogle.com/docs/strict-csp.html">Strict CSP</a> is a reasonable approach, one which
+we&#39;d like to encourage.</p>
+<p>In order to understand CSP&#39;s use in the wild, we can look at a few counters that
+give some insight into the percentage of Chrome users&#39; page views that use CSP
+in a given way:</p>
+<ul>
+<li><code>kContentSecurityPolicy</code>
+(<a href="https://chromestatus.com/metrics/feature/timeline/popularity/15">graph</a>)
+tracks the overall usage of <code>Content-Security-Policy</code> headers. Likewise,
+<code>kContentSecurityPolicyReportOnly</code>
+(<a href="https://chromestatus.com/metrics/feature/timeline/popularity/16">graph</a>)
+tracks the report-only variant.</li>
+</ul>
+<p>To get a feel for the general quality of policies in the wild, we want to
+evaluate how closely developers are hewing to the strictures of Strict CSP.
+We&#39;ve boiled that down to three categories:</p>
+<ul>
+<li><p>Does the policy reasonably restrict <a href="https://w3c.github.io/webappsec-csp/#directive-object-src"><code>object-src</code></a>? The only
+&quot;reasonable&quot; restriction, unfortunately, is <code>object-src &#39;none&#39;</code>.
+<code>kCSPWithReasonableObjectRestrictions</code> and
+<code>kCSPROWithReasonableObjectRestrictions</code> track that directive value in
+enforced and report-only modes respectively.</p>
+</li>
+<li><p>Does the policy reasonably restrict <code>base-uri</code> in order to avoid malicious
+redirection of relative URLs? <code>base-uri &#39;none&#39;</code> and <code>base-uri &#39;self&#39;</code> are
+both appropriate, and are tracked via <code>kCSPWithReasonableBaseRestrictions</code>
+and <code>kCSPROWithReasonableBaseRestrictions</code> in enforced and report-only modes
+respectively.</p>
+</li>
+<li><p>Does the policy avoid using a list of hosts or schemes (which <a href="https://research.google/pubs/pub45542/">research has
+shown to be mostly ineffective at mitigating attack</a>)?
+<code>kCSPWithReasonableScriptRestrictions</code> and
+<code>kCSPROWithReasonableScriptRestrictions</code> track the policies whose
+<a href="https://w3c.github.io/webappsec-csp/#directive-script-src"><code>script-src</code></a> directives rely upon cryptographic nonces and/or
+hashes rather than lists of trusted servers, and which also avoid relying
+upon <code>&#39;unsafe-inline&#39;</code>.</p>
+</li>
+</ul>
+<p>Policies that sufficiently restrict all of the directives above (<code>object-src</code>,
+<code>base-uri</code>, and <code>script-src</code>) are tracked via <code>kCSPWithReasonableRestrictions</code>
+and <code>kCSPROWithReasonableRestrictions</code>. This is the baseline we&#39;d like pages
+generally to meet, and a number we hope we can drive up over time.</p>
+<p>We&#39;re also tracking a higher bar, which includes all the restrictions above,
+but also avoids relying upon <code>&#39;strict-dynamic&#39;</code>, via
+<code>kCSPWithBetterThanReasonableRestrictions</code> and
+<code>kCSPROWithBetterThanReasonableRestrictions</code>.</p>
+<h4 id="embedded-enforcement">Embedded Enforcement</h4>
+<p><code>kIFrameCSPAttribute</code> records the overall usage of the <code>csp</code> attribute on
+<code>&lt;iframe&gt;</code> elements, which enables pages to enforce a policy on documents
+they embed.</p>
+<h2 id="trusted-types">Trusted Types</h2>
+<p><a href="https://github.com/w3c/webappsec-trusted-types/">Trusted Types</a> gives page authors a means to protect their sites against
+cross-site scripting attacks. In order to understand real-world Trusted Types
+usage we obtain the following usage counts:</p>
+<ul>
+<li><p>General use:<code>kTrustedTypesEnabled</code>, <code>kTrustedTypesEnabledEnforcing</code>, and
+<code>kTrustedTypesEnabledReportOnly</code>. The first tells us (relative to all page
+loads) how many pages have any form of Trusted Types enabled, while the other
+two allow us to determine which percentage of pages run in enforcing or
+report-only mode (or both).</p>
+</li>
+<li><p>Tracking specific features: <code>kTrustedTypesPolicyCreated</code> tracks
+creation of all Trusted Types policies, <code>kTrustedTypesDefaultPolicyCreated</code>
+notes whether a &quot;default&quot; policy has been created. <code>kTrustedTypesAllowDuplicates</code>
+records whether an &#39;allow-duplicates&#39; keyword has been used.</p>
+</li>
+<li><p>Error tracking: <code>kTrustedTypesAssignmentError</code> tracks whether Trusted Types
+has blocked a string assignment.</p>
+</li>
+</ul>
+<h2 id="cross-origin-isolation-policies">Cross Origin Isolation policies</h2>
+<p>Cross Origin Isolation policies refer to a number of header based policies that
+developers can send to enforce specific rules about how their content can be
+embedded, opened from, etc. It is also used to gate certain APIs that would be
+otherwise too powerful to use in a post-Spectre world.</p>
+<p><a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Cross-Origin_Resource_Policy_(CORP)">Cross-Origin-Resource-Policy</a> restricts a resource to only be fetched by
+&quot;same-origin&quot; or &quot;same-site&quot; pages.</p>
+<ul>
+<li>&quot;success&quot;: The CORP check passes successfully.</li>
+<li>&quot;same-origin violation&quot;: &quot;same-origin&quot; is specified on a cross-origin
+response.</li>
+<li>&quot;same-origin violation with COEP involvement&quot;: No CORP header
+is specified but that is treated as &quot;same-origin&quot; because the initiator
+context enables Cross-Origin Embedder Policy (see below), and the response
+comes from cross-origin.</li>
+<li>&quot;same-site violation&quot;: &quot;same-site&quot; is specified on a cross-site response.</li>
+</ul>
+<p><a href="https://gist.github.com/annevk/6f2dd8c79c77123f39797f6bdac43f3e">Cross-Origin-Opener-Policy</a> is used to restrict the usage of window
+openers. Pages can choose to restrict this relation to same-origin pages with
+similar COOP value, same-origin unless they are opening popups or put no
+restriction by default.</p>
+<ul>
+<li><p>Usage of COOP is tracked via:</p>
+<ul>
+<li><code>kCrossOriginOpenerPolicySameOrigin</code></li>
+<li><code>kCrossOriginOpenerPolicySameOriginAllowPopups</code></li>
+</ul>
+<ul>
+<li><code>kCoopAndCoepIsolated</code>
+They correspond respectively to the values: &quot;same-origin&quot;,
+&quot;same-origin-allow-popups&quot; and &quot;same-origin&quot; used conjointly with COEP.</li>
+</ul>
+</li>
+<li><p>Usage of COOP in report-only mode is tracked symmetrically via:</p>
+<ul>
+<li><code>kCrossOriginOpenerPolicySameOriginReportOnly</code></li>
+<li><code>kCrossOriginOpenerPolicySameOriginAllowPopupsReportOnly</code></li>
+</ul>
+<ul>
+<li><code>kCoopAndCoepIsolatedReportOnly</code></li>
+</ul>
+</li>
+<li><p>We track how often same-origin documents are present in two pages with
+different COOP values via <code>kSameOriginDocumentsWithDifferentCOOPStatus</code>. We
+might restrict synchronous access between those in order to allow COOP
+&quot;same-origin-allow-popups&quot; to enable crossOriginIsolated when used in
+conjunction with COEP.</p>
+</li>
+</ul>
+<p><a href="https://wicg.github.io/cross-origin-embedder-policy/">Cross-Origin-Embedder-Policy</a> is used to restrict the embedding of
+subresources to only those that have explicitly opted in via
+[Cross-Origin-Resource-Policy].</p>
+<ul>
+<li><p>Usage of COEP is tracked via:</p>
+<ul>
+<li><code>kCrossOriginEmbedderPolicyCredentialless</code></li>
+<li><code>kCrossOriginEmbedderPolicyRequireCorp</code>.</li>
+</ul>
+</li>
+<li><p>Usage of COEP in report-only mode is tracked symmetrically via:</p>
+<ul>
+<li><code>kCrossOriginEmbedderPolicyCredentiallessReportOnly</code></li>
+<li><code>kCrossOriginEmbedderPolicyRequireCorpReportOnly</code>.</li>
+</ul>
+</li>
+<li><p>Usage of COEP in SharedWorker is tracked via:</p>
+<ul>
+<li><code>kCoepNoneSharedWorker</code>,</li>
+<li><code>kCoepRequireCorpSharedWorker</code></li>
+<li><code>kCoepCredentiallessSharedWorker</code>.</li>
+</ul>
+</li>
+</ul>
+<p>Note that some APIs having precise timers or memory measurement are enabled only
+for pages that set COOP to &quot;same-origin&quot; and COEP to &quot;require-corp&quot;.</p>
+<ul>
+<li>We track such pages via <code>kCoopAndCoepIsolated</code>.</li>
+</ul>
+<h2 id="sanitizer-api">Sanitizer API</h2>
+<p><a href="https://wicg.github.io/sanitizer-api/">The Sanitizer API</a> provides a browser-maintained &quot;ever-green&quot;, safe,
+and easy-to-use library for user input sanitization as part of the general web
+platform.</p>
+<ul>
+<li>Sanitizer creation: <code>kSanitizerAPICreated</code> and
+<code>kSanitizerAPIDefaultConfiguration</code> tell us how many Sanitizers are
+created and how many Sanitizers are created without custom configurations.</li>
+<li>Sanitizer method: <code>kSanitizerAPIToFragment</code>, <code>kSanitizerAPISanitizeFor</code>,
+and <code>kSanitizerAPIElementSetSanitized</code> measure which API entry point has been
+called.</li>
+<li><code>kSanitizerAPIActionTaken</code> shows how many times a sanitize action has been
+performed while calling the Sanitizer APIs. (That is, on how many sanitizer
+calls did the sanitizer remove nodes from the input sets.)</li>
+<li>Input type: <code>kSanitizerAPIFromString</code>, <code>kSanitizerAPIFromDocument</code> and
+<code>kSanitizerAPIFromFragment</code> tell us what kind of input people are using.</li>
+</ul>
+<h2 id="private-network-access">Private Network Access</h2>
+<p><a href="https://wicg.github.io/private-network-access/">Private Network Access</a> helps to prevent the user agent from
+inadvertently enabling attacks on devices running on a user&#39;s local intranet,
+or services running on the user&#39;s machine directly.</p>
+<ul>
+<li><p>Use of PNA in workers tracked via:</p>
+<ul>
+<li><code>kPrivateNetworkAccessFetchesWorkerScript</code></li>
+<li><code>kPrivateNetworkAccessWithWorker</code></li>
+</ul>
+</li>
+<li><p><code>kPrivateNetworkAccessNullIpAddress</code> is an experimental use counter for
+accesses to the 0.0.0.0 IP address (and the corresponding <code>[::]</code> IPv6 address).
+These can be used to access localhost on MacOS and Linux and bypass Private
+Network Access checks. We intent to block all such requests. See
+<a href="https://crbug.com/1300021">https://crbug.com/1300021</a> and <a href="https://github.com/whatwg/fetch/issues/1117">https://github.com/whatwg/fetch/issues/1117</a>.</p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/web-mitigation-metrics.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/web-mitigation-metrics.md</a>
+  </p>
+</div>

@@ -1,0 +1,73 @@
+<h1>Chromium Flag Expiry</h1>
+<p>ellyjones@ / avi@</p>
+<p>This document outlines the process by which flags in Chromium expire and are
+removed from the codebase. This document only describes entries in
+<code>chrome://flags</code>, <em>not</em> command-line switches (commonly also called command-line
+flags). This process does not cover command-line switches and there continue to
+be no guarantees about those.</p>
+<p>See also <a href="flag_ownership">Chromium Flag Ownership</a>.</p>
+<h2 id="do-not-depend-on-flags">Do Not Depend On Flags</h2>
+<p>If you are a user or administrator of Chrome and are using (or think you need to
+use) a flag to configure Chromium for your use case, please <a href="https://new.crbug.com">file a bug</a> or
+email <a href="https://groups.google.com/a/chromium.org/forum/#!forum/flags-dev">flags-dev@</a>, because that flag will likely be removed at some point. If
+you are a Chromium developer, please carry on using flags as normal :)</p>
+<p>Flags have never been a supported configuration surface in Chromium, and we have
+never guaranteed that any specific flag will behave consistently or even
+continue to exist. This document describes a process for removing flags that
+have been around for long enough that users <em>might</em> have come to rely on their
+ongoing existence in a way that hopefully minimizes pain, but Chromium
+developers are free to change the behavior of or remove flags at any time. In
+particular, just because a flag will expire through this process does not mean a
+developer will not remove it earlier than this process specifies.</p>
+<h2 id="the-process">The Process</h2>
+<p>The logic in
+<a href="https://github.com/chromium/chromium/blob/HEAD/tools/flags/generate_unexpire_flags.py"><code>//tools/flags/generate_unexpire_flags.py</code></a>
+implements most of this. At any given time, if the current value of <code>MAJOR</code> in
+<a href="https://github.com/chromium/chromium/blob/HEAD/chrome/VERSION"><code>//chrome/VERSION</code></a> is <em><code>$MSTONE</code></em>, the two previous
+milestones (<em><code>$MSTONE-1</code></em> and <em><code>$MSTONE-2</code></em>) are considered recent.</p>
+<p>Then:</p>
+<ol>
+<li>Flags whose expiration is <em><code>$MSTONE</code></em> or higher are not expired</li>
+<li>Flags whose expiration is <em><code>$MSTONE-3</code></em> or lower are unconditionally expired</li>
+<li>Flags whose expiration is <em><code>$MSTONE-1</code></em> or <em><code>$MSTONE-2</code></em> are expired by
+default, but can be temporarily unexpired via flags named
+&quot;<code>temporary-unexpire-flags-M</code><em><code>$MSTONE</code></em>&quot;.</li>
+</ol>
+<p>There are other elements of this process not described here, such as emails to
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/flags-dev">flags-dev@</a> tracking the status of the process.</p>
+<p>Google employees: See more at
+<a href="http://goto.google.com/flags-expiry-process">go/flags-expiry-process</a> and
+<a href="http://goto.google.com/chrome-flags:expiry-process">go/chrome-flags:expiry-process</a>.</p>
+<h2 id="removing-a-flag">Removing A Flag</h2>
+<p>If a flag is no longer used (for instance, it was used to control a feature
+that has since launched), the flag should be removed. Delete the entry in
+<a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/about_flags.cc"><code>//chrome/browser/about_flags.cc</code></a> or
+<a href="https://github.com/chromium/chromium/blob/HEAD/ios/chrome/browser/flags/about_flags.mm"><code>//ios/chrome/browser/flags/about_flags.mm</code></a>
+for iOS (and any corresponding entries for the flag description), and remove any
+references in
+<a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/flag-metadata.json"><code>//chrome/browser/flag-metadata.json</code></a>.</p>
+<h2 id="removed-flags">Removed Flags</h2>
+<p><a href="https://crbug.com/953690">https://crbug.com/953690</a> is the never-to-be-closed
+bug to track flags that are removed.</p>
+<h2 id="i-have-questions">I Have Questions</h2>
+<p>Please get in touch with
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/flags-dev"><code>flags-dev@chromium.org</code></a>.
+If you feel like you need to have a Google-internal discussion for some reason,
+there&#39;s also
+<a href="https://groups.google.com/a/google.com/forum/#!forum/chrome-flags"><code>chrome-flags@</code></a>.</p>
+<h2 id="relevant-source-files">Relevant Source Files</h2>
+<ul>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/about_flags.cc"><code>//chrome/browser/about_flags.cc</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/flag-metadata.json"><code>//chrome/browser/flag-metadata.json</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/flag-never-expire-list.json"><code>//chrome/browser/flag-never-expire-list.json</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/expired_flags_list.h"><code>//chrome/browser/expired_flags_list.h</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/ios/chrome/browser/flags/about_flags.mm"><code>//ios/chrome/browser/flags/about_flags.mm</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/tools/flags/generate_expired_list.py"><code>//tools/flags/generate_expired_list.py</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/tools/flags/generate_unexpire_flags.py"><code>//tools/flags/generate_unexpire_flags.py</code></a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/flag_expiry.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/flag_expiry.md</a>
+  </p>
+</div>

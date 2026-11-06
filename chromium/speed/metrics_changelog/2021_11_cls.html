@@ -1,0 +1,22 @@
+<h1>Cumulative Layout Shift Changes in Chrome 98</h1>
+<h3 id="record-cls-value-at-the-first-onhidden-in-addition-to-tab-close-in-ukm">Record CLS value at the first OnHidden in addition to tab close in UKM</h3>
+<p>The Cumulative Layout Shift score will be recorded the first time a page moves
+from the foreground to the background, which can fill in for the layout shift
+values that are not able to be recorded at tab close, the current CLS reporting
+point.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/3251379">Source code for this change</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>There should be an increase of reporting the Cumulative Layout Shift value on
+desktop sites which have FCP values.</p>
+<p>Note this only affects UKM (and so CrUX) reporting of CLS and does not affect
+PerformanceObserver observations as measured in JavaScript.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>The updated metric was added in Chrome 98 which we released in the week of
+February 1, 2022. The CrUX report included this update starting with CrUX
+BigQuery 202207 (August 9, 2022).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_11_cls.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_11_cls.md</a>
+  </p>
+</div>

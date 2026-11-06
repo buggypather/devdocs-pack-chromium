@@ -1,0 +1,113 @@
+<h1>Linux Crash Dumping</h1>
+<p>Official builds of Chrome support crash dumping and reporting using the Google
+crash servers. This is a guide to how this works.</p>
+<h2 id="breakpad">Breakpad</h2>
+<p>Breakpad is an open source library which we use for crash reporting across all
+three platforms (Linux, Mac and Windows). For Linux, a substantial amount of
+work was required to support cross-process dumping. At the time of writing this
+code is currently forked from the upstream breakpad repo. While this situation
+remains, the forked code lives in <code>third_party/breakpad/linux</code>. The upstream
+repo is mirrored in <code>third_party/breakpad/breakpad</code>.</p>
+<p>The code currently supports i386 only. Getting x86-64 to work should only be a
+minor amount of work.</p>
+<h3 id="minidumps">Minidumps</h3>
+<p>Breakpad deals in a file format called &#39;minidumps&#39;. This is a Microsoft format
+and thus is defined by in-memory structures which are dumped, raw, to disk. The
+main header file for this file format is
+<code>third_party/breakpad/breakpad/src/google_breakpad/common/minidump_format.h</code>.</p>
+<p>At the top level, the minidump file format is a list of key-value pairs. Many of
+the keys are defined by the minidump format and contain cross-platform
+representations of stacks, threads etc. For Linux we also define a number of
+custom keys containing <code>/proc/cpuinfo</code>, <code>lsb-release</code> etc. These are defined in
+<code>third_party/breakpad/breakpad/linux/minidump_format_linux.h</code>.</p>
+<h3 id="catching-exceptions">Catching exceptions</h3>
+<p>Exceptional conditions (such as invalid memory references, floating point
+exceptions, etc) are signaled by synchronous signals to the thread which caused
+them. Synchronous signals are always run on the thread which triggered them as
+opposed to asynchronous signals which can be handled by any thread in a
+thread-group which hasn&#39;t masked that signal.</p>
+<p>All the signals that we wish to catch are synchronous except SIGABRT, and we can
+always arrange to send SIGABRT to a specific thread. Thus, we find the crashing
+thread by looking at the current thread in the signal handler.</p>
+<p>The signal handlers run on a pre-allocated stack in case the crash was triggered
+by a stack overflow.</p>
+<p>Once we have started handling the signal, we have to assume that the address
+space is compromised. In order not to fall prey to this and crash (again) in the
+crash handler, we observe some rules:</p>
+<ol>
+<li>We don&#39;t enter the dynamic linker. This, observably, can trigger crashes in
+the crash handler. Unfortunately, entering the dynamic linker is very easy
+and can be triggered by calling a function from a shared library who&#39;s
+resolution hasn&#39;t been cached yet. Since we can&#39;t know which functions have
+been cached we avoid calling any of these functions with one exception:
+<code>memcpy</code>. Since the compiler can emit calls to <code>memcpy</code> we can&#39;t really
+avoid it.</li>
+<li>We don&#39;t allocate memory via malloc as the heap may be corrupt. Instead we
+use a custom allocator (in <code>breakpad/linux/memory.h</code>) which gets clean pages
+directly from the kernel.</li>
+</ol>
+<p>In order to avoid calling into libc we have a couple of header files which wrap
+the system calls (<code>linux_syscall_support.h</code>) and reimplement a tiny subset of
+libc (<code>linux_libc_support.h</code>).</p>
+<h3 id="self-dumping">Self dumping</h3>
+<p>The simple case occurs when the browser process crashes. Here we catch the
+signal and <code>clone</code> a new process to perform the dumping. We have to use a new
+process because a process cannot ptrace itself.</p>
+<p>The dumping process then ptrace attaches to all the threads in the crashed
+process and writes out a minidump to <code>/tmp</code>. This is generic breakpad code.</p>
+<p>Then we reach the Chrome specific parts in <code>chrome/app/breakpad_linux.cc</code>. Here
+we construct another temporary file and write a MIME wrapping of the crash dump
+ready for uploading. We then fork off <code>wget</code> to upload the file. Based on Debian
+popcorn, <code>wget</code> is very commonly installed (much more so than <code>libcurl</code>) and
+<code>wget</code> handles the HTTPS gubbins for us.</p>
+<h3 id="renderer-dumping">Renderer dumping</h3>
+<p>In the case of a crash in the renderer, we don&#39;t want the renderer handling the
+crash dumping itself. In the future we will sandbox the renderer and allowing it
+the authority to crash dump itself is too much.</p>
+<p>Thus, we split the crash dumping in two parts: the gathering of information
+which is done in process and the external dumping which is done out of process.
+In the case above, the latter half was done in a <code>clone</code>d child. In this case,
+the browser process handles it.</p>
+<p>When renderers are forked off, they have a <code>UNIX DGRAM</code> socket in file
+descriptor 4. The signal handler then calls into Chrome specific code
+(<code>chrome/renderer/render_crash_handler_linux.cc</code>) when it would otherwise
+<code>clone</code>. The Chrome specific code sends a datagram to the socket which contains:</p>
+<ul>
+<li>Information which is only available to the signal handler (such as the
+<code>ucontext</code> structure).</li>
+<li>A file descriptor to a pipe which it then blocks on reading from.</li>
+<li>A <code>CREDENTIALS</code> structure giving its PID.</li>
+</ul>
+<p>The kernel enforces that the renderer isn&#39;t lying in the <code>CREDENTIALS</code> structure
+so it can&#39;t ask the browser to crash dump another process.</p>
+<p>The browser then performs the ptrace and minidump writing which would otherwise
+be performed in the <code>clone</code>d process and does the MIME wrapping the uploading as
+normal.</p>
+<p>Once the browser has finished getting information from the crashed renderer via
+ptrace, it writes a byte to the file descriptor which was passed from the
+renderer. The renderer than wakes up (because it was blocking on reading from
+the other end) and rethrows the signal to itself. It then appears to crash
+&#39;normally&#39; and other parts of the browser notice the abnormal termination and
+display the sad tab.</p>
+<h2 id="how-to-test-breakpad-support-in-chromium">How to test Breakpad support in Chromium</h2>
+<ul>
+<li><p>Build Chromium as normal.</p>
+</li>
+<li><p>Run the browser with the environment variable
+<a href="https://crbug.com/19663">CHROME_HEADLESS=1</a>. This enables crash dumping but
+prevents crash dumps from being uploaded and deleted.</p>
+<pre data-language="shell">env CHROME_HEADLESS=1 ./out/Debug/chrome-wrapper</pre>
+</li>
+<li><p>Visit the special URL <code>chrome://crash</code> to trigger a crash in the renderer
+process.</p>
+</li>
+<li><p>A crash dump file should appear in the directory
+<code>~/.config/chromium/Crash Reports</code>.</p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/crash_dumping.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/crash_dumping.md</a>
+  </p>
+</div>

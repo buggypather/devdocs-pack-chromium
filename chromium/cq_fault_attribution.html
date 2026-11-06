@@ -1,0 +1,27 @@
+<h1>CQ Fault Attribution</h1>
+<p>The Failure Analysis section in Gerrit provides an easily discoverable view of
+CQ test variant (and soon, build) failures, and categorizes them by comparing
+the failures to the same test variant in snapshot builds. The failures are
+categorized as one of the following:</p>
+<ul>
+<li>New failure (not currently present in tip-of-tree [ToT])</li>
+<li>Pre-existing with a different failure reason (test variant failure present in
+ToT, but for a different failure reason)</li>
+<li>Pre-existing with the same failure reason (test variant failure present in
+ToT for the same failure reason)</li>
+</ul>
+<p>Additionally, any test variant failures that have not been able to be
+classified due to insufficient test history in the snapshot / postsubmit builds
+used in ToT will be indicated as such.</p>
+<p>Within the Gerrit checks tab, any fault attributed test row will contain a tag
+with the corresponding fault attribution category. For any tests pre-existing
+failures, a link to the snapshot where the failure was found will be present as
+well.</p>
+<p>To provide any feedback on fault attribution (either positive or constructive
+feedback), please feel free to create a buganizer issue <a href="https://buganizer.corp.google.com/issues/new?component=1315651&amp;template=1849636">here</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/cq_fault_attribution.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/cq_fault_attribution.md</a>
+  </p>
+</div>

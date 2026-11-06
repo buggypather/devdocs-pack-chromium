@@ -1,0 +1,65 @@
+<h1>Tips and tricks for a nice Rust development experience</h1>
+<h2 id="using-vscode">Using VSCode</h2>
+<ol>
+<li>Ensure you&#39;re using the <code>rust-analyzer</code> extension for VSCode, rather than
+earlier forms of Rust support.</li>
+<li>Run <code>gn</code> with the <code>--export-rust-project</code> flag, such as:
+<code>gn gen out/Release --export-rust-project</code>.</li>
+<li><code>ln -s out/Release/rust-project.json rust-project.json</code></li>
+<li>When you run VSCode, or any other IDE that uses
+<a href="https://rust-analyzer.github.io/">rust-analyzer</a> it should detect the
+<code>rust-project.json</code> and use this to give you rich browsing, autocompletion,
+type annotations etc. for all the Rust within the Chromium codebase.</li>
+<li>Point rust-analyzer to the rust toolchain in Chromium. Otherwise you will
+need to install Rustc in your system, and Chromium uses the nightly
+compiler, so you would need that to match. Add the following to
+<code>.vscode/settings.json</code> in the Chromium checkout (e.g.
+<code>chromium/src/.vscode/settings.json</code>; create the subdirectory and file if
+they do not already exist):<pre>{
+   // The rest of the settings...
+
+   &quot;rust-analyzer.cargo.extraEnv&quot;: {
+     &quot;PATH&quot;: &quot;../../third_party/rust-toolchain/bin:$PATH&quot;,
+   }
+}</pre>
+This assumes you are working with an output directory like <code>out/Debug</code> which
+has two levels; adjust the number of <code>..</code> in the path according to your own
+setup.</li>
+</ol>
+<h2 id="suppressing-unused-code-warnings">Suppressing unused code warnings</h2>
+<p>We don&#39;t want to commit Rust code with unused variables,
+but work-in-progress changes often temporarily have unused code.
+The following options exist for dealing with unused code warnings:</p>
+<ul>
+<li>Avoid warnings by prefixing
+unused variables, parameters, and other APIs
+with an underscore character
+(e.g. using <code>_foo</code> rather than <code>foo</code> as the name).</li>
+<li>Temporarily insert <code>#![allow(unused)] /* DO NOT SUBMIT */</code> at the top of the affected <code>.rs</code> files.<ul>
+<li>See <code>rustc -W help</code> for a list of warnings covered by the <code>unused</code> group
+of warnings.</li>
+<li>You can also use <code>#![warn(...)]</code> to still see the warnings, but avoid
+treating them as errors.</li>
+</ul>
+</li>
+<li>Locally set <code>treat_warnings_as_errors = false</code> in your <code>args.gn</code>.
+This will affect all Rust and Clippy warnings (as well as C/C++ warnings).</li>
+</ul>
+<h2 id="better-gerrit-experience-for-100-columns-wide-code">Better Gerrit experience for 100-columns-wide code</h2>
+<p>Rust Style Guide
+<a href="https://doc.rust-lang.org/style-guide/index.html?highlight=100%20characters#indentation-and-line-width">allows</a>
+up to 100-characters-wide lines
+(<a href="https://source.android.com/docs/setup/contribute/code-style#limit-line-length">just like Java</a>).
+If Gerrit is configured for 80-characters-wide lines, it can lead to a
+suboptimal user experience.  This can be resolved by changing Gerrit settings
+(e.g. at <a href="https://chromium-review.googlesource.com/settings">https://chromium-review.googlesource.com/settings</a>) as follows:</p>
+<ul>
+<li>Diff Preferences =&gt; Diff width: 101</li>
+<li>Edit Preferences =&gt; Columns: 100</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/dev_experience_tips_and_tricks.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/dev_experience_tips_and_tricks.md</a>
+  </p>
+</div>

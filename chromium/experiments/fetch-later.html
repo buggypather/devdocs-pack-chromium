@@ -1,0 +1,78 @@
+<h1>fecthLater API</h1>
+<ul>
+<li>Contact: <a href="mailto:pending-beacon-experiment@chromium.org">pending-beacon-experiment@chromium.org</a></li>
+<li>API Feedback: <a href="https://github.com/WICG/pending-beacon/issues">https://github.com/WICG/pending-beacon/issues</a></li>
+</ul>
+<p>This document describes the status of the current implementation of the
+<a href="https://github.com/whatwg/fetch/pull/1647"><strong>FetchLater API</strong></a> in Chrome, and how to enable it manually.</p>
+<p>Starting from <a href="https://chromestatus.com/feature/4654499737632768">version 121</a>, Chrome experimentally supports the
+FetchLater API,
+which allows website authors to specify one or more beacons (HTTPS requests)
+that should be sent reliably when the page is being unloaded.</p>
+<p>See the <a href="https://github.com/WICG/pending-beacon/blob/main/docs/fetch-later-api.md">public explainer</a> to learn more about how it works.</p>
+<p>Note that this API is not enabled by default. Instead, Chrome plans to run
+Origin Trials to evaluate its impact. But Chrome also provides some ways to
+fully opt-in to the API for web developers who what to try the features.</p>
+<h2 id="whats-supported">What’s supported</h2>
+<p>Chrome supports all the JavaScript APIs described in the spec PR,
+specifically:</p>
+<ul>
+<li><a href="https://whatpr.org/fetch/1647/9ca4bda...37a66c9.html#dom-global-fetch-later"><code>fetchLater()</code></a>
+method, a <code>fetch()</code>-like API.</li>
+<li><a href="https://whatpr.org/fetch/1647/9ca4bda...37a66c9.html#deferred-fetching"><code>Deferred fetching</code></a>
+behavior.</li>
+</ul>
+<h2 id="whats-not-supported">What’s not supported</h2>
+<p>The following features are not finalized in the spec PR, and hence not supported
+in Chrome:</p>
+<ul>
+<li>The API is only supported in Document context. Supporting in ServiceWorker is
+blocked by ServiceWorker version of <a href="https://crbug.com/1356128">https://crbug.com/1356128</a>.</li>
+<li>Crash recovery related behaviors is not supported.
+(Discussed in <a href="https://github.com/WICG/pending-beacon/issues/34">pending-beacon/issues/34</a>)</li>
+<li>Retry after network failure is not supported.
+(Discussed in <a href="https://github.com/WICG/pending-beacon/issues/40">pending-beacon-/issues/40</a>)</li>
+<li>A fetchLater request is not observable in Chrome DevTools after its initiating
+document is closed, which is due to the current
+<a href="https://chromestatus.com/feature/4654499737632768?gate=4947446974644224">DevTools limitation</a>;
+if the document is still alive, the request should be visible.</li>
+</ul>
+<p>The following features work differently than the one described in explainer and
+spec:</p>
+<ul>
+<li>To address the privacy requirement (see
+<a href="https://github.com/WICG/pending-beacon/issues/30#issuecomment-1888554622">pending-beacon/issues/30</a>),
+any pending fetchLater requests on a document are <strong>all flushed out</strong> if the
+document enters BFCache, no matter BackgroundSync permission is on or not.</li>
+<li>The maximum time a fetchLater request can be pending is bound by Chrome&#39;s
+back/forward cache TTL, which is currently <strong>10 minutes</strong> after page goes into
+the cache. Note that due to the above forced-flushing behavior, in reality
+there should be no request pending after a page being cached.</li>
+</ul>
+<h2 id="activation">Activation</h2>
+<p>The API can be enabled by a command line flag.</p>
+<h3 id="using-command-line-flag">Using command line flag</h3>
+<p>Passing <code>--enable-features=FetchLaterAPI --enable-blink-features=FetchLaterAPI</code>
+command line flag to Chrome enables FetchLater API support.</p>
+<h3 id="verifying-the-api-is-working">Verifying the API is working</h3>
+<p>Added the following line to an HTTPS web page, and load the page into a Chrome
+tab.</p>
+<pre data-language="html">&lt;script&gt;
+fetchLater('/test');
+&lt;/script&gt;</pre>
+<p>Close the tab, and you should be able to observe a request sent to <code>/test</code> on
+your web server that hosts the page.</p>
+<h2 id="related-links">Related Links</h2>
+<ul>
+<li><a href="https://chromestatus.com/feature/4654499737632768">Chrome Platform Status - Feature: FetchLater API</a></li>
+<li><a href="https://github.com/WICG/pending-beacon/blob/main/docs/fetch-later-api.md">FetchLater Explainer on GitHub</a></li>
+<li><a href="https://whatpr.org/fetch/1647/9ca4bda...37a66c9.html#dom-global-fetch-later">FetchLater API Spec (draft)</a></li>
+<li>Ask questions about API &amp; Spec via <a href="https://github.com/WICG/pending-beacon/issues/new">new issue</a></li>
+<li><a href="https://docs.google.com/document/d/1U8XSnICPY3j-fjzG35UVm6zjwL6LvX6ETU3T8WrzLyQ/edit#heading=h.ms1oipx914vf">FetchLater API Design Doc in Chromium</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/fetch-later.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/fetch-later.md</a>
+  </p>
+</div>

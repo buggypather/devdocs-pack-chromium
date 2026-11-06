@@ -1,0 +1,67 @@
+<h1>Linux SUID Sandbox Development</h1>
+<p><em>IMPORTANT NOTE: The Linux SUID sandbox is almost but not completely removed.
+See <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=598454">https://bugs.chromium.org/p/chromium/issues/detail?id=598454</a>
+This page is mostly out-of-date.</em></p>
+<p>For context see <a href="https://github.com/chromium/chromium/blob/HEAD/sandbox/linux/README.md">LinuxSUIDSandbox</a></p>
+<p>We need a SUID helper binary to turn on the sandbox on Linux.</p>
+<p>In most cases, you can run <code>build/update-linux-sandbox.sh</code> and it&#39;ll install
+the proper sandbox for you in <code>/usr/local/sbin</code> and tell you to update your
+<code>.bashrc</code> if needed.</p>
+<h2 id="installation-instructions-for-developers">Installation instructions for developers</h2>
+<ul>
+<li><p>If you have no setuid sandbox at all, you will see a message such as:</p>
+<pre>Running without the SUID sandbox!</pre>
+</li>
+<li><p>If your setuid binary is out of date, you will get messages such as:</p>
+<pre>The setuid sandbox provides API version X, but you need Y
+You are using a wrong version of the setuid binary!</pre>
+</li>
+</ul>
+<p>Run the script mentioned above, or do something such as:</p>
+<ul>
+<li><p>Build <code>chrome_sandbox</code> whenever you build chrome
+(<code>ninja -C xxx chrome chrome_sandbox</code> instead of <code>ninja -C xxx chrome</code>)</p>
+</li>
+<li><p>After building, run something similar to (or use the provided
+<code>update-linux-sandbox.sh</code>):</p>
+<pre data-language="shell"># needed if you build on NFS!
+sudo cp out/Debug/chrome_sandbox /usr/local/sbin/chrome-devel-sandbox
+sudo chown root:root /usr/local/sbin/chrome-devel-sandbox
+sudo chmod 4755 /usr/local/sbin/chrome-devel-sandbox</pre>
+</li>
+<li><p>Put this line in your <code>~/.bashrc</code> (or <code>.zshenv</code> etc):</p>
+<pre>export CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox</pre>
+</li>
+</ul>
+<h2 id="try-bots-and-waterfall">Try bots and waterfall</h2>
+<p>If you&#39;re installing a new bot, always install the setuid sandbox (the
+instructions are different than for developers, contact the Chrome troopers). If
+something does need to run without the setuid sandbox, use the
+<code>--disable-setuid-sandbox</code> command line flag.</p>
+<p>The <code>SUID</code> sandbox must be enabled on the try bots and the waterfall. If you
+don&#39;t use it locally, things might appear to work for you, but break on the
+bots.</p>
+<p>(Note: as a temporary, stop gap measure, setting <code>CHROME_DEVEL_SANDBOX</code> to an
+empty string is equivalent to <code>--disable-setuid-sandbox</code>)</p>
+<h2 id="disabling-the-sandbox">Disabling the sandbox</h2>
+<p>If you are certain that you don&#39;t want the setuid sandbox, use
+<code>--disable-setuid-sandbox</code>. There should be very few cases like this. So if
+you&#39;re not absolutely sure, run with the setuid sandbox.</p>
+<h2 id="installation-instructions-for-raw-builds-of-chromium">Installation instructions for &quot;<a href="https://commondatastorage.googleapis.com/chromium-browser-continuous/index.html">Raw builds of Chromium</a>&quot;</h2>
+<p>If you&#39;re using a &quot;raw&quot; build of Chromium, do the following:</p>
+<pre>sudo chown root:root chrome_sandbox &amp;&amp; sudo chmod 4755 chrome_sandbox &amp;&amp; \
+    export CHROME_DEVEL_SANDBOX=&quot;$PWD/chrome_sandbox&quot;
+./chrome</pre>
+<p>You can also make such an installation more permanent by following the
+<a href="#Installation-Instructions-for-developers">steps above</a> and installing
+<code>chrome_sandbox</code> to a more permanent location.</p>
+<h2 id="system-wide-installations-of-chromium">System-wide installations of Chromium</h2>
+<p>The <code>CHROME_DEVEL_SANDBOX</code> variable is intended for developers and won&#39;t work
+for a system-wide installation of Chromium. Package maintainers should make sure
+the <code>setuid</code> binary is installed.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/suid_sandbox_development.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/suid_sandbox_development.md</a>
+  </p>
+</div>

@@ -1,0 +1,138 @@
+<h1>Naming Chromium Builders</h1>
+<h2 id="tldr--">TLDR -</h2>
+<p>Name builders as:
+<code>target (&quot;-&quot; build_descriptor)* &quot;-&quot; build_type (&quot;-&quot; purpose_descriptor)*</code></p>
+<p>Examples: <code>win64-rel</code>, <code>win64-msvc-rel</code> , <code>linux-chromeos-rel</code>,
+<code>ios-blink-rel-fyi</code></p>
+<h2 id="introduction-and-requirements">Introduction and Requirements</h2>
+<p>Chromium&#39;s continuous integration infrastructure is organized around builders.
+Builders provide a specification for what code to check out, what targets to
+build, compile arguments to use, and which tests to run. This document provides
+a naming convention for builders to improve consistency and clarity.</p>
+<p>This document only applies to the chromium/chrome projects and their respective
+branch projects (including perf, memory, etc.); this does not include other
+projects like Skia, ChromeOS, V8, etc. or the infra projects.</p>
+<h2 id="general-notes-on-naming">General notes on naming</h2>
+<ul>
+<li>Names should use only lowercase letters. Mixed case, while potentially more
+readable, complicates accurate transcription and requires more rules.</li>
+<li>Names should not have whitespace in them. Spaces make things potentially
+easier to read, but complicate accurate transcription.</li>
+<li>Use a dash <code>-</code> to separate parts of a name.</li>
+<li>The more consistency you can have between related things, the better.
+&quot;Linux Builder&quot; and &quot;Linux Tests&quot; vs. &quot;linux_chromium_rel_ng&quot; is bad;
+&quot;ios-simulator&quot; for both is better though by itself it isn&#39;t sufficiently
+unique.</li>
+<li>The less redundancy and noise you have, the better. If all of your bots have
+&quot;chromium&quot; in the name (or &quot;_ng&quot;, for that matter), you&#39;re better off
+eliminating it.</li>
+<li>Names should generally follow the pattern of identifiers separated by
+punctuation. Specifically, we should follow the unicode identifier syntax
+(probably the lowercase ASCII subset, i.e., the <code>[a-z][a-z0-9_]</code> subset that
+is a legal identifier in C, Java, C++, Go and Python). We should use the dash
+character to separate identifiers.</li>
+</ul>
+<h3 id="builders">Builders</h3>
+<p><code>target (&quot;-&quot; build_descriptor)* &quot;-&quot; build_type (&quot;-&quot; purpose_descriptor)*</code></p>
+<p>This can be broken down as:</p>
+<ul>
+<li><strong>target</strong>: What to build/test (platform, arch, test suite).<ul>
+<li>linux, win, mac, ios, android, etc.</li>
+</ul>
+</li>
+<li><strong>build_descriptor</strong>: Modifies how to build or test.<ul>
+<li>Any non obvious build descriptions that you wouldn&#39;t assume from the target
+and bucket.</li>
+<li>This assumes that you will normally be able to either infer about the host
+configuration, e.g. we can assume that &quot;android&quot; builds run on a linux x64
+host. All exceptions can be handled via build_descriptors.</li>
+<li>An example would be if a builder within the chrome builder group is doing a
+build on Chromium.</li>
+<li>i.e {bucket}/{builder} <code>chrome/linux-chromium-rel</code> - Here we specify
+chromium build, however, if the bucket were chromium, we would just call
+the builder <code>linux-rel</code>.</li>
+</ul>
+</li>
+<li><strong>build_type</strong>: <code>rel</code>, <code>dbg</code>, <code>official</code>.<ul>
+<li>Release builder (rel) - Builds binaries with default/base level of compiler
+optimizations.</li>
+<li>Debug (dbg) - Used for builders run in debug mode. This is typically done
+by passing in debug flag parameters, often running slower than release but
+providing more information.</li>
+<li>Official - Builds binaries with an extra level of compiler optimizations.
+More information can be found <a href="https://source.chromium.org/chromium/chromium/src/+/main:build/config/BUILDCONFIG.gn;drc=b026de546dc95db23f84584a395a9d3b31910342;l=126-130">here</a>.</li>
+</ul>
+</li>
+<li><strong>purpose_descriptor</strong>: How to treat the builder (e.g. <code>fyi</code>, <code>rel-ready</code>).<ul>
+<li>A catch all descriptor that would differentiate a builders purpose from
+its original base name of <code>{target}</code> + <code>{build_descriptor}</code> +
+<code>{build_type}</code></li>
+<li>We should only use this if there is a substantial change on the builder
+that does not fall within a target, build_descriptor or build_type.</li>
+<li>An example of this is making a builder <code>fyi</code> (for your information) thus
+denoting the builder is probably not a gardened builder that is used to
+provide data.</li>
+</ul>
+</li>
+</ul>
+<h3 id="examples">Examples:</h3>
+<p><strong>linux-rel:</strong> From a quick glance we can see that descriptors <code>cft</code> and
+<code>no-external-ip</code> are same builders as <code>linux-rel</code> but one builds and tests use
+Chrome for Testing and another controls the ability for linux-rel builders to
+show an external ip address.</p>
+<ul>
+<li><code>linux-rel</code>: Linux builder with a release build type. The omitted descriptor
+indicates no special configuration.</li>
+<li><code>linux-rel-cft</code>: A <code>linux-rel</code> builder with the <code>cft</code> (Chrome for testing)
+purpose descriptor.</li>
+<li><code>linux-rel-no-external-ip</code>: A <code>linux-rel</code> builder that runs in an environment
+with no external IP address. Here we can see that <code>no-external-ip</code> changes
+the nature of the builder but does not fall under <code>build_type</code>, <code>target</code>, or
+<code>build_descriptor</code> thus it falls under <code>purpose_descriptor</code>.</li>
+</ul>
+<p><strong>linux-chromeos:</strong> This grouping is easy to understand. We start off with a
+Linux builder that runs tests for Chrome on ChromeOs. Note, this differs from
+real CrOS builds. Information on why it&#39;s different <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/chromeos_build_instructions.md#Chromium-OS-on-Linux-linux_chromeos">here</a>.
+The use of easy to understand descriptors (<code>code-coverage</code>, <code>annotator</code>,
+<code>archive</code>) tells us information that help us distinguish linux-chromeos builders
+at a quick glance.</p>
+<ul>
+<li><code>linux-chromeos-rel</code>: A builder for the <code>linux-chromeos</code> target with a
+release build.</li>
+<li><code>linux-chromeos-dbg</code>: A builder for the <code>linux-chromeos</code> target with a debug
+build.</li>
+<li><code>linux-chromeos-annotator-rel</code>: A <code>linux-chromeos</code> release builder with the
+<code>annotator</code> descriptor.</li>
+<li><code>linux-chromeos-archive-rel</code>: A <code>linux-chromeos</code> release builder that
+additionally archives the build.</li>
+<li><code>linux-chromeos-code-coverage</code>: A <code>linux-chromeos</code> builder for code coverage.</li>
+</ul>
+<p><strong>win-rel:</strong> Notice strong base name <code>win-rel</code>. It is easy to have a regex find
+all builders related to <code>win-rel</code> with descriptors being concise and clear.</p>
+<ul>
+<li><code>win-rel</code>: Windows builder with a release build.</li>
+<li><code>win-msvc-rel</code>: A <code>win-rel</code> builder that uses the Microsoft Visual C
+compiler.</li>
+<li><code>win-msvc-dbg</code>: A Windows builder that uses the Microsoft Visual C compiler
+and has a debug build type.</li>
+</ul>
+<h3 id="testers">Testers</h3>
+<p>Testers are builders that are triggered by another builder. The tester will run
+tests that were built by the triggering builder.</p>
+<p><code>builder_name (&quot;-&quot; descriptor)* &quot;-tests&quot;</code></p>
+<p><strong>Examples:</strong></p>
+<ul>
+<li><code>android-cronet-arm-rel-kitkat-tests</code></li>
+<li><code>android-cronet-arm-rel-lollipop-tests</code></li>
+<li><code>mac-arm64-rel-tests</code></li>
+</ul>
+<p>If there are multiple testers triggered by a single builder, their names must
+be distinct, so all but one will require descriptors. In such a case, it is
+recommended that each tester include at least one descriptor unless it is 2
+builders and they are differentiated with a boolean descriptor (e.g. <code>noncq</code>).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/infra/naming_chromium_builders.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/infra/naming_chromium_builders.md</a>
+  </p>
+</div>

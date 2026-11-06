@@ -1,0 +1,164 @@
+<h1>ChromeVox (for developers)</h1>
+<p>ChromeVox is the built-in screen reader on Chrome OS. It was originally
+developed as a separate extension but over time it has been incorporated into
+the operating system itself. Now the code lives inside of the Chromium
+tree and it&#39;s built and shipped as part of Chrome OS.</p>
+<p>NOTE: ChromeVox ships also as an extension on the Chrome webstore. This version
+of ChromeVox is known as ChromeVox Classic and is loosely related to ChromeVox
+(on Chrome OS). All references to ChromeVox relate only to ChromeVox on Chrome
+OS.</p>
+<p>To start or stop ChromeVox, press Ctrl+Alt+Z on your ChromeOS device at any
+time.</p>
+<h2 id="developer-info">Developer Info</h2>
+<p>Code location: <code>chrome/browser/resources/chromeos/accessibility/chromevox</code></p>
+<p>Ninja target: it&#39;s built as part of &quot;chrome&quot;, but you can build and run
+browser_tests to test it (Chrome OS target only - you must have target_os =
+&quot;chromeos&quot; in your GN args first).</p>
+<h2 id="developing-on-linux">Developing On Linux</h2>
+<p>ChromeVox for Chrome OS development is done on Linux.</p>
+<p>See <a href="chromevox_on_desktop_linux">ChromeVox on Desktop Linux</a>
+for more information.</p>
+<h2 id="code-structure">Code Structure</h2>
+<p>The <code>chromevox/</code> extension directory is broken into subdirectories, based on
+what context the code runs in. The different contexts are as follows:</p>
+<ul>
+<li><p>The background context (<code>chromevox/background/</code>) contains the bulk of the
+ChromeVox logic, and runs in the background page (soon to be a background
+service worker). To group code by its logical function, it has the following
+subdirectories:</p>
+<ul>
+<li><p><code>chromevox/background/braille/</code>, which contains logic around braille
+  input/output.</p>
+</li>
+<li><p><code>chromevox/background/editing/</code>, which contains the logic to handle input
+  into text fields.</p>
+</li>
+<li><p><code>chromevox/background/event/</code>, which contains the logic that handles
+  events from the various APIs.</p>
+</li>
+<li><p><code>chromevox/background/logging/</code>, which contains logic to generate the
+content shown on the log page.</p>
+</li>
+<li><p><code>chromevox/background/output/</code>, which contains the logic to generate the
+text that is spoken or sent to the braille display. More details are in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/resources/chromeos/accessibility/chromevox/background/output/">the README.md file within that directory</a>.</p>
+</li>
+<li><p><code>chromevox/background/panel/</code>, which contains the logic to support the
+ChromeVox panel.</p>
+</li>
+</ul>
+</li>
+<li><p>The content script context (<code>chromevox/injected/</code>) contains the code that is
+injected into web pages. At this point, this is only used to support the Google
+Docs workaround. When that is resolved, it is anticipated this directory will be
+removed.</p>
+</li>
+<li><p>The learn mode context (<code>chromevox/learn_mode/</code>) contains the code to render
+and run the ChromeVox learn mode (which is different from the tutorial).</p>
+</li>
+<li><p>The log context (<code>chromevox/log_page/</code>) contains the code specific to showing
+the ChromeVox log page.</p>
+</li>
+<li><p>The options context (<code>chromevox/options/</code>) contains the code for the ChromeVox
+settings page. There is an ongoing effort to migrate this page into the ChromeOS
+settings app, after which this directory will be unneeded.</p>
+</li>
+<li><p>The panel context (<code>chromevox/panel/</code>) contains the code that renders and
+performs the logic of the ChromeVox panel, shown at the top of the screen. When
+the onscreen command menus are shown, that is also rendered in this context.</p>
+</li>
+<li><p>The tutorial context (<code>chromevox/tutorial/</code>) contains resources used
+exclusively by the ChromeVox tutorial.</p>
+</li>
+</ul>
+<p>Other subdirectories also have specific purposes:</p>
+<ul>
+<li><p>The common directory (<code>chromevox/common/</code>) contains files that can safely be
+shared between multiple contexts. These files must have no global state, as each
+context has its own global namespace. To get information between the contexts,
+bridge objects are used to pass structured messages. Any data passed through
+these bridges loses any and all class information, as it is converted to JSON in
+the process of being sent.</p>
+<ul>
+<li>The subdirectory <code>chromevox/common/braille/</code> contains common logic
+specific to braille</li>
+</ul>
+</li>
+<li><p>The earcons directory (<code>chromevox/earcons/</code>) contains the audio files for any
+short indicator sounds (earcons) used by ChromeVox to express information
+without words.</p>
+</li>
+<li><p>The images directory (<code>chromevox/images/</code>) contains any images used in any
+context.</p>
+</li>
+<li><p>The testing directory (<code>chromevox/testing/</code>) contains files that are used
+exclusively in testing.</p>
+</li>
+<li><p>The third_party directory (<code>chromevox/third_party</code>) contains open source code
+from other developers that is used in the ChromeVox extension.</p>
+</li>
+<li><p>The tools directory (<code>chromevox/tools</code>) contains python scrips used for
+building ChromeVox. Eventually these should be moved into the common
+accessibility directory.</p>
+</li>
+</ul>
+<h2 id="debugging-chromevox">Debugging ChromeVox</h2>
+<p>There are options available that may assist in debugging ChromeVox. Here are a
+few use cases.</p>
+<h3 id="feature-development">Feature development</h3>
+<p>When developing a new feature, it may be helpful to save time by not having to
+go through a compile cycle. This can be achieved by setting
+<code>chromevox_compress_js</code> to 0 in
+chrome/browser/resources/chromeos/accessibility/chromevox/BUILD.gn, or by using
+a debug build.</p>
+<p>In a debug build or with chromevox_compress_js off, the unflattened files in the
+Chrome out directory
+(e.g. out/Release/resources/chromeos/accessibility/chromevox/). Now you
+can hack directly on the copy of ChromeVox in out/ and toggle ChromeVox to pick
+up your changes (via Ctrl+Alt+Z).</p>
+<h3 id="fixing-bugs">Fixing bugs</h3>
+<p>The easiest way to debug ChromeVox is from an external browser. Start Chrome
+with this command-line flag:</p>
+<p><code>out/Release/chrome --remote-debugging-port=9222</code></p>
+<p>Now open <a href="http://localhost:9222">http://localhost:9222</a> in a separate instance of the browser, and debug the ChromeVox extension background page from there.</p>
+<p>Another option is to use emacs indium (available through M-x
+package-list-packages).</p>
+<p>It also talks to localhost:9222 but integrates more tightly into emacs instead.</p>
+<p>Another option is to use the built-in developer console. Go to the
+ChromeVox options page with Search+Shift+o, o; then, substitute the
+“options.html” path with “background.html”, and then open up the
+inspector.</p>
+<h3 id="debugging-chromeos">Debugging ChromeOS</h3>
+<p>To debug ChromeVox in ChromeOS, you need to add the command-line flag to the
+config file in device under test(DUT) instead of starting chrome from command
+line.</p>
+<pre>(dut) $ echo &quot; --remote-debugging-port=9222 &quot; &gt;&gt; /etc/chrome_dev.conf
+(dut) $ restart ui</pre>
+<p>This is also written in
+<a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/simple_chrome_workflow.md#command_line-flags-and-environment-variables">Simple Chrome Workflow Doc</a>.</p>
+<p>You need to ssh from your development device into your DUT forwarding port 9222
+to open ChromeVox extension background page in your dev device, for example</p>
+<pre>ssh my_crbook -L 3333:localhost:9222</pre>
+<p>Then open the forwarded port in the development device, <a href="http://localhost:3333">http://localhost:3333</a> in
+the example.</p>
+<p>You may need to remove rootfs verification to write to <code>/etc/chrome_dev.conf</code>.</p>
+<pre>(dut) $ crossystem dev_boot_signed_only=0
+(dut) $ sudo /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification
+(dut) $ reboot</pre>
+<p>See
+<a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/developer_mode.md#disable-verity">Chromium OS Doc</a>
+for more information about removing rootfs verification.</p>
+<h3 id="running-tests">Running tests</h3>
+<p>Build the browser_tests target. To run lots of tests in parallel, run it like
+this:</p>
+<pre>out/Release/browser_tests --test-launcher-jobs=20 --gtest_filter=ChromeVox*</pre>
+<p>Use a narrower test filter if you only want to run some of the tests. For
+example, most of the ChromeVox Next tests have &quot;E2E&quot; in them (for &quot;end-to-end&quot;),
+so to only run those:</p>
+<p><code>out/Release/browser_tests --test-launcher-jobs=20 --gtest_filter=&quot;*ChromeVox*E2E*&quot;</code></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/chromevox.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/chromevox.md</a>
+  </p>
+</div>

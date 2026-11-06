@@ -1,0 +1,138 @@
+<h1>Running Web Platform Tests on Android</h1>
+<h2 id="overview">Overview</h2>
+<p>This document provides a guide to running Web Platform Tests on Android.</p>
+<p>For general instruction for running the Web Platform Tests, you should read
+<a href="run_web_platform_tests">Running Web Platform Tests with run_wpt_tests.py</a>.</p>
+<h2 id="initial-setup">Initial Setup</h2>
+<p>Please follow the steps at <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_build_instructions.md">Checking out and building Chromium for Android
+</a> to
+setup your local environment. Once that is done, you need to build one of the
+following targets:</p>
+<pre data-language="bash">autoninja -C out/Default chrome_public_wpt        # For testing with Chrome Android
+autoninja -C out/Default system_webview_wpt_64    # For testing with WebView</pre>
+<h2 id="running-the-tests">Running the Tests</h2>
+<p>Once you have Chrome Android/WebView and <code>chromedriver</code> built, you can launch
+<code>run_wpt_tests.py</code> to run WPTs. You can either run the tests on an Android
+emulator or a real Android device.</p>
+<h3 id="running-wpts-on-an-android-emulator">Running WPTs on an Android emulator</h3>
+<p>You will need to follow the steps in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_emulator.md">Using an Android Emulator</a> to be ready to run the
+Android Emulator. Passing the <code>--avd-config</code> option to <code>run_wpt_tests.py</code> will
+launch an emulator that will be shut down after running the tests.</p>
+<p>The example below runs <code>external/wpt/badging/badge-success.https.html</code> in Chrome
+Android on Android 13:</p>
+<pre data-language="bash">third_party/blink/tools/run_wpt_tests.py \
+  -t Default \
+  -p clank \
+  --avd-config=tools/android/avd/proto/android_33_google_apis_x64.textpb \
+  external/wpt/badging/badge-success.https.html</pre>
+<ul>
+<li><code>-t Default</code>: Use the build in <code>//out/Default/</code></li>
+<li><code>-p clank</code>: Runs the tests using Chrome for Android (clank).</li>
+<li><code>--avd-config=tools/.../android_33_google_apis_x64.textpb</code>: Runs the tests on
+Android 13 emulator (Google API 33).</li>
+</ul>
+<p>To run the example in WebView:</p>
+<pre data-language="bash">$ third_party/blink/tools/run_wpt_tests.py \
+  -t Default \
+  -p android_webview \
+  --webview-provider out/Default/apks/SystemWebView64.apk \
+  --avd-config=tools/android/avd/proto/android_33_google_apis_x64.textpb \
+  external/wpt/badging/badge-success.https.html</pre>
+<ul>
+<li><code>-p webview</code>: Runs the tests using WebView.</li>
+<li><code>--webview-provider out/.../SystemWebView64.apk</code>: Specify
+SystemWebView64 as WebView APK.</li>
+</ul>
+<p>Alternatively, you can launch the emulator yourself and <code>run_wpt_tests.py</code> will
+detect and connect to the emulator and run WPTs with it. This can save you the
+time to repeatedly launch the emulator. The commands below show how this works.</p>
+<pre data-language="bash">$ tools/android/avd/avd.py start \
+  --avd-config=tools/android/avd/proto/android_33_google_apis_x64.textpb
+$ third_party/blink/tools/run_wpt_tests.py \
+  -t Default \
+  -p clank \
+  external/wpt/badging/badge-success.https.html</pre>
+<h3 id="running-wpts-on-a-real-android-device">Running WPTs on a real Android device</h3>
+<p><code>run_wpt_tests.py</code> should be able to work with a real device as long as the
+device can be found by <code>adb devices</code>. You will need to make sure the ABI matches
+and these <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_build_instructions.md#installing-and-running-chromium-on-a-device">steps
+</a>
+are followed.</p>
+<h3 id="running-tests-in-cqci">Running Tests in CQ/CI</h3>
+<p>To test Android-specific behaviors, the
+<code>android-chrome-13-x64-wpt-android-specific</code> and
+<code>android-webview-13-x64-wpt-android-specific</code> builders run the tests in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/web_tests/TestLists/android.filter"><code>android.filter</code></a> and
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/web_tests/TestLists/webview.filter"><code>webview.filter</code></a> respectively. Developers can add additional
+tests to the lists when necessary. A resource request might be
+needed depending on the case. See <a href="#Run-more-tests-with-Chrome-Android-or-WebView">below</a>
+for details.</p>
+<p>To satisfy different testing requirements, WPT coverage in CQ/CI is partitioned
+between suites that target different <code>//content</code> embedders:</p>
+<table>
+<thead>
+<tr>
+<th>Suite Name</th>
+<th>Browser Under Test</th>
+<th>Harness</th>
+<th>Tests Run</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>android_chrome_wpt_tests</code></td>
+<td><code>chrome_android</code></td>
+<td><code>run_wpt_tests.py</code></td>
+<td>Tests listed in <a href="#running-tests-in-cqci"><code>android.filter</code></a>.</td>
+</tr>
+<tr>
+<td><code>android_webview_wpt_tests</code></td>
+<td><code>android_webview</code></td>
+<td><code>run_wpt_tests.py</code></td>
+<td>Tests listed in <a href="#running-tests-in-cqci"><code>webview.filter</code></a>.</td>
+</tr>
+</tbody></table>
+<h2 id="test-expectations-and-baselines">Test expectations and Baselines</h2>
+<p>Expected failures on Chrome Android or WebView should be added to the default
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/TestExpectations">TestExpectations</a> file with the modifier &quot;Android&quot; or &quot;Webview&quot; respectively.</p>
+<p>For baselines:</p>
+<ul>
+<li>Chrome Android specific baselines reside at
+<code>third_party/blink/web_tests/platform/android</code>, and fall back to
+<code>third_party/blink/web_tests/platform/linux</code>.</li>
+<li>WebView specific baselines reside at
+<code>third_party/blink/web_tests/platform/webview</code>, and fall back to
+<code>third_party/blink/web_tests/platform/linux</code>.</li>
+</ul>
+<p>To update baselines:</p>
+<ol>
+<li>Trigger tryjob(s)</li>
+</ol>
+<ul>
+<li>For Chrome Androids: trigger <code>android-chrome-13-x64-wpt-android-specific</code></li>
+<li>For WebView: trigger <code>android-webview-13-x64-wpt-android-specific</code></li>
+</ul>
+<ol start="2">
+<li>Run <a href="web_test_expectations#How-to-rebaseline">the rebaseline tool</a> after
+  the results are ready.</li>
+</ol>
+<h2 id="run-more-tests-with-chrome-android-or-webview">Run more tests with Chrome Android or WebView</h2>
+<p>A resource request would be needed if running the additional tests increases the
+total test time by more than one minute. If this is the case, developers can use
+<a href="https://data.corp.google.com/sites/datasite_browser_infra/bot_estimator?p=task_type:%22test%22">the bot estimator</a>
+to estimate the bots needed, then follow the steps at <a href="https://g3doc.corp.google.com/company/teams/chrome/ops/business/resources/resource-request-program.md?cl=head&amp;polyglot=physical-hw#i-need-new-resources">go/i-need-hw</a>
+to get the resources. The tests can be added to the filter file after the resource
+is deployed.</p>
+<p>Please make sure there is no unexpected failures on the related steps before using
+the bot estimator, as the bot will retry those tests and that will increase the
+total test time.</p>
+<h2 id="known-issues">Known Issues</h2>
+<p>For runner bugs and feature requests, please file <a href="https://issues.chromium.org/issues/new?component=1456928&amp;template=1923166">an issue against
+<code>Blink&gt;Infra</code>
+</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/run_web_platform_tests_on_android.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/run_web_platform_tests_on_android.md</a>
+  </p>
+</div>

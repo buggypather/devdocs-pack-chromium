@@ -1,0 +1,99 @@
+<h1>Special Case URLs</h1>
+<p>Several types of URLs lead to special case behavior in Chromium and are worth
+considering as new features are built.</p>
+<h2 id="aboutblank">about:blank</h2>
+<p><code>about:blank</code> may sound like the simplest document in a browser, but it is
+actually a huge source of corner cases and confusion:</p>
+<ul>
+<li><strong>It may not be empty.</strong> The creator of an <code>about:blank</code> document may inject
+content into it, using <code>document.write</code> or other DOM APIs like
+<code>document.body.innerHTML</code>.</li>
+<li><strong>It may inherit an origin.</strong> Navigating to <code>about:blank</code> in the address bar
+has a unique, opaque origin, but an <code>about:blank</code> iframe or popup created by
+another document will inherit that document&#39;s origin. (Caveat: Chromium&#39;s
+process model uses the initiator of the navigation to determine which process
+it belongs in, but Blink currently uses the parent&#39;s origin even if the
+initiator is not the parent, which we would like to fix in
+<a href="https://crbug.com/585649">issue 585649</a>. Blink also aliases the origin, so a
+modification of <code>document.domain</code> in the parent unexpectedly affects the
+<code>about:blank</code> document as well.)</li>
+<li><strong>It may change its URL.</strong> When another document uses <code>document.open</code> or
+<code>document.write</code> on an <code>about:blank</code> document, the <code>about:blank</code> document
+inherits <code>location.href</code> from the other document. However, this type of URL
+change does not occur for other DOM APIs (e.g., <code>document.body.innerHTML</code>
+modifications), and the browser process does not yet learn about the URL
+update at all (and thus the URL in the address bar does not change).</li>
+<li><strong>It may have URL parameters.</strong> Some pages navigate <code>about:blank</code> documents
+to fragments (e.g., <code>about:blank#foo</code>) or query parameters to communicate
+with scripts that have been injected into the document. For this reason, we
+recommend using <code>GURL::IsAboutBlank</code> to detect <code>about:blank</code> documents rather
+than comparing directly against <code>kAboutBlankURL</code>.</li>
+<li><strong>It may be considered dangerous.</strong> An <code>about:blank</code> document may inherit an
+origin of a broken HTTPS document or an origin initially blocked by Safe
+Browsing, resulting in potentially surprising address bar security
+indicators.</li>
+<li><strong>It is present as the initial empty document of every frame.</strong> While most
+users will not see <code>about:blank</code> in the address bar very often, it is created
+extremely frequently. Each main frame and subframe starts on <code>about:blank</code>
+until the first document commits, and many real pages create <code>about:blank</code>
+iframes to inject script code or other content into them.</li>
+<li><strong>It may or may not commit.</strong> Surprisingly, only some of the above cases
+generate navigation commit events in the browser process. The initial empty
+document will commit if the iframe or <code>window.open</code> call has no URL or
+<code>&quot;about:blank&quot;</code> itself, but if the iframe or <code>window.open</code> call use a real
+(potentially slow) URL, there will be no commit for the initial empty
+document.</li>
+<li><strong>It may or may not stay in session history.</strong> In most cases, the initial
+empty document is replaced in session history when the first non-blank URL
+commits, such that you cannot go back to the <code>about:blank</code> NavigationEntry.
+This is not true if a window is created with <code>window.open(&quot;about:blank&quot;)</code>,
+though, in which case the NavigationEntry is preserved.</li>
+</ul>
+<h2 id="aboutsrcdoc">about:srcdoc</h2>
+<p>This URL commits when an iframe is created with a <code>srcdoc</code> parameter to define
+its contents. The contents can only be defined by the parent (or a same-origin
+document with access to the parent), and the document inherits its parent&#39;s
+origin.</p>
+<h2 id="iframe-sandbox">iframe sandbox</h2>
+<p>When an iframe has a <code>sandbox</code> attribute (which does not include
+<code>allow-same-origin</code>), it can load its content from a URL but the document has an
+opaque origin, rather than the origin of the URL. For this reason, it is
+important for most security checks to look at the origin rather than the URL
+(see <a href="security/origin-vs-url">Origin vs URL</a>).</p>
+<h2 id="chrome-and-os-urls">chrome: and os: URLs</h2>
+<p><code>chrome:</code> URLs are used for privileged pages that are part of Chromium, such as
+<code>chrome://settings</code>. Similarly, <code>os:</code> URLs are privileged pages that are part of
+ChromiumOS. Web pages are not allowed to navigate to them, to reduce the risk of
+privilege escalation attacks. Note that there are a subset of <code>chrome:</code> URLs
+that are used for debug commands, described under <a href="#debug-urls">Debug URLs</a>
+below.</p>
+<h2 id="debug-urls">Debug URLs</h2>
+<p>Chromium supports a series of &quot;debug URLs&quot; listed at the bottom of
+<code>chrome://chrome-urls</code>, such as <code>chrome://crash</code>. These are used to crash, hang,
+exit, or perform other debug actions. Like <code>javascript:</code> URLs, these URLs
+represent a command rather than a destination, and they do not go through the
+normal navigation flow or commit at all. Like the other
+<a href="#chrome_urls">chrome: URLs</a> discussed above, web pages are not allowed to
+navigate to them.</p>
+<h2 id="javascript-urls">javascript: URLs</h2>
+<p>Navigating to a <code>javascript:</code> URL is essentially evaluating a JavaScript
+expression in the target document, rather than navigating to a new document. As
+a result, the Same Origin Policy only allows navigating same-origin documents to
+<code>javascript:</code> URLs. A <code>javascript:</code> URL will never commit to session history.
+However, if it evaluates to a string (e.g., <code>javascript:&quot;foo&quot;</code>), then the
+contents of the document will be replaced with the string, similar to a
+<code>document.write(&quot;foo&quot;)</code> statement. (This does create a new Document in Blink,
+though, while document.write does not.)</p>
+<h2 id="error-page-internal-url">Error page internal URL</h2>
+<p>When Chromium navigates to an error page, it commits as
+<code>chrome-error://chromewebdata</code>. This URL is not displayed to the user (in favor
+of the URL that failed or was blocked). Note that this error URL is not stored
+in the NavigationEntry, but error pages can also be detected using the
+<code>url_is_unreachable</code> bit on the commit params or via
+<code>NavigationHandle::IsErrorPage</code>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/special_case_urls.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/special_case_urls.md</a>
+  </p>
+</div>

@@ -1,0 +1,222 @@
+<h1>How to Update Web Vitals Changelogs</h1>
+<p>This document defines the instructions, formatting standards, discovery workflows, and validation checklists for maintaining Core Web Vitals speed metrics changelogs. It is designed to guide both human contributors and AI agents to produce high-quality, standardized changelogs requiring minimal review iterations.</p>
+<hr>
+<h2 id="1-scope--audience-public-communications">1. Scope &amp; Audience (Public Communications)</h2>
+<p>These changelogs are <strong>public communications intended for external web developers, browser engineers, and RUM (Real User Monitoring) analytics providers</strong>.</p>
+<p>Their goal is to explain:</p>
+<ul>
+<li>What changes affect Core Web Vitals measurements.</li>
+<li>How Performance Timeline APIs behave in JavaScript.</li>
+<li>How field (CrUX / PageLoad UKM) or lab data shifts across Chrome releases.</li>
+</ul>
+<h3 id="inclusion-rules">Inclusion Rules</h3>
+<table>
+<thead>
+<tr>
+<th align="left">Category</th>
+<th align="left">Include</th>
+<th align="left">Do NOT Include</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>APIs &amp; Web Platform</strong></td>
+<td align="left">Changes to web-exposed performance entries (<code>PerformanceEventTiming</code>, <code>PerformanceSoftNavigation</code>, <code>LargestContentfulPaint</code>, <code>LayoutShift</code>), new IDL attributes, IDL type modifications, timing algorithm fixes, and exposed target encapsulation behavior.</td>
+<td align="left">Internal Blink/V8 bindings refactorings that preserve identical IDL types and runtime behavior.</td>
+</tr>
+<tr>
+<td align="left"><strong>Field Metrics (CrUX / UKM)</strong></td>
+<td align="left">Changes to metric definitions, calculation algorithms, aggregation logic, or browser engine optimizations that shift real-world Web Vitals scores in CrUX / PageLoad UKM.</td>
+<td align="left">Internal Chromium histograms, UMA breakdown additions, or internal browser telemetry.</td>
+</tr>
+<tr>
+<td align="left"><strong>Diagnostic Attribution</strong></td>
+<td align="left">Modifications to attribution data (e.g. <code>entry.target</code>, <code>entry.sources</code>, <code>interactionId</code> assignment timing, coordinate units).</td>
+<td align="left">Internal Perfetto trace categories, trace tracks, or debugging logs.</td>
+</tr>
+<tr>
+<td align="left"><strong>Engine Maintenance</strong></td>
+<td align="left">N/A</td>
+<td align="left">Dead code removals, compiler warning fixes, test deflaking, and private architectural refactoring without observable impact.</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="2-two-tier-document-architecture">2. Two-Tier Document Architecture</h2>
+<p>All changelog documentation follows a <strong>two-tier hierarchy</strong>:</p>
+<pre>docs/speed/metrics_changelog/
+├── how_to_update.md               # This skill and instruction document
+├── inp.md                         # Tier 1: Main index for Interaction to Next Paint
+├── lcp.md                         # Tier 1: Main index for Largest Contentful Paint
+├── cls.md                         # Tier 1: Main index for Cumulative Layout Shift
+├── soft_navigations.md            # Tier 1: Main index for Soft Navigations
+├── 2025_01_inp.md                 # Tier 2: Dedicated milestone deep-dive (Chrome 134)
+├── 2026_02_cls.md                 # Tier 2: Dedicated milestone deep-dive (Chrome 145)
+├── 2026_02_lcp.md                 # Tier 2: Dedicated milestone deep-dive (Chrome 147)
+└── ...</pre>
+<h3 id="tier-1-main-metric-index-files-inpmd-lcpmd-clsmd">Tier 1: Main Metric Index Files (<code>inp.md</code>, <code>lcp.md</code>, <code>cls.md</code>)</h3>
+<ul>
+<li>Reverse-chronological table of contents organized by Chrome milestone.</li>
+<li>Standardized, single-bullet entries with fixed category prefixes.</li>
+<li>Every bullet links either to a <strong>Tier 2 dedicated document</strong> (for major items) or directly to a <strong>public Gerrit CL</strong> (for minor bugfixes).</li>
+</ul>
+<h3 id="tier-2-dedicated-milestone-files-yyyy_mm_metricmd">Tier 2: Dedicated Milestone Files (<code>YYYY_MM_&lt;metric&gt;.md</code>)</h3>
+<ul>
+<li>Standalone deep-dive documents for major feature launches, metric definition revisions, standard API updates, or complex behavioral changes.</li>
+<li>File naming convention: <code>YYYY_MM_&lt;metric&gt;.md</code>, where <code>YYYY_MM</code> is the year and month of the Chrome release milestone branch point (e.g. <code>2026_02_inp.md</code> for Chrome 147 branching in February 2026).</li>
+</ul>
+<h3 id="decision-matrix-dedicated-doc-vs-inline-bullet">Decision Matrix: Dedicated Doc vs. Inline Bullet</h3>
+<pre>┌────────────────────────────────────────────────────────┐
+│ Is it a feature launch, API addition, metric revision, │
+│ spec alignment, or broad performance optimization?     │
+└───────────────────────────┬────────────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+              ▼                           ▼
+            [YES]                        [NO]
+  Create Dedicated Doc           Is it an isolated,
+  YYYY_MM_&lt;metric&gt;.md          self-contained bugfix?
+  and link from Index                     │
+                                          ▼
+                                Create Inline Bullet
+                                with public CL link
+                                in the Main Index</pre>
+<hr>
+<h2 id="3-standard-templates">3. Standard Templates</h2>
+<h3 id="31-main-index-bullet-format-inpmd-lcpmd-etc">3.1. Main Index Bullet Format (<code>inp.md</code>, <code>lcp.md</code>, etc.)</h3>
+<pre data-language="markdown">* Chrome &lt;Milestone&gt;
+  * Launch feature: [&lt;Feature Title&gt;](YYYY_MM_&lt;metric&gt;.md)
+  * Metric definition improvement: [&lt;Feature Title&gt;](YYYY_MM_&lt;metric&gt;.md)
+  * Implementation optimizations: [&lt;Feature Title&gt;](YYYY_MM_&lt;metric&gt;.md)
+  * Metric bug fix: [&lt;Fix Summary&gt;](YYYY_MM_&lt;metric&gt;.md)
+  * Metric bug fix: &lt;Brief summary&gt; ([&lt;CL_ID&gt;](https://chromium-review.googlesource.com/c/chromium/src/+/&lt;CL_ID&gt;)).</pre>
+<p><strong>Index Rules:</strong></p>
+<ol>
+<li><strong>Deduplicate Merges/Backports</strong>: If a fix was authored in milestone N but cherry-picked/merged into milestone N-1, <strong>only</strong> list it under milestone N-1 where users were first affected.</li>
+<li><strong>Link Every Topic</strong>: When a dedicated file contains multiple sections for the same milestone, ensure all corresponding bullets in the index file link to that dedicated file.</li>
+</ol>
+<hr>
+<h3 id="32-dedicated-milestone-document-template-yyyy_mm_metricmd">3.2. Dedicated Milestone Document Template (<code>YYYY_MM_&lt;metric&gt;.md</code>)</h3>
+<p>Use this template for all Tier 2 files. When documenting multiple distinct changes for the same milestone, separate each section with a horizontal rule (<code>---</code>).</p>
+<pre data-language="markdown"># &lt;Metric Full Name&gt; Changes in Chrome &lt;Milestone&gt;
+
+## &lt;Descriptive Feature Title&gt;
+
+&lt;1-2 sentences summarizing what changed, the feature flag or API name, and the core motivation.&gt;
+
+&lt;Detailed explanation comparing previous behavior with new behavior. Describe why the change was made, technical context, and how edge cases are resolved.&gt;
+
+&lt;External references: W3C specification issues/PRs, ChromeStatus features, Chromium bug IDs, and Gerrit review CLs.&gt;
+The specification discussion can be found in [w3c/&lt;repo&gt;#&lt;issue&gt;](https://github.com/w3c/&lt;repo&gt;/issues/&lt;issue&gt;) and [chromestatus.com/feature/&lt;id&gt;](https://chromestatus.com/feature/&lt;id&gt;).
+The source change can be found in [crrev.com/c/&lt;cl_id&gt;](https://chromium-review.googlesource.com/c/chromium/src/+/&lt;cl_id&gt;).
+
+### How does this affect a site's metrics?
+
+- **CrUX / UKM (Field Data)**: &lt;Explicitly state whether aggregate field metrics (75th percentile) are expected to increase, decrease, become more stable, or remain unchanged.&gt;
+- **Real User Monitoring (RUM) &amp; PerformanceObserver**: &lt;Describe exact differences in JavaScript performance entries, such as earlier/intermediate entry delivery, null values for detached targets, interaction ID assignment timing, or new attributes.&gt;
+- **Metric Values vs. Attribution**: &lt;Clarify whether the numerical metric score changes or if this is purely an API/reporting precision improvement.&gt;
+
+### When were users affected?
+
+Chrome &lt;Milestone&gt; reached stable users in &lt;Month Year&gt;.</pre>
+<hr>
+<h2 id="4-writing-the-how-does-this-affect-a-sites-metrics-section">4. Writing the &quot;How does this affect a site&#39;s metrics?&quot; Section</h2>
+<p>To prevent human review iterations, this section MUST explicitly address the following criteria:</p>
+<ol>
+<li><strong>Direction of Score Impact</strong>: Explicitly declare if field metrics will <strong>increase (regress)</strong>, <strong>decrease (improve)</strong>, or <strong>remain neutral</strong>.<ul>
+<li><em>Avoid vague terms</em>: Never say <em>&quot;improves metrics&quot;</em> without clarifying if it means faster load times (lower milliseconds), higher reporting coverage, or better diagnostic fidelity.</li>
+</ul>
+</li>
+<li><strong>Field (CrUX / UKM) vs. Lab / RUM</strong>: Explicitly distinguish between aggregate field data (evaluated at page unload or first interaction) and real-time JavaScript <code>PerformanceObserver</code> emissions.</li>
+<li><strong>Coverage &amp; Reporting Rates</strong>: If a fix prevents dropped entries during page unload or abandonment, note the increase in field reporting coverage.</li>
+<li><strong>Attribution vs. Score</strong>: If a change only affects metadata (e.g. <code>entry.target</code>, <code>entry.sources</code>, <code>interactionId</code>), explicitly state that the overall metric score values remain unchanged.</li>
+</ol>
+<hr>
+<h2 id="5-ai-agent-discovery--execution-workflow">5. AI Agent Discovery &amp; Execution Workflow</h2>
+<p>AI agents updating these changelogs MUST follow this step-by-step procedure:</p>
+<pre>[1. Baseline Check] ──&gt; [2. Multi-Layered Search] ──&gt; [3. Candidate Filter]
+                                                              │
+[6. Presubmit Check] &lt;── [5. Dedicated Doc Authoring] &lt;── [4. Index Drafting]</pre>
+<h3 id="step-1-baseline-check">Step 1: Baseline Check</h3>
+<p>Read the latest Chrome milestone already published in <code>inp.md</code>, <code>lcp.md</code>, <code>cls.md</code>, and <code>soft_navigations.md</code>.</p>
+<h3 id="step-2-multi-layered-search">Step 2: Multi-Layered Search</h3>
+<p>To avoid missing commits due to file moves or directory restructurings, use all four search strategies:</p>
+<ol>
+<li><strong>Subtree Path Searches (Recursive)</strong>:<ul>
+<li>Query full subtrees: <code>third_party/blink/renderer/core/timing/</code>, <code>third_party/blink/renderer/core/paint/</code>, <code>third_party/blink/renderer/core/layout/</code>, <code>components/page_load_metrics/</code>.</li>
+<li><em>Do NOT search static lists of specific <code>.cc</code> files.</em></li>
+</ul>
+</li>
+<li><strong>Feature Flag Transitions (<code>runtime_enabled_features.json5</code>)</strong>:<ul>
+<li>Check <code>third_party/blink/renderer/platform/runtime_enabled_features.json5</code> for flags toggled to <code>status: &quot;stable&quot;</code> or <code>status: &quot;experimental&quot;</code>.</li>
+</ul>
+</li>
+<li><strong>Author Searches Across Timing OWNERS</strong>:<ul>
+<li>Review commits authored by owners in <code>third_party/blink/renderer/core/timing/OWNERS</code> (e.g., Scott Haseley, Michal Mocny, Ian Clelland, etc.) during the target date window.</li>
+</ul>
+</li>
+<li><strong>Keyword Searches</strong>:<ul>
+<li>Search commit logs for: <code>LCP</code>, <code>LargestContentfulPaint</code>, <code>INP</code>, <code>EventTiming</code>, <code>LayoutShift</code>, <code>SoftNavigation</code>, <code>ICP</code>, <code>PaintTiming</code>, <code>interactionId</code>, <code>targetSelector</code>.</li>
+</ul>
+</li>
+</ol>
+<h3 id="step-3-candidate-filtering">Step 3: Candidate Filtering</h3>
+<ul>
+<li>Filter out internal telemetry (histograms.xml), trace events, compiler fixes, test deflaking, and private refactorings.</li>
+<li>Cross-check commit merge dates against official branch point dates to ensure exact milestone attribution.</li>
+</ul>
+<h3 id="step-4-index-drafting">Step 4: Index Drafting</h3>
+<p>Draft bullet entries in the corresponding main index file (<code>inp.md</code>, <code>lcp.md</code>, etc.) using standard category prefixes.</p>
+<h3 id="step-5-dedicated-doc-authoring">Step 5: Dedicated Doc Authoring</h3>
+<ul>
+<li>Create <code>YYYY_MM_&lt;metric&gt;.md</code> files for major changes using the Section 3.2 template.</li>
+<li><strong>Verify with Source</strong>: Read the full commit message, bug description, and diff of every CL to ensure technical accuracy.</li>
+<li>Search for W3C issues/PRs (<code>w3c/event-timing</code>, <code>w3c/largest-contentful-paint</code>, <code>WICG/layout-instability</code>) and ChromeStatus features.</li>
+</ul>
+<h3 id="step-6-pre-submission-quality-checklist">Step 6: Pre-Submission Quality Checklist</h3>
+<p>Before requesting review or finalizing edits, verify every item:</p>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Spellcheck</strong>: Double-check spelling (e.g. ensure <code>improved</code> is not misspelled as <code>imporved</code>).</li>
+<li><input disabled="" type="checkbox"> <strong>Public URLs Only</strong>: All links must use public URLs (<code>https://chromium-review.googlesource.com/...</code> or <code>crrev.com/...</code>, <code>https://github.com/w3c/...</code>). Never use local <code>file://</code> URLs.</li>
+<li><input disabled="" type="checkbox"> <strong>Backport &amp; Deduping</strong>: Changes merged to an earlier milestone are only documented under that earlier milestone.</li>
+<li><input disabled="" type="checkbox"> <strong>Cross-links Complete</strong>: All items in multi-topic dedicated files are linked from the main index.</li>
+<li><input disabled="" type="checkbox"> <strong>Presubmit Verification</strong>: Run <code>git cl presubmit --force --upload</code> locally and confirm 0 errors and 0 warnings.</li>
+</ul>
+<hr>
+<h2 id="6-key-repositories-and-file-paths-quick-reference">6. Key Repositories and File Paths Quick Reference</h2>
+<table>
+<thead>
+<tr>
+<th align="left">Directory / File</th>
+<th align="left">Description &amp; Focus</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><code>third_party/blink/renderer/core/timing/</code></td>
+<td align="left">Primary location for Web Vitals APIs (<code>PerformanceEventTiming</code>, <code>LargestContentfulPaint</code>, <code>PerformanceSoftNavigation</code>).</td>
+</tr>
+<tr>
+<td align="left"><code>third_party/blink/renderer/core/paint/</code> &amp; <code>core/paint/timing/</code></td>
+<td align="left">Paint Timing, FCP, LCP computation, text/image paint records.</td>
+</tr>
+<tr>
+<td align="left"><code>third_party/blink/renderer/core/layout/</code></td>
+<td align="left">Layout Instability and Layout Shift tracking logic.</td>
+</tr>
+<tr>
+<td align="left"><code>components/page_load_metrics/</code></td>
+<td align="left">Browser-side metric aggregation, UKM recording, and PageLoad observer logic.</td>
+</tr>
+<tr>
+<td align="left"><code>third_party/blink/renderer/core/scheduler/</code></td>
+<td align="left">Task attribution and input deferral logic.</td>
+</tr>
+<tr>
+<td align="left"><code>third_party/blink/renderer/platform/runtime_enabled_features.json5</code></td>
+<td align="left">Feature flag statuses (experimental/stable launches).</td>
+</tr>
+</tbody></table>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/how_to_update.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/how_to_update.md</a>
+  </p>
+</div>

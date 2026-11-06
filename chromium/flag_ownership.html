@@ -1,0 +1,95 @@
+<h1>Chromium Flag Ownership</h1>
+<p>ellyjones@ / avi@</p>
+<p>This document explains flag ownership in Chromium, and gives some principles and
+best practices.</p>
+<p>See also <a href="flag_expiry">Chromium Flag Expiry</a>.</p>
+<h2 id="what-is-flag-ownership">What Is Flag Ownership?</h2>
+<p>Every entry in chrome://flags is required to have at least one listed owner,
+which can be:</p>
+<ul>
+<li>A single person</li>
+<li>A mailing list</li>
+<li>A reference to an OWNERS file</li>
+</ul>
+<p>The owners of a flag serve as points of contact for it, and are notified when
+it expires.</p>
+<h2 id="who-should-be-an-owner">Who Should Be An Owner?</h2>
+<p>In general, it&#39;s a good idea to include:</p>
+<ul>
+<li>The one or two SWEs who know the most about the flag and why it exists</li>
+<li>An appropriate mailing list for the team that owns it, so that expirations are
+not missed, or</li>
+<li>An owners file that contains all the members of the owning team, again so that
+expirations are not missed.</li>
+</ul>
+<p>Three important notes about listing owners:</p>
+<ul>
+<li>Any entry that is just a bare word (like &quot;username&quot;) is treated as being
+@chromium.org; by far the most common mistake is to write &quot;username&quot; when
+&quot;<a href="mailto:username@google.com">username@google.com</a>&quot; is meant. This is not a problem if you have both
+chromium.org and google.com addresses.</li>
+<li>The flag ownership database is <em>public</em>, so if your team&#39;s name is supposed to
+be secret, don&#39;t list it; in that situation, it&#39;s better to create a new list
+with a less revealing name and have it forward to your team&#39;s list.</li>
+<li>Every listed owner must be able to receive email from an <em>unprivileged</em>
+google.com account, so please don&#39;t list your team&#39;s private list that
+requires joining to post or similar - your flag expiration email will bounce.
+If your team&#39;s list needs to remain closed to posting, you should instead make
+a separate list that allows open posting, or list an OWNERS file full of
+individuals.</li>
+</ul>
+<h2 id="i-dont-want-my-flag-to-expire">I Don&#39;t Want My Flag To Expire!</h2>
+<p>Some flags do not control UI features, but rather are commonly-used debugging
+controls, such as <code>ignore-gpu-blocklist</code>. For these flags, see the instructions
+at the head of <code>flag-metadata.json</code>. Please be very judicious about
+never-expiring flags, since they represent ongoing engineering, test and support
+burden. The flags team will probably only approve your non-expiring flag if:</p>
+<ul>
+<li>You regularly ask users or developers to change its value for
+debugging/support purposes</li>
+<li>You have been doing so for at least six months</li>
+<li>You don&#39;t plan to stop doing so any time soon</li>
+</ul>
+<p>If you have a non-expiring flag, the flags team requires a comment in the json
+file as to the rationale that it be non-expiring. A quick sentence or two will
+be fine. (Yes, we are aware that, technically, JSON files can&#39;t have comments.
+Don&#39;t worry about it.) You&#39;ll also need to add your flag to the permitted list
+in
+<a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/flag-never-expire-list.json"><code>//chrome/browser/flag-never-expire-list.json</code></a>
+which will require approval from the flags team.</p>
+<h2 id="what-should-my-expiry-be">What Should My Expiry Be?</h2>
+<p>A good rule of thumb is that your flag should expire at least one milestone
+after you expect your feature to have launched to stable. In other words, if
+your feature will be 100% enabled on Stable in M74, your flag should be marked
+as expiring in M75 or later. However, you can freely leave yourself lots of
+slack - the purpose of expiration is to ensure that obsolete flags eventually
+get cleaned up, but whether that takes one milestone or five for any given flag
+is not a big deal. It is also very easy to adjust the expiration milestone later
+if you need to.</p>
+<p>One practice is to always set your expirations to the next &quot;round&quot; milestone
+after you expect to launch, so that your team can batch flag cleanup work - for
+example, if your feature is planned to go out in M101, you might set the
+expiration to M105, and then your team might schedule a flag cleanup for the 105
+branch time.</p>
+<h2 id="i-have-other-questions">I Have Other Questions</h2>
+<p>Please get in touch with
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/flags-dev"><code>flags-dev@chromium.org</code></a>.
+If you feel like you need to have a Google-internal discussion for some reason,
+there&#39;s also
+<a href="https://groups.google.com/a/google.com/forum/#!forum/chrome-flags"><code>chrome-flags@</code></a>.</p>
+<h2 id="relevant-source-files">Relevant Source Files</h2>
+<ul>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/about_flags.cc"><code>//chrome/browser/about_flags.cc</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/flag-metadata.json"><code>//chrome/browser/flag-metadata.json</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/flag-never-expire-list.json"><code>//chrome/browser/flag-never-expire-list.json</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/expired_flags_list.h"><code>//chrome/browser/expired_flags_list.h</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/ios/chrome/browser/flags/about_flags.mm"><code>//ios/chrome/browser/flags/about_flags.mm</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/tools/flags/generate_expired_list.py"><code>//tools/flags/generate_expired_list.py</code></a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/tools/flags/generate_unexpire_flags.py"><code>//tools/flags/generate_unexpire_flags.py</code></a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/flag_ownership.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/flag_ownership.md</a>
+  </p>
+</div>

@@ -1,0 +1,43 @@
+<h1>Startup</h1>
+<p>Chrome is (mostly) shipped as a single executable that knows how to run as all
+the interesting sorts of processes we use.</p>
+<p>Here&#39;s an overview of how that works.</p>
+<ol>
+<li>First there&#39;s the platform-specific entry point: <code>wWinMain()</code> on Windows,
+<code>main()</code> on Linux.  This lives in <code>chrome/app/chrome_exe_main_*</code>.  On Mac and
+Windows, that function loads modules as described later, while on Linux it
+does very little, and all of them call into:</li>
+<li><code>ChromeMain()</code>, which is the place where cross-platform code that needs to
+run in all Chrome processes lives.  It lives in <code>chrome/app/chrome_main*</code>.
+For example, here is where we call initializers for modules like logging and
+ICU.  We then examine the internal <code>--process-type</code> switch and dispatch to:</li>
+<li>A process-type-specific main function such as <code>BrowserMain()</code> (for the outer
+browser process) or <code>RendererMain()</code> (for a tab-specific renderer process).</li>
+</ol>
+<h2 id="platform-specific-entry-points">Platform-specific entry points</h2>
+<h3 id="windows">Windows</h3>
+<p>On Windows we build the bulk of Chrome as a DLL.  (XXX: why?)  <code>wWinMain()</code>
+loads <code>chrome.dll</code>, does some other random stuff (XXX: why?) and calls
+<code>ChromeMain()</code> in the DLL.</p>
+<h3 id="mac">Mac</h3>
+<p>Mac is also packaged as a framework and an executable, but they&#39;re linked
+together: <code>main()</code> calls <code>ChromeMain()</code> directly.  There is also a second entry
+point, in
+<a href="https://cs.chromium.org/chromium/src/chrome/app_shim/chrome_main_app_mode_mac.mm"><code>chrome_main_app_mode_mac.mm</code></a>,
+for app mode shortcuts: &quot;On Mac, one can&#39;t make shortcuts with command-line
+arguments. Instead, we produce small app bundles which locate the Chromium
+framework and load it, passing the appropriate
+data.&quot;  This executable also calls <code>ChromeMain()</code>.</p>
+<h3 id="linux">Linux</h3>
+<p>On Linux due to the sandbox we launch subprocesses by repeatedly forking from a
+helper process.  This means that new subprocesses don&#39;t enter through main()
+again, but instead resume from clones in the middle of startup.  The initial
+launch of the helper process still executes the normal startup path, so any
+initialization that happens in <code>ChromeMain()</code> will have been run for all
+subprocesses but they will all share the same initialization.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/design/startup.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/design/startup.md</a>
+  </p>
+</div>

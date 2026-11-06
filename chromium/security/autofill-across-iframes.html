@@ -1,0 +1,122 @@
+<h1>Autofill across iframes</h1>
+<p>Chrome Autofill fills in frame-transcending forms like the following example.</p>
+<pre data-language="html">&lt;!-- Top-level document URL: https://merchant.example/... --&gt;
+&lt;form&gt;
+  Cardholder name:
+  &lt;input id=name&gt;
+
+  Credit card number:
+  &lt;iframe src=&quot;https://psp.example/...&quot; allow=autofill&gt;
+    #document
+      &lt;input id=num&gt;
+  &lt;/iframe&gt;
+
+  Expiration date:
+  &lt;input id=exp&gt;
+
+  Verification code:
+  &lt;iframe src=&quot;https://psp.example/...&quot; allow=autofill&gt;
+    #document
+      &lt;input id=cvc&gt;
+  &lt;/iframe&gt;
+
+  &lt;iframe src=&quot;https://ads.example/...&quot;&gt;
+    #document
+      &lt;input id=account&gt;
+  &lt;/iframe&gt;
+&lt;/form&gt;</pre>
+<h2 id="the-security-policy">The security policy</h2>
+<p>An autofill fills a form control <em>candidate</em> only if one of the following is
+true:</p>
+<ul>
+<li>the autofill&#39;s origin and the <em>candidate</em>&#39;s origin are the <a href="https://html.spec.whatwg.org/multipage/browsers.html#same-origin">same origin</a>;</li>
+<li>the candidate&#39;s origin and the top-level origin are the <a href="https://html.spec.whatwg.org/multipage/browsers.html#same-origin">same origin</a>.</li>
+</ul>
+<p>The second bullet point is going to be replaced with the new policy-controlled
+feature <a href="https://github.com/explainers-by-googlers/safe-text-input/blob/main/autofill.md"><code>autofill</code></a>, which allows a page to select which embedded content is
+(not) trusted to receive autofill input. Then, an autofill will fill a form
+control <em>candidate</em> only if one of the following is true:</p>
+<ul>
+<li>the autofill&#39;s origin and the <em>candidate</em>&#39;s origin are the <a href="https://html.spec.whatwg.org/multipage/browsers.html#same-origin">same origin</a>;</li>
+<li>the policy-controlled feature <a href="https://github.com/explainers-by-googlers/safe-text-input/blob/main/autofill.md"><code>autofill</code></a> is enabled in the <em>candidate</em>&#39;s
+<a href="https://dom.spec.whatwg.org/#concept-node-document">node document</a>.</li>
+</ul>
+<p>Starting in Chrome 153 (October 2026), autofill suggestions will include a
+<a href="https://github.com/explainers-by-googlers/safe-text-input/raw/main/images/warning-autofill.png">warning</a> if they&#39;d fill a field in whose <a href="https://dom.spec.whatwg.org/#concept-node-document">node document</a> <a href="https://github.com/explainers-by-googlers/safe-text-input/blob/main/autofill.md"><code>autofill</code></a> is
+disabled.</p>
+<p>In the long term, the first bullet point (and the warnings) will be removed.</p>
+<p>Note that the above conditions are necessary but not sufficient for Chrome to
+autofill a field. In particular, Chrome does not fill credentials across frames.
+Chrome also avoids autofilling sensitive data, such as credit card numbers,
+across origins.</p>
+<p>The terminology used above is defined in the <a href="#appendix-terminology">appendix</a>.</p>
+<p>The policy is implemented in <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/autofill/content/browser/form_forest.cc;l=618-623;drc=94fbbc584c5d42f0097a9cb28b355853d2b34658">FormForest::GetRendererFormsOfBrowserForm()</a>.</p>
+<h2 id="the-rationale">The rationale</h2>
+<p>The example form above exhibits a common pattern: at the time of writing, about
+20% of the payment forms on the web span multiple origins. Most commonly, the
+cardholder name field&#39;s origin is the top-level origin, whereas the credit card
+number is in a cross-origin iframe hosted by the payment service provider (PSP).</p>
+<p>These iframes are typically styled so that they seamlessly integrate with the
+merchant&#39;s page -- the user is not made aware that multiple frames and origins
+are involved. Yet the different origins isolate the payment information from the
+merchant&#39;s website, which helps them comply with the payment card industry&#39;s
+data security standard (see Section 2.2.3 of the <a href="https://www.pcisecuritystandards.org/">PCI-DSS best practices</a>).</p>
+<p>Chrome Autofill&#39;s objective is to fill fields that the user expects to be
+filled, even if those fields cross origins, while protecting the user against
+possibly malicious sub-frames.</p>
+<p>The following table illustrates which fields may be filled in our example form
+depending on the autofill&#39;s origin:</p>
+<table>
+<thead>
+<tr>
+<th>Autofill&#39;s origin</th>
+<th align="center"><code>name</code></th>
+<th align="center"><code>num</code></th>
+<th align="center"><code>exp</code></th>
+<th align="center"><code>cvc</code></th>
+<th align="center"><code>account</code></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>https://merchant.example</code></td>
+<td align="center">✔</td>
+<td align="center">✔</td>
+<td align="center">✔</td>
+<td align="center">✔</td>
+<td align="center">✖</td>
+</tr>
+<tr>
+<td><code>https://psp.example</code></td>
+<td align="center">✔</td>
+<td align="center">✔</td>
+<td align="center">✔</td>
+<td align="center">✔</td>
+<td align="center">✖</td>
+</tr>
+<tr>
+<td><code>https://ads.example</code></td>
+<td align="center">✔</td>
+<td align="center">✖</td>
+<td align="center">✔</td>
+<td align="center">✖</td>
+<td align="center">✔</td>
+</tr>
+</tbody></table>
+<h2 id="appendix-terminology">Appendix: Terminology</h2>
+<p>An <em>autofill</em> is an operation that fills one or many form control elements in
+the <a href="https://html.spec.whatwg.org/#fully-active-descendant-of-a-top-level-traversable-with-user-attention">fully active descendants of a top-level traversable with user attention</a>.
+An autofill can only be initiated on a <a href="https://html.spec.whatwg.org/#focused">focused</a> form control element.</p>
+<p>An autofill <em>fills a form control</em> if it changes the form control&#39;s <a href="https://html.spec.whatwg.org/#concept-fe-value">value</a>. The
+value after the autofill is the <em>form control&#39;s autofill value</em>.</p>
+<p>A <em>form control&#39;s origin</em> is its <a href="https://dom.spec.whatwg.org/#concept-node-document">node document</a>&#39;s <a href="https://dom.spec.whatwg.org/#concept-document-origin">origin</a>.
+An <em>autofill&#39;s origin</em> is the <a href="https://html.spec.whatwg.org/#focused">focused</a> form control&#39;s origin.
+The <em>top-level origin</em> is the <a href="https://html.spec.whatwg.org/#top-level-traversable">top-level traversable</a>&#39;s <a href="https://html.spec.whatwg.org/#nav-document">active document</a>&#39;s <a href="https://dom.spec.whatwg.org/#concept-document-origin">origin</a>.</p>
+<p>The policy-controlled feature <em><a href="https://github.com/explainers-by-googlers/safe-text-input/blob/main/autofill.md"><code>autofill</code></a> is enabled in a document</em> if the
+<a href="https://w3c.github.io/webappsec-permissions-policy/#algo-is-feature-enabled">Is feature enabled in document for origin?</a> algorithm on <a href="https://github.com/explainers-by-googlers/safe-text-input/blob/main/autofill.md"><code>autofill</code></a>, the
+document, and the document&#39;s <a href="https://dom.spec.whatwg.org/#concept-document-origin">origin</a> returns <code>Enabled</code>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/autofill-across-iframes.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/autofill-across-iframes.md</a>
+  </p>
+</div>

@@ -1,0 +1,4626 @@
+<h1>Telemetry Extension API overview</h1>
+<p>This document gives a function-level documentation of the Telemetry Extension
+API. It is separated in the three namespaces <strong>telemetry</strong>, <strong>diagnostics</strong>,
+<strong>events</strong> and <strong>management</strong>.</p>
+<h1 id="dictionary-based-union-types">Dictionary-based union types</h1>
+<p>There are functions with similar signatures. It&#39;s useful to simplify the
+interfaces by merging these functions into one. For example,
+<code>postFooData(arg: FooType)</code> and <code>postBarData(arg: BarType)</code> could be merged into
+<code>postData(arg: ExampleUnionType)</code>. We use a <em>dictionary-based union type</em> for
+this purpose. Such a union object represents exactly one of the <code>N</code> candidate
+types, in the form of a dictionary with <code>N</code> optional fields, each corresponding
+to one candidate type.</p>
+<p>Let&#39;s see an example. The following table describes a union type
+<code>ExampleUnionType</code> that is either a <code>FooType</code> or a <code>BarType</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>foo</td>
+<td>FooType</td>
+<td>Information about foo</td>
+</tr>
+<tr>
+<td>bar</td>
+<td>BarType</td>
+<td>Information about bar</td>
+</tr>
+</tbody></table>
+<p>To invoke a function <code>os.exampleFunction()</code> that accepts an <code>ExampleUnionType</code></p>
+<ul>
+<li>with an object of <code>FooType</code><pre>os.exampleFunction(
+  arg: {
+     foo: aFooObject
+  }
+)</pre>
+</li>
+<li>with an object of <code>BarType</code><pre>os.exampleFunction(
+  arg: {
+     bar: aBarObject
+  }
+)</pre>
+</li>
+</ul>
+<p>Notice that exactly one field should be set. That is, the object is invalid
+when either</p>
+<ul>
+<li>more than one field is set, or</li>
+<li>no field is set.</li>
+</ul>
+<h1 id="diagnostics">Diagnostics</h1>
+<p>The diagnostics namespace got a rework since the M119 release and added a new
+extension-event based interface in M119. The interface is described in
+<a href="#v2-diagnostics-api">V2 Diagnostics API</a>.</p>
+<h2 id="types">Types</h2>
+<h3 id="enum-routinetype">Enum RoutineType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ac_power</td>
+</tr>
+<tr>
+<td>battery_capacity</td>
+</tr>
+<tr>
+<td>battery_charge</td>
+</tr>
+<tr>
+<td>battery_discharge</td>
+</tr>
+<tr>
+<td>battery_health</td>
+</tr>
+<tr>
+<td>cpu_cache</td>
+</tr>
+<tr>
+<td>cpu_floating_point_accuracy</td>
+</tr>
+<tr>
+<td>cpu_prime_search</td>
+</tr>
+<tr>
+<td>cpu_stress</td>
+</tr>
+<tr>
+<td>disk_read</td>
+</tr>
+<tr>
+<td>dns_resolution</td>
+</tr>
+<tr>
+<td>memory</td>
+</tr>
+<tr>
+<td>smartctl_check</td>
+</tr>
+<tr>
+<td>lan_connectivity</td>
+</tr>
+<tr>
+<td>signal_strength</td>
+</tr>
+<tr>
+<td>dns_resolver_present</td>
+</tr>
+<tr>
+<td>gateway_can_be_pinged</td>
+</tr>
+<tr>
+<td>sensitive_sensor</td>
+</tr>
+<tr>
+<td>nvme_self_test</td>
+</tr>
+<tr>
+<td>fingerprint_alive</td>
+</tr>
+<tr>
+<td>smartctl_check_with_percentage_used</td>
+</tr>
+<tr>
+<td>emmc_lifetime</td>
+</tr>
+<tr>
+<td>bluetooth_power</td>
+</tr>
+<tr>
+<td>ufs_lifetime</td>
+</tr>
+<tr>
+<td>power_button</td>
+</tr>
+<tr>
+<td>audio_driver</td>
+</tr>
+<tr>
+<td>bluetooth_discovery</td>
+</tr>
+<tr>
+<td>bluetooth_scanning</td>
+</tr>
+<tr>
+<td>bluetooth_pairing</td>
+</tr>
+<tr>
+<td>fan</td>
+</tr>
+</tbody></table>
+<h3 id="enum-routinestatus">Enum RoutineStatus</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>ready</td>
+</tr>
+<tr>
+<td>running</td>
+</tr>
+<tr>
+<td>waiting_user_action</td>
+</tr>
+<tr>
+<td>passed</td>
+</tr>
+<tr>
+<td>failed</td>
+</tr>
+<tr>
+<td>error</td>
+</tr>
+<tr>
+<td>cancelled</td>
+</tr>
+<tr>
+<td>failed_to_start</td>
+</tr>
+<tr>
+<td>removed</td>
+</tr>
+<tr>
+<td>cancelling</td>
+</tr>
+<tr>
+<td>unsupported</td>
+</tr>
+<tr>
+<td>not_run</td>
+</tr>
+</tbody></table>
+<h3 id="enum-routinecommandtype">Enum RoutineCommandType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>cancel</td>
+</tr>
+<tr>
+<td>remove</td>
+</tr>
+<tr>
+<td>resume</td>
+</tr>
+<tr>
+<td>status</td>
+</tr>
+</tbody></table>
+<h3 id="enum-usermessagetype">Enum UserMessageType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>unplug_ac_power</td>
+</tr>
+<tr>
+<td>plug_in_ac_power</td>
+</tr>
+<tr>
+<td>press_power_button</td>
+</tr>
+</tbody></table>
+<h3 id="enum-diskreadroutinetype">Enum DiskReadRoutineType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>linear</td>
+</tr>
+<tr>
+<td>random</td>
+</tr>
+</tbody></table>
+<h3 id="enum-acpowerstatus">Enum AcPowerStatus</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>connected</td>
+</tr>
+<tr>
+<td>disconnected</td>
+</tr>
+</tbody></table>
+<h3 id="enum-nvmeselftesttype">Enum NvmeSelfTestType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>short_test</td>
+</tr>
+<tr>
+<td>long_test</td>
+</tr>
+</tbody></table>
+<h3 id="runacpowerroutinerequest">RunAcPowerRoutineRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>expected_status</td>
+<td>AcPowerStatus</td>
+<td>The expected status of the AC (&#39;connected&#39;, &#39;disconnected&#39; or &#39;unknown&#39;)</td>
+</tr>
+<tr>
+<td>expected_power_type*</td>
+<td>string</td>
+<td>If specified, this must match the type of power supply for the routine to succeed.</td>
+</tr>
+</tbody></table>
+<h3 id="runbatterydischargeroutinerequest">RunBatteryDischargeRoutineRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>length_seconds</td>
+<td>number</td>
+<td>Length of time to run the routine for</td>
+</tr>
+<tr>
+<td>maximum_discharge_percent_allowed</td>
+<td>number</td>
+<td>The routine will fail if the battery discharges by more than this percentage</td>
+</tr>
+</tbody></table>
+<h3 id="runbatterychargeroutinerequest">RunBatteryChargeRoutineRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>length_seconds</td>
+<td>number</td>
+<td>Length of time to run the routine for</td>
+</tr>
+<tr>
+<td>minimum_charge_percent_required</td>
+<td>number</td>
+<td>The routine will fail if the battery charges by less than this percentage</td>
+</tr>
+</tbody></table>
+<h3 id="runcpuroutinerequest">RunCpuRoutineRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>length_seconds</td>
+<td>number</td>
+<td>Length of time to run the routine for</td>
+</tr>
+</tbody></table>
+<h3 id="rundiskreadrequest">RunDiskReadRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>type</td>
+<td>DiskReadRoutineType</td>
+<td>Type of disk read routine that will be started</td>
+</tr>
+<tr>
+<td>length_seconds</td>
+<td>number</td>
+<td>Length of time to run the routine for</td>
+</tr>
+<tr>
+<td>file_size_mb</td>
+<td>number</td>
+<td>test file size, in mega bytes, to test with DiskRead routine. Maximum file size is 10 GB</td>
+</tr>
+</tbody></table>
+<h3 id="runpowerbuttonrequest">RunPowerButtonRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>timeout_seconds</td>
+<td>number</td>
+<td>A timeout for the routine</td>
+</tr>
+</tbody></table>
+<h3 id="runnvmeselftestrequest">RunNvmeSelfTestRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>test_type</td>
+<td>NvmeSelfTestType</td>
+<td>Selects between a &quot;short_test&quot; or a &quot;long_test&quot;.</td>
+</tr>
+</tbody></table>
+<h3 id="runsmartctlcheckrequest">RunSmartctlCheckRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>percentage_used_threshold</td>
+<td>number</td>
+<td>an optional threshold number in percentage, range [0, 255] inclusive, that the routine examines <code>percentage_used</code> against. If not specified, the routine will default to the max allowed value (255).</td>
+</tr>
+</tbody></table>
+<h3 id="runroutineresponse">RunRoutineResponse</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>number</td>
+<td>Id of the routine routine created</td>
+</tr>
+<tr>
+<td>status</td>
+<td>RoutineStatus</td>
+<td>Current routine status</td>
+</tr>
+</tbody></table>
+<h3 id="getroutineupdaterequest">GetRoutineUpdateRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>number</td>
+<td>Id of the routine you want to query</td>
+</tr>
+<tr>
+<td>command</td>
+<td>RoutineCommandType</td>
+<td>What kind of updated should be performed</td>
+</tr>
+</tbody></table>
+<h3 id="getroutineupdateresponse">GetRoutineUpdateResponse</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>progress_percent</td>
+<td>number</td>
+<td>Current progress of the routine</td>
+</tr>
+<tr>
+<td>output</td>
+<td>string</td>
+<td>Optional debug output</td>
+</tr>
+<tr>
+<td>status</td>
+<td>RoutineStatus</td>
+<td>Current routine status</td>
+</tr>
+<tr>
+<td>status_message</td>
+<td>string</td>
+<td>Optional routine status message</td>
+</tr>
+<tr>
+<td>user_message</td>
+<td>UserMessageType</td>
+<td>Returned for routines that require user action (e.g. unplug power cable)</td>
+</tr>
+</tbody></table>
+<h3 id="getavailableroutinesresponse">GetAvailableRoutinesResponse</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>routines</td>
+<td>Array&lt;RoutineType&gt;</td>
+<td>Available routine types</td>
+</tr>
+</tbody></table>
+<h2 id="functions">Functions</h2>
+<h3 id="getavailableroutines">getAvailableRoutines()</h3>
+<pre>chrome.os.diagnostics.getAvailableRoutines() =&gt; Promise&lt;GetAvailableRoutinesResponse&gt;</pre>
+<h4 id="released-in-chrome-version">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permission">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="getroutineupdate">getRoutineUpdate()</h3>
+<pre>chrome.os.diagnostics.getRoutineUpdate(
+  request: GetRoutineUpdateRequest,
+) =&gt; Promise&lt;GetRoutineUpdateResponse&gt;</pre>
+<h4 id="released-in-chrome-version-1">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permission-1">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runacpowerroutine">runAcPowerRoutine()</h3>
+<pre>chrome.os.diagnostics.runAcPowerRoutine(
+  request: RunAcPowerRoutineRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-2">Released in Chrome version</h4>
+<p>M105</p>
+<h4 id="required-permission-2">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runaudiodriverroutine">runAudioDriverRoutine()</h3>
+<pre>chrome.os.diagnostics.runAudioDriverRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-3">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permission-3">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runbatterycapacityroutine">runBatteryCapacityRoutine()</h3>
+<pre>chrome.os.diagnostics.runBatteryCapacityRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-4">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permission-4">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runbatterychargeroutine">runBatteryChargeRoutine()</h3>
+<pre>chrome.os.diagnostics.runBatteryChargeRoutine(
+  request: RunBatteryChargeRoutineRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-5">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permission-5">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runbatterydischargeroutine">runBatteryDischargeRoutine()</h3>
+<pre>chrome.os.diagnostics.runBatteryDischargeRoutine(
+  request: RunBatteryDischargeRoutineRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-6">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permission-6">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runbatteryhealthroutine">runBatteryHealthRoutine()</h3>
+<pre>chrome.os.diagnostics.runBatteryHealthRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-7">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permission-7">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runbluetoothdiscoveryroutine">runBluetoothDiscoveryRoutine()</h3>
+<pre>chrome.os.diagnostics.runBluetoothDiscoveryRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-8">Released in Chrome version</h4>
+<p>M118</p>
+<h4 id="required-permission-8">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runbluetoothpairingroutine">runBluetoothPairingRoutine()</h3>
+<pre>chrome.os.diagnostics.runBluetoothPairingRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-9">Released in Chrome version</h4>
+<p>M118</p>
+<h4 id="required-permission-9">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+<li><code>os.bluetooth_peripherals_info</code></li>
+</ul>
+<h3 id="runbluetoothpowerroutine">runBluetoothPowerRoutine()</h3>
+<pre>chrome.os.diagnostics.runBluetoothPowerRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-10">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permission-10">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runbluetoothscanningroutine">runBluetoothScanningRoutine()</h3>
+<pre>chrome.os.diagnostics.runBluetoothScanningRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-11">Released in Chrome version</h4>
+<p>M118</p>
+<h4 id="required-permission-11">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+<li><code>os.bluetooth_peripherals_info</code></li>
+</ul>
+<h3 id="runcpucacheroutine">runCpuCacheRoutine()</h3>
+<pre>chrome.os.diagnostics.runCpuCacheRoutine(
+  request: RunCpuRoutineRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-12">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permission-12">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runcpufloatingpointaccuracyroutine">runCpuFloatingPointAccuracyRoutine()</h3>
+<pre>chrome.os.diagnostics.runCpuFloatingPointAccuracyRoutine(
+  request: RunCpuRoutineRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-13">Released in Chrome version</h4>
+<p>M99</p>
+<h4 id="required-permission-13">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runcpuprimesearchroutine">runCpuPrimeSearchRoutine()</h3>
+<pre>chrome.os.diagnostics.runCpuPrimeSearchRoutine(
+  request: RunCpuRoutineRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-14">Released in Chrome version</h4>
+<p>M99</p>
+<h4 id="required-permission-14">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runcpustressroutine">runCpuStressRoutine()</h3>
+<pre>chrome.os.diagnostics.runCpuStressRoutine(
+  request: RunCpuRoutineRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-15">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permission-15">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="rundiskreadroutine">runDiskReadRoutine()</h3>
+<pre>chrome.os.diagnostics.runDiskReadRoutine(
+  request: RunDiskReadRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-16">Released in Chrome version</h4>
+<p>M102</p>
+<h4 id="required-permission-16">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="rundnsresolutionroutine">runDnsResolutionRoutine()</h3>
+<pre>chrome.os.diagnostics.runDnsResolutionRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-17">Released in Chrome version</h4>
+<p>M108</p>
+<h4 id="required-permission-17">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="rundnsresolverpresentroutine">runDnsResolverPresentRoutine()</h3>
+<pre>chrome.os.diagnostics.runDnsResolverPresentRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-18">Released in Chrome version</h4>
+<p>M108</p>
+<h4 id="required-permission-18">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runemmclifetimeroutine">runEmmcLifetimeRoutine()</h3>
+<pre>chrome.os.diagnostics.runEmmcLifetimeRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-19">Released in Chrome version</h4>
+<p>M110</p>
+<h4 id="required-permission-19">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runfanroutine">runFanRoutine()</h3>
+<pre>chrome.os.diagnostics.runFanRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-20">Released in Chrome version</h4>
+<p>M121</p>
+<h4 id="required-permission-20">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runfingerprintaliveroutine">runFingerprintAliveRoutine()</h3>
+<pre>chrome.os.diagnostics.runFingerprintAliveRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-21">Released in Chrome version</h4>
+<p>M110</p>
+<h4 id="required-permission-21">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="rungatewaycanbepingedroutine">runGatewayCanBePingedRoutine()</h3>
+<pre>chrome.os.diagnostics.runGatewayCanBePingedRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-22">Released in Chrome version</h4>
+<p>M108</p>
+<h4 id="required-permission-22">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runlanconnectivityroutine">runLanConnectivityRoutine()</h3>
+<pre>chrome.os.diagnostics.runLanConnectivityRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-23">Released in Chrome version</h4>
+<p>M102</p>
+<h4 id="required-permission-23">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runmemoryroutine">runMemoryRoutine()</h3>
+<pre>chrome.os.diagnostics.runMemoryRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-24">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permission-24">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runnvmeselftestroutine">runNvmeSelfTestRoutine()</h3>
+<pre>chrome.os.diagnostics.runNvmeSelfTestRoutine(
+  request: RunNvmeSelfTestRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-25">Released in Chrome version</h4>
+<p>M110</p>
+<h4 id="required-permission-25">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runpowerbuttonroutine">runPowerButtonRoutine()</h3>
+<pre>chrome.os.diagnostics.runPowerButtonRoutine(
+  request: RunPowerButtonRequest,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-26">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permission-26">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runsensitivesensorroutine">runSensitiveSensorRoutine()</h3>
+<pre>chrome.os.diagnostics.runSensitiveSensorRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-27">Released in Chrome version</h4>
+<p>M110</p>
+<h4 id="required-permission-27">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runsignalstrengthroutine">runSignalStrengthRoutine()</h3>
+<pre>chrome.os.diagnostics.runSignalStrengthRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-28">Released in Chrome version</h4>
+<p>M108</p>
+<h4 id="required-permission-28">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runsmartctlcheckroutine">runSmartctlCheckRoutine()</h3>
+<pre>chrome.os.diagnostics.runSmartctlCheckRoutine(
+  request: RunSmartctlCheckRequest?,
+) =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-29">Released in Chrome version</h4>
+<p>M102</p>
+<p>Optional parameter <code>request</code> added in M110.</p>
+<p>The parameter is only available if &quot;smartctl_check_with_percentage_used&quot; is
+returned from <code>GetAvailableRoutines()</code>.</p>
+<h4 id="required-permission-29">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="runufslifetimeroutine">runUfsLifetimeRoutine()</h3>
+<pre>chrome.os.diagnostics.runUfsLifetimeRoutine() =&gt; Promise&lt;RunRoutineResponse&gt;</pre>
+<h4 id="released-in-chrome-version-30">Released in Chrome version</h4>
+<p>M117.</p>
+<h4 id="required-permission-30">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h1 id="v2-diagnostics-api">V2 Diagnostics API</h1>
+<h2 id="types-1">Types</h2>
+<h3 id="enum-routinewaitingreason">Enum RoutineWaitingReason</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>waiting_to_be_scheduled</td>
+</tr>
+<tr>
+<td>waiting_for_interaction</td>
+</tr>
+</tbody></table>
+<h3 id="enum-exceptionreason">Enum ExceptionReason</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>unexpected</td>
+</tr>
+<tr>
+<td>unsupported</td>
+</tr>
+<tr>
+<td>app_ui_closed</td>
+</tr>
+<tr>
+<td>camera_frontend_not_opened</td>
+</tr>
+</tbody></table>
+<h3 id="enum-memtestertestitemenum">Enum MemtesterTestItemEnum</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>stuck_address</td>
+</tr>
+<tr>
+<td>compare_and</td>
+</tr>
+<tr>
+<td>compare_div</td>
+</tr>
+<tr>
+<td>compare_mul</td>
+</tr>
+<tr>
+<td>compare_or</td>
+</tr>
+<tr>
+<td>compare_sub</td>
+</tr>
+<tr>
+<td>compare_xor</td>
+</tr>
+<tr>
+<td>sequential_increment</td>
+</tr>
+<tr>
+<td>bit_flip</td>
+</tr>
+<tr>
+<td>bit_spread</td>
+</tr>
+<tr>
+<td>block_sequential</td>
+</tr>
+<tr>
+<td>checkerboard</td>
+</tr>
+<tr>
+<td>random_value</td>
+</tr>
+<tr>
+<td>solid_bits</td>
+</tr>
+<tr>
+<td>walking_ones</td>
+</tr>
+<tr>
+<td>walking_zeroes</td>
+</tr>
+<tr>
+<td>eight_bit_writes</td>
+</tr>
+<tr>
+<td>sixteen_bit_writes</td>
+</tr>
+</tbody></table>
+<h3 id="enum-routinesupportstatus">Enum RoutineSupportStatus</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>supported</td>
+</tr>
+<tr>
+<td>unsupported</td>
+</tr>
+</tbody></table>
+<h3 id="routineinitializedinfo">RoutineInitializedInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that entered this state</td>
+</tr>
+</tbody></table>
+<h3 id="enum-networkbandwidthroutinerunningtype">Enum NetworkBandwidthRoutineRunningType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>download</td>
+</tr>
+<tr>
+<td>upload</td>
+</tr>
+</tbody></table>
+<h3 id="networkbandwidthroutinerunninginfo">NetworkBandwidthRoutineRunningInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>type</td>
+<td>NetworkBandwidthRoutineRunningType</td>
+<td>The type of test that routine is running</td>
+</tr>
+<tr>
+<td>speedKbps</td>
+<td>number</td>
+<td>The current network speed in Kbit/s</td>
+</tr>
+</tbody></table>
+<h3 id="routinerunninginfounion">RoutineRunningInfoUnion</h3>
+<p>This is a <a href="#Dictionary_based-union-types">union type</a>. Exactly one field is set.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>networkBandwidth</td>
+<td>NetworkBandwidthRoutineRunningInfo</td>
+<td>Extra detail for a running network bandwidth routine</td>
+</tr>
+</tbody></table>
+<h3 id="routinerunninginfo">RoutineRunningInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that entered this state</td>
+</tr>
+<tr>
+<td>percentage</td>
+<td>number</td>
+<td>Current percentage of the routine status (0-100)</td>
+</tr>
+<tr>
+<td>info</td>
+<td>RoutineRunningInfoUnion</td>
+<td>Extra details about a running routine</td>
+</tr>
+</tbody></table>
+<h3 id="checkledlitupstateinquiry">CheckLedLitUpStateInquiry</h3>
+<p>Details regarding the inquiry to check the LED lit up state. Clients should
+inspect the target LED and report its state using <code>CheckLedLitUpStateReply</code>
+as the argument of <code>replyToRoutineInquiry</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+</table>
+<h3 id="checkkeyboardbacklightstateinquiry">CheckKeyboardBacklightStateInquiry</h3>
+<p>Details regarding the inquiry to check the keyboard backlight LED state. Clients
+should inspect the keyboard backlight and report its state using
+<code>CheckKeyboardBacklightStateReply</code> as the argument of <code>replyToRoutineInquiry</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+</table>
+<h3 id="routineinquiryunion">RoutineInquiryUnion</h3>
+<p>This is a <a href="#Dictionary_based-union-types">union type</a>. Exactly one field is set.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>checkLedLitUpState</td>
+<td>CheckLedLitUpStateInquiry</td>
+<td>See <code>CheckLedLitUpStateInquiry</code>.</td>
+</tr>
+<tr>
+<td>checkKeyboardBacklightState</td>
+<td>CheckKeyboardBacklightStateInquiry</td>
+<td>See <code>CheckKeyboardBacklightStateInquiry</code>.</td>
+</tr>
+</tbody></table>
+<h3 id="routineinteractionunion">RoutineInteractionUnion</h3>
+<p>This is a <a href="#Dictionary_based-union-types">union type</a>. Exactly one field is set.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>inquiry</td>
+<td>RoutineInquiryUnion</td>
+<td>Routine inquiries need to be replied to with the <code>replyToRoutineInquiry</code> method</td>
+</tr>
+</tbody></table>
+<h3 id="routinewaitinginfo">RoutineWaitingInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that entered this state</td>
+</tr>
+<tr>
+<td>percentage</td>
+<td>number</td>
+<td>Current percentage of the routine status (0-100)</td>
+</tr>
+<tr>
+<td>reason</td>
+<td>RoutineWaitingReason</td>
+<td>Reason why the routine waits</td>
+</tr>
+<tr>
+<td>message</td>
+<td>string</td>
+<td>Additional information, may be used to pass instruction or explanation</td>
+</tr>
+<tr>
+<td>interaction</td>
+<td>RoutineInteractionUnion</td>
+<td>The requested interaction. When set, clients must respond to the interaction for the routine to proceed. See <code>RoutineInteractionUnion</code> to learn about how to respond to each interaction.</td>
+</tr>
+</tbody></table>
+<h3 id="routinefinishedinfo">RoutineFinishedInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that entered this state</td>
+</tr>
+<tr>
+<td>hasPassed</td>
+<td>boolean</td>
+<td>Whether the routine finished successfully</td>
+</tr>
+<tr>
+<td>detail</td>
+<td>RoutineFinishedDetailUnion</td>
+<td>Extra details about a finished routine</td>
+</tr>
+</tbody></table>
+<h3 id="exceptioninfo">ExceptionInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that entered this state</td>
+</tr>
+<tr>
+<td>reason</td>
+<td>ExceptionReason</td>
+<td>Reason why the routine threw an exception</td>
+</tr>
+<tr>
+<td>debugMessage</td>
+<td>string</td>
+<td>A human readable message for debugging. Don&#39;t rely on the content because it could change anytime</td>
+</tr>
+</tbody></table>
+<h3 id="routinefinisheddetailunion">RoutineFinishedDetailUnion</h3>
+<p>This is a <a href="#Dictionary_based-union-types">union type</a>. Exactly one field is set.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>memory</td>
+<td>MemoryRoutineFinishedDetail</td>
+<td>Extra detail for a finished memory routine</td>
+</tr>
+<tr>
+<td>fan</td>
+<td>FanRoutineFinishedDetail</td>
+<td>Extra detail for a finished fan routine</td>
+</tr>
+<tr>
+<td>networkBandwidth</td>
+<td>NetworkBandwidthRoutineFinishedDetail</td>
+<td>Extra detail for a finished network bandwidth routine</td>
+</tr>
+<tr>
+<td>cameraFrameAnalysis</td>
+<td>CameraFrameAnalysisRoutineFinishedDetail</td>
+<td>Extra detail for a finished camera frame analysis routine</td>
+</tr>
+</tbody></table>
+<h3 id="memtesterresult">MemtesterResult</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>passedItems</td>
+<td>Array&lt;MemtesterTestItemEnum&gt;</td>
+<td>Passed test items</td>
+</tr>
+<tr>
+<td>failedItems</td>
+<td>Array&lt;MemtesterTestItemEnum&gt;</td>
+<td>Failed test items</td>
+</tr>
+</tbody></table>
+<h3 id="legacymemtesterresult">LegacyMemtesterResult</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>passed_items</td>
+<td>Array&lt;MemtesterTestItemEnum&gt;</td>
+<td>Passed test items</td>
+</tr>
+<tr>
+<td>failed_items</td>
+<td>Array&lt;MemtesterTestItemEnum&gt;</td>
+<td>Failed test items</td>
+</tr>
+</tbody></table>
+<h3 id="memoryroutinefinisheddetail">MemoryRoutineFinishedDetail</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>bytesTested</td>
+<td>number</td>
+<td>Number of bytes tested in the memory routine</td>
+</tr>
+<tr>
+<td>result</td>
+<td>MemtesterResult</td>
+<td>Contains the memtester test results</td>
+</tr>
+</tbody></table>
+<h3 id="legacymemoryroutinefinishedinfo">LegacyMemoryRoutineFinishedInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that entered this state</td>
+</tr>
+<tr>
+<td>has_passed</td>
+<td>boolean</td>
+<td>Whether the routine finished successfully</td>
+</tr>
+<tr>
+<td>bytesTested</td>
+<td>number</td>
+<td>Number of bytes tested in the memory routine</td>
+</tr>
+<tr>
+<td>result</td>
+<td>LegacyMemtesterResult</td>
+<td>Contains the memtester test results</td>
+</tr>
+</tbody></table>
+<h3 id="creatememoryroutinearguments">CreateMemoryRoutineArguments</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>maxTestingMemKib</td>
+<td>number</td>
+<td>An optional field to indicate how much memory should be tested. If the value is null, memory test will run with as much memory as possible</td>
+</tr>
+</tbody></table>
+<h3 id="enum-hardwarepresencestatus">Enum HardwarePresenceStatus</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>matched</td>
+</tr>
+<tr>
+<td>not_matched</td>
+</tr>
+<tr>
+<td>not_configured</td>
+</tr>
+</tbody></table>
+<h3 id="fanroutinefinisheddetail">FanRoutineFinishedDetail</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>passedFanIds</td>
+<td>Array&lt;number&gt;</td>
+<td>The ids of fans that can be controlled</td>
+</tr>
+<tr>
+<td>failedFanIds</td>
+<td>Array&lt;number&gt;</td>
+<td>The ids of fans that cannot be controlled</td>
+</tr>
+<tr>
+<td>fanCountStatus</td>
+<td>HardwarePresenceStatus</td>
+<td>Whether the number of fan probed is matched</td>
+</tr>
+</tbody></table>
+<h3 id="legacyfanroutinefinishedinfo">LegacyFanRoutineFinishedInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that entered this state</td>
+</tr>
+<tr>
+<td>has_passed</td>
+<td>boolean</td>
+<td>Whether the routine finished successfully</td>
+</tr>
+<tr>
+<td>passed_fan_ids</td>
+<td>Array&lt;number&gt;</td>
+<td>The ids of fans that can be controlled</td>
+</tr>
+<tr>
+<td>failed_fan_ids</td>
+<td>Array&lt;number&gt;</td>
+<td>The ids of fans that cannot be controlled</td>
+</tr>
+<tr>
+<td>fan_count_status</td>
+<td>HardwarePresenceStatus</td>
+<td>Whether the number of fan probed is matched</td>
+</tr>
+</tbody></table>
+<h3 id="createfanroutinearguments">CreateFanRoutineArguments</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+</table>
+<h3 id="enum-volumebuttontype">Enum VolumeButtonType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>volume_up</td>
+</tr>
+<tr>
+<td>volume_down</td>
+</tr>
+</tbody></table>
+<h3 id="legacyvolumebuttonroutinefinishedinfo">LegacyVolumeButtonRoutineFinishedInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that entered this state</td>
+</tr>
+<tr>
+<td>has_passed</td>
+<td>boolean</td>
+<td>Whether the routine finished successfully</td>
+</tr>
+</tbody></table>
+<h3 id="legacycreatevolumebuttonroutinearguments">LegacyCreateVolumeButtonRoutineArguments</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>button_type</td>
+<td>VolumeButtonType</td>
+<td>The volume button to be tested</td>
+</tr>
+<tr>
+<td>timeout_seconds</td>
+<td>number</td>
+<td>Length of time to listen to the volume button events. The value should be positive and less or equal to 600 seconds</td>
+</tr>
+</tbody></table>
+<h3 id="createvolumebuttonroutinearguments">CreateVolumeButtonRoutineArguments</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>buttonType</td>
+<td>VolumeButtonType</td>
+<td>The volume button to be tested</td>
+</tr>
+<tr>
+<td>timeoutSeconds</td>
+<td>number</td>
+<td>Length of time to listen to the volume button events. The value should be positive and less or equal to 600 seconds</td>
+</tr>
+</tbody></table>
+<h3 id="createnetworkbandwidthroutinearguments">CreateNetworkBandwidthRoutineArguments</h3>
+<p>Checks the network bandwidth and reports the speed info.</p>
+<p>This routine is supported when <code>oem-name</code> in cros-config is set and not empty
+string. The external service for the routine is not available for the
+unrecognized devices.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+</table>
+<h3 id="networkbandwidthroutinefinisheddetail">NetworkBandwidthRoutineFinishedDetail</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>downloadSpeedKbps</td>
+<td>number</td>
+<td>Average download speed in Kbit/s</td>
+</tr>
+<tr>
+<td>uploadSpeedKbps</td>
+<td>number</td>
+<td>Average upload speed in Kbit/s</td>
+</tr>
+</tbody></table>
+<h3 id="enum-ledname">Enum LedName</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>battery</td>
+</tr>
+<tr>
+<td>power</td>
+</tr>
+<tr>
+<td>adapter</td>
+</tr>
+<tr>
+<td>left</td>
+</tr>
+<tr>
+<td>right</td>
+</tr>
+</tbody></table>
+<h3 id="enum-ledcolor">Enum LedColor</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>red</td>
+</tr>
+<tr>
+<td>green</td>
+</tr>
+<tr>
+<td>blue</td>
+</tr>
+<tr>
+<td>yellow</td>
+</tr>
+<tr>
+<td>white</td>
+</tr>
+<tr>
+<td>amber</td>
+</tr>
+</tbody></table>
+<h3 id="createledlituproutinearguments">CreateLedLitUpRoutineArguments</h3>
+<p>The routine lights up the target LED in the specified color and requests
+the caller to verify the change.</p>
+<p>This routine is supported if and only if the device has a ChromeOS EC.</p>
+<p>When an LED name or LED color is not supported by the EC, it will cause a
+routine exception (by emitting an <code>onRoutineException</code> event) at runtime.</p>
+<p>The routine proceeds with the following steps:</p>
+<ol>
+<li>Set the specified LED with the specified color and enter the waiting
+state with the <code>CheckLedLitUpStateInquiry</code> interaction request.W</li>
+<li>After receiving <code>CheckLedLitUpStateReply</code> with the observed LED state,
+the color of the LED will be reset (back to auto control). Notice that
+there is no timeout so the routine will be in the waiting state
+indefinitely.</li>
+<li>The routine passes if the LED is lit up in the correct color. Otherwise,
+the routine fails.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>name</td>
+<td>LedName</td>
+<td>The LED to be lit up</td>
+</tr>
+<tr>
+<td>color</td>
+<td>LedColor</td>
+<td>The color to be lit up</td>
+</tr>
+</tbody></table>
+<h3 id="createcameraframeanalysisroutinearguments">CreateCameraFrameAnalysisRoutineArguments</h3>
+<p>The routine checks the frames captured by camera. The frontend should ensure the
+camera is opened during the execution of the routine.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+</table>
+<h3 id="createkeyboardbacklightroutinearguments">CreateKeyboardBacklightRoutineArguments</h3>
+<p>This routine checks whether the keyboard backlight can be lit up at any
+brightness level.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+</table>
+<h3 id="enum-cameraframeanalysisissue">Enum CameraFrameAnalysisIssue</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>no_issue</td>
+</tr>
+<tr>
+<td>camera_service_not_available</td>
+</tr>
+<tr>
+<td>blocked_by_privacy_shutter</td>
+</tr>
+<tr>
+<td>lens_are_dirty</td>
+</tr>
+</tbody></table>
+<h3 id="enum-camerasubtestresult">Enum CameraSubtestResult</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>not_run</td>
+</tr>
+<tr>
+<td>passed</td>
+</tr>
+<tr>
+<td>failed</td>
+</tr>
+</tbody></table>
+<h3 id="cameraframeanalysisroutinefinisheddetail">CameraFrameAnalysisRoutineFinishedDetail</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>issue</td>
+<td>CameraFrameAnalysisIssue</td>
+<td>The issue caught by the routine. See the fields for each subtest for their details.</td>
+</tr>
+<tr>
+<td>privacyShutterOpenTest</td>
+<td>CameraSubtestResult</td>
+<td>The result is <code>failed</code> if the len is blocked by the privacy shutter. To mitigate the issue, users are suggested to open the privacy shutter to unveil the len.</td>
+</tr>
+<tr>
+<td>lensNotDirtyTest</td>
+<td>CameraSubtestResult</td>
+<td>The result is <code>failed</code> if the frames are blurred. To mitigate the issue, users are suggested to clean the lens.</td>
+</tr>
+</tbody></table>
+<h3 id="createroutineargumentsunion">CreateRoutineArgumentsUnion</h3>
+<p>This is a <a href="#Dictionary_based-union-types">union type</a>. Exactly one field is set.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Released in Chrome version</th>
+<th>Description</th>
+<th>Additional permission needed to access</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>memory</td>
+<td>CreateMemoryRoutineArguments</td>
+<td>M125</td>
+<td>Arguments to create a memory routine</td>
+<td>None</td>
+</tr>
+<tr>
+<td>volumeButton</td>
+<td>CreateVolumeButtonRoutineArguments</td>
+<td>M125</td>
+<td>Arguments to create a volume button routine</td>
+<td>None</td>
+</tr>
+<tr>
+<td>fan</td>
+<td>CreateFanRoutineArguments</td>
+<td>M125</td>
+<td>Arguments to create a fan routine</td>
+<td>None</td>
+</tr>
+<tr>
+<td>networkBandwidth</td>
+<td>CreateNetworkBandwidthRoutineArguments</td>
+<td>M125</td>
+<td>Arguments to create a network bandwidth routine</td>
+<td><code>os.diagnostics.network_info_mlab</code></td>
+</tr>
+<tr>
+<td>ledLitUp</td>
+<td>CreateLedLitUpRoutineArguments</td>
+<td>M125</td>
+<td>Arguments to create a LED lit up routine</td>
+<td>None</td>
+</tr>
+<tr>
+<td>cameraFrameAnalysis</td>
+<td>CreateCameraFrameAnalysisRoutineArguments</td>
+<td>M129</td>
+<td>Arguments to create a camera frame analysis routine</td>
+<td>None</td>
+</tr>
+<tr>
+<td>keyboardBacklight</td>
+<td>CreateKeyboardBacklightRoutineArguments</td>
+<td>M128</td>
+<td>Arguments to create a keyboard backlight routine</td>
+<td>None</td>
+</tr>
+</tbody></table>
+<h3 id="createroutineresponse">CreateRoutineResponse</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that was just created</td>
+</tr>
+</tbody></table>
+<h3 id="routinesupportstatusinfo">RoutineSupportStatusInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>status</td>
+<td>RoutineSupportStatus</td>
+<td>Whether a routine with the provided arguments is supported or unsupported</td>
+</tr>
+</tbody></table>
+<h3 id="startroutinerequest">StartRoutineRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that shall be created</td>
+</tr>
+</tbody></table>
+<h3 id="enum-ledlitupstate">Enum LedLitUpState</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>correct_color</td>
+</tr>
+<tr>
+<td>not_lit_up</td>
+</tr>
+</tbody></table>
+<h3 id="enum-keyboardbacklightstate">Enum KeyboardBacklightState</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ok</td>
+</tr>
+<tr>
+<td>any_not_lit_up</td>
+</tr>
+</tbody></table>
+<h3 id="checkledlitupstatereply">CheckLedLitUpStateReply</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>state</td>
+<td>LedLitUpState</td>
+<td>State of the target LED</td>
+</tr>
+</tbody></table>
+<h3 id="checkkeyboardbacklightstatereply">CheckKeyboardBacklightStateReply</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>state</td>
+<td>KeyboardBacklightState</td>
+<td>State of the keyboard backlight LED</td>
+</tr>
+</tbody></table>
+<h3 id="routineinquiryreplyunion">RoutineInquiryReplyUnion</h3>
+<p>This is a <a href="#Dictionary_based-union-types">union type</a>. Exactly one field is set.</p>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that shall be replied</td>
+</tr>
+<tr>
+<td>checkLedLitUpState</td>
+<td>CheckLedLitUpStateReply</td>
+<td>Reply to a <code>CheckLedLitUpStateInquiry</code></td>
+</tr>
+<tr>
+<td>checkKeyboardBacklightState</td>
+<td>CheckKeyboardBacklightStateReply</td>
+<td>Reply to a <code>CheckKeyboardBacklightStateInquiry</code></td>
+</tr>
+</tbody></table>
+<h3 id="replytoroutineinquiryrequest">ReplyToRoutineInquiryRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that shall be replied</td>
+</tr>
+<tr>
+<td>reply</td>
+<td>RoutineInquiryReplyUnion</td>
+<td>Reply to an inquiry in the routine waiting info</td>
+</tr>
+</tbody></table>
+<h3 id="cancelroutinerequest">CancelRoutineRequest</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uuid</td>
+<td>string</td>
+<td>UUID of the routine that shall be cancelled</td>
+</tr>
+</tbody></table>
+<h2 id="functions-1">Functions</h2>
+<h3 id="cancelroutine">cancelRoutine()</h3>
+<pre>chrome.os.diagnostics.cancelRoutine(
+  request: CancelRoutineRequest,
+) =&gt; Promise&lt;void&gt;</pre>
+<p>Stops executing the routine identified by <code>UUID</code> and removes all related
+resources from the system.</p>
+<h4 id="released-in-chrome-version-31">Released in Chrome version</h4>
+<p>M119</p>
+<h4 id="required-permission-31">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="createroutine">createRoutine()</h3>
+<pre>chrome.os.diagnostics.createRoutine(
+  args: CreateRoutineArgumentsUnion,
+) =&gt; Promise&lt;CreateRoutineResponse&gt;</pre>
+<p>Create a routine with <code>CreateRoutineArgumentsUnion</code>. Exactly one routine should
+be set in <code>CreateRoutineArgumentsUnion</code>.</p>
+<h4 id="released-in-chrome-version-32">Released in Chrome version</h4>
+<p>M125</p>
+<h4 id="required-permission-32">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="isroutineargumentsupported">isRoutineArgumentSupported()</h3>
+<pre>chrome.os.diagnostics.isRoutineArgumentSupported(
+  args: CreateRoutineArgumentsUnion,
+) =&gt; Promise&lt;RoutineSupportStatusInfo&gt;</pre>
+<p>Checks whether a certain <code>CreateRoutineArgumentsUnion</code> is supported on the
+platform. Exactly one routine should be set in <code>CreateRoutineArgumentsUnion</code>.</p>
+<h4 id="released-in-chrome-version-33">Released in Chrome version</h4>
+<p>M125</p>
+<h4 id="required-permission-33">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="replytoroutineinquiry">replyToRoutineInquiry()</h3>
+<pre>chrome.os.diagnostics.replyToRoutineInquiry(
+  request: ReplyToRoutineInquiryRequest,
+) =&gt; Promise&lt;void&gt;</pre>
+<p>Replies to a routine inquiry. This can only work when the routine with <code>UUID</code> is
+in the waiting state and has set an inquiry in the waiting info.</p>
+<h4 id="released-in-chrome-version-34">Released in Chrome version</h4>
+<p>M125</p>
+<h4 id="required-permission-34">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="startroutine">startRoutine()</h3>
+<pre>chrome.os.diagnostics.startRoutine(
+  request: StartRoutineRequest,
+) =&gt; Promise&lt;void&gt;</pre>
+<p>Starts execution of a routine. This can only be expected to work after the
+<code>onRoutineInitialized</code> event was emitted for the routine with <code>UUID</code>.</p>
+<h4 id="released-in-chrome-version-35">Released in Chrome version</h4>
+<p>M119</p>
+<h4 id="required-permission-35">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="deprecated-createfanroutine">(Deprecated) createFanRoutine()</h3>
+<pre>chrome.os.diagnostics.createFanRoutine(
+  args: CreateFanRoutineArguments,
+) =&gt; Promise&lt;CreateRoutineResponse&gt;</pre>
+<p>Create a fan routine.</p>
+<h4 id="released-in-chrome-version-36">Released in Chrome version</h4>
+<p>M121</p>
+<p>Deprecated in M125, use <code>createRoutine()</code> with a <code>fan</code> arg.</p>
+<h4 id="required-permission-36">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="deprecated-creatememoryroutine">(Deprecated) createMemoryRoutine()</h3>
+<pre>chrome.os.diagnostics.createMemoryRoutine(
+  args: CreateMemoryRoutineArguments,
+) =&gt; Promise&lt;CreateRoutineResponse&gt;</pre>
+<p>Create a memory routine.</p>
+<h4 id="released-in-chrome-version-37">Released in Chrome version</h4>
+<p>M119</p>
+<p>Deprecated in M125, use <code>createRoutine()</code> with a <code>memory</code> arg.</p>
+<h4 id="required-permission-37">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="deprecated-createvolumebuttonroutine">(Deprecated) createVolumeButtonRoutine()</h3>
+<pre>chrome.os.diagnostics.createVolumeButtonRoutine(
+  args: LegacyCreateVolumeButtonRoutineArguments,
+) =&gt; Promise&lt;CreateRoutineResponse&gt;</pre>
+<p>Create a volume button routine.</p>
+<h4 id="released-in-chrome-version-38">Released in Chrome version</h4>
+<p>M121</p>
+<p>Deprecated in M125, use <code>createRoutine()</code> with a <code>volumeButton</code> arg.</p>
+<h4 id="required-permission-38">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="deprecated-isfanroutineargumentsupported">(Deprecated) isFanRoutineArgumentSupported()</h3>
+<pre>chrome.os.diagnostics.isFanRoutineArgumentSupported(
+  args: CreateFanRoutineArguments,
+) =&gt; Promise&lt;RoutineSupportStatusInfo&gt;</pre>
+<p>Checks whether a certain <code>CreateFanRoutineArguments</code> is supported on the
+platform.</p>
+<h4 id="released-in-chrome-version-39">Released in Chrome version</h4>
+<p>M121</p>
+<p>Deprecated in M125, use <code>isRoutineArgumentSupported()</code> with a <code>fan</code> arg.</p>
+<h4 id="required-permission-39">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="deprecated-ismemoryroutineargumentsupported">(Deprecated) isMemoryRoutineArgumentSupported()</h3>
+<pre>chrome.os.diagnostics.isMemoryRoutineArgumentSupported(
+  args: CreateMemoryRoutineArguments,
+) =&gt; Promise&lt;RoutineSupportStatusInfo&gt;</pre>
+<p>Checks whether a certain <code>CreateMemoryRoutineArguments</code> is supported on the
+platform.</p>
+<h4 id="released-in-chrome-version-40">Released in Chrome version</h4>
+<p>M119</p>
+<p>Deprecated in M125, use <code>isRoutineArgumentSupported()</code> with a <code>memory</code> arg.</p>
+<h4 id="required-permission-40">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="deprecated-isvolumebuttonroutineargumentsupported">(Deprecated) isVolumeButtonRoutineArgumentSupported()</h3>
+<pre>chrome.os.diagnostics.isVolumeButtonRoutineArgumentSupported(
+  args: LegacyCreateVolumeButtonRoutineArguments,
+) =&gt; Promise&lt;RoutineSupportStatusInfo&gt;</pre>
+<p>Checks whether a certain <code>LegacyCreateVolumeButtonRoutineArguments</code> is supported
+on the platform.</p>
+<h4 id="released-in-chrome-version-41">Released in Chrome version</h4>
+<p>M121</p>
+<p>Deprecated in M125, use <code>isRoutineArgumentSupported()</code> with a <code>volumeButton</code>
+arg.</p>
+<h4 id="required-permission-41">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h2 id="events">Events</h2>
+<h3 id="onroutineexception">onRoutineException</h3>
+<pre>chrome.os.diagnostics.onRoutineException(
+  function(ExceptionInfo),
+)</pre>
+<p>Fired when an exception occurs. The error passed in <code>ExceptionInfo</code> is
+non-recoverable.</p>
+<h4 id="released-in-chrome-version-42">Released in Chrome version</h4>
+<p>M119</p>
+<h4 id="required-permission-42">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="onroutinefinished">onRoutineFinished</h3>
+<pre>chrome.os.diagnostics.onRoutineFinished(
+  function(RoutineFinishedInfo),
+)</pre>
+<p>Fired when a routine finishes.</p>
+<h4 id="released-in-chrome-version-43">Released in Chrome version</h4>
+<p>M125</p>
+<h4 id="required-permission-43">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="onroutineinitialized">onRoutineInitialized</h3>
+<pre>chrome.os.diagnostics.onRoutineInitialized(
+  function(RoutineInitializedInfo),
+)</pre>
+<p>Fired when a routine is initialized.</p>
+<h4 id="released-in-chrome-version-44">Released in Chrome version</h4>
+<p>M119</p>
+<h4 id="required-permission-44">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="onroutinerunning">onRoutineRunning</h3>
+<pre>chrome.os.diagnostics.onRoutineRunning(
+  function(RoutineRunningInfo),
+)</pre>
+<p>Fired when a routine starts running. This can happen in two situations:</p>
+<ol>
+<li><code>startRoutine</code> was called and the routine successfully started execution.</li>
+<li>The routine exited the &quot;waiting&quot; state and returned to running.</li>
+</ol>
+<h4 id="released-in-chrome-version-45">Released in Chrome version</h4>
+<p>M119</p>
+<h4 id="required-permission-45">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="onroutinewaiting">onRoutineWaiting</h3>
+<pre>chrome.os.diagnostics.onRoutineWaiting(
+  function(RoutineWaitingInfo),
+)</pre>
+<p>Fired when a routine stops execution and waits for an action, for example, user
+interaction. <code>RoutineWaitingInfo</code> contains information about what the routine is
+waiting for.</p>
+<h4 id="released-in-chrome-version-46">Released in Chrome version</h4>
+<p>M119</p>
+<h4 id="required-permission-46">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="deprecated-onfanroutinefinished">(Deprecated) onFanRoutineFinished</h3>
+<pre>chrome.os.diagnostics.onFanRoutineFinished(
+  function(LegacyFanRoutineFinishedInfo),
+)</pre>
+<p>Fired when a fan routine finishes.</p>
+<h4 id="released-in-chrome-version-47">Released in Chrome version</h4>
+<p>M121</p>
+<p>Deprecated in M125, use <code>onRoutineFinished</code>.</p>
+<h4 id="required-permission-47">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="deprecated-onmemoryroutinefinished">(Deprecated) onMemoryRoutineFinished</h3>
+<pre>chrome.os.diagnostics.onMemoryRoutineFinished(
+  function(LegacyMemoryRoutineFinishedInfo),
+)</pre>
+<p>Fired when a memory routine finishes.</p>
+<h4 id="released-in-chrome-version-48">Released in Chrome version</h4>
+<p>M119</p>
+<p>Deprecated in M125, use <code>onRoutineFinished</code>.</p>
+<h4 id="required-permission-48">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h3 id="deprecated-onvolumebuttonroutinefinished">(Deprecated) onVolumeButtonRoutineFinished</h3>
+<pre>chrome.os.diagnostics.onVolumeButtonRoutineFinished(
+  function(LegacyVolumeButtonRoutineFinishedInfo),
+)</pre>
+<p>Fired when a volume button routine finishes.</p>
+<h4 id="released-in-chrome-version-49">Released in Chrome version</h4>
+<p>M121</p>
+<p>Deprecated in M125, use <code>onRoutineFinished</code>.</p>
+<h4 id="required-permission-49">Required permission</h4>
+<ul>
+<li><code>os.diagnostics</code></li>
+</ul>
+<h1 id="events-1">Events</h1>
+<h2 id="types-2">Types</h2>
+<h3 id="enum-eventcategory">Enum EventCategory</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>audio_jack</td>
+</tr>
+<tr>
+<td>lid</td>
+</tr>
+<tr>
+<td>usb</td>
+</tr>
+<tr>
+<td>sd_card</td>
+</tr>
+<tr>
+<td>power</td>
+</tr>
+<tr>
+<td>keyboard_diagnostic</td>
+</tr>
+<tr>
+<td>stylus_garage</td>
+</tr>
+<tr>
+<td>touchpad_button</td>
+</tr>
+<tr>
+<td>touchpad_touch</td>
+</tr>
+<tr>
+<td>touchpad_connected</td>
+</tr>
+<tr>
+<td>touchscreen_touch</td>
+</tr>
+<tr>
+<td>touchscreen_connected</td>
+</tr>
+<tr>
+<td>external_display</td>
+</tr>
+<tr>
+<td>stylus_touch</td>
+</tr>
+<tr>
+<td>stylus_connected</td>
+</tr>
+</tbody></table>
+<h3 id="enum-eventsupportstatus">Enum EventSupportStatus</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>supported</td>
+</tr>
+<tr>
+<td>unsupported</td>
+</tr>
+</tbody></table>
+<h3 id="eventsupportstatusinfo">EventSupportStatusInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>status</td>
+<td>EventSupportStatus</td>
+<td>Support status of an event</td>
+</tr>
+</tbody></table>
+<h3 id="enum-audiojackevent">Enum AudioJackEvent</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>connected</td>
+</tr>
+<tr>
+<td>disconnected</td>
+</tr>
+</tbody></table>
+<h3 id="enum-audiojackdevicetype">Enum AudioJackDeviceType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>headphone</td>
+</tr>
+<tr>
+<td>microphone</td>
+</tr>
+</tbody></table>
+<h3 id="audiojackeventinfo">AudioJackEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>event</td>
+<td>AudioJackEvent</td>
+<td>The event that occurred</td>
+</tr>
+<tr>
+<td>deviceType</td>
+<td>AudioJackDeviceType</td>
+<td>The device type of</td>
+</tr>
+</tbody></table>
+<h3 id="enum-lidevent">Enum LidEvent</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>closed</td>
+</tr>
+<tr>
+<td>opened</td>
+</tr>
+</tbody></table>
+<h3 id="lideventinfo">LidEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>event</td>
+<td>LidEvent</td>
+<td>The event that occurred</td>
+</tr>
+</tbody></table>
+<h3 id="enum-keyboardconnectiontype">Enum KeyboardConnectionType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>internal</td>
+</tr>
+<tr>
+<td>usb</td>
+</tr>
+<tr>
+<td>bluetooth</td>
+</tr>
+<tr>
+<td>unknown</td>
+</tr>
+</tbody></table>
+<h3 id="enum-physicalkeyboardlayout">Enum PhysicalKeyboardLayout</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>chrome_os</td>
+</tr>
+</tbody></table>
+<h3 id="enum-mechanicalkeyboardlayout">Enum MechanicalKeyboardLayout</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>ansi</td>
+</tr>
+<tr>
+<td>iso</td>
+</tr>
+<tr>
+<td>jis</td>
+</tr>
+</tbody></table>
+<h3 id="enum-keyboardnumberpadpresence">Enum KeyboardNumberPadPresence</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>present</td>
+</tr>
+<tr>
+<td>not_present</td>
+</tr>
+</tbody></table>
+<h3 id="enum-keyboardtoprowkey">Enum KeyboardTopRowKey</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>no_key</td>
+</tr>
+<tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>back</td>
+</tr>
+<tr>
+<td>forward</td>
+</tr>
+<tr>
+<td>refresh</td>
+</tr>
+<tr>
+<td>fullscreen</td>
+</tr>
+<tr>
+<td>overview</td>
+</tr>
+<tr>
+<td>screenshot</td>
+</tr>
+<tr>
+<td>screen_brightness_down</td>
+</tr>
+<tr>
+<td>screen_brightness_up</td>
+</tr>
+<tr>
+<td>privacy_screen_toggle</td>
+</tr>
+<tr>
+<td>microphone_mute</td>
+</tr>
+<tr>
+<td>volume_mute</td>
+</tr>
+<tr>
+<td>volume_down</td>
+</tr>
+<tr>
+<td>volume_up</td>
+</tr>
+<tr>
+<td>keyboard_backlight_toggle</td>
+</tr>
+<tr>
+<td>keyboard_backlight_down</td>
+</tr>
+<tr>
+<td>keyboard_backlight_up</td>
+</tr>
+<tr>
+<td>next_track</td>
+</tr>
+<tr>
+<td>previous_track</td>
+</tr>
+<tr>
+<td>play_pause</td>
+</tr>
+<tr>
+<td>screen_mirror</td>
+</tr>
+<tr>
+<td>delete</td>
+</tr>
+</tbody></table>
+<h3 id="enum-keyboardtoprightkey">Enum KeyboardTopRightKey</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>power</td>
+</tr>
+<tr>
+<td>lock</td>
+</tr>
+<tr>
+<td>control_panel</td>
+</tr>
+</tbody></table>
+<h3 id="keyboardinfo">KeyboardInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>number</td>
+<td>The number of the keyboard&#39;s /dev/input/event* node</td>
+</tr>
+<tr>
+<td>connectionType</td>
+<td>KeyboardConnectionType</td>
+<td>The keyboard&#39;s connection type</td>
+</tr>
+<tr>
+<td>name</td>
+<td>string</td>
+<td>The keyboard&#39;s name</td>
+</tr>
+<tr>
+<td>physicalLayout</td>
+<td>PhysicalKeyboardLayout</td>
+<td>The keyboard&#39;s physical layout</td>
+</tr>
+<tr>
+<td>mechanicalLayout</td>
+<td>MechanicalKeyboardLayout</td>
+<td>The keyboard&#39;s mechanical layout</td>
+</tr>
+<tr>
+<td>regionCode</td>
+<td>string</td>
+<td>For internal keyboards, the region code of the device (from which the visual layout can be determined)</td>
+</tr>
+<tr>
+<td>numberPadPresent</td>
+<td>KeyboardNumberPadPresence</td>
+<td>Whether the keyboard has a number pad or not</td>
+</tr>
+<tr>
+<td>topRowKeys</td>
+<td>Array&lt;KeyboardTopRowKey&gt;</td>
+<td>List of ChromeOS specific action keys in the top row. This list excludes the left-most Escape key, and right-most key (usually Power/Lock). If a keyboard has F11-F15 keys beyond the rightmost action key, they may not be included in this list (even as &quot;none&quot;)</td>
+</tr>
+<tr>
+<td>topRightKey</td>
+<td>KeyboardTopRightKey</td>
+<td>For CrOS keyboards, the glyph shown on the key at the far right end of the top row</td>
+</tr>
+<tr>
+<td>hasAssistantKey</td>
+<td>boolean</td>
+<td>Only applicable on ChromeOS keyboards</td>
+</tr>
+</tbody></table>
+<h3 id="keyboarddiagnosticeventinfo">KeyboardDiagnosticEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>keyboardInfo</td>
+<td>KeyboardInfo</td>
+<td>The keyboard which has been tested</td>
+</tr>
+<tr>
+<td>testedKeys</td>
+<td>Array&lt;number&gt;</td>
+<td>Keys which have been tested. It is an array of the evdev key code</td>
+</tr>
+<tr>
+<td>testedTopRowKeys</td>
+<td>Array&lt;number&gt;</td>
+<td>Top row keys which have been tested. They are positions of the key on the top row after escape (0 is leftmost, 1 is next to the right, etc.).  Generally, 0 is F1, in some fashion. NOTE: This position may exceed the length of keyboard_info-&gt;top_row_keys, for external keyboards with keys in the F11-F15 range</td>
+</tr>
+</tbody></table>
+<h3 id="enum-usbevent">Enum UsbEvent</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>connected</td>
+</tr>
+<tr>
+<td>disconnected</td>
+</tr>
+</tbody></table>
+<h3 id="usbeventinfo">UsbEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>vendor</td>
+<td>string</td>
+<td>Vendor name</td>
+</tr>
+<tr>
+<td>name</td>
+<td>string</td>
+<td>The device&#39;s name</td>
+</tr>
+<tr>
+<td>vid</td>
+<td>number</td>
+<td>Vendor ID of the device</td>
+</tr>
+<tr>
+<td>pid</td>
+<td>number</td>
+<td>Product ID of the device</td>
+</tr>
+<tr>
+<td>categories</td>
+<td>Array&lt;string&gt;</td>
+<td>USB device categories: <a href="https://www.usb.org/defined-class-codes">https://www.usb.org/defined-class-codes</a></td>
+</tr>
+<tr>
+<td>event</td>
+<td>UsbEvent</td>
+<td>The event that occurred</td>
+</tr>
+</tbody></table>
+<h3 id="enum-externaldisplayevent">Enum ExternalDisplayEvent</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>connected</td>
+</tr>
+<tr>
+<td>disconnected</td>
+</tr>
+</tbody></table>
+<h3 id="externaldisplayeventinfo">ExternalDisplayEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>event</td>
+<td>ExternalDisplayEvent</td>
+<td>The event that occurred</td>
+</tr>
+<tr>
+<td>display_info</td>
+<td>ExternalDisplayInfo</td>
+<td>The information related to the plugged in external display</td>
+</tr>
+</tbody></table>
+<h3 id="enum-sdcardevent">Enum SdCardEvent</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>connected</td>
+</tr>
+<tr>
+<td>disconnected</td>
+</tr>
+</tbody></table>
+<h3 id="sdcardeventinfo">SdCardEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>event</td>
+<td>SdCardEvent</td>
+<td>The event that occurred</td>
+</tr>
+</tbody></table>
+<h3 id="enum-powerevent">Enum PowerEvent</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ac_inserted</td>
+</tr>
+<tr>
+<td>ac_removed</td>
+</tr>
+<tr>
+<td>os_suspend</td>
+</tr>
+<tr>
+<td>os_resume</td>
+</tr>
+</tbody></table>
+<h3 id="powereventinfo">PowerEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>event</td>
+<td>PowerEvent</td>
+<td>The event that occurred</td>
+</tr>
+</tbody></table>
+<h3 id="enum-stylusgarageevent">Enum StylusGarageEvent</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>inserted</td>
+</tr>
+<tr>
+<td>removed</td>
+</tr>
+</tbody></table>
+<h3 id="stylusgarageeventinfo">StylusGarageEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>event</td>
+<td>StylusGarageEvent</td>
+<td>The event that occurred</td>
+</tr>
+</tbody></table>
+<h3 id="enum-inputtouchbutton">Enum InputTouchButton</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>left</td>
+</tr>
+<tr>
+<td>middle</td>
+</tr>
+<tr>
+<td>right</td>
+</tr>
+</tbody></table>
+<h3 id="enum-inputtouchbuttonstate">Enum InputTouchButtonState</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>pressed</td>
+</tr>
+<tr>
+<td>released</td>
+</tr>
+</tbody></table>
+<h3 id="touchpadbuttoneventinfo">TouchpadButtonEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>button</td>
+<td>InputTouchButton</td>
+<td>The input button that was interacted with</td>
+</tr>
+<tr>
+<td>state</td>
+<td>InputTouchButtonState</td>
+<td>The new state of the button</td>
+</tr>
+</tbody></table>
+<h3 id="touchpointinfo">TouchPointInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>trackingId</td>
+<td>number</td>
+<td>An id to track an initiated contact throughout its life cycle</td>
+</tr>
+<tr>
+<td>x</td>
+<td>number</td>
+<td>The x position</td>
+</tr>
+<tr>
+<td>y</td>
+<td>number</td>
+<td>The y position</td>
+</tr>
+<tr>
+<td>pressure</td>
+<td>number</td>
+<td>The pressure applied to the touch contact. The value ranges from 0 to <code>max_pressure</code> as defined in <code>TouchpadConnectedEventInfo</code> and <code>TouchscreenConnectedEventInfo</code></td>
+</tr>
+<tr>
+<td>touchMajor</td>
+<td>number</td>
+<td>The length of the longer dimension of the touch contact</td>
+</tr>
+<tr>
+<td>touchMinor</td>
+<td>number</td>
+<td>The length of the shorter dimension of the touch contact</td>
+</tr>
+</tbody></table>
+<h3 id="touchpadtoucheventinfo">TouchpadTouchEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>touchPoints</td>
+<td>Array&lt;TouchPointInfo&gt;</td>
+<td>The touch points reported by the touchpad</td>
+</tr>
+</tbody></table>
+<h3 id="touchpadconnectedeventinfo">TouchpadConnectedEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>maxX</td>
+<td>number</td>
+<td>The maximum possible x position of touch points</td>
+</tr>
+<tr>
+<td>maxY</td>
+<td>number</td>
+<td>The maximum possible y position of touch points</td>
+</tr>
+<tr>
+<td>maxPressure</td>
+<td>number</td>
+<td>The maximum possible pressure of touch points, or 0 if pressure is not supported</td>
+</tr>
+<tr>
+<td>buttons</td>
+<td>Array&lt;InputTouchButton&gt;</td>
+<td>The supported buttons</td>
+</tr>
+</tbody></table>
+<h3 id="touchscreentoucheventinfo">TouchscreenTouchEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>touchPoints</td>
+<td>Array&lt;TouchPointInfo&gt;</td>
+<td>The touch points reported by the touchscreen</td>
+</tr>
+</tbody></table>
+<h3 id="touchscreenconnectedeventinfo">TouchscreenConnectedEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>maxX</td>
+<td>number</td>
+<td>The maximum possible x position of touch points</td>
+</tr>
+<tr>
+<td>maxY</td>
+<td>number</td>
+<td>The maximum possible y position of touch points</td>
+</tr>
+<tr>
+<td>maxPressure</td>
+<td>number</td>
+<td>The maximum possible pressure of touch points, or 0 if pressure is not supported</td>
+</tr>
+</tbody></table>
+<h3 id="stylustouchpointinfo">StylusTouchPointInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>x</td>
+<td>number</td>
+<td>The x position in the cartesian XY plane. The value ranges from 0 to <code>max_x</code> as defined in <code>StylusConnectedEventInfo</code></td>
+</tr>
+<tr>
+<td>y</td>
+<td>number</td>
+<td>The y position in the cartesian XY plane. The value ranges from 0 to <code>max_y</code> as defined in <code>StylusConnectedEventInfo</code></td>
+</tr>
+<tr>
+<td>pressure</td>
+<td>number</td>
+<td>The pressure applied to the touch contact. The value ranges from 0 to <code>max_pressure</code> as defined in <code>StylusConnectedEventInfo</code></td>
+</tr>
+</tbody></table>
+<h3 id="stylustoucheventinfo">StylusTouchEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>touchPoint</td>
+<td>StylusTouchPointInfo</td>
+<td>The info of the stylus touch point. A null touch point means the stylus leaves the contact</td>
+</tr>
+</tbody></table>
+<h3 id="stylusconnectedeventinfo">StylusConnectedEventInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>maxX</td>
+<td>number</td>
+<td>The maximum possible x position of touch points</td>
+</tr>
+<tr>
+<td>maxY</td>
+<td>number</td>
+<td>The maximum possible y position of touch points</td>
+</tr>
+<tr>
+<td>maxPressure</td>
+<td>number</td>
+<td>The maximum possible pressure of touch points, or 0 if pressure is not supported</td>
+</tr>
+</tbody></table>
+<h2 id="functions-2">Functions</h2>
+<h3 id="iseventsupported">isEventSupported()</h3>
+<pre>chrome.os.events.isEventSupported(
+  category: EventCategory,
+) =&gt; Promise&lt;EventSupportStatusInfo&gt;</pre>
+<p>Checks whether an event is supported. The information returned by this method is
+valid across reboots of the device.</p>
+<h4 id="released-in-chrome-version-50">Released in Chrome version</h4>
+<p>M115</p>
+<h4 id="required-permissions">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="startcapturingevents">startCapturingEvents()</h3>
+<pre>chrome.os.events.startCapturingEvents(
+  category: EventCategory,
+) =&gt; Promise&lt;void&gt;</pre>
+<p>Starts capturing events for <code>EventCategory</code>. After calling this method, an
+extension can expect to be updated about events through invocations of
+<code>on&lt;EventCategory&gt;Event</code>, until either the PWA is closed or
+<code>stopCapturingEvents()</code> is called. Note that an extension is only able to
+subscribe to events if the PWA is currently open.</p>
+<h4 id="released-in-chrome-version-51">Released in Chrome version</h4>
+<p>M115</p>
+<h4 id="required-permissions-1">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="stopcapturingevents">stopCapturingEvents()</h3>
+<pre>chrome.os.events.stopCapturingEvents(
+  category: EventCategory,
+) =&gt; Promise&lt;void&gt;</pre>
+<p>Stops capturing <code>EventCategory</code> events. This means <code>on&lt;EventCategory&gt;Event</code>
+won&#39;t be invoked until <code>startCapturingEvents()</code> is successfully called.</p>
+<h4 id="released-in-chrome-version-52">Released in Chrome version</h4>
+<p>M115</p>
+<h4 id="required-permissions-2">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h2 id="events-2">Events</h2>
+<h3 id="onaudiojackevent">onAudioJackEvent</h3>
+<pre>chrome.os.events.onAudioJackEvent(
+  function(AudioJackEventInfo),
+)</pre>
+<p>Fired when an audio device is plugged in or out.</p>
+<h4 id="released-in-chrome-version-53">Released in Chrome version</h4>
+<p>M115</p>
+<h4 id="required-permissions-3">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="onexternaldisplayevent">onExternalDisplayEvent</h3>
+<pre>chrome.os.events.onExternalDisplayEvent(
+  function(ExternalDisplayEventInfo),
+)</pre>
+<p>Fired when an <code>ExternalDisplay</code> event occurs.</p>
+<h4 id="released-in-chrome-version-54">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-4">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="onkeyboarddiagnosticevent">onKeyboardDiagnosticEvent</h3>
+<pre>chrome.os.events.onKeyboardDiagnosticEvent(
+  function(KeyboardDiagnosticEventInfo),
+)</pre>
+<p>Fired when a keyboard diagnostic has been completed in the first party
+diagnostic tool.</p>
+<h4 id="released-in-chrome-version-55">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-5">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="onlidevent">onLidEvent</h3>
+<pre>chrome.os.events.onLidEvent(
+  function(LidEventInfo),
+)</pre>
+<p>Fired when the device lid is opened or closed.</p>
+<h4 id="released-in-chrome-version-56">Released in Chrome version</h4>
+<p>M115</p>
+<h4 id="required-permissions-6">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="onpowerevent">onPowerEvent</h3>
+<pre>chrome.os.events.onPowerEvent(
+  function(PowerEventInfo),
+)</pre>
+<p>Fired when a <code>Power</code> event occurs.</p>
+<h4 id="released-in-chrome-version-57">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-7">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="onsdcardevent">onSdCardEvent</h3>
+<pre>chrome.os.events.onSdCardEvent(
+  function(SdCardEventInfo),
+)</pre>
+<p>Fired when an <code>SD Card</code> event occurs.</p>
+<h4 id="released-in-chrome-version-58">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-8">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="onstylusconnectedevent">onStylusConnectedEvent</h3>
+<pre>chrome.os.events.onStylusConnectedEvent(
+  function(StylusConnectedEventInfo),
+)</pre>
+<p>Fired when a <code>Stylus Connected</code> event occurs.</p>
+<h4 id="released-in-chrome-version-59">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-9">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="onstylusgarageevent">onStylusGarageEvent</h3>
+<pre>chrome.os.events.onStylusGarageEvent(
+  function(StylusGarageEventInfo),
+)</pre>
+<p>Fired when a <code>Stylus Garage</code> event occurs.</p>
+<h4 id="released-in-chrome-version-60">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-10">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="onstylustouchevent">onStylusTouchEvent</h3>
+<pre>chrome.os.events.onStylusTouchEvent(
+  function(StylusTouchEventInfo),
+)</pre>
+<p>Fired when a <code>Stylus Touch</code> event occurs.</p>
+<h4 id="released-in-chrome-version-61">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-11">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="ontouchpadbuttonevent">onTouchpadButtonEvent</h3>
+<pre>chrome.os.events.onTouchpadButtonEvent(
+  function(TouchpadButtonEventInfo),
+)</pre>
+<p>Fired when a <code>Touchpad Button</code> event occurs.</p>
+<h4 id="released-in-chrome-version-62">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-12">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="ontouchpadconnectedevent">onTouchpadConnectedEvent</h3>
+<pre>chrome.os.events.onTouchpadConnectedEvent(
+  function(TouchpadConnectedEventInfo),
+)</pre>
+<p>Fired when a <code>Touchpad Connected</code> event occurs.</p>
+<h4 id="released-in-chrome-version-63">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-13">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="ontouchpadtouchevent">onTouchpadTouchEvent</h3>
+<pre>chrome.os.events.onTouchpadTouchEvent(
+  function(TouchpadTouchEventInfo),
+)</pre>
+<p>Fired when a <code>Touchpad Touch</code> event occurs.</p>
+<h4 id="released-in-chrome-version-64">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-14">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="ontouchscreenconnectedevent">onTouchscreenConnectedEvent</h3>
+<pre>chrome.os.events.onTouchscreenConnectedEvent(
+  function(TouchscreenConnectedEventInfo),
+)</pre>
+<p>Fired when a <code>Touchscreen Connected</code> event occurs.</p>
+<h4 id="released-in-chrome-version-65">Released in Chrome version</h4>
+<p>M118</p>
+<h4 id="required-permissions-15">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="ontouchscreentouchevent">onTouchscreenTouchEvent</h3>
+<pre>chrome.os.events.onTouchscreenTouchEvent(
+  function(TouchscreenTouchEventInfo),
+)</pre>
+<p>Fired when a <code>Touchscreen Touch</code> event occurs.</p>
+<h4 id="released-in-chrome-version-66">Released in Chrome version</h4>
+<p>M118</p>
+<h4 id="required-permissions-16">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h3 id="onusbevent">onUsbEvent</h3>
+<pre>chrome.os.events.onUsbEvent(
+  function(UsbEventInfo),
+)</pre>
+<p>Fired when a <code>Usb</code> event occurs.</p>
+<h4 id="released-in-chrome-version-67">Released in Chrome version</h4>
+<p>M115</p>
+<h4 id="required-permissions-17">Required permissions</h4>
+<ul>
+<li><code>os.events</code></li>
+</ul>
+<h1 id="telemetry">Telemetry</h1>
+<h2 id="types-3">Types</h2>
+<h3 id="audiooutputnodeinfo">AudioOutputNodeInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>number</td>
+<td>Node id</td>
+</tr>
+<tr>
+<td>name</td>
+<td>string</td>
+<td>The name of this node. For example, &quot;Speaker&quot;</td>
+</tr>
+<tr>
+<td>deviceName</td>
+<td>string</td>
+<td>The name of the device that this node belongs to. For example, &quot;HDA Intel PCH: CA0132 Analog:0,0&quot;</td>
+</tr>
+<tr>
+<td>active</td>
+<td>boolean</td>
+<td>Whether this node is currently used for output. There is one active node for output</td>
+</tr>
+<tr>
+<td>nodeVolume</td>
+<td>number</td>
+<td>The node volume in [0, 100]</td>
+</tr>
+</tbody></table>
+<h3 id="audioinputnodeinfo">AudioInputNodeInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>number</td>
+<td>Node id</td>
+</tr>
+<tr>
+<td>name</td>
+<td>string</td>
+<td>The name of this node. For example, &quot;Internal Mic&quot;</td>
+</tr>
+<tr>
+<td>deviceName</td>
+<td>string</td>
+<td>The name of the device that this node belongs to. For example, &quot;HDA Intel PCH: CA0132 Analog:0,0&quot;</td>
+</tr>
+<tr>
+<td>active</td>
+<td>boolean</td>
+<td>Whether this node is currently used for input. There is one active node for input</td>
+</tr>
+<tr>
+<td>nodeGain</td>
+<td>number</td>
+<td>The input node gain set by UI, the value is in [0, 100]</td>
+</tr>
+</tbody></table>
+<h3 id="audioinfo">AudioInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>outputMute</td>
+<td>boolean</td>
+<td>Is the active output device mute or not</td>
+</tr>
+<tr>
+<td>inputMute</td>
+<td>boolean</td>
+<td>Is the active input device mute or not</td>
+</tr>
+<tr>
+<td>underruns</td>
+<td>number</td>
+<td>Number of underruns</td>
+</tr>
+<tr>
+<td>severeUnderruns</td>
+<td>number</td>
+<td>Number of severe underruns</td>
+</tr>
+<tr>
+<td>outputNodes</td>
+<td>Array&lt;AudioOutputNodeInfo&gt;</td>
+<td>Output nodes</td>
+</tr>
+<tr>
+<td>inputNodes</td>
+<td>Array&lt;AudioInputNodeInfo&gt;</td>
+<td>Input nodes</td>
+</tr>
+</tbody></table>
+<h3 id="batteryinfo">BatteryInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>chargeFull</td>
+<td>number</td>
+<td>Full capacity (Ah)</td>
+</tr>
+<tr>
+<td>chargeFullDesign</td>
+<td>number</td>
+<td>Design capacity (Ah)</td>
+</tr>
+<tr>
+<td>chargeNow</td>
+<td>number</td>
+<td>Battery&#39;s charge (Ah)</td>
+</tr>
+<tr>
+<td>currentNow</td>
+<td>number</td>
+<td>Battery&#39;s current (A)</td>
+</tr>
+<tr>
+<td>cycleCount</td>
+<td>number</td>
+<td>Battery&#39;s cycle count</td>
+</tr>
+<tr>
+<td>manufactureDate</td>
+<td>string</td>
+<td>Manufacturing date in yyyy-mm-dd format. Included when the main battery is Smart</td>
+</tr>
+<tr>
+<td>modelName</td>
+<td>string</td>
+<td>Battery&#39;s model name</td>
+</tr>
+<tr>
+<td>serialNumber</td>
+<td>string</td>
+<td>Battery&#39;s serial number</td>
+</tr>
+<tr>
+<td>status</td>
+<td>string</td>
+<td>Battery&#39;s status (e.g. charging)</td>
+</tr>
+<tr>
+<td>technology</td>
+<td>string</td>
+<td>Used technology in the battery</td>
+</tr>
+<tr>
+<td>temperature</td>
+<td>number</td>
+<td>Temperature in 0.1K. Included when the main battery is Smart</td>
+</tr>
+<tr>
+<td>vendor</td>
+<td>string</td>
+<td>Battery&#39;s manufacturer</td>
+</tr>
+<tr>
+<td>voltageMinDesign</td>
+<td>number</td>
+<td>Desired minimum output voltage</td>
+</tr>
+<tr>
+<td>voltageNow</td>
+<td>number</td>
+<td>Battery&#39;s voltage (V)</td>
+</tr>
+</tbody></table>
+<h3 id="nonremovableblockdeviceinfo">NonRemovableBlockDeviceInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>name</td>
+<td>string</td>
+<td>The name of the block device.</td>
+</tr>
+<tr>
+<td>type</td>
+<td>string</td>
+<td>The type of the block device, (e.g. &quot;MMC&quot;, &quot;NVMe&quot; or &quot;ATA&quot;).</td>
+</tr>
+<tr>
+<td>size</td>
+<td>number</td>
+<td>The device size in bytes.</td>
+</tr>
+</tbody></table>
+<h3 id="nonremovableblockdeviceinforesponse">NonRemovableBlockDeviceInfoResponse</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>deviceInfos</td>
+<td>Array&lt;NonRemovableBlockDeviceInfo&gt;</td>
+<td>The list of block devices.</td>
+</tr>
+</tbody></table>
+<h3 id="enum-cpuarchitectureenum">Enum CpuArchitectureEnum</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>x86_64</td>
+</tr>
+<tr>
+<td>aarch64</td>
+</tr>
+<tr>
+<td>armv7l</td>
+</tr>
+</tbody></table>
+<h3 id="physicalcpuinfo">PhysicalCpuInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>logicalCpus</td>
+<td>Array&lt;LogicalCpuInfo&gt;</td>
+<td>Logical CPUs corresponding to this physical CPU</td>
+</tr>
+<tr>
+<td>modelName</td>
+<td>string</td>
+<td>The CPU model name</td>
+</tr>
+</tbody></table>
+<h3 id="logicalcpuinfo">LogicalCpuInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>cStates</td>
+<td>Array&lt;CpuCStateInfo&gt;</td>
+<td>Information about the logical CPU&#39;s time in various C-states</td>
+</tr>
+<tr>
+<td>idleTimeMs</td>
+<td>number</td>
+<td>Idle time since last boot, in milliseconds</td>
+</tr>
+<tr>
+<td>maxClockSpeedKhz</td>
+<td>number</td>
+<td>The max CPU clock speed in kilohertz</td>
+</tr>
+<tr>
+<td>scalingCurrentFrequencyKhz</td>
+<td>number</td>
+<td>Current frequency the CPU is running at</td>
+</tr>
+<tr>
+<td>scalingMaxFrequencyKhz</td>
+<td>number</td>
+<td>Maximum frequency the CPU is allowed to run at, by policy</td>
+</tr>
+<tr>
+<td>coreId</td>
+<td>number</td>
+<td>The ID of this logical CPU core</td>
+</tr>
+</tbody></table>
+<h3 id="cpucstateinfo">CpuCStateInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>name</td>
+<td>string</td>
+<td>State name</td>
+</tr>
+<tr>
+<td>timeInStateSinceLastBootUs</td>
+<td>number</td>
+<td>Time spent in the state since the last reboot, in microseconds</td>
+</tr>
+</tbody></table>
+<h3 id="cpuinfo">CpuInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>architecture</td>
+<td>CpuArchitectureEnum</td>
+<td>The CPU architecture - it&#39;s assumed all of a device&#39;s CPUs share the same architecture</td>
+</tr>
+<tr>
+<td>numTotalThreads</td>
+<td>number</td>
+<td>Number of total threads available</td>
+</tr>
+<tr>
+<td>physicalCpus</td>
+<td>Array&lt;PhysicalCpuInfo&gt;</td>
+<td>Information about the device&#39;s physical CPUs</td>
+</tr>
+</tbody></table>
+<h3 id="enum-displayinputtype">Enum DisplayInputType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>digital</td>
+</tr>
+<tr>
+<td>analog</td>
+</tr>
+</tbody></table>
+<h3 id="embeddeddisplayinfo">EmbeddedDisplayInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>privacyScreenSupported</td>
+<td>boolean</td>
+<td>Whether a privacy screen is supported or not</td>
+</tr>
+<tr>
+<td>privacyScreenEnabled</td>
+<td>boolean</td>
+<td>Whether a privacy screen is enabled or not</td>
+</tr>
+<tr>
+<td>displayWidth</td>
+<td>number</td>
+<td>Display width in millimeters</td>
+</tr>
+<tr>
+<td>displayHeight</td>
+<td>number</td>
+<td>Display height in millimeters</td>
+</tr>
+<tr>
+<td>resolutionHorizontal</td>
+<td>number</td>
+<td>Horizontal resolution</td>
+</tr>
+<tr>
+<td>resolutionVertical</td>
+<td>number</td>
+<td>Vertical resolution</td>
+</tr>
+<tr>
+<td>refreshRate</td>
+<td>number</td>
+<td>Refresh rate</td>
+</tr>
+<tr>
+<td>manufacturer</td>
+<td>string</td>
+<td>Three letter manufacturer ID</td>
+</tr>
+<tr>
+<td>modelId</td>
+<td>number</td>
+<td>Manufacturer product code</td>
+</tr>
+<tr>
+<td>serialNumber</td>
+<td>number</td>
+<td>32 bits serial number</td>
+</tr>
+<tr>
+<td>manufactureWeek</td>
+<td>number</td>
+<td>Week of manufacture</td>
+</tr>
+<tr>
+<td>manufactureYear</td>
+<td>number</td>
+<td>Year of manufacture</td>
+</tr>
+<tr>
+<td>edidVersion</td>
+<td>string</td>
+<td>EDID version</td>
+</tr>
+<tr>
+<td>inputType</td>
+<td>DisplayInputType</td>
+<td>Digital or analog input</td>
+</tr>
+<tr>
+<td>displayName</td>
+<td>string</td>
+<td>Name of display product</td>
+</tr>
+</tbody></table>
+<h3 id="externaldisplayinfo">ExternalDisplayInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>displayWidth</td>
+<td>number</td>
+<td>Display width in millimeters</td>
+</tr>
+<tr>
+<td>displayHeight</td>
+<td>number</td>
+<td>Display height in millimeters</td>
+</tr>
+<tr>
+<td>resolutionHorizontal</td>
+<td>number</td>
+<td>Horizontal resolution</td>
+</tr>
+<tr>
+<td>resolutionVertical</td>
+<td>number</td>
+<td>Vertical resolution</td>
+</tr>
+<tr>
+<td>refreshRate</td>
+<td>number</td>
+<td>Refresh rate</td>
+</tr>
+<tr>
+<td>manufacturer</td>
+<td>string</td>
+<td>Three letter manufacturer ID</td>
+</tr>
+<tr>
+<td>modelId</td>
+<td>number</td>
+<td>Manufacturer product code</td>
+</tr>
+<tr>
+<td>serialNumber</td>
+<td>number</td>
+<td>32 bits serial number</td>
+</tr>
+<tr>
+<td>manufacture_week</td>
+<td>number</td>
+<td>Week of manufacture</td>
+</tr>
+<tr>
+<td>manufacture_year</td>
+<td>number</td>
+<td>Year of manufacture</td>
+</tr>
+<tr>
+<td>edidVersion</td>
+<td>string</td>
+<td>EDID version</td>
+</tr>
+<tr>
+<td>inputType</td>
+<td>DisplayInputType</td>
+<td>Digital or analog input</td>
+</tr>
+<tr>
+<td>displayName</td>
+<td>string</td>
+<td>Name of display product</td>
+</tr>
+</tbody></table>
+<h3 id="displayinfo">DisplayInfo</h3>
+<h3 id="externaldisplayinfo-1">ExternalDisplayInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>embeddedDisplay</td>
+<td>EmbeddedDisplayInfo</td>
+<td>Embedded display info</td>
+</tr>
+<tr>
+<td>externalDisplays</td>
+<td>Array&lt;ExternalDisplayInfo&gt;</td>
+<td>External display info</td>
+</tr>
+</tbody></table>
+<h3 id="enum-networktype">Enum NetworkType</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>cellular</td>
+</tr>
+<tr>
+<td>ethernet</td>
+</tr>
+<tr>
+<td>tether</td>
+</tr>
+<tr>
+<td>vpn</td>
+</tr>
+<tr>
+<td>wifi</td>
+</tr>
+</tbody></table>
+<h3 id="enum-networkstate">Enum NetworkState</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>uninitialized</td>
+<td>The network type is available but not yet initialized</td>
+</tr>
+<tr>
+<td>disabled</td>
+<td>The network type is available but disabled or disabling</td>
+</tr>
+<tr>
+<td>prohibited</td>
+<td>The network type is prohibited by policy</td>
+</tr>
+<tr>
+<td>not_connected</td>
+<td>The network type is available and enabled or enabling, but no network connection has been established</td>
+</tr>
+<tr>
+<td>connecting</td>
+<td>The network type is available and enabled, and a network connection is in progress</td>
+</tr>
+<tr>
+<td>portal</td>
+<td>The network is in a portal state</td>
+</tr>
+<tr>
+<td>connected</td>
+<td>The network is in a connected state, but connectivity is limited</td>
+</tr>
+<tr>
+<td>online</td>
+<td>The network is connected and online</td>
+</tr>
+</tbody></table>
+<h3 id="networkinfo">NetworkInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>type</td>
+<td>NetworkType</td>
+<td>The type of network interface (wifi, ethernet, etc.)</td>
+</tr>
+<tr>
+<td>state</td>
+<td>NetworkState</td>
+<td>The current state of the network interface (disabled, enabled, online, etc.)</td>
+</tr>
+<tr>
+<td>macAddress</td>
+<td>string</td>
+<td>(Added in M110): The currently assigned mac address. Only available with the permission os.telemetry.network_info.</td>
+</tr>
+<tr>
+<td>ipv4Address</td>
+<td>string</td>
+<td>The currently assigned ipv4Address of the interface</td>
+</tr>
+<tr>
+<td>ipv6Addresses</td>
+<td>Array&lt;string&gt;</td>
+<td>The list of currently assigned ipv6Addresses of the interface</td>
+</tr>
+<tr>
+<td>signalStrength</td>
+<td>number</td>
+<td>The current signal strength in percent</td>
+</tr>
+</tbody></table>
+<h3 id="internetconnectivityinfo">InternetConnectivityInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>networks</td>
+<td>Array&lt;NetworkInfo&gt;</td>
+<td>List of available network interfaces and their configuration</td>
+</tr>
+</tbody></table>
+<h3 id="marketinginfo">MarketingInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>marketingName</td>
+<td>string</td>
+<td>Contents of CrosConfig in <code>/branding/marketing-name</code></td>
+</tr>
+</tbody></table>
+<h3 id="memoryinfo">MemoryInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>totalMemoryKiB</td>
+<td>number</td>
+<td>Total memory, in kilobytes</td>
+</tr>
+<tr>
+<td>freeMemoryKiB</td>
+<td>number</td>
+<td>Free memory, in kilobytes</td>
+</tr>
+<tr>
+<td>availableMemoryKiB</td>
+<td>number</td>
+<td>Available memory, in kilobytes</td>
+</tr>
+<tr>
+<td>pageFaultsSinceLastBoot</td>
+<td>number</td>
+<td>Number of page faults since the last boot</td>
+</tr>
+</tbody></table>
+<h3 id="oemdatainfo">OemDataInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>oemData</td>
+<td>string</td>
+<td>OEM&#39;s specific data. This field is used to store battery serial number by some OEMs</td>
+</tr>
+</tbody></table>
+<h3 id="osversioninfo">OsVersionInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>releaseMilestone</td>
+<td>string</td>
+<td>The release milestone (e.g. &quot;87&quot;)</td>
+</tr>
+<tr>
+<td>buildNumber</td>
+<td>string</td>
+<td>The build number (e.g. &quot;13544&quot;)</td>
+</tr>
+<tr>
+<td>patchNumber</td>
+<td>string</td>
+<td>The build number (e.g. &quot;59.0&quot;)</td>
+</tr>
+<tr>
+<td>releaseChannel</td>
+<td>string</td>
+<td>The release channel (e.g. &quot;stable-channel&quot;)</td>
+</tr>
+</tbody></table>
+<h3 id="vpdinfo">VpdInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>skuNumber</td>
+<td>string</td>
+<td>Device&#39;s SKU number, a.k.a. product number</td>
+</tr>
+<tr>
+<td>serialNumber</td>
+<td>string</td>
+<td>Device&#39;s serial number</td>
+</tr>
+<tr>
+<td>modelName</td>
+<td>string</td>
+<td>Device&#39;s model name</td>
+</tr>
+<tr>
+<td>activateDate</td>
+<td>string</td>
+<td>Device&#39;s activate date: Format: YYYY-WW</td>
+</tr>
+</tbody></table>
+<h3 id="statefulpartitioninfo">StatefulPartitionInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>availableSpace</td>
+<td>number</td>
+<td>The currently available space in the user partition (Bytes)</td>
+</tr>
+<tr>
+<td>totalSpace</td>
+<td>number</td>
+<td>The total space of the user partition (Bytes)</td>
+</tr>
+</tbody></table>
+<h3 id="enum-thermalsensorsource">Enum ThermalSensorSource</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>ec</td>
+</tr>
+<tr>
+<td>sysFs</td>
+</tr>
+</tbody></table>
+<h3 id="thermalsensorinfo">ThermalSensorInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>name</td>
+<td>string</td>
+<td>Name of the thermal sensor</td>
+</tr>
+<tr>
+<td>temperatureCelsius</td>
+<td>number</td>
+<td>Temperature detected by the thermal sensor in celsius</td>
+</tr>
+<tr>
+<td>source</td>
+<td>ThermalSensorSource</td>
+<td>Where the thermal sensor is detected from</td>
+</tr>
+</tbody></table>
+<h3 id="thermalinfo">ThermalInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>thermalSensors</td>
+<td>Array&lt;ThermalSensorInfo&gt;</td>
+<td>An array containing all the information retrieved for thermal sensors</td>
+</tr>
+</tbody></table>
+<h3 id="enum-tpmgscversion">Enum TpmGSCVersion</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>not_gsc</td>
+</tr>
+<tr>
+<td>cr50</td>
+</tr>
+<tr>
+<td>ti5</td>
+</tr>
+</tbody></table>
+<h3 id="tpmversion">TpmVersion</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>gscVersion</td>
+<td>TpmGSCVersion</td>
+<td>The version of Google security chip(GSC), or &quot;not_gsc&quot; if not applicable</td>
+</tr>
+<tr>
+<td>family</td>
+<td>number</td>
+<td>TPM family. We use the TPM 2.0 style encoding (see <a href="https://trustedcomputinggroup.org/wp-content/uploads/TPM-Rev-2.0-Part-1-Architecture-01.07-2014-03-13.pdf">here</a>  for reference), e.g.: <ul><li>TPM 1.2: &quot;1.2&quot; -&gt; 0x312e3200</li><li> TPM 2.0: &quot;2.0&quot; -&gt; 0x322e3000</li></ul></td>
+</tr>
+<tr>
+<td>specLevel</td>
+<td>number</td>
+<td>The level of the specification that is implemented by the TPM</td>
+</tr>
+<tr>
+<td>manufacturer</td>
+<td>number</td>
+<td>A manufacturer specific code</td>
+</tr>
+<tr>
+<td>tpmModel</td>
+<td>number</td>
+<td>The TPM model number</td>
+</tr>
+<tr>
+<td>firmwareVersion</td>
+<td>number</td>
+<td>The current firmware version of the TPM</td>
+</tr>
+<tr>
+<td>vendorSpecific</td>
+<td>string</td>
+<td>Information set by the vendor</td>
+</tr>
+</tbody></table>
+<h3 id="tpmstatus">TpmStatus</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>enabled</td>
+<td>boolean</td>
+<td>Whether a TPM is enabled on the system</td>
+</tr>
+<tr>
+<td>owned</td>
+<td>boolean</td>
+<td>Whether the TPM has been owned</td>
+</tr>
+<tr>
+<td>specLevel</td>
+<td>boolean</td>
+<td>Whether the owner password is still retained (as part of the TPM initialization)</td>
+</tr>
+</tbody></table>
+<h3 id="tpmdictionaryattack">TpmDictionaryAttack</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>counter</td>
+<td>number</td>
+<td>The current dictionary attack counter value</td>
+</tr>
+<tr>
+<td>threshold</td>
+<td>number</td>
+<td>The current dictionary attack counter threshold</td>
+</tr>
+<tr>
+<td>lockoutInEffect</td>
+<td>boolean</td>
+<td>Whether the TPM is currently in some form of dictionary attack lockout</td>
+</tr>
+<tr>
+<td>lockoutSecondsRemaining</td>
+<td>number</td>
+<td>The number of seconds remaining in the lockout (if applicable)</td>
+</tr>
+</tbody></table>
+<h3 id="tpminfo">TpmInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>version</td>
+<td>TpmVersion</td>
+<td>The current version of the Trusted Platform Module (TPM)</td>
+</tr>
+<tr>
+<td>status</td>
+<td>TpmStatus</td>
+<td>The current status of the TPM</td>
+</tr>
+<tr>
+<td>dictionaryAttack</td>
+<td>TpmDictionaryAttack</td>
+<td>TPM dictionary attack (DA) related information</td>
+</tr>
+</tbody></table>
+<h3 id="usbbusinterfaceinfo">UsbBusInterfaceInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>interfaceNumber</td>
+<td>number</td>
+<td>The zero-based number (index) of the interface</td>
+</tr>
+<tr>
+<td>classId</td>
+<td>number</td>
+<td>The class id can be used to classify / identify the usb interfaces. See the usb.ids database for the values (<a href="https://github.com/gentoo/hwids">https://github.com/gentoo/hwids</a>)</td>
+</tr>
+<tr>
+<td>subclassId</td>
+<td>number</td>
+<td>The subclass id can be used to classify / identify the usb interfaces. See the usb.ids database for the values (<a href="https://github.com/gentoo/hwids">https://github.com/gentoo/hwids</a>)</td>
+</tr>
+<tr>
+<td>protocolId</td>
+<td>number</td>
+<td>The protocol id can be used to classify / identify the usb interfaces. See the usb.ids database for the values (<a href="https://github.com/gentoo/hwids">https://github.com/gentoo/hwids</a>)</td>
+</tr>
+<tr>
+<td>driver</td>
+<td>string</td>
+<td>The driver used by the device. This is the name of the matched driver which is registered in the kernel. See &quot;{kernel root}/drivers/&quot; for the list of the built in drivers</td>
+</tr>
+</tbody></table>
+<h3 id="enum-fwupdversionformat">Enum FwupdVersionFormat</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>plain</td>
+<td>An unidentified format text string</td>
+</tr>
+<tr>
+<td>number</td>
+<td>A single integer version number</td>
+</tr>
+<tr>
+<td>pair</td>
+<td>Two AABB.CCDD version numbers</td>
+</tr>
+<tr>
+<td>triplet</td>
+<td>Microsoft-style AA.BB.CCDD version numbers</td>
+</tr>
+<tr>
+<td>quad</td>
+<td>UEFI-style AA.BB.CC.DD version numbers</td>
+</tr>
+<tr>
+<td>bcd</td>
+<td>Binary coded decimal notation</td>
+</tr>
+<tr>
+<td>intelMe</td>
+<td>Intel ME-style bitshifted notation</td>
+</tr>
+<tr>
+<td>intelMe2</td>
+<td>Intel ME-style A.B.CC.DDDD notation</td>
+</tr>
+<tr>
+<td>surfaceLegacy</td>
+<td>Legacy Microsoft Surface 10b.12b.10b</td>
+</tr>
+<tr>
+<td>surface</td>
+<td>Microsoft Surface 8b.16b.8b</td>
+</tr>
+<tr>
+<td>dellBios</td>
+<td>Dell BIOS BB.CC.DD style</td>
+</tr>
+<tr>
+<td>hex</td>
+<td>Hexadecimal 0xAABCCDD style</td>
+</tr>
+</tbody></table>
+<h3 id="fwupdfirmwareversioninfo">FwupdFirmwareVersionInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>version</td>
+<td>string</td>
+<td>The string form of the firmware version</td>
+</tr>
+<tr>
+<td>version_format</td>
+<td>FwupdVersionFormat</td>
+<td>The format for parsing the version string</td>
+</tr>
+</tbody></table>
+<h3 id="enum-usbversion">Enum UsbVersion</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+</tr>
+<tr>
+<td>usb1</td>
+</tr>
+<tr>
+<td>usb2</td>
+</tr>
+<tr>
+<td>usb3</td>
+</tr>
+</tbody></table>
+<h3 id="enum-usbspecspeed">Enum UsbSpecSpeed</h3>
+<p>An enumeration of the usb spec speed in Mbps.
+Source:</p>
+<ol>
+<li><a href="https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-bus-usb">https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-bus-usb</a></li>
+<li><a href="https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-bus-usb">https://www.kernel.org/doc/Documentation/ABI/stable/sysfs-bus-usb</a></li>
+<li><a href="https://en.wikipedia.org/wiki/USB">https://en.wikipedia.org/wiki/USB</a></li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>unknown</td>
+<td>Unknown speed</td>
+</tr>
+<tr>
+<td>n1_5Mbps</td>
+<td>Low speed</td>
+</tr>
+<tr>
+<td>n12Mbps</td>
+<td>Full speed</td>
+</tr>
+<tr>
+<td>n480Mbps</td>
+<td>High Speed</td>
+</tr>
+<tr>
+<td>n5Gbps</td>
+<td>Super Speed</td>
+</tr>
+<tr>
+<td>n10Gbps</td>
+<td>Super Speed+</td>
+</tr>
+<tr>
+<td>n20Gbps</td>
+<td>Super Speed+ Gen 2x2</td>
+</tr>
+</tbody></table>
+<h3 id="usbbusinfo">UsbBusInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>classId</td>
+<td>number</td>
+<td>The class id can be used to classify / identify the usb interfaces. See the usb.ids database for the values (<a href="https://github.com/gentoo/hwids">https://github.com/gentoo/hwids</a>)</td>
+</tr>
+<tr>
+<td>subclassId</td>
+<td>number</td>
+<td>The subclass id can be used to classify / identify the usb interfaces. See the usb.ids database for the values (<a href="https://github.com/gentoo/hwids">https://github.com/gentoo/hwids</a>)</td>
+</tr>
+<tr>
+<td>protocolId</td>
+<td>number</td>
+<td>The protocol id can be used to classify / identify the usb interfaces. See the usb.ids database for the values (<a href="https://github.com/gentoo/hwids">https://github.com/gentoo/hwids</a>)</td>
+</tr>
+<tr>
+<td>vendorId</td>
+<td>number</td>
+<td>The vendor id can be used to classify / identify the usb interfaces. See the usb.ids database for the values (<a href="https://github.com/gentoo/hwids">https://github.com/gentoo/hwids</a>)</td>
+</tr>
+<tr>
+<td>productId</td>
+<td>number</td>
+<td>The product id can be used to classify / identify the usb interfaces. See the usb.ids database for the values (<a href="https://github.com/gentoo/hwids">https://github.com/gentoo/hwids</a>)</td>
+</tr>
+<tr>
+<td>interfaces</td>
+<td>Array&lt;UsbBusInterfaceInfo&gt;</td>
+<td>The usb interfaces under the device. A usb device has at least one interface. Each interface may or may not work independently, based on each device. This allows a usb device to provide multiple features. The interfaces are sorted by the <code>interface_number</code> field</td>
+</tr>
+<tr>
+<td>fwupdFirmwareVersionInfo</td>
+<td>FwupdFirmwareVersionInfo</td>
+<td>The firmware version obtained from fwupd</td>
+</tr>
+<tr>
+<td>version</td>
+<td>UsbVersion</td>
+<td>The recognized usb version. It may not be the highest USB version supported by the hardware</td>
+</tr>
+<tr>
+<td>spec_speed</td>
+<td>UsbSpecSpeed</td>
+<td>The spec usb speed</td>
+</tr>
+</tbody></table>
+<h3 id="usbdevicesinfo">UsbDevicesInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>devices</td>
+<td>Array&lt;UsbBusInfo&gt;</td>
+<td>Information about all connected USB devices</td>
+</tr>
+</tbody></table>
+<h2 id="functions-3">Functions</h2>
+<h3 id="getaudioinfo">getAudioInfo()</h3>
+<pre>chrome.os.telemetry.getAudioInfo() =&gt; Promise&lt;AudioInfo&gt;</pre>
+<h4 id="released-in-chrome-version-68">Released in Chrome version</h4>
+<p>M111</p>
+<h4 id="required-permissions-18">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="getbatteryinfo">getBatteryInfo()</h3>
+<pre>chrome.os.telemetry.getBatteryInfo() =&gt; Promise&lt;BatteryInfo&gt;</pre>
+<h4 id="released-in-chrome-version-69">Released in Chrome version</h4>
+<p>M102</p>
+<h4 id="required-permissions-19">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+<li><code>os.telemetry.serial_number</code> for serial number field</li>
+</ul>
+<h3 id="getcpuinfo">getCpuInfo()</h3>
+<pre>chrome.os.telemetry.getCpuInfo() =&gt; Promise&lt;CpuInfo&gt;</pre>
+<h4 id="released-in-chrome-version-70">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permissions-20">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="getdisplayinfo">getDisplayInfo()</h3>
+<pre>chrome.os.telemetry.getDisplayInfo() =&gt; Promise&lt;DisplayInfo&gt;</pre>
+<h4 id="released-in-chrome-version-71">Released in Chrome version</h4>
+<p>M117</p>
+<h4 id="required-permissions-21">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="getinternetconnectivityinfo">getInternetConnectivityInfo()</h3>
+<pre>chrome.os.telemetry.getInternetConnectivityInfo() =&gt; Promise&lt;InternetConnectivityInfo&gt;</pre>
+<h4 id="released-in-chrome-version-72">Released in Chrome version</h4>
+<p>M108</p>
+<p>Mac address added in M111.</p>
+<h4 id="required-permissions-22">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+<li><code>os.telemetry.network_info</code> for MAC address field</li>
+</ul>
+<h3 id="getmarketinginfo">getMarketingInfo()</h3>
+<pre>chrome.os.telemetry.getMarketingInfo() =&gt; Promise&lt;MarketingInfo&gt;</pre>
+<h4 id="released-in-chrome-version-73">Released in Chrome version</h4>
+<p>M111</p>
+<h4 id="required-permissions-23">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="getmemoryinfo">getMemoryInfo()</h3>
+<pre>chrome.os.telemetry.getMemoryInfo() =&gt; Promise&lt;MemoryInfo&gt;</pre>
+<h4 id="released-in-chrome-version-74">Released in Chrome version</h4>
+<p>M99</p>
+<h4 id="required-permissions-24">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="getnonremovableblockdevicesinfo">getNonRemovableBlockDevicesInfo()</h3>
+<pre>chrome.os.telemetry.getNonRemovableBlockDevicesInfo() =&gt; Promise&lt;NonRemovableBlockDeviceInfoResponse&gt;</pre>
+<h4 id="released-in-chrome-version-75">Released in Chrome version</h4>
+<p>M108</p>
+<h4 id="required-permissions-25">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="getoemdata">getOemData()</h3>
+<pre>chrome.os.telemetry.getOemData() =&gt; Promise&lt;OemDataInfo&gt;</pre>
+<h4 id="released-in-chrome-version-76">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permissions-26">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+<li><code>os.telemetry.serial_number</code></li>
+</ul>
+<h3 id="getosversioninfo">getOsVersionInfo()</h3>
+<pre>chrome.os.telemetry.getOsVersionInfo() =&gt; Promise&lt;OsVersionInfo&gt;</pre>
+<h4 id="released-in-chrome-version-77">Released in Chrome version</h4>
+<p>M105</p>
+<h4 id="required-permissions-27">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="getstatefulpartitioninfo">getStatefulPartitionInfo()</h3>
+<pre>chrome.os.telemetry.getStatefulPartitionInfo() =&gt; Promise&lt;StatefulPartitionInfo&gt;</pre>
+<h4 id="released-in-chrome-version-78">Released in Chrome version</h4>
+<p>M105</p>
+<h4 id="required-permissions-28">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="getthermalinfo">getThermalInfo()</h3>
+<pre>chrome.os.telemetry.getThermalInfo() =&gt; Promise&lt;ThermalInfo&gt;</pre>
+<h4 id="released-in-chrome-version-79">Released in Chrome version</h4>
+<p>M122</p>
+<h4 id="required-permissions-29">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="gettpminfo">getTpmInfo()</h3>
+<pre>chrome.os.telemetry.getTpmInfo() =&gt; Promise&lt;TpmInfo&gt;</pre>
+<h4 id="released-in-chrome-version-80">Released in Chrome version</h4>
+<p>M108</p>
+<h4 id="required-permissions-30">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+</ul>
+<h3 id="getusbbusinfo">getUsbBusInfo()</h3>
+<pre>chrome.os.telemetry.getUsbBusInfo() =&gt; Promise&lt;UsbDevicesInfo&gt;</pre>
+<h4 id="released-in-chrome-version-81">Released in Chrome version</h4>
+<p>M114</p>
+<h4 id="required-permissions-31">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+<li><code>os.attached_device_info</code></li>
+</ul>
+<h3 id="getvpdinfo">getVpdInfo()</h3>
+<pre>chrome.os.telemetry.getVpdInfo() =&gt; Promise&lt;VpdInfo&gt;</pre>
+<h4 id="released-in-chrome-version-82">Released in Chrome version</h4>
+<p>M96</p>
+<h4 id="required-permissions-32">Required permissions</h4>
+<ul>
+<li><code>os.telemetry</code></li>
+<li><code>os.telemetry.serial_number</code> for serial number field</li>
+</ul>
+<h1 id="management">Management</h1>
+<h2 id="types-4">Types</h2>
+<h3 id="setaudiogainarguments">SetAudioGainArguments</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>nodeId</td>
+<td>number</td>
+<td>Node id of the audio device to be configured</td>
+</tr>
+<tr>
+<td>gain</td>
+<td>number</td>
+<td>Target gain percent in [0, 100]. Sets to 0 or 100 if outside</td>
+</tr>
+</tbody></table>
+<h3 id="setaudiovolumearguments">SetAudioVolumeArguments</h3>
+<table>
+<thead>
+<tr>
+<th>Property Name</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>nodeId</td>
+<td>number</td>
+<td>Node id of the audio device to be configured</td>
+</tr>
+<tr>
+<td>volume</td>
+<td>number</td>
+<td>Target volume percent in [0, 100]. Sets to 0 or 100 if outside</td>
+</tr>
+<tr>
+<td>isMuted</td>
+<td>boolean</td>
+<td>Whether to mute the device</td>
+</tr>
+</tbody></table>
+<h2 id="functions-4">Functions</h2>
+<h3 id="setaudiogain">setAudioGain()</h3>
+<pre>chrome.os.management.setAudioGain(
+  args: SetAudioGainArguments,
+) =&gt; Promise&lt;boolean&gt;</pre>
+<p>Sets the specified input audio device&#39;s gain to value. Returns false if
+<code>args.nodeId</code> is invalid.</p>
+<h4 id="released-in-chrome-version-83">Released in Chrome version</h4>
+<p>M122</p>
+<h4 id="required-permissions-33">Required permissions</h4>
+<ul>
+<li><code>os.management.audio</code></li>
+</ul>
+<h3 id="setaudiovolume">setAudioVolume()</h3>
+<pre>chrome.os.management.setAudioGain(
+  args: SetAudioVolumeArguments,
+) =&gt; Promise&lt;boolean&gt;</pre>
+<p>Sets the specified output audio device&#39;s volume and mute state to the given
+value. Returns false if <code>args.nodeId</code> is invalid.</p>
+<h4 id="released-in-chrome-version-84">Released in Chrome version</h4>
+<p>M122</p>
+<h4 id="required-permissions-34">Required permissions</h4>
+<ul>
+<li><code>os.management.audio</code></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/api_overview.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/api_overview.md</a>
+  </p>
+</div>

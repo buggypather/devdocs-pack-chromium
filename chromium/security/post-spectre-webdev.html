@@ -1,0 +1,422 @@
+<h1>Post-Spectre Web Development</h1>
+<p>Contributors: Artur Janc, Camille Lamy, Charlie Reis, Jun Kokatsu, Mike West.
+Patches and corrections welcome!</p>
+<p>Last Updated: Mar. 12th, 2021</p>
+<p>*** note
+<strong>Note</strong>: This document has been <a href="https://lists.w3.org/Archives/Public/public-webappsec/2021Feb/0007.html">adopted</a> by the W3C&#39;s Web Application Security
+Working Group; <a href="https://w3c.github.io/webappsec-post-spectre-webdev/">https://w3c.github.io/webappsec-post-spectre-webdev/</a> is
+proceeding under that group&#39;s aegis, and this document will redirect there
+once the working group is satisfied with its recommendations.</p>
+<hr>
+<h2 id="introduction">Introduction</h2>
+<p>In early 2018, <a href="https://spectreattack.com/">Spectre</a> made it clear that a foundational security
+boundary the web aimed to maintain was substantially less robust than expected.
+This revelation has pushed web browsers to shift their focus from the
+platform-level origin boundary to an OS-level process boundary. Chromium&#39;s
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/side-channel-threat-model.md">threat model</a>, for instance, now asserts that &quot;active
+web content … will be able to read any and all data in the address space of the
+process that hosts it&quot;. This  shift in thinking imposes a shift in development
+practice, both for browser vendors, and for web developers. Browsers need to
+align the origin boundary with the process boundary through fundamental
+refactoring projects (for example, Chromium&#39;s <a href="https://www.chromium.org/Home/chromium-security/site-isolation">Site Isolation</a>,
+and Firefox&#39;s <a href="https://wiki.mozilla.org/Project_Fission">Project Fission</a>). Moreover, browsers must
+provide web developers with tools to mitigate risk in the short term, and should
+push the platform towards safe default behaviors in the long term. The bad news
+is that this is going to be a lot of work, much of it falling on the shoulders
+of web developers. The good news is that a reasonable set of mitigation
+primitives exists today, ready and waiting for use.</p>
+<p>This document will point to a set of mitigations which seem promising, and
+provide concrete recommendations for web developers responsible for protecting
+users&#39; data.</p>
+<h3 id="threat-model">Threat Model</h3>
+<p>Spectre-like side-channel attacks inexorably lead to a model in which active web
+content (JavaScript, WASM, probably CSS if we tried hard enough, and so on) can
+read any and all data which has entered the address space of the process which
+hosts it. While this has deep implications for user agent implementations&#39;
+internal hardening strategies (stack canaries, ASLR, etc), here we&#39;ll remain
+focused on the core implication at the web platform level, which is both simple
+and profound: any data which flows into a process hosting a given origin is
+legible to that origin. We must design accordingly.</p>
+<p>In order to determine the scope of data that can be assumed accessible to an
+attacker, we must make a few assumptions about the normally-not-web-exposed
+process model which the user agent implements. The following seems like a good
+place to start:</p>
+<ol>
+<li><p>User agents are capable of separating the execution of a web origin&#39;s code
+into a process distinct from the agent&#39;s core. This separation enables the
+agent itself to access local devices, fetch resources, broker cross-process
+communication, and so on, in a way which remains invisible to any process
+potentially hosting untrusted code.</p>
+</li>
+<li><p>User agents are able to make decisions about whether or not a given resource
+should be delivered to a process hosting a given origin based on
+characteristics of both the request and the response (headers, etc).</p>
+</li>
+<li><p>User agents can consistently separate top-level, cross-origin windows into
+distinct processes. They cannot consistently separate same-site or
+same-origin windows into distinct processes given the potential for
+synchronous access between the windows.</p>
+</li>
+<li><p>User agents cannot yet consistently separate framed origins into processes
+distinct from their embedders&#39; origin.</p>
+<p>Note: Though some user agents support <a href="https://www.chromium.org/developers/design-documents/oop-iframes">out-of-process frames</a>, no
+agent supports it consistently across a broad range of devices and
+platforms. Ideally this will change over time, as the frame boundary <em>must</em>
+be one we can eventually consider robust.</p>
+</li>
+</ol>
+<p>With this in mind, our general assumption will be that an origin gains access to
+any resource which it renders (including images, stylesheets, scripts, frames,
+etc). Likewise, embedded frames gain access to their ancestors&#39; content.</p>
+<p>This model is spelled out in more detail in both Chromium&#39;s
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/side-channel-threat-model.md">Post-Spectre Threat Model Rethink</a>, and in Artur Janc&#39;s
+<a href="https://arturjanc.com/coi-threat-model.pdf">Notes on the threat model of cross-origin isolation</a>.</p>
+<h3 id="mitigation-tldr">Mitigation TL;DR</h3>
+<ol>
+<li><p><strong>Decide when (not!) to respond to requests</strong> by examining incoming headers,
+paying special attention to the <code>Origin</code> header on the one hand, and various
+<code>Sec-Fetch-</code> prefixed headers on the other, as described in the article
+<a href="https://web.dev/fetch-metadata/">Protect your resources from web attacks with Fetch Metadata</a>.</p>
+</li>
+<li><p><strong>Restrict attackers&#39; ability to load your data as a subresource</strong> by
+setting a <a href="https://resourcepolicy.fyi/">cross-origin resource policy</a> (CORP) of <code>same-origin</code>
+(opening up to <code>same-site</code> or <code>cross-origin</code> only when necessary).</p>
+</li>
+<li><p><strong>Restrict attackers&#39; ability to frame your data as a document</strong> by opt-ing
+into framing protections via <code>X-Frame-Options: SAMEORIGIN</code> or CSP&#39;s more
+granular <code>frame-ancestors</code> directive (<code>frame-ancestors &#39;self&#39; https://trusted.embedder</code>, for example).</p>
+</li>
+<li><p><strong>Restrict attackers&#39; ability to obtain a handle to your window</strong> by setting
+a <a href="https://docs.google.com/document/d/1Ey3MXcLzwR1T7aarkpBXEwP7jKdd2NvQdgYvF8_8scI/edit">cross-origin opener policy</a> (COOP). In the best case, you can
+default to a restrictive <code>same-origin</code> value, opening up to
+<code>same-origin-allow-popups</code> or <code>unsafe-none</code> only if necessary.</p>
+</li>
+<li><p><strong>Prevent MIME-type confusion attacks</strong> and increase the robustness of
+passive defenses like <a href="https://chromium.googlesource.com/chromium/src/+/main/services/network/cross_origin_read_blocking_explainer.md">cross-origin read blocking</a> (CORB) /
+<a href="https://github.com/annevk/orb">opaque response blocking</a> (ORB) by setting correct <code>Content-Type</code>
+headers, and globally asserting <code>X-Content-Type-Options: nosniff</code>.</p>
+</li>
+</ol>
+<h2 id="practical-examples">Practical Examples</h2>
+<h3 id="subresources">Subresources</h3>
+<p>Resources which are intended to be loaded into documents should protect
+themselves from being used in unexpected ways. Before walking through strategies
+for specific kinds of resources, a few headers seem generally applicable:</p>
+<ol>
+<li><p>Sites should use Fetch Metadata to make good decisions about
+<a href="https://web.dev/fetch-metadata/">when to serve resources</a>. In order to ensure that decision
+sticks, servers should explain its decision to the browser by sending a
+<code>Vary</code> header containing <code>Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site</code>.
+This ensures that the server has a chance to make different decisions for
+requests which will be <em>used</em> differently.</p>
+</li>
+<li><p>Subresources should opt-out of MIME type sniffing by sending an
+<code>X-Content-Type-Options</code> header with a value of <code>nosniff</code>. This increases
+the robustness of MIME-based checks like <a href="https://chromium.googlesource.com/chromium/src/+/main/services/network/cross_origin_read_blocking_explainer.md">cross-origin read blocking</a>
+and <a href="https://github.com/annevk/orb">opaque response blocking</a>, and mitigates some well-known risks
+around type confusion for scripts.</p>
+</li>
+<li><p>Subresources are intended for inclusion in a given context, not as
+independently navigable documents. To mitigate the risk that navigation to a
+subresource causes script execution or opens an origin up to attack in some
+other way, servers can assert the following set of headers which
+collectively make it difficult to meaningfully abuse a subresource via
+navigation:</p>
+<ul>
+<li><p>Use the <code>Content-Security-Policy</code> header to assert the <code>sandbox</code>
+directive. This ensures that these resources remain inactive if
+navigated to directly as a top-level document. No scripts will execute,
+and the resource will be pushed into an &quot;opaque&quot; origin.</p>
+<p>Note: Some servers deliver <code>Content-Disposition: attachment; filename=file.name</code> to obtain a similar effect. This was valuable to
+mitigate vulnerabilies in Flash, but the <code>sandbox</code> approach seems to
+more straightforwardly address the threats we care about today.</p>
+</li>
+<li><p>Asserting the <a href="https://docs.google.com/document/d/1Ey3MXcLzwR1T7aarkpBXEwP7jKdd2NvQdgYvF8_8scI/edit"><code>Cross-Origin-Opener-Policy</code></a> header with a value
+of <code>same-origin</code> prevents cross-origin documents from retaining a handle
+to the resource&#39;s window if it&#39;s opened in a popup.</p>
+</li>
+<li><p>Sending the <code>X-Frame-Options</code> header with a value of <code>DENY</code> prevents the
+resource from being framed.</p>
+</li>
+</ul>
+</li>
+</ol>
+<p>Most subresources, then, should contain the following block of headers, which
+you&#39;ll see repeated a few times below:    </p>
+<pre data-language="http">Content-Security-Policy: sandbox
+Cross-Origin-Opener-Policy: same-origin
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY</pre>
+<p>With these generic protections in mind, let&#39;s sift through a few scenarios to
+determine what headers a server would be well-served to assert:</p>
+<h4 id="static-subresources">Static Subresources</h4>
+<p>By their nature, static resources contain the same data no matter who requests
+them, and therefore cannot contain interesting information that an attacker
+couldn&#39;t otherwise obtain. There&#39;s no risk to making these resources widely
+available, and value in allowing embedders to robustly debug, so something like
+the following response headers could be appropriate:</p>
+<pre data-language="http">Access-Control-Allow-Origin: *
+Cross-Origin-Resource-Policy: cross-origin
+Timing-Allow-Origin: *
+Content-Security-Policy: sandbox
+Cross-Origin-Opener-Policy: same-origin
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY</pre>
+<p>CDNs are the canonical static resource distribution points, and many use the
+pattern above. Take a look at the following common resources&#39; response headers
+for inspiration:</p>
+<ul>
+<li><a href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"><code>https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js</code></a></li>
+<li><a href="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"><code>https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js</code></a></li>
+<li><a href="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js"><code>https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js</code></a></li>
+<li><a href="https://ssl.google-analytics.com/ga.js"><code>https://ssl.google-analytics.com/ga.js</code></a></li>
+</ul>
+<p>Similarly, application-specific static resource servers are a good place to look
+for this practice. Consider:</p>
+<ul>
+<li><a href="https://static.xx.fbcdn.net/rsrc.php/v3/y2/r/zVvRrO8pOtu.png"><code>https://static.xx.fbcdn.net/rsrc.php/v3/y2/r/zVvRrO8pOtu.png</code></a></li>
+<li><a href="https://www.gstatic.com/images/branding/googlelogo/svg/googlelogo_clr_74x24px.svg"><code>https://www.gstatic.com/images/branding/googlelogo/svg/googlelogo_clr_74x24px.svg</code></a></li>
+</ul>
+<h4 id="dynamic-subresources">Dynamic Subresources</h4>
+<p>Subresources that contain data personalized to a given user are juicy targets
+for attackers, and must be defended by ensuring that they&#39;re loaded only in
+ways that are appropriate for the data in question. A few cases are well worth
+considering:</p>
+<ol>
+<li><p>Application-internal resources (private API endpoints, avatar images,
+uploaded data, etc.) should not be available to any cross-origin requestor.
+These resources should be restricted to usage as a subresource in
+same-origin contexts by sending a <a href="https://resourcepolicy.fyi/"><code>Cross-Origin-Resource-Policy</code></a>
+header with a value of <code>same-origin</code>:</p>
+<pre data-language="http">Cross-Origin-Resource-Policy: same-origin
+Content-Security-Policy: sandbox
+Cross-Origin-Opener-Policy: same-origin
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY</pre>
+<p>This header will prevent cross-origin attackers from loading the resource as
+a response to a <code>no-cors</code> request.</p>
+<p>For example, examine the headers returned when requesting endpoints like the
+following:</p>
+<ul>
+<li><a href="https://myaccount.google.com/_/AccountSettingsUi/browserinfo"><code>https://myaccount.google.com/_/AccountSettingsUi/browserinfo</code></a></li>
+<li><a href="https://twitter.com/i/api/1.1/branch/init.json"><code>https://twitter.com/i/api/1.1/branch/init.json</code></a></li>
+<li><a href="https://www.facebook.com/ajax/webstorage/process_keys/?state=0"><code>https://www.facebook.com/ajax/webstorage/process_keys/?state=0</code></a></li>
+</ul>
+</li>
+<li><p>Personalized resources intended for cross-origin use (public API endpoints,
+etc) should carefully consider incoming requests&#39; properties before
+responding. These endpoints can only safely be enabled by requiring CORS,
+and choosing the set of origins for which a given response can be exposed by
+setting the appropriate access-control headers, for example:</p>
+<pre data-language="http">Access-Control-Allow-Credentials: true
+Access-Control-Allow-Origin: https://trusted.example
+Access-Control-Allow-Methods: POST
+Access-Control-Allow-Headers: ...
+Access-Control-Allow-...: ...
+Cross-Origin-Resource-Policy: same-origin
+Content-Security-Policy: sandbox
+Cross-Origin-Opener-Policy: same-origin
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY</pre>
+<p>Note: The <code>Cross-Origin-Resource-Policy</code> header is only processed for
+requests that are <em>not</em> using CORS for access control (&quot;<code>no-cors</code>
+requests&quot;). Sending <code>Cross-Origin-Resource-Policy: same-origin</code> is
+therefore not harmful, and works to ensure that <code>no-cors</code> usage isn&#39;t
+accidentally allowed.</p>
+<p>For example, examine the headers returned when requesting endpoints like
+the following:</p>
+<ul>
+<li><a href="https://api.twitter.com/1.1/jot/client_event.json"><code>https://api.twitter.com/1.1/jot/client_event.json</code></a></li>
+<li><a href="https://play.google.com/log?format=json&hasfast=true"><code>https://play.google.com/log?format=json&amp;hasfast=true</code></a></li>
+<li><a href="https://securepubads.g.doubleclick.net/pcs/view"><code>https://securepubads.g.doubleclick.net/pcs/view</code></a></li>
+<li><a href="https://c.amazon-adsystem.com/e/dtb/bid"><code>https://c.amazon-adsystem.com/e/dtb/bid</code></a></li>
+</ul>
+</li>
+<li><p>Personalized resources that are intended for cross-origin <code>no-cors</code>
+embedding, but which don&#39;t intend to be directly legible in that context
+(avatar images, authenticated media, etc). These should enable cross-origin
+embedding via <code>Cross-Origin-Resource-Policy</code>, but <em>not</em> via CORS access
+control headers:</p>
+<pre data-language="http">Cross-Origin-Resource-Policy: cross-origin
+Content-Security-Policy: sandbox
+Cross-Origin-Opener-Policy: same-origin
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY</pre>
+<p>Note, that this allows the resource to be used by any cross-origin document.
+That&#39;s reasonable for some use cases, but requiring CORS, and opting-in a
+small set of origins via appropriate access-control headers is a possible
+alternative for some resources. This approach will give those contexts
+trivial access to the resource&#39;s bits, so the granularity is a tradeoff.
+Still, considering this case to be the same as the &quot;personalized resources
+intended for cross-origin use&quot; isn&#39;t unreasonable.</p>
+<p>If we implemented more granular bindings for CORP headers (along the lines
+of <code>Cross-Origin-Resource-Policy: https://trusted.example</code>), we could avoid
+this tradeoff entirely. That&#39;s proposed in
+<a href="https://github.com/whatwg/fetch/issues/670">whatwg/fetch#760</a>.</p>
+<p>For example:</p>
+<ul>
+<li><a href="https://lh3.google.com/u/0/d/1JBUaX1xSOZRxBk5bRNZWgnzyJoCQC52TIRokACBSmGc=w512"><code>https://lh3.google.com/u/0/d/1JBUaX1xSOZRxBk5bRNZWgnzyJoCQC52TIRokACBSmGc=w512</code></a></li>
+</ul>
+</li>
+</ol>
+<h3 id="documents">Documents</h3>
+<h4 id="fully-isolated-documents">Fully-Isolated Documents</h4>
+<p>Documents that require users to be signed-in almost certainly contain
+information that shouldn&#39;t be revealed to attackers. These pages should take
+care to isolate themselves from other origins, both by making <em>a priori</em>
+decisions about <a href="https://web.dev/fetch-metadata/">whether to serve the page at all</a>, and by
+giving clients careful instructions about how the page can be used once
+delivered. For instance, something like the following set of response headers
+could be appropriate:</p>
+<pre data-language="http">Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN</pre>
+<p>Note: Documents which need to make use of APIs that require full cross-origin
+isolation (such as <code>SharedArrayBuffer</code>), will also need to serve a
+<a href="https://wicg.github.io/cross-origin-embedder-policy/"><code>Cross-Origin-Embedder-Policy</code></a> header, as outlined in
+<a href="https://web.dev/coop-coep/">Making your website &quot;cross-origin isolated&quot; using COOP and COEP</a>.</p>
+<p>Account settings pages, admin panels, and application-specific documents are all
+good examples of resources which would benefit from as much isolation as
+possible. For real-life examples, consider:</p>
+<ul>
+<li><a href="https://myaccount.google.com/"><code>https://myaccount.google.com/</code></a></li>
+</ul>
+<h4 id="documents-expecting-to-open-cross-origin-windows">Documents Expecting to Open Cross-Origin Windows</h4>
+<p>Not every document that requires sign-in can be fully-isolated from the rest of
+the internet. It&#39;s often the case that partial isolation is a better fit.
+Consider sites that depend upon cross-origin windows for federated workflows
+involving payments or sign-in, for example. These pages would generally benefit
+from restricting attackers&#39; ability to embed them, or obtain their window
+handle, but they can&#39;t easily lock themselves off from all such vectors via
+<code>Cross-Origin-Opener-Policy: same-origin</code> and <code>X-Frame-Options: DENY</code>. In these
+cases, something like the following set of response headers might be
+appropriate:</p>
+<pre data-language="http">Cross-Origin-Opener-Policy: same-origin-allow-popups
+Cross-Origin-Resource-Policy: same-origin
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN</pre>
+<p>The only difference between this case and the &quot;Fully-Isolated&quot; case above is the
+<code>Cross-Origin-Opener-Policy</code> value. <code>same-origin</code> will break the opener
+relationship between the document and any cross-origin window, regardless of who
+opened whom. <code>same-origin-allow-popups</code> will break cross-origin opener
+relationships initiated by a cross-origin document&#39;s use of <code>window.open()</code>, but
+will allow the asserting document to open cross-origin windows that retain an
+opener relationship.</p>
+<h4 id="documents-expecting-cross-origin-openers">Documents Expecting Cross-Origin Openers</h4>
+<p>Federated sign-in forms and payment providers are clear examples of documents
+which intend to be opened by cross-origin windows, and require that relationship
+to be maintained in order to facilitate communication via channels like
+<code>postMessage()</code> or navigation. These documents cannot isolate themselves
+completely, but can prevent themselves from being embedded or fetched
+cross-origin. Three scenarios are worth considering:</p>
+<ol>
+<li><p>Documents that only wish to be opened in cross-origin popups could loosen
+their cross-origin opener policy by serving the following headers:</p>
+<pre data-language="http">Cross-Origin-Resource-Policy: same-origin
+Cross-Origin-Opener-Policy: unsafe-none
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: SAMEORIGIN</pre>
+<p>For example:</p>
+<ul>
+<li><blockquote>
+<p>TODO: Find some links.</p>
+</blockquote>
+</li>
+</ul>
+</li>
+<li><p>Documents that only wish to be framed in cross-origin contexts could loosen
+their framing protections by serving the following headers:</p>
+<pre data-language="http">Cross-Origin-Resource-Policy: same-origin
+Cross-Origin-Opener-Policy: same-origin
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: ALLOWALL</pre>
+<p>Note that this allows embedding by any cross-origin documents. That&#39;s
+reasonable for some widgety use cases, but when possible, a more secure
+alternative would specify a list of origins which are allowed to embed the
+document via the <code>frame-ancestors</code> CSP directive. That is, in addition to
+the <code>X-Frame-Options</code> header above, the following header could also be
+included to restrict the document to a short list of trusted embedders:</p>
+<pre data-language="http">Content-Security-Policy: frame-ancestors https://trusted1.example https://trusted2.example</pre>
+<p>For example:</p>
+<ul>
+<li><blockquote>
+<p>TODO: Find some links.</p>
+</blockquote>
+</li>
+</ul>
+</li>
+<li><p>Documents that support both popup and framing scenarios need to loosen both
+their cross-origin opener policies and framing protections by combining the
+recommendations above, serving the following headers:</p>
+<pre data-language="http">Cross-Origin-Resource-Policy: same-origin
+Cross-Origin-Opener-Policy: unsafe-none
+Vary: Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site
+X-Content-Type-Options: nosniff
+X-Frame-Options: ALLOWALL</pre>
+<p>For example:</p>
+<ul>
+<li><blockquote>
+<p>TODO: Find some links.</p>
+</blockquote>
+</li>
+</ul>
+</li>
+</ol>
+<h2 id="implementation-considerations">Implementation Considerations</h2>
+<h3 id="explicitly-setting-headers-with-default-values">Explicitly Setting Headers with Default Values</h3>
+<p>Several recommendations above suggest that developers would be well-served to
+set headers like <code>X-Frame-Options: ALLOWALL</code> or <code>Cross-Origin-Opener-Policy: unsafe-none</code> on responses. These map to the web&#39;s status quo behavior, and seem
+therefore superfluous. Why should developers set them?</p>
+<p>The core reason is that these defaults are poor fits for today&#39;s threats, and we
+ought to be working to change them. Proposals like <a href="https://github.com/mikewest/embedding-requires-opt-in">Embedding Requires Opt-In</a>
+and <a href="https://github.com/mikewest/coop-by-default">COOP By Default</a> suggest that we should shift the web&#39;s
+defaults away from requiring developers to opt-into more secure behaviors by
+making them opt-out rather than opt-in. This would place the configuration cost
+on those developers whose projects require risky settings.</p>
+<p>This document recommends setting those less-secure header values explicitly, as
+that makes it more likely that we&#39;ll be able to shift the web&#39;s defaults in the
+future.</p>
+<h2 id="acknowledgements">Acknowledgements</h2>
+<p>This document relies upon a number of excellent resources that spell out much of
+the foundation of our understanding of Spectre&#39;s implications for the web, and
+justify the mitigation strategies we currently espouse. The following is an
+incomplete list of those works, in no particular order:</p>
+<ul>
+<li><p>Chris Palmer&#39;s
+<a href="https://noncombatant.org/application-principals/">Isolating Application-Defined Principles</a></p>
+</li>
+<li><p>Charlie Reis&#39;
+<a href="https://docs.google.com/document/d/1dnUjxfGWnvhQEIyCZb0F2LmCZ9gio6ogu2rhMGqi6gY/edit">Long-Term Web Browser Mitigations for Spectre</a></p>
+</li>
+<li><p>Anne van Kesteren&#39;s
+<a href="https://docs.google.com/presentation/d/1sadl7jTrBIECCanuqSrNndnDr82NGW1yyuXFT1Dc7SQ/edit#slide=id.p">A Spectre-Shaped Web</a>,
+<a href="https://hacks.mozilla.org/2020/07/safely-reviving-shared-memory/">Safely Reviving Shared Memory</a>,
+and <a href="https://github.com/annevk/orb">Opaque Resource Blocking</a>.</p>
+</li>
+<li><p>Artur Janc and Mike West&#39;s <a href="https://www.arturjanc.com/cross-origin-infoleaks.pdf">How do we stop spilling the beans across origins?</a></p>
+</li>
+<li><p>Mike West&#39;s <a href="https://wicg.github.io/cross-origin-embedder-policy/">Cross-Origin Embedder Policy explainer</a></p>
+</li>
+<li><p>Charlie Reis and Camille Lamy&#39;s <a href="https://docs.google.com/document/d/1Ey3MXcLzwR1T7aarkpBXEwP7jKdd2NvQdgYvF8_8scI/edit">Cross-Origin Opener Policy explainer</a></p>
+</li>
+<li><p>Artur Janc, Charlie Reis, and Anne van Kesteren&#39;s <a href="https://docs.google.com/document/d/1Ey3MXcLzwR1T7aarkpBXEwP7jKdd2NvQdgYvF8_8scI/edit">COOP and COEP Explained</a></p>
+</li>
+<li><p>Artur Janc&#39;s <a href="https://arturjanc.com/coi-threat-model.pdf">Notes on the threat model of cross-origin isolation</a></p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/post-spectre-webdev.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/post-spectre-webdev.md</a>
+  </p>
+</div>

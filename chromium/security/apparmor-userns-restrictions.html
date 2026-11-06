@@ -1,0 +1,82 @@
+<h1>AppArmor User Namespace Restrictions vs. Chromium Developer Builds</h1>
+<h2 id="short-summary">Short summary</h2>
+<p>If you want to run developer builds of Chromium/Chrome on Ubuntu 23.10+
+(or possibly other Linux distros in the future), you&#39;ll need to either globally
+or selectively disable an Ubuntu security feature.</p>
+<h2 id="how-can-i-run-developer-builds-or-chromium-builds-i-downloaded-from-the-internet">How can I run developer builds or chromium builds I downloaded from the internet?</h2>
+<h3 id="option-1-the-easiest-way">Option 1, the easiest way</h3>
+<p>The easiest way is to disable Ubuntu&#39;s security feature globally by running
+these commands in a terminal:</p>
+<pre>echo 0 | sudo tee /proc/sys/kernel/apparmor_restrict_unprivileged_userns</pre>
+<p>but note that this disables a useful Ubuntu security feature.</p>
+<p>To make this setting persist across reboots, create a new file in
+<code>/etc/sysctl.d</code>, for example:</p>
+<pre>echo kernel.apparmor_restrict_unprivileged_userns=0 | sudo tee /etc/sysctl.d/60-apparmor-namespace.conf</pre>
+<h3 id="option-2-a-safer-way">Option 2, a safer way</h3>
+<p>A slightly safer way is to write an AppArmor profile that allows running any
+binary named &quot;chrome&quot; under your chromium build directory:</p>
+<pre>export CHROMIUM_BUILD_PATH=/@{HOME}/chromium/src/out/**/chrome
+cat | sudo tee /etc/apparmor.d/chrome-dev-builds &lt;&lt;EOF
+abi &lt;abi/4.0&gt;,
+include &lt;tunables/global&gt;
+
+profile chrome $CHROMIUM_BUILD_PATH flags=(unconfined) {
+  userns,
+
+  # Site-specific additions and overrides. See local/README for details.
+  include if exists &lt;local/chrome&gt;
+}
+EOF
+sudo service apparmor reload  # reload AppArmor profiles to include the new one</pre>
+<p>Note that an attacker with the ability to create an executable called <code>chrome</code>
+anywhere in the above directory will be able to bypass Ubuntu&#39;s security
+mechanism.</p>
+<p>You can change <code>CHROMIUM_BUILD_PATH</code> to anything you like. ** matches any part
+of a path, * matches one component of a path. Other options of described in
+<code>man apparmor.d</code> under the GLOBBING section.</p>
+<h3 id="option-3-the-safest-way">Option 3, the safest way</h3>
+<p>If you have installed Google Chrome, the setuid sandbox helper (the old version
+of the sandbox) is available at <code>/opt/google/chrome/chrome-sandbox</code>. You can
+tell developer builds to use it by putting the following in your <code>~/.bashrc</code>:</p>
+<pre>export CHROME_DEVEL_SANDBOX=/opt/google/chrome/chrome-sandbox</pre>
+<p>Ubuntu&#39;s packaged version of chromium will not install the setuid sandbox
+helper (it&#39;s a snap package that disables the ubuntu security feature at
+runtime for its installed version of chromium).</p>
+<p>If you have not installed Google Chrome, but you do have a chromium source
+checkout, you can build the SUID sandbox helper yourself and install it. This
+is the old version of the sandbox, but should work without disabling any Ubuntu
+security features. See [Linux SUID Sandbox Development]
+(<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/suid_sandbox_development.md">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/suid_sandbox_development.md</a>)
+for instructions. This should work permanently.</p>
+<p>The older version of the sandbox may be slightly weaker, and involves installing
+a setuid binary.</p>
+<h2 id="why-does-this-only-affect-developer-builds">Why does this only affect developer builds?</h2>
+<p>Ubuntu ships with an AppArmor profile that applies to Chrome stable binaries
+installed at <code>/opt/google/chrome/chrome</code> (the default installation path). This
+policy is stored at <code>/etc/apparmor.d/chrome</code>.</p>
+<h2 id="what-if-i-dont-have-root-access-to-the-machine-and-cant-install-anything">What if I don&#39;t have root access to the machine and can&#39;t install anything?</h2>
+<p>You will need to run developer builds with the <code>--no-sandbox</code> command line flag,
+but be aware that this disables critical security features of Chromium and
+should never be used when browsing the open web.</p>
+<h2 id="technical-details">Technical details</h2>
+<p>Our primary sandbox no longer works on developer builds on some Linux
+distributions, namely Ubuntu, due to a security feature that restricts access
+to a powerful kernel feature, user namespaces. User namespaces are used by
+Chromium (and many containerization applications) to restrict access to the
+filesystem without requiring root privileges or a setuid binary. For a while,
+user namespaces have been available to unprivileged (e.g. non-root) users on
+most Linux distros, but they exposed a lot of extra kernel attack sruface. For
+more details, see Ubuntu&#39;s announcement at
+<a href="https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces">https://ubuntu.com/blog/ubuntu-23-10-restricted-unprivileged-user-namespaces</a>.</p>
+<p>Individual binaries can be allowlisted by filepath using root-owned AppArmor
+profiles stored in <code>/etc/apparmor.d/</code>. Ubuntu ships with an AppArmor profile
+that applies to Chrome stable binaries installed at
+<code>/opt/google/chrome/chrome</code> (the default installation path). Ubuntu&#39;s packaged
+version of Chromium is a snap package, and snap generates an AppArmor profile
+at runtime that allows usage of user namespaces.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md</a>
+  </p>
+</div>

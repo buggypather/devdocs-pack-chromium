@@ -1,0 +1,169 @@
+<h1>Using Skia Autoroller to manage third-party dependencies</h1>
+<p>*** note
+<strong>This isn&#39;t related to the <a href="https://skia.org/">Skia project</a>.</strong></p>
+<p>Skia is a 2D graphics library used by Chromium and other projects.</p>
+<p>The Skia Autoroller was developed by the now-defunct Skia Infrastructure team,
+and has been used by Skia project itself and Chromium projects to automatically
+update dependencies.</p>
+<hr>
+<p>If a dependency is a Git repository and can be used <strong>without modification</strong>,
+you should follow this guide to setup mirroring and Skia Autoroller to keep
+your dependency fresh.</p>
+<p>In technical terms, &quot;<strong>without modification</strong>&quot; means:</p>
+<ul>
+<li>The dependency MUST be checked out as a Git submodule, inside
+<code>third_party/&lt;name&gt;/src/</code> directory</li>
+<li>The checked out commit MUST exist in the upstream repository, unless you&#39;re
+making <a href="#applying-urgent-chromium-patches">Urgent Chromium patches</a></li>
+</ul>
+<p>In practice, this means:</p>
+<ul>
+<li>You MUST NOT modify the dependency&#39;s source code to satisfy Chromium&#39;s
+requirements, or to make it build in Chromium (e.g. change <code>std::span</code> usage
+to Chromium&#39;s <code>base::span</code>).</li>
+<li>You MUST pull in the entire repository into Chromium. Pulling in only certain
+directories or files (i.e. a subset of the repository) <strong>aren&#39;t supported</strong>.</li>
+<li>You CAN add files alongside <code>third_party/&lt;name&gt;/src/</code> to integrate the
+dependency with Chromium. Typically: BUILD.gn, README.chromium metadata,
+C++ header guards
+(<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/microsoft_dxheaders/include/directml.h;drc=37a8609bbbe5200fa034718304b3c3a04296240b">example</a>),
+and integration tests.</li>
+</ul>
+<p><strong>Recommended for:</strong> Well-maintained or mature projects. The project maintainers
+should be willing to accept outside contributions (e.g. we can upstream a bug fix),
+and should be reasonably active in responding to pull requests and security bugs.</p>
+<p><strong>Examples:</strong></p>
+<ul>
+<li>Chromium projects: Dawn, v8</li>
+<li>Google projects: <a href="https://github.com/google/re2">re2</a></li>
+<li>Well maintained projects: <a href="https://github.com/facebook/zstd">zstd</a>,
+<a href="https://github.com/open-source-parsers/jsoncpp">jsoncpp</a></li>
+</ul>
+<h2 id="directory-structure">Directory structure</h2>
+<pre>third_party/
+  README.chromium
+  OWNERS
+  BUILD.gn    &lt;-- Optional, build rules and files for Chromium integration
+  src/        &lt;-- Git submodule. MUST point to a commit in the upstream
+    xxx       &lt;-- Upstream's content, managed by gclient.</pre>
+<h2 id="initial-setup">Initial setup</h2>
+<h3 id="step-1-obtain-approval-to-include-the-dependency-in-chromium">Step 1: Obtain approval to include the dependency in Chromium</h3>
+<p>You first MUST obtain approval from Chrome ALTs to include the dependencies
+in Chromium. Please refer to
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/adding_to_third_party.md#before-you-start">&quot;Adding to third-party &gt; Before you start&quot;</a>.</p>
+<h3 id="step-2-ask-a-chromium-git-admin-to-mirror-the-repository-to-gerrit">Step 2: Ask a Chromium Git Admin to mirror the repository to Gerrit</h3>
+<p>Create a Git Admin request
+<a href="https://issues.chromium.org/issues/new?component=2194686&amp;template=2359397">here</a>.
+Use the following template (feel free to copy the following Markdown snippet
+into the bug description):</p>
+<pre>=== Create a third-party repo mirror ===
+
+Googlesource host: **chromium**
+
+Upstream repo: **Link to upstream repo, like `https://github.com/abc/xyz`**
+
+Where to mirror: **external/&lt;git-host&gt;/&lt;repo-name&gt;**, like `external/github.com/abc/xyz`
+
+What to mirror: **all branches and tags**, imported with `upstream/` prefix
+
+Permissions: **Inherit from** `chromium/deps` project</pre>
+<h3 id="step-3-add-the-mirrored-dependency-to-chromium">Step 3. Add the mirrored dependency to Chromium</h3>
+<p>You need to make a CL to add this dependency to Chromium. This CL typically contains:</p>
+<ul>
+<li>DEPS file change</li>
+<li>Git submodules change</li>
+<li>README.chromium</li>
+<li>Top-level OWNERS entry to grant Git submodule&#39;s ownership</li>
+<li>Files to integrate with Chromium, e.g. BUILD.gn, DEPS</li>
+<li>Tests to verify the dependency works as intended and to detect breakages</li>
+</ul>
+<p>Please follow the instructions
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/dependencies.md#adding-dependencies">here</a>.</p>
+<h3 id="step-4-setup-skia-autoroller-to-auto-update-the-dependency">Step 4. Setup Skia Autoroller to auto-update the dependency</h3>
+<p>Create a Skia Infrastructure request to setup the autoroller
+<a href="https://issues.skia.org/issues/new?pli=1&amp;component=1389291&amp;template=1850622">here</a>.</p>
+<p>Please provide all of the requested information in the issue template, and
+mention <strong>&quot;I want the autoroller to update both the DEPS entry and the
+README.chromium file&quot;</strong>.</p>
+<p><strong>Additionally</strong>, mention how the autoroller should check for new releases. Two
+options are supported.</p>
+<ul>
+<li>Roll by Git tag</li>
+<li>Roll by latest commit</li>
+</ul>
+<p>In general, we recommend to roll to latest Git tag (usually corresponds to a
+versioned release). You need to provide a regular expression to extract an
+integer tuple from the tag name. The autoroller will roll to the Git tag
+with the largest tuple (e.g. <code>(1,2,3)</code> is greater than <code>(1,1,2)</code>).</p>
+<p>For example, the following regular expression matches semantic version style
+<code>vX.Y.Z</code> Git version tags in the mirrored repo:
+<code>^upstream/v(\\d+)\\.(\\d+)\\.(\\d+)$</code>.</p>
+<p>Alternatively, you can request to track the latest commit in a branch (e.g.
+<code>main</code>). This is commonly used for Google maintained projects. <strong>If you use this
+option, either by preference or because your upstream does not tag versions,
+we RECOMMEND specifying <code>roll_cooldown: 2w</code> in your Skia Autoroller request</strong>.
+This will introduce a minimum of two weeks between updates and will reduce churn
+in your dependency, and give upgrades time to bake. This is especially useful if
+your upstream is a busy repo.</p>
+<p>You CAN request extra trybots to run on a roll (e.g. macOS bots).</p>
+<p>After Skia Autoroller is setup, it will propose future CLs to update the
+revision in DEPS, update Git submodules and set metadata fields in
+README.chromium.</p>
+<h2 id="keeping-the-dependency-fresh">Keeping the dependency fresh</h2>
+<p>Skia autoroller periodically checks the upstream for newer releases and
+creates an autoroll CL for you to review.</p>
+<h3 id="when-an-autoroll-cl-is-proposed">When an autoroll CL is proposed</h3>
+<p>The autoroller will send you a CL when a roll happens.</p>
+<p>The autoroller will trigger Chromium commit queue (including the &quot;extra trybots&quot;
+you requested in step 4). If everything passes, the autoroller will submit the CL
+automatically.</p>
+<p>The autoroller tries to generate a CL description to summarize the upstream
+change (e.g. a list of commits). In the rare cases where the CL description
+generation fails, you should check upstream release notes and review the diff.</p>
+<h3 id="when-an-autoroll-cl-fails">When an autoroll CL fails</h3>
+<p>This could happen when the upstream introduces a breaking change (caught by
+your tests on Chromium CQ), or if BUILD.gn files need updating.</p>
+<p>You should <strong>take-over</strong> the autoroller&#39;s CL, fix breakages, have another
+committer review the change, then submit the CL.</p>
+<p>We recommend you download the CL from Gerrit Web UI, using the &quot;Download&quot;
+button, update the CL locally, then upload it for review (i.e. you
+become the autoroll CL&#39;s uploader).</p>
+<h3 id="applying-urgent-chromium-patches">Applying urgent Chromium patches</h3>
+<p>In general, you should work with the upstream to fix bugs. Skia Autoroller will
+automatically update the dependency in Chromium when the upstream publishes a
+new tag or a new commit (depending on your choice in Step 2).</p>
+<p>In the rare cases where you need to apply a patch before the upstream makes the
+release, please follow the following steps.</p>
+<p>First, edit the Git submodule locally, test and commit the change.</p>
+<p>Then, <strong>inside the dependency&#39;s <code>src</code> directory</strong>, run
+<code>git cl upload --target_branch=&lt;branch_name&gt;</code> to upload your change for review.</p>
+<p>We recommend naming the branches like so to keep track of changes:
+<code>&lt;upstream_tag_or_revision&gt;-chromium_patch-&lt;number-or-description&gt;</code></p>
+<p>Then, get another committer to review the change and submit it to the mirrored
+repository.</p>
+<p>Finally, update chromium/src&#39;s DEPS entry and .gitmodules to point to the
+new commit, and land this CL. You can make use of
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/depot_tools/roll_dep.py">depot_tools <code>roll-dep</code></a>
+script.</p>
+<p>*** note
+The above procedure is intended as a temporary &quot;break glass&quot; fix. You&#39;re
+expected to upstream and the fix, and roll in the updated dependency as soon
+as possible.</p>
+<p>You MAY need to pause Skia Autoroller depending on the upstream&#39;s release
+cadence (e.g. will the next release include my patch).</p>
+<ul>
+<li>If you don&#39;t pause the autoroller, it will propose a change to use an
+upstream tag or a commit that&#39;s newer than your patch commit.</li>
+<li>This WILL discard your patch if your pull request isn&#39;t merged into the
+upstream.</li>
+</ul>
+<p><strong>Warning:</strong> If you&#39;ve paused the autoroller for too long, and the dependency
+becomes stale, you MAY be asked to adopt a different well-lit path that better
+handles patching.</p>
+<hr>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/managing-third-party/skia-autoroller.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/managing-third-party/skia-autoroller.md</a>
+  </p>
+</div>

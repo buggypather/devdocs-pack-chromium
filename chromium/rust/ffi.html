@@ -1,0 +1,156 @@
+<h1>Rust FFI</h1>
+<p>This document provide guidance for C++/Rust interoperation using FFI (foreign
+function interfaces).</p>
+<h2 id="which-tool-should-i-use">Which tool should I use?</h2>
+<p>For interoperating with <strong>C++ code</strong>, we recommend the
+<a href="https://cxx.rs/">the <code>cxx</code> crate</a>.
+For introductory guidance, please see
+<a href="https://google.github.io/comprehensive-rust/chromium/interoperability-with-cpp.html">the <code>cxx</code> chapter</a>
+in the Chromium section of the Comprehensive Rust course.</p>
+<p>If you only need to use a <strong>C APIs</strong> from Rust (and not the other direction),
+you can use the <a href="https://rust-lang.github.io/rust-bindgen/"><code>bindgen</code></a> tool.
+Bindgen will automatically create Rust equivalents of the input C code, which
+you can then use from your own Rust code. For example, this project uses bindgen to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:mojo/public/rust/c_mojo_api/BUILD.gn;l=30;drc=84d3affd8824ebaa8ab04d0f20bcebb64b484704">import the Mojo C API</a>.
+For documentation of various options, see <code>//build/rust/rust_bindgen.gni</code>.</p>
+<p>Bindgen can also be used to import C++ headers, but it only supports a limited
+subset of the language.</p>
+<p><strong>In the future</strong>, we intend to recommend <a href="https://crubit.rs">Crubit</a> for new
+code (tracked in <a href="https://crbug.com/351793625">https://crbug.com/351793625</a>). Chromium now supports
+<code>cc_bindings_from_rs</code> (aka <code>cpp_api_from_rust</code>) for calling Rust from C++.
+However, because the Android build system does not yet support Crubit, it cannot be used in
+<code>//base</code>, <code>//net</code>, or other dependencies of Cronet (see <a href="https://crbug.com/535682335">https://crbug.com/535682335</a>).
+The reverse direction (Rust calling C++) is not yet supported, but integration
+is underway. See <a href="crubit"><code>crubit/README.md</code></a> for details.</p>
+<p>Chromium <strong>does not support any other FFI tools</strong> (e.g.
+<a href="https://github.com/mozilla/cbindgen"><code>cbindgen</code></a> or
+<a href="https://github.com/HKalbasi/zngur"><code>zngur</code></a>), and we do not plan to support
+them in the future.</p>
+<h2 id="safety-considerations">Safety considerations</h2>
+<p>All FFI code is <code>unsafe</code> by definition, since the Rust compiler cannot enforce
+its rules on non-Rust code. This means that when working with FFI, you must be
+careful to understand exactly what behaviors are possible. Make sure you&#39;re
+familiar with our <a href="unsafe#how-to-use-unsafe">safety guidelines</a>.
+So long as you&#39;re consistent about writing and following safety comments, you
+can avoid most problems.</p>
+<ul>
+<li><strong>Opaque types</strong>: When sharing a type from C++ to Rust using a <code>cxx::bridge</code>,
+it is treated as opaque, zero-sized placeholder type from the perspective of
+the Rust compiler. This means that it must always be behind an indirection (a
+pointer, reference, box, etc.), and the Rust compiler makes no assumptions
+about what it points to.<ul>
+<li>In particular, is it not fundamentally unsound for C++ to mutate an opaque
+value while Rust has a reference to it, although you must still be cautious
+of e.g. race conditions.</li>
+</ul>
+</li>
+<li><strong><a href="https://cxx.rs/shared.html">Shared types</a></strong>: Rust has visibility into these
+types, so you must ensure C++ obeys all aliasing rules, e.g. not mutating the
+value while Rust has a reference to it.</li>
+<li><strong>Widespread types</strong>: Some types are widely used throughout Chromium&#39;s C++
+codebase, and auditing every usage for safety is infeasible. In such cases,
+you may assume that C++ does not already contain undefined behavior.<ul>
+<li>For example, you may assume that mutations to the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:base/command_line.cc;l=38;drc=5496fbe366e6796c5b549c65a2cb267b5c933e35">static per-process <code>CommandLine</code> variable</a>
+are not already racy, even though there isn&#39;t specific code to enforce that.</li>
+</ul>
+</li>
+</ul>
+<h2 id="cxx-guidance"><code>cxx</code> guidance</h2>
+<p>The <code>cxx</code> crate is the current standard for C++/Rust interop in Chromium, but it
+has some rough edges that we hope will eventually be smoothed over with the
+<a href="https://crbug.com/470466915">adoption of Crubit</a>. This section provides advice
+for working with <code>cxx</code> in the meantime.</p>
+<h3 id="best-practices">Best practices</h3>
+<ul>
+<li>Maintain binding declarations in a <strong>single</strong> <code>#[cxx::bridge]</code> declaration.
+<code>cxx</code> supports reusing types across multiple <code>bridge</code>s, but there are some
+rough edges.</li>
+<li>Generate C++ side of bindings into a project-specific or crate-specific
+<code>namespace</code>.  For example: <code>#[cxx::bridge(namespace = &quot;some_cpp_namespace&quot;)]</code>.</li>
+<li>Prefer to call existing C++ functions when possible. When you cannot (e.g.
+because it involves a type that <code>cxx</code> can&#39;t translate), create wrapper
+functions in a C++ shim file.<ul>
+<li>By convention, these files end in <code>_shim.h</code> (or <code>.cc</code>).</li>
+</ul>
+</li>
+<li><a href="#safety-considerations">Think carefully</a> about if and how data can be
+shared by C++ and Rust at the same time, as this is a major source of
+potential unsafety.</li>
+</ul>
+<h3 id="suggestions">Suggestions</h3>
+<p>These are not necessarily best practices, but take them into consideration when
+designing your bridges.</p>
+<ul>
+<li>If you&#39;re not using a wrapper type, leverage <code>cxx</code>&#39;s [attributes] to generate
+more idiomatic code:<ul>
+<li>The <code>Self</code> attribute can attach static functions to existing types.</li>
+<li>The <code>rust_name</code> attribute is useful for translating between naming
+conventions.</li>
+</ul>
+</li>
+<li>If you&#39;re exposing a function without safety requirements (e.g. because it
+doesn&#39;t manipulate memory), you mark it as safe by annotating the entire
+<code>extern &quot;C++&quot;</code> block as <code>unsafe</code>.<ul>
+<li>A good rule of thumb is to do this after you try to write a safety comment
+and can&#39;t come up with any way for things to go wrong.</li>
+</ul>
+</li>
+</ul>
+<h2 id="general-tips-and-tricks">General Tips and Tricks</h2>
+<p>In general, you should follow
+<a href="https://doc.rust-lang.org/style-guide/">idomatic Rust style</a>, but some idioms
+are especially useful in an FFI context:</p>
+<ul>
+<li><p>Use <a href="https://doc.rust-lang.org/std/convert/trait.From.html"><code>From</code></a> (or
+<a href="https://doc.rust-lang.org/std/convert/trait.TryFrom.html"><code>TryFrom</code></a>) to
+convert between types; it&#39;s especially well-suited to converting between
+types that are logically equivalent, such as FFI types like
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/skia/experimental/rust_png/ffi/FFI.rs;l=20-27;drc=70253db1ecfe261003756f0d81ae30929cc77ee4"><code>ffi::ColorType</code></a>
+and third-party crate types like
+<a href="https://docs.rs/png/0.17.6/png/enum.ColorType.html"><code>png::ColorType</code></a>.</p>
+<ul>
+<li><p>See an <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/skia/experimental/rust_png/ffi/FFI.rs;l=221-231;drc=70253db1ecfe261003756f0d81ae30929cc77ee4">example trait implementation</a>
+and an example of <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/skia/experimental/rust_png/ffi/FFI.rs;l=651;drc=70253db1ecfe261003756f0d81ae30929cc77ee4">using the conversion</a>
+as <code>foo.into()</code>.</p>
+</li>
+<li><p>Note that when implementing the conversion for types defined in other crates,
+you may need to work around the
+<a href="https://doc.rust-lang.org/reference/items/implementations.html#r-items.impl.trait.orphan-rule">orphan rule</a>
+by implementing
+<a href="https://doc.rust-lang.org/std/convert/trait.Into.html"><code>Into</code></a>
+(or
+<a href="https://doc.rust-lang.org/std/convert/trait.TryInto.html"><code>TryInto</code></a>)
+trait instead.</p>
+</li>
+</ul>
+</li>
+<li><p>Use the <a href="https://doc.rust-lang.org/reference/expressions/operator-expr.html#r-expr.try">? operator</a>
+alongside the <a href="https://doc.rust-lang.org/std/option/">Option</a> or
+<a href="https://doc.rust-lang.org/std/result/">Result</a> types to check for errors.</p>
+<ul>
+<li><p>When used in the FFI layer, this may require splitting some functions
+into (a) one that returns <code>Result&lt;T, E&gt;</code> and uses <code>?</code> sugar,
+and (b) one that translates <code>Result&lt;T, E&gt;</code> into FFI-friendly
+status.</p>
+</li>
+<li><p>There are some examples
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/user_data_importer/utility/zip_ffi_glue.rs;l=297;drc=33f81e080c4c06d18880ec04832511bda3929972">here</a>
+and
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/user_data_importer/utility/zip_ffi_glue.rs;l=421-427;drc=33f81e080c4c06d18880ec04832511bda3929972">here</a>.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/6733098/18/components/user_data_importer/utility/zip_ffi_glue.rs#484">This example</a>
+avoids having to come up with a separate name by using an anonymous function.</p>
+</li>
+</ul>
+</li>
+<li><p>Use the <a href="https://doc.rust-lang.org/rust-by-example/flow_control/let_else.html"><code>let Ok(foo) = ... else { ... }</code></a> syntax to handle errors when you
+don&#39;t always want to return if you see a <code>None</code>. See
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/user_data_importer/utility/zip_ffi_glue.rs;l=328-333;drc=33f81e080c4c06d18880ec04832511bda3929972">an example here</a>.</p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/ffi.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/ffi.md</a>
+  </p>
+</div>

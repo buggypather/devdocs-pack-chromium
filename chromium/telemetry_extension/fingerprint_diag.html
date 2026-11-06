@@ -1,0 +1,354 @@
+<h1>Customization Guide - Fingerprint Diagnostics</h1>
+<h1 id="objective">Objective</h1>
+<p>Provide the instructions on the fingerprint diagnostic routines on ChromeOS
+devices.</p>
+<p>For an overview of the Telemetry Extension platform, please visit our
+<a href="telemetry_extension">main documentation</a>.</p>
+<h1 id="instructions">Instructions</h1>
+<p>This section provides the instructions on how to configure fingerprint
+diagnostic routines parameters with or without Boxster.</p>
+<blockquote>
+<p><strong><em>NOTE:</em></strong> It is your responsibility to make sure the parameters you fill in
+are correct. Neither cros-config nor Boxster validate that value.</p>
+</blockquote>
+<h2 id="configure-fingerprint-parameters">Configure fingerprint parameters</h2>
+<h3 id="models-with-boxster">Models with Boxster</h3>
+<ol>
+<li>In <code>config.star</code><ol>
+<li>Find a variable initialized with <code>hw_topo.create_fingerprint</code>.</li>
+<li>Add a keyword argument <code>fingerprint_diag</code> and fill in all the
+<a href="#fingerprint-parameters">fingerprint parameters</a>. Those parameters should be
+found in the fingerprint module spec.</li>
+</ol>
+</li>
+<li>Reflect your changes in <code>generated/config.jsonproto</code> and
+<code>sw_build_config/platform/chromeos-config/generated/project-config.json</code> by
+running: <code>./config/bin/gen_config config.star</code>.</li>
+<li>Commit your changes. Sample CL:
+<a href="http://crrev.com/c/3385463">crrev.com/c/3385463</a>.</li>
+</ol>
+<p>The configuration in  <code>config.star</code> would look like this:</p>
+<pre data-language="python">// config.star
+_FINGERPRINT = hw_topo.create_fingerprint(
+    &quot;FINGERPRINT&quot;,
+    &quot;Default fingerprint&quot;,
+    location = hw_topo.fp_loc.KEYBOARD_BOTTOM_LEFT,
+    board = &quot;fake_fingerprint_board&quot;,
+    fingerprint_diag = hw_topo.create_fingerprint_diag(
+        routine_enable = True,
+        max_pixel_dev = 5,
+        max_dead_pixels = 5,
+        pixel_median = hw_topo.create_fingerprint_diag_pixel_median(
+            cb_type1_lower = 1,
+            cb_type1_upper = 2,
+            cb_type2_lower = 3,
+            cb_type2_upper = 4,
+            icb_type1_lower = 5,
+            icb_type1_upper = 6,
+            icb_type2_lower = 7,
+            icb_type2_upper = 8,
+        ),
+        num_detect_zone = 2,
+        detect_zones = [hw_topo.create_fingerprint_diag_detect_zone(
+            x1 = 10,
+            y1 = 20,
+            x2 = 30,
+            y2 = 40,
+        ), hw_topo.create_fingerprint_diag_detect_zone(
+            x1 = 50,
+            y1 = 60,
+            x2 = 70,
+            y2 = 80,
+        )],
+        max_dead_pixels_in_detect_zone = 0,
+        max_reset_pixel_dev = 5,
+        max_error_reset_pixels = 5,
+    ),
+)</pre>
+<h3 id="models-without-boxster">Models without Boxster</h3>
+<ol>
+<li>In <code>model.yaml</code><ol>
+<li>Find the config of the model you want to enable.</li>
+<li>(skip if existed) Add <code>cros-healthd</code> section under the config.</li>
+<li>(skip if existed) Add <code>routines</code> section under <code>cros-healthd</code> section.</li>
+<li>Add <code>fingerprint-diag</code> under <code>routines</code> section.</li>
+<li>Add <a href="#fingerprint-parameters">fingerprint parameters</a> under
+<code>fingerprint-diag</code> section.</li>
+<li>Commit your changes and upload them to the internal Gerrit.</li>
+</ol>
+</li>
+</ol>
+<p>An example <code>model.yaml</code> could look somewhat like this:</p>
+<pre data-language="yaml">xxx-config:
+  ...
+  cros-healthd:
+    routines:
+      fingerprint-diag:
+        routine-enable: True
+        max-dead-pixels: 10
+        max-dead-pixels-in-detect-zone: 0
+        max-pixel-dev: 25
+        num-detect-zone: 2
+        max-error-reset-pixels: 5
+        max-reset-pixel-dev: 55
+        pixel-median:
+          cb-type1-lower: 180
+          cb-type1-upper: 220
+          cb-type2-lower: 80
+          cb-type2-upper: 120
+          icb-type1-lower: 15
+          icb-type1-upper: 70
+          icb-type2-lower: 145
+          icb-type2-upper: 200
+        detect-zones: [
+          {x1: 20, y1: 16, x2: 27, y2: 23},
+          {x1: 76, y1: 16, x2: 83, y2: 23},
+          {x1: 132, y1: 16, x2: 139, y2: 23},
+          {x1: 20, y1: 56, x2: 27, y2: 63},
+          {x1: 76, y1: 56, x2: 83, y2: 63},
+          {x1: 132, y1: 56, x2: 139, y2: 63},
+          {x1: 20, y1: 88, x2: 27, y2: 95},
+          {x1: 76, y1: 88, x2: 83, y2: 95},
+          {x1: 132, y1: 88, x2: 139, y2: 95},
+          {x1: 20, y1: 128, x2: 27, y2: 135},
+          {x1: 76, y1: 128, x2: 83, y2: 135},
+          {x1: 132, y1: 128, x2: 139, y2: 135}
+        ]
+  ...</pre>
+<h2 id="fingerprint-parameters">Fingerprint parameters</h2>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>RegEx</th>
+<th>Required</th>
+<th>Oneof Group</th>
+<th>Build-only</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>detect-zones</td>
+<td>array - <a href="#detect_zones">detect-zones</a></td>
+<td></td>
+<td>False</td>
+<td></td>
+<td>False</td>
+<td>Rectangles [x1, y1, x2, y2].</td>
+</tr>
+<tr>
+<td>max-dead-pixels</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>The maximum allowed number of dead pixels on the fingerprint sensor.  Minimum value: 0x0.</td>
+</tr>
+<tr>
+<td>max-dead-pixels-in-detect-zone</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>The maximum allowed number of dead pixels in the detection zone.  Minimum value: 0x0.</td>
+</tr>
+<tr>
+<td>max-error-reset-pixels</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>The maximum allowed number of error pixels when doing the reset test on the fingerprint sensor.  Minimum value: 0x0.</td>
+</tr>
+<tr>
+<td>max-pixel-dev</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>The maximum deviation from the median for a pixel.  Minimum value: 0x0.</td>
+</tr>
+<tr>
+<td>max-reset-pixel-dev</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>The maximum deviation from the median for a pixel when doing the reset test.  Minimum value: 0x0.</td>
+</tr>
+<tr>
+<td>num-detect-zone</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>The number of detect zone.  Minimum value: 0x0.</td>
+</tr>
+<tr>
+<td>pixel-median</td>
+<td><a href="#pixel_median">pixel-median</a></td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Range constraints of the pixel median value of the checkerboards.</td>
+</tr>
+<tr>
+<td>routine-enable</td>
+<td>boolean</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Enable fingerprint diagnostic routine or not.</td>
+</tr>
+</tbody></table>
+<h3 id="detect-zones">detect-zones</h3>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>RegEx</th>
+<th>Required</th>
+<th>Oneof Group</th>
+<th>Build-only</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>x1</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td><code>x1</code> should be smaller than <code>x2</code>.  Minimum value: 0x0.</td>
+</tr>
+<tr>
+<td>x2</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td><code>x1</code> should be smaller than <code>x2</code>.  Minimum value: 0x0.</td>
+</tr>
+<tr>
+<td>y1</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td><code>y1</code> should be smaller than <code>y2</code>.  Minimum value: 0x0.</td>
+</tr>
+<tr>
+<td>y2</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td><code>y1</code> should be smaller than <code>y2</code>.  Minimum value: 0x0.</td>
+</tr>
+</tbody></table>
+<h3 id="pixel-median">pixel-median</h3>
+<table>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Type</th>
+<th>RegEx</th>
+<th>Required</th>
+<th>Oneof Group</th>
+<th>Build-only</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>cb-type1-lower</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Checkerboard type1 lower bound.  Minimum value: 0x0. Maximum value: 0xff.</td>
+</tr>
+<tr>
+<td>cb-type1-upper</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Checkerboard type1 upper bound.  Minimum value: 0x0. Maximum value: 0xff.</td>
+</tr>
+<tr>
+<td>cb-type2-lower</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Checkerboard type2 lower bound.  Minimum value: 0x0. Maximum value: 0xff.</td>
+</tr>
+<tr>
+<td>cb-type2-upper</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Checkerboard type2 upper bound.  Minimum value: 0x0. Maximum value: 0xff.</td>
+</tr>
+<tr>
+<td>icb-type1-lower</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Inverted checkerboard type1 lower bound.  Minimum value: 0x0. Maximum value: 0xff.</td>
+</tr>
+<tr>
+<td>icb-type1-upper</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Inverted checkerboard type1 upper bound.  Minimum value: 0x0. Maximum value: 0xff.</td>
+</tr>
+<tr>
+<td>icb-type2-lower</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Inverted checkerboard type2 lower bound.  Minimum value: 0x0. Maximum value: 0xff.</td>
+</tr>
+<tr>
+<td>icb-type2-upper</td>
+<td>integer</td>
+<td></td>
+<td>True</td>
+<td></td>
+<td>False</td>
+<td>Inverted checkerboard type2 upper bound.  Minimum value: 0x0. Maximum value: 0xff.</td>
+</tr>
+</tbody></table>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/fingerprint_diag.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/fingerprint_diag.md</a>
+  </p>
+</div>

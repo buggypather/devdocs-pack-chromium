@@ -1,0 +1,399 @@
+<h1>The Chromium Test Executable API</h1>
+<p><a href="https://bit.ly/chromium-test-runner-api">bit.ly/chromium-test-runner-api</a> (*)</p>
+<h2 id="introduction">Introduction</h2>
+<p>This document defines the API that test executables must implement in order to
+be run on the Chromium continuous integration infrastructure (the
+<a href="https://chromium.googlesource.com/infra/infra/+/main/doc/users/services/about_luci.md">LUCI</a>
+system using the <code>chromium</code> and <code>chromium_trybot</code> recipes).</p>
+<p>*** note
+<strong>NOTE:</strong> This document specifies the existing <code>isolated_scripts</code> API in the
+Chromium recipe. Currently we also support other APIs (e.g., for
+GTests), but we should migrate them to use the <code>isolated_scripts</code> API.
+That work is not currently scheduled.</p>
+<hr>
+<p>This spec applies only to functional tests and does not attempt to
+specify how performance tests should work, though in principle they
+could probably work the same way and possibly just produce different
+output.</p>
+<p>This document is specifically targeted at Chromium and assumes you are
+using GN and Ninja for your build system. It should be possible to adapt
+these APIs to other projects and build recipes, but this is not an
+immediate goal. Similarly, if a project adapts this API and the related
+specifications it should be able to reuse the functionality and tooling
+we&#39;ve built out for Chromium&#39;s CI system more easily in other LUCI
+deployments.</p>
+<hr>
+<p><strong>NOTE:</strong> It bears repeating that this describes the current state of
+affairs, and not the desired end state. A companion doc,
+<a href="https://docs.google.com/document/d/1MwnIx8kavuLSpZo3JmL9T7nkjTz1rpaJA4Vdj_9cRYw/edit?usp=sharing">Cleaning up the Chromium Testing Environment</a>,
+discusses a possible path forward and end state.</p>
+<hr>
+<h2 id="building-and-invoking-a-test-executable">Building and Invoking a Test Executable</h2>
+<p>There are lots of different kinds of tests, but we want to be able to
+build and invoke them uniformly, regardless of how they are implemented.</p>
+<p>We will call the thing being executed to run the tests a <em>test
+executable</em> (or executable for short). This is not an ideal name, as
+this doesn&#39;t necessarily refer to a GN executable target type; it may be
+a wrapper script that invokes other binaries or scripts to run the
+tests.</p>
+<p>We expect the test executable to run one or more tests. A <em>test</em> must be
+an atomically addressable thing with a name that is unique to that
+invocation of the executable, i.e., we expect that we can pass a list of
+test names to the test executable and only run just those tests. Test
+names must not contain a &quot;::&quot; (which is used as a separator between test
+names) and must not contain a &quot;*&quot; (which could be confused with a glob
+character) or start with a &quot;-&quot; (which would be confused with an
+indicator that you should skip the test). Test names should generally
+only contain ASCII code points, as the infrastructure does not currently
+guarantee that non-ASCII code points will work correctly everywhere. We
+do not specify test naming conventions beyond these requirements, and it
+is fully permissible for a test to contain multiple assertions which may
+pass or fail; this design does not specify a way to interpret or handle
+those &quot;sub-atomic&quot; assertions; their existence is opaque to this design.
+In particular, this spec does not provide a particular way to identify
+and handle parameterized tests, or to do anything with test suites
+beyond a supporting a limited form of globbing for specifying sets of
+test names.</p>
+<p>To configure a new test, you need to modify one to three files:</p>
+<ul>
+<li>The test must be listed in one or more test suites in
+<a href="https://github.com/chromium/chromium/blob/HEAD/testing/buildbot/test_suites.pyl">//testing/buildbot/test_suites.pyl</a>.  Most commonly the test will be
+defined as a single string (e.g., &quot;base_unittests&quot;), which keys into an
+entry in <a href="https://github.com/chromium/chromium/blob/HEAD/testing/buildbot/gn_isolate_map.pyl">//testing/buildbot/gn_isolate_map.pyl</a>.  In some cases, tests
+will reference a target and add additional command line arguments. These
+entries (along with <a href="https://github.com/chromium/chromium/blob/HEAD/testing/buildbot/test_suite_exceptions.pyl">//testing/buildbot/test_suite_exceptions.pyl</a> and
+<a href="https://github.com/chromium/chromium/blob/HEAD/testing/buildbot/waterfalls.pyl">//testing/buildbot/waterfalls.pyl</a>) determine where the tests will be
+run. For more information on how these files work, see
+<a href="https://github.com/chromium/chromium/blob/HEAD/testing/buildbot/README.md">//testing/buildbot/README.md</a></li>
+<li>Tests entries must ultimately reference an entry in
+//testing/buildbot/gn_isolate_map.pyl. This file contains the mapping of
+ninja compile targets to GN targets (specifying the GN label for the
+latter); we need this mapping in order to be able to run <code>gn analyze</code>
+against a patch to see which targets are affected by a patch. This file
+also tells MB what kind of test an entry is (so we can form the correct
+command line) and may specify additional command line flags. If you are
+creating a test that is only a variant of an existing test, this may be the
+only file you need to modify. (Technically, you could define a new test
+solely in test_suites.pyl and reference existing gn_isolate_map.pyl
+entries, but this is considered bad practice).</li>
+<li>Add the GN target itself to the appropriate build files. Make sure this GN
+target contains all of the data and data_deps entries needed to ensure the
+test isolate has all the files the test needs to run.  If your test doesn&#39;t
+depend on new build targets or add additional data file dependencies, you
+likely don&#39;t need this. However, this is increasingly uncommon.</li>
+</ul>
+<h3 id="command-line-arguments">Command Line Arguments</h3>
+<p>The executable must support the following command line arguments (aka flags):</p>
+<pre>--isolated-outdir=[PATH]</pre>
+<p>This argument is required, and should be set to the directory created
+by the swarming task for the task to write outputs into.</p>
+<pre>--out-dir=[PATH]</pre>
+<p>This argument mirrors <code>--isolated-outdir</code>, but may appear in addition to
+it depending on the bot configuration (e.g. IOS bots that specify the
+<code>out_dir_arg</code> mixin in //testing/buildbot/waterfalls.pyl). It only needs
+to be handled in these cases.</p>
+<pre>--isolated-script-test-output=[FILENAME]</pre>
+<p>This argument is optional. If this argument is provided, the executable
+must write the results of the test run in the <a href="json_test_results_format">JSON Test
+Results Format</a> into
+that file. If this argument is not given to the executable, the
+executable must not write the output anywhere. The executable should
+only write a valid version of the file, and generally should only do
+this at the end of the test run. This means that if the run is
+interrupted, you may not get the results of what did run, but that is
+acceptable.</p>
+<pre>--isolated-script-test-filter=[STRING]</pre>
+<p>This argument is optional. If this argument is provided, it must be a
+double-colon-separated list of strings, where each string either
+uniquely identifies a full test name or is a prefix plus a &quot;<em>&quot; on the
+end (to form a glob). The executable must run only the test matching
+those names or globs. &quot;</em>&quot; is <em>only</em> supported at the end, i.e., &#39;Foo.<em>&#39;
+is legal, but &#39;</em>.bar&#39; is not. If the string has a &quot;-&quot; at the front, the
+test (or glob of tests) must be skipped, not run. This matches how test
+names are specified in the simple form of the <a href="https://bit.ly/chromium-test-list-format">Chromium Test List
+Format</a>. We use the double
+colon as a separator because most other common punctuation characters
+can occur in test names (some test suites use URLs as test names, for
+example). This argument may be provided multiple times; how to treat
+multiple occurrences (and how this arg interacts with
+--isolated-script-test-filter-file) is described below.</p>
+<pre>--isolated-script-test-filter-file=[FILENAME]</pre>
+<p>If provided, the executable must read the given filename to determine
+which tests to run and what to expect their results to be. The file must
+be in the <a href="https://bit.ly/chromium-test-list-format">Chromium Test List Format</a> (either the simple or
+tagged formats are fine). This argument may be provided multiple times;
+how to treat multiple occurrences (and how this arg interacts with
+<code>--isolated-script-test-filter</code>) is described below.</p>
+<pre>--isolated-script-test-launcher-retry-limit=N</pre>
+<p>By default, tests are run only once if they succeed. If they fail, we
+will retry the test up to N times (so, for N+1 total invocations of the
+test) looking for a success (and stop retrying once the test has
+succeed). By default, the value of N is 3. To turn off retries, pass
+<code>--isolated-script-test-launcher-retry-limit=0</code>. If this flag is provided,
+it is an error to also pass <code>--isolated-script-test-repeat</code> (since -repeat
+specifies an explicit number of times to run the test, it makes no sense
+to also pass --retry-limit).</p>
+<pre>--isolated-script-test-repeat=N</pre>
+<p>If provided, the executable must run a given test N times (total),
+regardless of whether the test passes or fails. By default, tests are
+only run once (N=1) if the test matches an expected result or passes,
+otherwise it may be retried until it succeeds, as governed by
+<code>--isolated-script-test-launcher-retry-limit</code>, above. If this flag is
+provided, it is an error to also pass
+<code>--isolated-script-test-launcher-retry-limit</code> (since -repeat specifies an
+explicit number of times to run the test, it makes no sense to also pass
+-retry-limit).</p>
+<pre>--xcode-build-version [VERSION]</pre>
+<p>This flag is passed to scripts on IOS bots only, due to the <code>xcode_14_main</code>
+mixin in //testing/builtbot/waterfalls.pyl.</p>
+<pre>--xctest</pre>
+<p>This flag is passed to scripts on IOS bots only, due to the <code>xctest</code>
+mixin in //testing/builtbot/waterfalls.pyl.</p>
+<p>If &quot;<code>--</code>&quot; is passed as an argument:</p>
+<ul>
+<li>If the executable is a wrapper that invokes another underlying
+executable, then the wrapper must handle arguments passed before the
+&quot;--&quot; on the command line (and must error out if it doesn&#39;t know how
+to do that), and must pass through any arguments following the &quot;--&quot;
+unmodified to the underlying executable (and otherwise ignore them
+rather than erroring out if it doesn&#39;t know how to interpret them).</li>
+<li>If the executable is not a wrapper, but rather invokes the tests
+directly, it should handle all of the arguments and otherwise ignore
+the &quot;--&quot;. The executable should error out if it gets arguments it
+can&#39;t handle, but it is not required to do so.</li>
+</ul>
+<p>If &quot;--&quot; is not passed, the executable should error out if it gets
+arguments it doesn&#39;t know how to handle, but it is not required to do
+so.</p>
+<p>If the test executable produces artifacts, they should be written to the
+location specified by the dirname of the <code>--isolated-script-test-output</code>
+argument). If the <code>--isolated-script-test-output-argument</code> is not
+specified, the executable should store the tests somewhere under the
+root_build_dir, but there is no standard for how to do this currently
+(most tests do not produce artifacts).</p>
+<p>The flag names are purposely chosen to be long in order to not conflict
+with other flags the executable might support.</p>
+<h3 id="environment-variables">Environment variables</h3>
+<p>The executable must check for and honor the following environment variables:</p>
+<pre>GTEST_SHARD_INDEX=[N]</pre>
+<p>This environment variable is optional, but if it is provided, it
+partially determines (along with <code>GTEST_TOTAL_SHARDS</code>) which fixed
+subset of tests (or &quot;shard&quot;) to run. <code>GTEST_TOTAL_SHARDS</code> must also be
+set, and <code>GTEST_SHARD_INDEX</code> must be set to an integer between 0 and
+<code>GTEST_TOTAL_SHARDS</code>. Determining which tests to run is described
+below.</p>
+<pre>GTEST_TOTAL_SHARDS=[N]</pre>
+<p>This environment variable is optional, but if it is provided, it
+partially determines (along with <code>GTEST_TOTAL_SHARDS</code>) which fixed subset
+of tests (or &quot;shard&quot;) to run. It must be set to a non-zero integer.
+Determining which tests to run is described below.</p>
+<h3 id="exit-codes-aka-return-codes-or-return-values">Exit codes (aka return codes or return values)</h3>
+<p>The executable must return 0 for a completely successful run, and a
+non-zero result if something failed. The following codes are recommended
+(2 and 130 coming from UNIX conventions):</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0 (zero)</td>
+<td>The executable ran to completion and all tests either ran as expected or passed unexpectedly.</td>
+</tr>
+<tr>
+<td>1</td>
+<td>The executable ran to completion but some tests produced unexpectedly failing results.</td>
+</tr>
+<tr>
+<td>2</td>
+<td>The executable failed to start, most likely due to unrecognized or unsupported command line arguments.</td>
+</tr>
+<tr>
+<td>130</td>
+<td>The executable run was aborted the user (or caller) in a semi-orderly manner (aka SIGKILL or Ctrl-C).</td>
+</tr>
+</tbody></table>
+<h2 id="filtering-which-tests-to-run">Filtering which tests to run</h2>
+<p>By default, the executable must run every test it knows about. However,
+as noted above, the <code>--isolated-script-test-filter</code> and
+<code>--isolated-script-test-filter-file</code> flags can be used to customize which
+tests to run. Either or both flags may be used, and either may be
+specified multiple times.</p>
+<p>The interaction is as follows:</p>
+<ul>
+<li>A test should be run only if it would be run when <strong>every</strong> flag is
+evaluated individually.</li>
+<li>A test should be skipped if it would be skipped if <strong>any</strong> flag was
+evaluated individually.</li>
+</ul>
+<p>If multiple filters in a flag match a given test name, the longest match
+takes priority (longest match wins). I.e.,. if you had
+<code>--isolated-script-test-filter=&#39;a*::-ab*&#39;</code>, then <code>ace.html</code> would run but
+<code>abd.html</code> would not. The order of the filters should not matter. It is
+an error to have multiple expressions of the same length that conflict
+(e.g., <code>a*::-a*</code>).</p>
+<p>Examples are given below.</p>
+<p>It may not be obvious why we need to support these flags being used multiple
+times, or together. There are two main sets of reasons:</p>
+<ul>
+<li>First, you may want to use multiple -filter-file arguments to specify
+multiple sets of test expectations (e.g., the base test expectations and
+then MSAN-specific expectations), or to specify expectations in one file
+and list which tests to run in a separate file.</li>
+<li>Second, the way the Chromium recipes work, in order to retry a test step to
+confirm test failures, the recipe doesn&#39;t want to have to parse the
+existing command line, it just wants to append
+--isolated-script-test-filter and list the
+tests that fail, and this can cause the --isolated-script-test-filter
+argument to be listed multiple times (or in conjunction with
+--isolated-script-test-filter-file).</li>
+</ul>
+<p>You cannot practically use these mechanisms to run equally sized subsets of the
+tests, so if you want to do the latter, use <code>GTEST_SHARD_INDEX</code> and
+<code>GTEST_TOTAL_SHARDS</code> instead, as described in the next section.</p>
+<h2 id="running-equally-sized-subsets-of-tests-shards">Running equally-sized subsets of tests (shards)</h2>
+<p>If the <code>GTEST_SHARD_INDEX</code> and <code>GTEST_TOTAL_SHARDS</code> environment variables are
+set, <code>GTEST_TOTAL_SHARDS</code> must be set to a non-zero integer N, and
+<code>GTEST_SHARD_INDEX</code> must be set to an integer M between 0 and N-1. Given those
+two values, the executable must run only every N<sup>th</sup> test starting at
+test number M (i.e., every i<sup>th</sup> test where (i mod N) == M).  dd</p>
+<p>This mechanism produces roughly equally-sized sets of tests that will hopefully
+take roughly equal times to execute, but cannot guarantee the latter property
+to any degree of precision. If you need them to be as close to the same
+duration as possible, you will need a more complicated process. For example,
+you could run all of the tests once to determine their individual running
+times, and then build up lists of tests based on that, or do something even
+more complicated based on multiple test runs to smooth over variance in test
+execution times. Chromium does not currently attempt to do this for functional
+tests, but we do something similar for performance tests in order to better
+achieve equal running times and device affinity for consistent results.</p>
+<p>You cannot practically use the sharding mechanism to run a stable named set of
+tests, so if you want to do the latter, use the <code>--isolated-script-test-filter</code>
+flags instead, as described in the previous section.</p>
+<p>Which tests are in which shard must be determined <strong>after</strong> tests have been
+filtered out using the <code>--isolated-script-test-filter(-file)</code> flags.</p>
+<p>The order that tests are run in is not otherwise specified, but tests are
+commonly run either in lexicographic order or in a semi-fixed random order; the
+latter is useful to help identify inter-test dependencies, i.e., tests that
+rely on the results of previous tests having run in order to pass (such tests
+are generally considered to be undesirable).</p>
+<h2 id="examples">Examples</h2>
+<p>Assume that out/Default is a debug build (i.e., that the &quot;Debug&quot; tag will
+apply), and that you have tests named Foo.Bar.bar{1,2,3}, Foo.Bar.baz,
+and Foo.Quux.quux, and the following two filter files:</p>
+<pre data-language="sh">$ cat filter1
+Foo.Bar.*
+-Foo.Bar.bar3
+$ cat filter2
+# tags: [ Debug Release ]
+[ Debug ] Foo.Bar.bar2 [ Skip ]
+$</pre>
+<h4 id="filtering-tests-on-the-command-line">Filtering tests on the command line</h4>
+<pre data-language="sh">$ out/Default/bin/run_foo_tests \
+    --isolated_script-test-filter='Foo.Bar.*::-Foo.Bar.bar3'
+[1/2] Foo.Bar.bar1 passed in 0.1s
+[2/2] Foo.Bar.bar2 passed in 0.13s
+
+2 tests passed in 0.23s, 0 skipped, 0 failures.
+$</pre>
+<h4 id="using-a-filter-file">Using a filter file</h4>
+<pre data-language="sh">$ out/Default/bin/run_foo_tests --isolated-script-test-filter-file=filter1
+[1/2] Foo.Bar.bar1 passed in 0.1s
+[2/2] Foo.Bar.bar2 passed in 0.13s
+
+2 tests passed in 0.23s, 0 skipped, 0 failures.</pre>
+<h4 id="combining-multiple-filters">Combining multiple filters</h4>
+<pre data-language="sh">$ out/Default/bin/run_foo_tests --isolated-script-test-filter='Foo.Bar.*' \
+    --isolated-script-test-filter='Foo.Bar.bar2'
+[1/1] Foo.Bar.bar2 passed in 0.13s
+
+All 2 tests completed successfully in 0.13s
+$ out/Default/bin/run_foo_tests --isolated-script-test-filter='Foo.Bar.* \
+    --isolated-script-test-filter='Foo.Baz.baz'
+No tests to run.
+$ out/Default/bin/run_foo_tests --isolated-script-test-filter-file=filter2 \
+    --isolated-script-test-filter=-FooBaz.baz
+[1/4] Foo.Bar.bar1 passed in 0.1s
+[2/4] Foo.Bar.bar3 passed in 0.13s
+[3/4] Foo.Baz.baz passed in 0.05s
+
+3 tests passed in 0.28s, 2 skipped, 0 failures.
+$</pre>
+<h4 id="running-one-shard-of-tests">Running one shard of tests</h4>
+<pre data-language="sh">$ GTEST_TOTAL_SHARDS=3 GTEST_SHARD_INDEX=1 out/Default/bin/run_foo_tests
+Foo.Bar.bar2 passed in 0.13s
+Foo.Quux.quux1 passed in 0.02s
+
+2 tests passed in 0.15s, 0 skipped, 0 failures.
+$</pre>
+<h2 id="related-work">Related Work</h2>
+<p>This document only partially makes sense in isolation.</p>
+<p>The <a href="json_test_results_format">JSON Test Results Format</a> document
+specifies how the results of the test run should be reported.</p>
+<p>The <a href="https://bit.ly/chromium-test-list-format">Chromium Test List Format</a> specifies in more detail how we can specify
+which tests to run and which to skip, and whether the tests are expected to
+pass or fail.</p>
+<p>Implementing everything in this document plus the preceding three documents
+should fully specify how tests are run in Chromium. And, if we do this,
+implementing tools to manage tests should be significantly easier.</p>
+<p><a href="https://bit.ly/chromium-build-naming">On Naming Chromium Builders and Build Steps</a> is a related proposal that
+has been partially implemented; it is complementary to this work, but not
+required.</p>
+<p><a href="https://docs.google.com/document/d/1MwnIx8kavuLSpZo3JmL9T7nkjTz1rpaJA4Vdj_9cRYw/edit?usp=sharing">Cleaning up the Chromium Testing Conventions</a> describes a series of
+changes we might want to make to this API and the related infrastructure to
+simplify things.</p>
+<p>Additional documents that may be of interest:</p>
+<ul>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/testing/buildbot/README.md">Testing Configuration Files</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/tools/mb/docs/user_guide.md">The MB (Meta-Build wrapper) User Guide</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/tools/mb/docs/design_spec.md">The MB (Meta-Build wrapper) Design Spec</a></li>
+<li><a href="https://goto.google.com/chops-tada">Test Activation / Deactivation (TADA)</a> (internal Google document only,
+sorry)</li>
+<li><a href="https://bit.ly/chromium-test-artifacts">Standardize Artifacts for Chromium Testing</a> is somewhat dated but goes
+into slightly greater detail on how to store artifacts produced by tests
+than the JSON Test Results Format does.</li>
+</ul>
+<h2 id="document-history">Document history</h2>
+<p>[ Significant changes only. ]</p>
+<table>
+<thead>
+<tr>
+<th>Date</th>
+<th>Comment</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2017-12-13</td>
+<td>Initial version. This tried to be a full-featured spec that defined common flags that devs might want with friendly names, as well the flags needed to run tests on the bots.</td>
+</tr>
+<tr>
+<td>2019-05-24</td>
+<td>Second version. The spec was significantly revised to just specify the minimal subset needed to run tests consistently on bots given the current infrastructure.</td>
+</tr>
+<tr>
+<td>2019-05-29</td>
+<td>All TODOs and discussion of future work was stripped out; now the spec only specifies how the <code>isolated_scripts</code> currently behave. Future work was moved to a new doc, <a href="https://docs.google.com/document/d/1MwnIx8kavuLSpZo3JmL9T7nkjTz1rpaJA4Vdj_9cRYw/edit?usp=sharing">Cleaning up the Chromium Testing Environment</a>.</td>
+</tr>
+<tr>
+<td>2019-09-16</td>
+<td>Add comment about ordering of filters and longest match winning for <code>--isolated-script-test-filter</code>.</td>
+</tr>
+<tr>
+<td>2020-07-01</td>
+<td>Moved into the src repo and converted to Markdown. No content changes otherwise.</td>
+</tr>
+</tbody></table>
+<h2 id="notes">Notes</h2>
+<p>(*) The initial version of this document talked about test runners instead of
+test executables, so the bit.ly shortcut URL refers to the test-runner-api instead of
+the test-executable-api. The author attempted to create a test-executable-api link,
+but pointed it at the wrong document by accident. bit.ly URLs can&#39;t easily be
+updated :(.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/test_executable_api.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/test_executable_api.md</a>
+  </p>
+</div>

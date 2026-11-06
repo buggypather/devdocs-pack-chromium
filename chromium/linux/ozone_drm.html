@@ -1,0 +1,77 @@
+<h1>Running ChromeOS UI on Linux</h1>
+<p>Note that this instructions may not work for you. They have been
+verified to work as of 2018/06/06 on standard Google engineering
+workstations as issued to engineerings on the Chrome team. Please
+submit patches describing the steps needed for other machines or distributions.</p>
+<h2 id="nouveau">Nouveau</h2>
+<p>If you have an NVidia card, you probably have the binary drivers installed. These install a blacklist for the nouveau kernel modules. Best is to remove the nvidia driver and switch to nouveau completely:</p>
+<pre>$ sudo apt-get remove --purge &quot;nvidia*&quot;
+$ sudo apt-get install xserver-xorg-input-evdev xserver-xorg-input-mouse xserver-xorg-input-kbd xserver-xorg-input-libinput xserver-xorg-video-nouveau
+$ sudo dpkg-reconfigure xserver-xorg
+$ # If you are using a Google development machine:
+$ sudo goobuntu-config set custom_video_driver custom</pre>
+<p>Default version of nouveau xorg driver is too old for the NV117 chipset in Z840 machines. Install a newer version:</p>
+<pre>$ cd /tmp
+$ wget http://http.us.debian.org/debian/pool/main/x/xserver-xorg-video-nouveau/xserver-xorg-video-nouveau_1.0.15-2_amd64.deb
+$ sudo apt-get install ./xserver-xorg-video-nouveau_1.0.15-2_amd64.deb</pre>
+<p>At this point you <em>must  reboot.</em> If you run into issues to load video at boot then disable <code>load_video</code> and <code>gfx_mode</code> in <code>/boot/grub/grub.cfg</code>.</p>
+<h2 id="building-chrome">Building Chrome</h2>
+<p>Checkout chromium as per your usual workflow. See <a href="https://www.chromium.org/developers/how-tos/get-the-code">Get the Code:
+Checkout, Build, &amp; Run
+Chromium</a>.
+Googlers should checkout chromium source code as described here:
+<a href="https://companydoc.corp.google.com/company/teams/chrome/build_instructions.md?cl=head">Building Chromium on a corporate Linux
+workstation</a></p>
+<p>We want to build on linux on top of Ozone with the DRM 
+(Direct Render Manager) platform which is backed by GBM 
+(Generic Buffer Management). The following instructions builds 
+chromium targets along with minigbm  that lives in the chromium 
+tree <code>src/third_party/minigbm</code>. Currently, there is no builder for
+this configuration so while this worked (mostly) when this document 
+was written, some experimentation may be necessary.</p>
+<p>Set the gn args for your output dir target <code>out/Nouveau</code> with:</p>
+<pre>$ gn args out/Nouveau
+Add the following arguments:
+dcheck_always_on = true
+use_ozone = true
+target_os = &quot;chromeos&quot;
+ozone_platform_drm = true
+ozone_platform = &quot;drm&quot;
+use_system_minigbm = false
+target_sysroot = &quot;//build/linux/debian_jessie_amd64-sysroot&quot;
+is_debug = false
+use_remoteexec = true
+use_xkbcommon = true
+#use_evdev_gestures = true
+#use_system_libevdev = false
+#use_system_gestures = false
+
+# Non-Googlers should set the next two flags to false
+is_chrome_branded = true
+is_official_build = true
+use_pulseaudio = false</pre>
+<p>Build official release build of chrome:</p>
+<pre>$ ninja -j768 -l24 -C out/Nouveau chrome chrome_sandbox nacl_helper
+$ # Give user access to dri, input and audio device nodes:
+$ sudo sh -c &quot;echo 'KERNEL==\&quot;event*\&quot;, NAME=\&quot;input/%k\&quot;, MODE=\&quot;660\&quot;, GROUP=\&quot;plugdev\&quot;' &gt; /etc/udev/rules.d/90-input.rules&quot;
+$ sudo sh -c &quot;echo 'KERNEL==\&quot;card[0-9]*\&quot;, NAME=\&quot;dri/%k\&quot;, GROUP=\&quot;video\&quot;' &gt; /etc/udev/rules.d/90-dri.rules&quot;
+$ sudo udevadm control --reload
+$ sudo udevadm trigger --action=add
+$ sudo usermod -a -G plugdev $USER
+$ sudo usermod -a -G video $USER
+$ sudo usermod -a -G audio $USER
+$ newgrp video
+$ newgrp plugdev
+$ newgrp audio
+$ # Stop pulseaudio if running:
+$ pactl exit</pre>
+<p>Run chrome: (Set <code>CHROMIUM_SRC</code> to the directory containing your Chrome checkout.)</p>
+<pre>$ sudo chvt 8; EGL_PLATFORM=surfaceless $CHROMIUM_SRC/out/Nouveau/chrome --ozone-platform=drm --enable-running-as-system-compositor --login-profile=user --user-data-dir=$HOME/.config/google-chrome-gbm --use-gl=egl --enable-wayland-server --login-manager --ash-constrain-pointer-to-root --default-tile-width=512 --default-tile-height=512 --system-developer-mode --crosh-command=/bin/bash</pre>
+<p>Login to Chrome settings should synchronize.</p>
+<p>Install Secure Shell if not already installed from  <a href="https://chrome.google.com/webstore/detail/secure-shell/pnhechapfaindjhompbnflcldabbghjo?hl=en">the web store</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/ozone_drm.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/ozone_drm.md</a>
+  </p>
+</div>

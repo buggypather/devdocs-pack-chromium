@@ -1,0 +1,53 @@
+<h1>Metadata for Crosier tests</h1>
+<h2 id="create-a-yaml-file-with-test-case-details">Create a yaml file with test case details</h2>
+<p>Create a yaml file in the same location of your test source file. Example of
+such yaml file:</p>
+<pre data-language="yaml">---
+name: &quot;LockScreen&quot;
+harness: &quot;crosier&quot;
+category: &quot;integration&quot;
+owners:
+  - email: &quot;test-owner-email@google.com&quot;
+  - email: &quot;chromeos-sw-engprod@google.com&quot;
+hw_agnostic: False
+criteria: |
+  Tests that dbus messages for lid close trigger screen lock. This only tests
+  the &quot;lock on lid close&quot; pref state.
+cases:
+  - id: &quot;CloseLidDbusIntegration&quot;
+    tags: [&quot;crosier:crosierdemosuite&quot;, &quot;crosier:cq&quot;]
+  - id: &quot;CloseLidPref&quot;
+    tags: [&quot;crosier:crosierdemosuite&quot;, &quot;crosier:cq&quot;, &quot;informational&quot;]
+...</pre>
+<p>Pay specifal attention to the list of <code>tags</code> for each test case. Using these
+tags, tests are being allocated to ChromeOS CI/CQ scheduling suites.</p>
+<p>Following tags are recognized and supported:</p>
+<ul>
+<li><code>crosier:crosierdemosuite</code> - test case will run daily in a dedicated,
+non-critical test suite for stability and regression monitoring.</li>
+<li><code>crosier:cq</code> - test case will run in global CQ and post-submit snapshot
+builds.</li>
+<li><code>informational</code> - test case will be considered as non-critical, i.e. not
+included in the critical CQ test suite.</li>
+<li><code>group:hw_agnostic</code> - test will run on VMs rather than on devices.</li>
+</ul>
+<h2 id="include-new-yaml-file-in-crosier-binary-build">Include new yaml file in Crosier binary build</h2>
+<p>The link to all yaml files should be added to the <code>crosier_metadata</code> rules that
+is included by the Crosier <code>chromeos_integration_tests</code> rule of the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/test/BUILD.gn">BUILD.gn</a>
+file:</p>
+<pre>copy(&quot;crosier_metadata&quot;) {
+    sources = [
+        ...
+        &quot;../browser/ash/login/lock/lock_screen_integration_test.yaml&quot;,
+        ...
+        ...
+    ]
+    outputs = [ &quot;$root_out_dir/crosier_metadata/{{source_file_part}}&quot; ]
+}</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/chromeos_integration/crosier_metadata.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/chromeos_integration/crosier_metadata.md</a>
+  </p>
+</div>

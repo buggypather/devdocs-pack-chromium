@@ -1,0 +1,108 @@
+<h1>Concepts</h1>
+<h2 id="web-apps---concepts">Web Apps - Concepts</h2>
+<h3 id="manifest-or-webmanifest">Manifest, or WebManifest</h3>
+<p>This refers to the document described by the
+<a href="https://www.w3.org/TR/appmanifest/">appmanifest</a> spec, with some extra features
+described by
+<a href="https://wicg.github.io/manifest-incubations/index.html">manifest-incubations</a>.
+This document describes metadata and developer configuration of an installable
+web app.</p>
+<p>For code representations of the manifest see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/web_applications/docs/manifest_representations.md">the list</a>.</p>
+<h3 id="manifest-link">Manifest Link</h3>
+<p>A manifest link is something that looks like this in a html document:</p>
+<pre data-language="html">&lt;link rel=&quot;manifest&quot; href=&quot;manifest.webmanifest&quot;&gt;</pre>
+<p>This link ties the manifest to the document, and subsequently used in the spec
+algorithms defined in <a href="https://www.w3.org/TR/appmanifest/">appmanifest</a> or
+<a href="https://wicg.github.io/manifest-incubations/index.html">manifest-incubations</a>
+to describe the webapp and determine if it is installable.</p>
+<h3 id="installable">Installable</h3>
+<p>If a document or page is considered &quot;installable&quot;, then the user agent can
+create some form of installed web app for that page. To be installable,
+<a href="https://source.chromium.org/search?q=f:web_app_dialog_utils.h%20CanCreateWebApp">web_app::CanCreateWebApp</a>
+(in <code>chrome/browser/ui/web_applications/web_app_dialog_utils.h</code>) must return
+true, where:</p>
+<ul>
+<li>The user profile must allow webapps to be installed</li>
+<li>The web contents of the page must not be crashed</li>
+<li>The last navigation on the web contents must not be a browser error page (e.g.
+DNS or connection errors; HTTP 404 responses are considered normal
+navigations)</li>
+<li>The URL scheme must be <code>http</code> or <code>https</code> (specific internal surfaces like
+<code>chrome://password-manager</code> are also eligible; extension app installation is
+disabled on Desktop)</li>
+</ul>
+<p>This is different from <a href="#promotable">promotable</a> below, which determines if
+Chrome will proactively promote installation of the page.</p>
+<h3 id="promotable">Promotable</h3>
+<p>A document is considered &quot;promotable&quot; if it fulfills installability criteria
+evaluated by <code>InstallableManager</code>. This general criteria includes:</p>
+<ul>
+<li>The document contains a <code>&lt;link rel=&quot;manifest&quot;&gt;</code>.</li>
+<li>The linked manifest can be processed
+<a href="https://www.w3.org/TR/appmanifest/#processing">according</a> to the spec and is
+valid.</li>
+<li>The processed manifest contains:<ul>
+<li><code>name</code> or <code>short_name</code></li>
+<li><code>start_url</code></li>
+<li><code>icons</code> with at least one icon matching the minimum size requirements (&gt;=
+144px or SVG <code>any</code>)</li>
+<li><code>display</code> or <code>display_override</code> mode that is not <code>&quot;browser&quot;</code> (e.g.
+<code>standalone</code>, <code>minimal-ui</code>, <code>window-controls-overlay</code>, <code>tabbed</code>)</li>
+</ul>
+</li>
+</ul>
+<p>Notes:</p>
+<ul>
+<li>Per spec, the document origin and the <code>start_url</code> origin must match.</li>
+<li>Per spec, the <code>start_url</code> origin does not have to match the <code>manifest_url</code>
+origin</li>
+<li>The <code>start_url</code> could be different from the <code>document_url</code>.</li>
+</ul>
+<h3 id="manifest-id">Manifest id</h3>
+<p>The <code>id</code> specified in the manifest represents the identity of the web app. The
+manifest id is processed following the algorithm described in
+<a href="https://www.w3.org/TR/appmanifest/#id-member">appmanifest specification</a> to
+produce the app&#39;s identity. In the web app system, the app&#39;s
+<a href="https://www.w3.org/TR/appmanifest/#dfn-identity">identifier</a> is
+<a href="https://source.chromium.org/search?q=f:web_app_helpers.h%20GenerateAppIdFromManifestId">hashed</a>
+to be stored to
+<a href="https://source.chromium.org/search?q=f:web_app.h%20WebApp::app_id">WebApp-&gt;app_id()</a>.</p>
+<p>For a detailed breakdown of cross-platform identifiers (Manifest ID, App ID,
+package names, UIDs), see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/components/webapps/docs/identifiers.md">Web App Identifiers</a>.</p>
+<p>If a manifest is discovered during any sort of page load, then the update
+process is initiated for that manifest. If it resolves to an <code>app_id</code> that is
+installed, then it will perform an update. See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/web_applications/docs/manifest_update_process.md">documentation</a>
+for more information.</p>
+<h3 id="scope">Scope</h3>
+<p>Scope refers to the prefix that a WebApp controls. All paths at or nested inside
+of a WebApp&#39;s scope are thought of as &quot;controlled&quot; or &quot;in-scope&quot; of that WebApp.
+This is a simple string prefix match. For example, if <code>scope</code> is <code>/my-app</code>, then
+the following will be &quot;in-scope&quot;:</p>
+<ul>
+<li><code>/my-app/index.html</code></li>
+<li><code>/my-app/sub/dir/hello.html</code></li>
+<li><code>/my-app-still-prefixed/index.html</code> (Note: if the scope was <code>/</code>, then this
+would not be out-of-scope)</li>
+</ul>
+<p>And the following will be &quot;out-of-scope&quot;:</p>
+<ul>
+<li><code>/my-other-app/index.html</code></li>
+<li><code>/index.html</code></li>
+</ul>
+<h3 id="display-mode">Display Mode</h3>
+<p>The <code>display</code> of a web app determines how the developer would like the app to
+look like to the user. See the
+<a href="https://www.w3.org/TR/appmanifest/#display-modes">spec</a> for how the <code>display</code>
+member is processed in the manifest and what the display modes mean.</p>
+<h3 id="isolated-web-apps">Isolated Web Apps</h3>
+<p>See <a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/web_applications/docs/isolated_web_apps.md">this document</a>
+for more information.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webapps/concepts.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webapps/concepts.md</a>
+  </p>
+</div>

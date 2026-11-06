@@ -1,0 +1,508 @@
+<h1>Chromium docs</h1>
+<p>This directory contains <a href="https://www.chromium.org/Home/">chromium project</a>
+documentation in <a href="https://gerrit.googlesource.com/gitiles/+/master/Documentation/markdown.md">Gitiles-flavored Markdown</a>. It is automatically
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/">rendered by Gitiles</a>.</p>
+<p><strong>If you add new documents, please also add a link to them in the Document Index
+below.</strong></p>
+<h2 id="creating-documentation">Creating Documentation</h2>
+<h3 id="guidelines">Guidelines</h3>
+<ul>
+<li>See the <a href="documentation_guidelines">Chromium Documentation Guidelines</a>
+and the
+<a href="documentation_best_practices">Chromium Documentation Best Practices</a>.</li>
+<li>Markdown documents must follow the
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/styleguide/markdown/markdown.md">Markdown Style
+Guide</a>.</li>
+</ul>
+<h3 id="previewing-changes">Previewing changes</h3>
+<h4 id="locally-using-md_browser">Locally using <a href="https://github.com/chromium/chromium/blob/HEAD/tools/md_browser/">md_browser</a></h4>
+<pre data-language="bash"># in chromium checkout
+./tools/md_browser/md_browser.py</pre>
+<p>This is only an estimate. The <strong>gitiles</strong> view may differ.</p>
+<h4 id="online-with-gerrits-links-to-gitiles">Online with Gerrit&#39;s links to gitiles</h4>
+<ol>
+<li>Upload a patch to gerrit, or receive a review request.
+e.g. <a href="https://chromium-review.googlesource.com/c/3362532">https://chromium-review.googlesource.com/c/3362532</a></li>
+<li>View a specific .md file.
+e.g. <a href="https://chromium-review.googlesource.com/c/3362532/2/docs/README.md">https://chromium-review.googlesource.com/c/3362532/2/docs/README.md</a></li>
+<li>You will see something like <br>
+Base
+<a href="https://chromium.googlesource.com/chromium/src/+/ad44f6081ccc6b92479b12f1eb7e9482f474859d/docs/README.md">preview</a>
+-&gt; Patchset 3
+<a href="https://chromium.googlesource.com/chromium/src/+/refs/changes/32/3362532/3/docs/README.md">preview</a>
+| DOWNLOAD <br>
+at the top left of the page. Click on the second
+&quot;<a href="https://chromium.googlesource.com/chromium/src/+/refs/changes/32/3362532/3/docs/README.md">preview</a>&quot;
+link to open the preview for the current patch set.</li>
+</ol>
+<p>This <strong>gitiles</strong> view is the authoritative view, exactly the same as will be
+used when committed.</p>
+<h2 id="document-index">Document Index</h2>
+<p><strong>Note</strong>: this is not an exhaustive list of all documents.</p>
+<h3 id="checking-out-and-building">Checking Out and Building</h3>
+<ul>
+<li><a href="linux/build_instructions">Linux Build Instructions</a> - Linux</li>
+<li><a href="mac_build_instructions">Mac Build Instructions</a> - MacOS</li>
+<li><a href="windows_build_instructions">Windows Build Instructions</a> - Windows</li>
+<li><a href="android_build_instructions">Android Build Instructions</a> - Android target
+(on a Linux host)</li>
+<li><a href="linux/cast_build_instructions">Cast Build Instructions</a> - Cast target
+(on a Linux host)</li>
+<li><a href="android_cast_build_instructions">Cast for Android Build Instructions</a> -
+Cast for Android (on a Linux host)</li>
+<li><a href="fuchsia/build_instructions">Fuchsia Build Instructions</a> -
+Fuchsia target (on a Linux host)</li>
+<li><a href="ios/build_instructions">iOS Build Instructions</a> - iOS target (on a MacOS
+host)</li>
+<li><a href="gerrit_guide">Gerrit Guide</a> - Setup Gerrit access</li>
+<li><a href="gerrit_reauth">Gerrit ReAuth</a> - Gerrit ReAuth guide</li>
+<li><a href="chromeos_build_instructions">Chrome OS Build Instructions</a> - Chrome OS</li>
+<li><a href="linux/chromium_arm">Linux Chromium ARM Recipes</a> - Recipes for building
+Chromium for ARM on Linux.</li>
+<li><a href="component_build">Chrome Component Build</a> - Faster builds using more
+libraries</li>
+<li><a href="cr_user_manual">Cr User Manual</a> - Manual for <code>cr</code>, a tool that tries to
+hide some of the tools used for working on Chromium behind an abstraction
+layer</li>
+</ul>
+<h3 id="design-docs">Design Docs</h3>
+<ul>
+<li>See <a href="design">design/README.md</a></li>
+</ul>
+<h3 id="integrated-development-environment-ide-set-up-guides">Integrated Development Environment (IDE) Set Up Guides</h3>
+<ul>
+<li><a href="android_studio">Android Studio</a> - Android Studio for Android builds</li>
+<li><a href="atom">Atom</a> - Atom multi-platform code editor</li>
+<li><a href="clion">CLion</a> - CLion IDE, supports GUI debugging.</li>
+<li><a href="eclipse">Eclipse for Android</a> - Eclipse for Android</li>
+<li><a href="linux/eclipse_dev">Eclipse for Linux</a> - Eclipse for other platforms
+(This guide was written for Linux, but is probably usable on Windows/MacOS
+as well)</li>
+<li><a href="emacs">EMACS Notes</a> - EMACS commands/styles/tool integrations</li>
+<li><a href="qtcreator">Qt Creator</a> - Using Qt Creator as an IDE or GUI debugger</li>
+<li><a href="vscode">Visual Studio Code</a> - Visual Studio Code</li>
+</ul>
+<h3 id="git">Git</h3>
+<ul>
+<li><a href="git_cookbook">Git Cookbook</a> - A collection of git recipes for common
+tasks</li>
+<li><a href="git_tips">Git Tips</a> - More git tips</li>
+<li><a href="git_submodules">Git submodules</a> - Git submodule (tips, FAQ)</li>
+</ul>
+<h3 id="clang">Clang</h3>
+<ul>
+<li><a href="clang">Clang Compiler</a> - General information on the clang compiler, used
+by default on Mac and Linux</li>
+<li><a href="clang_tool_refactoring">Clang Tool Refactoring</a> - Leveraging clang tools
+to perform refactorings that are AST-aware</li>
+<li><a href="clang_static_analyzer">The Clang Static Analyzer</a> - How to enable static
+analysis at build time</li>
+<li><a href="clang_code_coverage_wrapper">Clang Code Coverage Wrapper</a> - Enable Clang
+code coverage instrumentation for a subset of source files.</li>
+<li><a href="writing_clang_plugins">Writing Clang Plugins</a> - Don&#39;t write a clang
+plugin, but if you do, read this</li>
+<li><a href="updating_clang">Updating Clang</a> - Updating the version of Clang used to
+build</li>
+<li><a href="clang_format">Using clang-format on Chromium C++ Code</a> - Various ways to
+invoke clang-format on C++ code</li>
+<li><a href="clang_tidy">Clang Tidy</a> - Support for the <code>clang-tidy</code> tool in Chromium</li>
+<li><a href="updating_clang_format_binaries">Updating Clang Format Binaries</a> - How up
+update the clang-format binaries that come with a checkout of Chromium</li>
+</ul>
+<h3 id="general-development">General Development</h3>
+<ul>
+<li><a href="contributing">Contributing to Chromium</a> - Reference workflow process for
+contributing to the Chromium code base.</li>
+<li><a href="commit_checklist">Commit Checklist</a> - Streamlined checklist to go
+through before uploading CLs on Gerrit.</li>
+<li><a href="code_reviews">Code Reviews</a> - Code review requirements and guidelines</li>
+<li><a href="dependencies">Dependency management</a> - Managing dependencies (DEPS, git submodules)</li>
+<li><a href="cr_respect">Respectful Code Reviews</a> - A guide for code reviewers</li>
+<li><a href="cl_respect">Respectful Changes</a> - A guide for code authors</li>
+<li><a href="code_review_owners">Mandatory Code-Review Rollout</a> - Upcoming policy changes related to code review and OWNERS</li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/docs/luci_migration_faq.md">LUCI Migration FAQ</a> - FAQ on Buildbot-to-LUCI
+builder migration for Chromium</li>
+<li><a href="tour_of_luci_ui">Tour of Continuous Integration UI</a> - A tour of our
+the user interface for LUCI, our continuous integration system</li>
+<li><a href="parsing_test_results">Parsing Test Results</a> - An introduction for how to
+understand the results emitted by polygerrit and CI builds.</li>
+<li><a href="closure_compilation">Closure Compilation</a> - The <em>Closure</em> JavaScript
+compiler</li>
+<li><a href="threading_and_tasks">Threading and Tasks in Chrome</a> - How to run tasks
+and handle thread safety in Chrome.</li>
+<li><a href="callback">Callback&lt;&gt; and Bind()</a> - All about Callbacks, Closures, and
+Bind().</li>
+<li><a href="ui">Chromium Views UI</a> - Working with the desktop UI framework.</li>
+<li><a href="ui/views/platform_style">Views Platform Styling</a> - How views are styled
+to fit in different native platforms</li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/docs/tab_helpers.md">Tab Helpers</a> - Using WebContents/WebContentsObserver to add
+features to browser tabs.</li>
+<li><a href="adding_to_third_party">Adding third_party Libraries</a> - How to get code
+into third_party/</li>
+<li><a href="graphical_debugging_aid_chromium_views">Graphical Debugging Aid for Chromium Views</a> -
+Visualizing view trees during debugging</li>
+<li><a href="bitmap_pipeline">Bitmap Pipeline</a> - How bitmaps are moved from the
+renderer to the screen.</li>
+<li><a href="flag_guarding_guidelines">Flag Guarding Guidelines</a> - When to use
+server controlled kill switches and A/B experiments to safely roll out
+changes.</li>
+<li><a href="origin_trials_integration">Using the Origin Trials Framework</a> - A
+framework for conditionally enabling experimental APIs for testing.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:docs/website/site/developers/design-documents/sync">Chrome Sync</a> -
+Docs for the subsystem that allows one to sync data across devices.</li>
+<li><a href="ozone_overview">Ozone Overview</a> - Ozone is an abstraction layer between
+the window system and low level input and graphics.</li>
+<li><a href="release_branch_guidance">Guidelines for considering branch dates in project planning</a> -
+What to do (and not to do) around branch dates when scheduling your project
+work.</li>
+<li><a href="infra/watchlists">Watchlists</a> - Use watchlists to get notified of CLs
+you are interested in.</li>
+<li><a href="shutdown">Shutdown</a> - Explains the steps of Chrome shutdown, to make it
+easier to determine where to add a new shutdown operation.</li>
+<li><a href="api_keys">API Keys</a> - When you need access to Google APIs for a custom
+build, fork, integration of stock Chromium, or are building ChromiumOS (for
+login).</li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/components/user_education/README.md">User Education</a> - Create
+in-product help (IPH) and tutorials to call out Chromium features.</li>
+<li><a href="user_agent">User-Agent</a> - User-Agent and User-Agent Client Hints.</li>
+</ul>
+<h3 id="testing">Testing</h3>
+<ul>
+<li><a href="testing/web_tests">Running and Debugging Web Tests</a></li>
+<li><a href="testing/on_disabling_tests">On disabling tests</a></li>
+<li><a href="testing/writing_web_tests">Writing Web Tests</a> - Web Tests using
+<code>content_shell</code></li>
+<li><a href="testing/web_test_expectations">Web Test Expectations and Baselines</a> -
+Setting expected results of web tests.</li>
+<li><a href="testing/web_tests_tips">Web Tests Tips</a> - Best practices for web tests</li>
+<li><a href="testing/web_tests_with_manual_fallback">Web Tests with Manual Fallback</a> -
+Writing tests that simulate manual interventions</li>
+<li><a href="how_to_extend_web_test_framework">Extending the Web Test Framework</a></li>
+<li><a href="testing/identifying_tests_that_depend_on_order">Fixing Web Test Flakiness</a> -
+Diagnosing and fixing web test flakiness due to ordering dependencies.</li>
+<li><a href="testing/web_tests_in_content_shell">Running Web Tests using <code>content_shell</code></a> -
+Running web tests by hand.</li>
+<li><a href="testing/web_platform_tests">Web Platform Tests</a> - Shared tests across
+browser vendors</li>
+<li><a href="testing/using_crashpad_with_content_shell">Using Crashpad with <code>content_shell</code></a> -
+Capture stack traces on layout test crashes without an attached debugger</li>
+<li><a href="testing/test_descriptions">Test Descriptions</a> - Unit test targets that can be
+built, with associated descriptions.</li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/testing/libfuzzer/README.md">Fuzz Testing</a> - Fuzz testing in Chromium.</li>
+<li><a href="testing/linux_running_asan_tests">Running Chrome tests with AddressSanitizer (asan) and LeakSanitizer (lsan)</a> -
+Run Chrome tests with ASAN and LSAN builds to detect addressability issues and memory leaks.</li>
+<li><a href="testing/code_coverage">Code Coverage</a> - Code coverage for Chromium.</li>
+<li><a href="testing/code_coverage_in_gerrit">Code Coverage in Gerrit</a> - Per-CL code
+coverage in Gerrit to assist code reviews.</li>
+<li><a href="chrome_for_testing">Chrome for Testing</a> - The functional and behavioral differences of Chrome for Testing from standard Chrome.</li>
+<li><a href="chrome_for_testing/chrome_for_testing_configuration">Chrome for Testing configuration</a> - Customizing Chrome for Testing required components installation and UI behavior.</li>
+</ul>
+<h3 id="configuration-docs">Configuration Docs</h3>
+<ul>
+<li><a href="configuration">Configuration: Prefs, Settings, Features, Switches &amp; Flags</a> - Explains different ways to gate a new feature.</li>
+<li><a href="how_to_add_your_feature_flag">Adding a new feature flag in chrome://flags</a> - Quick guide to add a new feature flag to experiment your feature.</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/RuntimeEnabledFeatures.md">Runtime Enabled Features</a></li>
+<li><a href="initialize_blink_features">Initialization of Blink runtime features in content layer</a></li>
+<li><a href="origin_trials_integration">Integrating a feature with the origin trials framework</a></li>
+<li><a href="custom_type_helpers_for_origin_trial_elements">Custom Type Helpers for Origin-Trial-Controlled HTML Elements</a></li>
+</ul>
+<h3 id="gpu-related-docs">GPU-related docs</h3>
+<ul>
+<li><a href="gpu/pixel_wrangling">GPU Pixel Wrangling</a> - Instructions for GPU
+pixel wrangling (the GPU sheriffing rotation).</li>
+<li><a href="gpu/debugging_gpu_related_code">Debugging GPU related code</a> - Hints for
+debugging GPU- and graphics-related code.</li>
+<li><a href="gpu/gpu_testing">GPU Testing</a> - Description of Chromium&#39;s GPU testing
+infrastructure.</li>
+<li><a href="gpu/gpu_testing_bot_details">GPU Bot Details</a> - In-depth description of
+how the bots are maintained.</li>
+</ul>
+<h3 id="misc-linux-specific-docs">Misc Linux-Specific Docs</h3>
+<ul>
+<li><a href="linux/proxy_config">Linux Proxy Config</a> - Network proxy sources on Linux</li>
+<li><a href="linux/debugging_ssl">Debugging SSL on Linux</a> - Tips on debugging SSL
+code in Linux</li>
+<li><a href="linux/cert_management">Linux Cert Management</a> - Managing X.509
+Certificates in Linux</li>
+<li><a href="linux/debugging">Tips for Debugging on Linux</a></li>
+<li><a href="linux/gtk_theme_integration">Linux GTK Theme Integration</a> - Having
+Chrome match the GTK+ theme.</li>
+<li><a href="linux/plugins">Browser Plugins on Linux</a> - A collection of links to
+information on how browser plugins work on Linux</li>
+<li><a href="linux/crash_dumping">Linux Crash Dumping</a> - How Breakpad uploads crash
+reports to Google crash servers.</li>
+<li><a href="linux/minidump_to_core">Linux Minidump to Core</a> - How to convert a
+Breakpad-generated minidump files to a core file readable by most debuggersx</li>
+<li><a href="linux/sandbox_ipc">Linux Sandbox IPC</a> - The lower level UPC system used
+to route requests from the bottom of the call stack up into the browser.</li>
+<li><a href="linux/dev_build_as_default_browser">Linux Dev Build as Default Browser</a> -
+How to configure a Dev build of Chrome as the default browser in Linux.</li>
+<li><a href="linux/chromium_packages">Linux Chromium Packages</a> - Packages of Chromium
+browser (not Chrome) provided by some Linux distributions.</li>
+<li><a href="seccomp_sandbox_crash_dumping"><code>seccomp</code> Sandbox Crash Dumping</a> - Notes
+on crash dumping a process running in a seccomp sandbox.</li>
+<li><a href="linux/password_storage">Linux Password Storage</a> - Keychain integrations
+between Chromium and Linux.</li>
+<li><a href="sublime_ide">Linux Sublime Development</a> - Using Sublime as an IDE
+for Chromium development on Linux.</li>
+<li><a href="linux/building_debug_gtk">Building and Debugging GTK</a> - Building
+Chromium against GTK using lower optimization levels and/or more debugging
+symbols.</li>
+<li><a href="linux/debugging_gtk">Debugging GTK</a> - Using the GTK Debug packages and
+related tools.</li>
+<li><a href="linux/using_a_chroot">Chroot Notes</a> - Setting up a chroot to work around
+libfreetype differences in some versions of Linux.</li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/sandbox/linux/README.md">Linux Sandboxing</a> - The Linux multi-process model to
+isolate browser components with different privileges.</li>
+<li><a href="linux/zygote">Zygote Process</a> - How the Linux Zygote process, used to
+spawn new processes, works.</li>
+<li><a href="testing/web_tests_linux">Running Web Tests on Linux</a> - Linux-specific
+instructions for running web tests.</li>
+<li><a href="linux/sysroot">Linux Sysroot Images</a> - How builds use libraries on Linux</li>
+<li><a href="linux/hw_video_decode">Linux Hardware Video Decoding</a> - Enabling
+hardware video decode codepaths on Linux</li>
+</ul>
+<h3 id="misc-macos-specific-docs">Misc MacOS-Specific Docs</h3>
+<ul>
+<li><a href="mac/debugging">Mac Debugging Tips</a> - An introduction to debugging on
+Mac, as well as a collection of useful tips.</li>
+<li><a href="ccache_mac">Using CCache on Mac</a> - Speed up builds on Mac using ccache
+with clang/ninja</li>
+<li><a href="cocoa_tips_and_tricks">Cocoa tips and tricks</a> - A collection of idioms
+used when writing Cocoa views and controllers</li>
+</ul>
+<h3 id="misc-windows-specific-docs">Misc Windows-Specific Docs</h3>
+<ul>
+<li><a href="cygwin_dll_remapping_failure">Handling cygwin rebaseall failures</a></li>
+<li><a href="angle_in_chromium">Hacking on ANGLE in Chromium</a> - OpenGL ES 2.0 built
+on top of DirectX</li>
+<li><a href="windows_split_dll">Windows Split DLLs</a> - Splitting <code>chrome.dll</code> into
+multiple dlls to work around toolchain limitations on Windows.</li>
+<li><a href="windows_native_window_occlusion_tracking">Windows Native Window Occlusion Tracking</a></li>
+<li><a href="windows_pwa_integration">Windows PWA Integration</a> - Integration with
+Progressive Web Apps on Windows</li>
+<li><a href="windows_shortcut_and_taskbar_handling">Windows Shortcut and Taskbar Handling</a></li>
+<li><a href="windows_virtual_desktop_handling">Windows Virtual Desktop Integration</a></li>
+</ul>
+<h3 id="misc-android-specific-docs">Misc Android-Specific Docs</h3>
+<ul>
+<li><a href="google_play_services">Google Play Services in Chrome for Android</a></li>
+<li><a href="android_accessing_cpp_enums_in_java">Accessing C++ Enums in Java</a> - How
+to use C++-defined enums in Java code</li>
+<li><a href="profiling_content_shell_on_android">Profiling Content Shell on Android</a> -
+Setting up profiling for <code>content_shell</code> on Android</li>
+<li><a href="working_remotely_with_android">Working Remotely with Android</a> - Building
+on a remote machine for an Android device connected to your local machine</li>
+<li><a href="testing/android_test_instructions">Android Test Instructions</a> - Running a build
+on an Android device or emulator.</li>
+<li><a href="android_debugging_instructions">Android Debugging</a> - Tools and tips for
+how to debug Java and/or C/C++ code running on Android.</li>
+<li><a href="android_logging">Android Logging</a> - How Chrome&#39;s logging API works with
+<code>android.util.Log</code> on Android, and usage guidelines.</li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/build/android/docs/lint.md">Android Java Static Analysis</a> - Catching
+Java related issues at compile time with the &#39;lint&#39; tool.</li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/build/android/docs/coverage.md">Java Code Coverage</a> - Collecting code
+coverage data with the EMMA tool.</li>
+<li><a href="android_dynamic_feature_modules">Dynamic Feature Modules (DFMs)</a> - What
+are they and how to create new ones.</li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/build/android/docs/README.md">Other build-related Android docs</a></li>
+<li><a href="ui/android/overview">Chrome for Android UI</a> - Resources and best practices for
+developing UI</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/components/browser_ui/settings/android/settings_search_testing.md">Android Settings Search Testing</a> -
+Testing guide and parity invariants for Android Settings Search.</li>
+</ul>
+<h3 id="misc-ios-specific-docs">Misc iOS-Specific Docs</h3>
+<ul>
+<li><a href="ios/infra">Continuous Build and Test Infrastructure for Chromium for iOS</a></li>
+<li><a href="ios/opening_links">Opening links in Chrome for iOS</a> - How to have your
+iOS app open links in Chrome.</li>
+<li><a href="ios/user_agent">User Agent in Chrome for iOS</a> - Notes on User Agent
+strings using Chrome for iOS.</li>
+<li><a href="ios/testing">Running iOS test suites locally</a></li>
+<li><a href="ios/working_with_files">Working With Project Files in iOS</a> - How
+to add, remove, and rename files in the iOS Chromium project.</li>
+</ul>
+<h3 id="misc-chrome-os-specific-docs">Misc Chrome-OS-Specific Docs</h3>
+<ul>
+<li><a href="login/restrictive_networks">Setting up captive portals and other restrictive networks</a></li>
+<li><a href="enterprise/enrollment">Enterprise Enrollment</a><ul>
+<li><a href="enterprise/kiosk_public_session">Kiosk mode and public sessions</a></li>
+</ul>
+</li>
+<li><a href="login/ui_debugging">Debugging UI in OOBE/login/lock</a></li>
+<li><a href="chrome_os_logging">Chrome Logging on Chrome OS</a></li>
+<li><a href="testing/chromeos_debugging_tips">Debugging tips</a></li>
+</ul>
+<h3 id="misc-webui-specific-docs">Misc WebUI-Specific Docs</h3>
+<ul>
+<li><a href="webui/webui_explainer">WebUI Explainer</a> - An explanation of C++ and
+TypeScript infrastructural code for Chrome UIs implemented with web
+technologies (i.e. chrome:// URLs).</li>
+<li><a href="webui/optimizing_web_uis">Optimizing Chrome Web UIs</a> - Notes on making
+WebUIs more performant</li>
+<li><a href="webui/trusted_types_on_webui">Trusted Types on WebUI</a> - Tips for coding
+in WebUI with Trusted Types in mind.</li>
+<li><a href="webui/chrome_untrusted">chrome-untrusted:// FAQ</a> - Explainer on the
+usage of the <code>chrome-untrusted://</code> scheme for hosting WebUIs that handle
+untrustworthy content.</li>
+</ul>
+<h3 id="media">Media</h3>
+<ul>
+<li><a href="media/audio_focus">Audio Focus Handling</a> - How multiple MediaSession
+audio streams interact</li>
+<li><a href="media/autoplay">Autoplay of HTMLMediaElements</a> - How HTMLMediaElements
+are autoplayed.</li>
+<li><a href="media/latency_tracing">Latency tracing</a> - How to use the
+<code>&quot;audio.latency&quot;</code> tracing category to measure audio latency.</li>
+<li><a href="piranha_plant">Piranha Plant</a> - Future architecture of MediaStreams</li>
+<li><a href="media/capture">Media Capture</a> - Features and APIs that enable the
+browser to capture pixels and audio from itself or the underlying OS.</li>
+<li><a href="media/gpu/video_encoder_test_usage">Video Encode Accelerator Tests</a> - How to
+use the accelerated video encoder test program.</li>
+<li><a href="media/gpu/video_decoder_test_usage">Video Decoder Tests</a> - Running the
+video decoder tests.</li>
+<li><a href="media/gpu/video_decoder_perf_test_usage">Video Decoder Performance Tests</a> -
+Running the video decoder performance tests.</li>
+</ul>
+<h3 id="accessibility">Accessibility</h3>
+<ul>
+<li><a href="accessibility/overview">Accessibility Overview</a> - Overview of
+accessibility concerns and approaches in Chromium.</li>
+<li><a href="accessibility/browser/tests">Accessibility Tests</a> - Where to find
+accessibility-related tests in the codebase.</li>
+<li><a href="accessibility/os/chromevox">ChromeVox on Chrome OS</a> - Enabling spoken
+feedback (ChromeVox) on Chrome OS.</li>
+<li><a href="accessibility/os/chromevox_on_desktop_linux">ChromeVox on Desktop Linux</a> -
+Enabling spoken feedback (ChromeVox) on desktop Linux.</li>
+<li><a href="accessibility/browser/offscreen">Offscreen, Invisible and Size</a> - How Chrome
+defines offscreen, invisible and size in the accessibility tree.</li>
+<li><a href="accessibility/browser/tts">Text to Speech</a> - Overview of text to speech in
+Chrome and Chrome OS.</li>
+<li><a href="accessibility/os/brltty">BRLTTY in Chrome OS</a> - Chrome OS integration with
+BRLTTY to support refreshable braille displays</li>
+<li><a href="accessibility/os/patts">PATTS on Chrome OS</a> - Notes on the PATTS speech
+synthesis engine used on Chrome OS</li>
+<li><a href="ios/voiceover">VoiceOver</a> - Using Apple&#39;s VoiceOver feature with
+Chromium on iOS.</li>
+</ul>
+<h3 id="memory">Memory</h3>
+<ul>
+<li><a href="memory">Memory Overview</a></li>
+<li><a href="memory/heap_profiling_external">Heap Profiling with External Tools</a></li>
+</ul>
+<h3 id="memory-infrastructure-timeline-profiling-memoryinfra">Memory Infrastructure Timeline Profiling (MemoryInfra)</h3>
+<ul>
+<li><a href="memory-infra">Overview</a></li>
+<li><a href="memory-infra/probe-gpu">GPU Profiling</a></li>
+<li><a href="memory-infra/adding_memory_infra_tracing">Adding Tracing to a Component</a></li>
+<li><a href="memory-infra/memory_infra_startup_tracing">Enabling Startup Tracing</a></li>
+<li><a href="memory-infra/probe-cc">Memory Usage in CC</a></li>
+<li><a href="memory-infra/memory_benchmarks">Memory Benchmarks</a></li>
+<li><a href="memory-infra/heap_profiler">Heap Profiling</a></li>
+</ul>
+<h3 id="metrics">Metrics</h3>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/tools/metrics/histograms/README.md">Histograms</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/tools/metrics/actions/README.md">User Actions</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/tools/metrics/histograms/review_guidelines.md">Code review guidelines</a></li>
+</ul>
+<h3 id="misc">Misc</h3>
+<ul>
+<li><a href="useful_urls">Useful URLs</a> - A collection of links to various tools and
+dashboards</li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/docs/erc_irc.md">ERC IRC</a> - Using ERC in EMACS to access IRC</li>
+<li><a href="kiosk_mode">Kiosk Mode</a> - Simulating kiosk mode.</li>
+<li><a href="user_handle_mapping">User Handle Mapping</a> - Names of developers across
+Chromium/IRC/Google</li>
+<li><a href="documentation_best_practices">Documentation Best Practices</a></li>
+<li><a href="documentation_guidelines">Documentation Guidelines</a></li>
+<li><a href="chromium_browser_vs_google_chrome">Chromium Browser vs Google Chrome</a> -
+What&#39;s the difference between <em>Chromium Browser</em> and <em>Google Chrome</em>?</li>
+<li><a href="google_chrome_branded_builds">Google Chrome branded builds</a></li>
+<li><a href="proxy_auto_config">Proxy Auto Config using WPAD</a> - How WPAD servers are
+used to automatically set proxy settings.</li>
+<li><a href="installation_at_vmware">Installing Chromium OS on VMWare</a> - How to
+install Chromium OS on VMWare.</li>
+<li><a href="user_data_dir">User Data Directory</a> - How the user data and cache
+directories are determined on all platforms.</li>
+<li><a href="user_data_storage">User Data Storage</a> - Policy documentation for files in User Data.</li>
+</ul>
+<h3 id="mojo--services">Mojo &amp; Services</h3>
+<ul>
+<li><a href="mojo_and_services">Intro to Mojo &amp; Services</a> - Quick introduction
+to Mojo and services in Chromium, with examples</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/README.md">Mojo API Reference</a> - Detailed reference documentation for
+all things Mojo</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/services/README.md">Service Development Guidelines</a> - Guidelines for
+service development in the Chromium tree</li>
+<li><a href="servicification">Servicifying Chromium Features</a> - General advice for
+integrating new and existing subsystems into Chromium as services</li>
+<li><a href="mojo_ipc_conversion">Converting Legacy IPC to Mojo</a> - Tips and common
+patterns for practical IPC conversion work</li>
+<li><a href="security/mojo">Mojo “Style” Guide</a> - Recommendations for best practices
+from Mojo and IPC reviewers</li>
+<li><a href="dbus_mojo_connection_service">D-Bus Mojo Connection Service</a> - A service
+in Chrome to bootstrap CrOS services&#39; Mojo connection.</li>
+</ul>
+<h3 id="security">Security</h3>
+<ul>
+<li><a href="security/rule-of-2">The Rule Of 2</a> - An important security rule when
+handling untrustworthy contents (like anything downloaded from the web).</li>
+<li><a href="security/security_md_guidelines">SECURITY.md Guidelines</a> - Guidelines for writing
+an effective SECURITY.md for Chromium components.</li>
+</ul>
+<h3 id="speed">Speed</h3>
+<ul>
+<li><a href="speed">Chrome Speed</a> - Documentation for performance measurements and regressions in Chrome.</li>
+<li><a href="speed_metrics">Chrome Speed Metrics</a> - Documentation about user experience metrics on the web and their JavaScript APIs.</li>
+</ul>
+<h3 id="stability">Stability</h3>
+<ul>
+<li><a href="stability">Overview of stability/crash metrics and reporting</a> - Describes the different ways Chrome monitors stability and attempts to improve stability.</li>
+</ul>
+<h3 id="ui">UI</h3>
+<ul>
+<li><a href="ui">Chromium UI Platform</a> - All things user interface</li>
+</ul>
+<h3 id="whats-up-with-that-transcripts">What&#39;s Up With That Transcripts</h3>
+<p>These are transcripts of <a href="https://www.youtube.com/playlist?list=PL9ioqAuyl6ULIdZQys3fwRxi3G3ns39Hq">What&#39;s Up With
+That</a>,
+a video series of interviews with Chromium software engineers.</p>
+<ul>
+<li><a href="transcripts/wuwt-e01-pointers">What&#39;s Up With Pointers - Episode 1</a></li>
+<li><a href="transcripts/wuwt-e02-dchecks">What&#39;s Up With DCHECKs - Episode 2</a></li>
+<li><a href="transcripts/wuwt-e03-content">What&#39;s Up With //content - Episode 3</a></li>
+<li><a href="transcripts/wuwt-e04-tests">What&#39;s Up With Tests - Episode 4</a></li>
+<li><a href="transcripts/wuwt-e05-build-gn">What&#39;s Up With BUILD.gn - Episode 5</a></li>
+<li><a href="transcripts/wuwt-e06-open-source">What&#39;s Up With Open Source - Episode 6</a></li>
+<li><a href="transcripts/wuwt-e07-mojo">What&#39;s Up With Mojo - Episode 7</a></li>
+<li><a href="transcripts/wuwt-e08-processes">What&#39;s Up With Processes - Episode 8</a></li>
+<li><a href="transcripts/wuwt-e09-site-isolation">What&#39;s Up With Site Isolation - Episode 9</a></li>
+<li><a href="transcripts/wuwt-e10-web-platform">What&#39;s Up With Web Platform - Episode 10</a></li>
+<li><a href="transcripts/wuwt-e11-web-standards">What&#39;s Up With Web Standards - Episode 11</a></li>
+<li><a href="transcripts/wuwt-e12-base">What&#39;s Up With Base - Episode 12</a></li>
+</ul>
+<h3 id="probably-obsolete">Probably Obsolete</h3>
+<ul>
+<li><a href="tpm_quick_ref">TPM Quick Reference</a> - Trusted Platform Module notes.</li>
+<li><a href="system_hardening_features">System Hardening Features</a> - A list of
+current and planned Chrome OS security features.</li>
+<li><a href="webview_policies">WebView Policies</a></li>
+<li><a href="linux/profiling">Linux Profiling</a> - How to profile Chromium on Linux</li>
+<li><a href="linux/graphics_pipeline">Linux Graphics Pipeline</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/sandbox/linux/README.md">Linux <code>SUID</code> Sandbox</a> - Sandboxing renderers
+using a SUID binary on Linux</li>
+<li><a href="linux/suid_sandbox_development">Linux <code>SUID</code> Sandbox Development</a> -
+Development on the above system.</li>
+<li><a href="linux/pid_namespace_support">Linux PID Namespace Support</a></li>
+<li><a href="vanilla_msysgit_workflow">Vanilla msysgit workflow</a> - A workflow for
+using mostly vanilla git on Windows.</li>
+<li><a href="chrome_settings">Old Options</a> - Pre-Material Design chrome://settings
+notes.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/README.md</a>
+  </p>
+</div>

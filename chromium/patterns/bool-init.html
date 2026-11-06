@@ -1,0 +1,53 @@
+<h1>The Bool Init Pattern</h1>
+<p>The <code>bool Init()</code> pattern allows a class to have initialization behavior which
+can fail. Since Chromium C++ doesn&#39;t allow exceptions, ordinarily constructors
+aren&#39;t allowed to fail except by crashing the entire program.</p>
+<p>In practice, this pattern looks like this:</p>
+<pre>class C {
+ public:
+  C();
+
+  // nodiscard is best practice here, to ensure callers don't ignore
+  // the failure value. It is otherwise VERY easy to accidentally ignore
+  // an Init failure.
+  [[nodiscard]] bool Init();
+};</pre>
+<p>and then client classes need to do something like this:</p>
+<pre>auto c = std::make_unique&lt;C&gt;(...);
+if (!c-&gt;Init())
+  return WELL_THAT_DIDNT_GO_SO_WELL;</pre>
+<h2 id="when-to-use-this-pattern">When To Use This Pattern</h2>
+<p>Probably don&#39;t. The factory pattern or unconditional initialization are
+alternatives that don&#39;t require client classes to remember to call <code>Init()</code>
+every time they use your class.</p>
+<p>This pattern is often used internally as part of a class, but having a public
+<code>Init</code> method that clients of your class are expected to call is error-prone -
+it is too easy for client classes to forget to call it, and detecting that error
+requires runtime checking inside your class. As such, you should not add a
+public <code>Init</code> method. It is also important for <em>subclass</em> clients to remember to
+call <code>Init</code>, which adds yet another source of error.</p>
+<p>However, this pattern is sometimes used internally as part of the factory
+pattern, in which case the factory often looks like this:</p>
+<pre>// static
+std::unique_ptr&lt;C&gt; C::Make(...) {
+  auto c = std::make_unique&lt;C&gt;(...);
+  if (!c-&gt;Init())
+    c.reset();
+  return c;
+}</pre>
+<p>That particular use, where there is a single <code>Init</code> call site and clients cannot
+otherwise acquire an uninitialized instance of <code>C</code>, is much safer but the risks
+involved in subclassing <code>C</code> still apply.</p>
+<h2 id="alternatives--see-also">Alternatives / See also:</h2>
+<ul>
+<li>The <a href="builder-and-parameter-bundle">builder</a> pattern</li>
+<li>Unconditional initialization (arrange your object so that initializing it
+cannot fail)</li>
+<li>RAII in general</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/bool-init.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/bool-init.md</a>
+  </p>
+</div>

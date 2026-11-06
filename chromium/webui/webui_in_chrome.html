@@ -1,0 +1,504 @@
+<h1>Creating WebUI Interfaces</h1>
+<style>
+.note::before {
+  content: 'Note: ';
+  font-variant: small-caps;
+  font-style: italic;
+}
+
+.doc h1 {
+  margin: 0;
+}
+</style><p>A WebUI page is made of a single-page application, which communicates
+with a C++ UI controller, as explained <a href="webui_explainer">here</a>.</p>
+<p>For WebUIs that are not served on iOS, the frontend resources (TS/HTML/CSS)
+should be placed in <code>chrome/browser/resources</code> and the backend code
+(WebUIController, WebUIConfig, and any handlers) should be placed next to the
+controller logic in <code>chrome/browser/ui/&lt;feature&gt;</code> or <code>chrome/browser/&lt;feature&gt;</code>.
+In the event that the WebUI is simple and there is no non-WebUI controller
+logic, then this guidance does not apply. For legacy reasons, many features
+still have the C++ code in <code>chrome/browser/ui/webui/&lt;feature&gt;</code>. For more
+guidance on overall directory and features structure, see <a href="../chrome_browser_design_principles">Design
+Principles</a>.</p>
+<p>WebUIs that are available on iOS need to have 2 separate backend
+implementations: one for iOS in ios/, and one for all other platforms in
+<code>chrome/browser/ui/&lt;feature&gt;</code>. If the backend or parts of it can be shared, that
+code will live in <code>components/&lt;feature&gt;</code>. To allow both implementations to
+access the frontend resources and other shared code (e.g., mojo interfaces),
+frontend resources and shared code for such WebUIs should be placed in
+<code>components/</code> instead of <code>chrome/</code>. Note: some legacy WebUIs are located in
+other folders, such as <code>content/</code>. This is discouraged for new WebUIs since code
+in <code>content/</code> and other folders may not be allowed to depend on WebUI shared
+infrastructure and utilities.</p>
+<p>In this example, we can start by creating folders for the new page in
+<code>chrome/browser/resources/hello_world</code> and <code>chrome/browser/hello_world</code>. When
+creating WebUI resources, follow the
+<a href="https://github.com/chromium/chromium/blob/HEAD/styleguide/web/web.md">Web Development Style Guide</a>.</p>
+<h2 id="making-a-basic-webui-page">Making a basic WebUI page</h2>
+<p>For a sample WebUI page you could start with the following files:</p>
+<p><code>chrome/browser/resources/hello_world/hello_world.html</code></p>
+<pre data-language="html">&lt;!DOCTYPE HTML&gt;
+&lt;html&gt;
+  &lt;meta charset=&quot;utf-8&quot;&gt;
+  &lt;link rel=&quot;stylesheet&quot; href=&quot;hello_world.css&quot;&gt;
+  &lt;hello-world-app&gt;&lt;/hello-world-app&gt;
+  &lt;script type=&quot;module&quot; src=&quot;app.js&quot;&gt;&lt;/script&gt;
+&lt;/html&gt;</pre>
+<p><code>chrome/browser/resources/hello_world/hello_world.css</code></p>
+<pre data-language="css">body {
+  margin: 0;
+}</pre>
+<p><code>chrome/browser/resources/hello_world/app.css</code></p>
+<pre data-language="css">/* Copyright 2024 The Chromium Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file. */
+
+/* #css_wrapper_metadata_start
+ * #type=style-lit
+ * #scheme=relative
+ * #css_wrapper_metadata_end */
+
+#example-div {
+  color: blue;
+}</pre>
+<p><code>chrome/browser/resources/hello_world/app.html.ts</code></p>
+<pre data-language="ts">// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import {html} from '//resources/lit/v3_0/lit.rollup.js';
+import type {HelloWorldAppElement} from './app.js';
+
+export function getHtml(this: HelloWorldAppElement) {
+  return html`
+&lt;h1&gt;Hello World&lt;/h1&gt;
+&lt;div id=&quot;example-div&quot;&gt;${this.message_}&lt;/div&gt;`;
+}</pre>
+<p><code>chrome/browser/resources/hello_world/app.ts</code></p>
+<pre data-language="ts">import '/strings.m.js';
+
+import {loadTimeData} from 'chrome://resources/js/load_time_data.js';
+import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+
+import {getCss} from './app.css.js';
+import {getHtml} from './app.html.js';
+
+export class HelloWorldAppElement extends CrLitElement {
+  static get is() {
+    return 'hello-world-app';
+  }
+
+  static override get styles() {
+    return getCss();
+  }
+
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
+    return {
+      message_: {type: String},
+    };
+  }
+
+  protected accessor message_: string = loadTimeData.getString('message');
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'hello-world-app': HelloWorldAppElement;
+  }
+}
+
+customElements.define(HelloWorldAppElement.is, HelloWorldAppElement);</pre>
+<p>Add a <code>BUILD.gn</code> file to get TypeScript compilation and to generate the JS file
+from which the template will be imported.</p>
+<p><code>chrome/browser/resources/hello_world/BUILD.gn</code></p>
+<pre data-language="py">import(&quot;//ui/webui/resources/tools/build_webui.gni&quot;)
+
+build_webui(&quot;build&quot;) {
+  grd_prefix = &quot;hello_world&quot;
+
+  static_files = [ &quot;hello_world.html&quot;, &quot;hello_world.css&quot; ]
+
+  ts_files = [ &quot;app.ts&quot;, &quot;app.html.ts&quot; ]
+  css_files = [ &quot;app.css&quot; ]
+
+  # Enable the proper webui_context_type depending on whether implementing
+  # a chrome:// or chrome-untrusted:// page.
+  webui_context_type = &quot;trusted&quot;
+
+  ts_deps = [
+    &quot;//third_party/lit/v3_0:build_ts&quot;,
+    &quot;//ui/webui/resources/js:build_ts&quot;,
+  ]
+}</pre>
+<blockquote>
+<p>Note: See <a href="webui_build_configuration#example-build-configurations">the build config docs for more examples</a>
+of how the build could be configured.</p>
+</blockquote>
+<p>Finally, create an <code>OWNERS</code> file for the new folder.</p>
+<h3 id="adding-the-resources">Adding the resources</h3>
+<p>The <code>build_webui</code> target in <code>BUILD.gn</code> autogenerates some targets and files
+that need to be linked from the binary-wide resource targets:</p>
+<p>Add the new resource target to <code>chrome/browser/resources/BUILD.gn</code></p>
+<pre data-language="py">group(&quot;resources&quot;) {
+  public_deps += [
+    ...
+    &quot;hello_world:resources&quot;
+    ...
+  ]
+}</pre>
+<p>Add an entry to resource_ids.spec</p>
+<p>This file is for automatically generating resource ids. Ensure that your entry
+has a unique ID and preserves numerical ordering. If you see an error like &quot;ValueError: Cannot jump to unvisited&quot;, please check the numeric order of your resource ids.</p>
+<p><code>tools/gritsettings/resource_ids.spec</code></p>
+<pre>  # START chrome/ WebUI resources section
+  ... (lots)
+  &quot;&lt;(SHARED_INTERMEDIATE_DIR)/chrome/browser/resources/hello_world/resources.grd&quot;: {
+    &quot;META&quot;: {&quot;sizes&quot;: {&quot;includes&quot;: [5]}},
+    &quot;includes&quot;: [2085],
+  },</pre>
+<p>Also add to <code>chrome/chrome_paks.gni</code></p>
+<pre data-language="py">template(&quot;chrome_extra_paks&quot;) {
+  ... (lots)
+  sources += [
+    ...
+    &quot;$root_gen_dir/chrome/hello_world_resources.pak&quot;,
+    ...
+  ]
+  deps += [
+    ...
+    &quot;//chrome/browser/resources/hello_world:resources&quot;,
+    ...
+  ]
+}</pre>
+<h3 id="adding-url-constants-for-the-new-chrome-url">Adding URL constants for the new chrome URL</h3>
+<p><code>chrome/common/webui_url_constants.cc:</code></p>
+<pre data-language="c++">const char kChromeUIHelloWorldURL[] = &quot;chrome://hello-world/&quot;;
+const char kChromeUIHelloWorldHost[] = &quot;hello-world&quot;;</pre>
+<p><code>chrome/common/webui_url_constants.h:</code></p>
+<pre data-language="c++">extern const char kChromeUIHelloWorldURL[];
+extern const char kChromeUIHelloWorldHost[];</pre>
+<h3 id="adding-a-webui-class-for-handling-requests-to-the-chromehello-world-url">Adding a WebUI class for handling requests to the <code>chrome://hello-world/</code> URL</h3>
+<p>Next we need a class to handle requests to this new resource URL. Typically this will subclass <code>WebUIController</code> (WebUI
+dialogs will also need another class which will subclass <code>WebDialogDelegate</code>, this is shown later).</p>
+<p><code>chrome/browser/hello_world/hello_world_ui.h</code></p>
+<pre data-language="c++">#ifndef CHROME_BROWSER_HELLO_WORLD_HELLO_WORLD_UI_H_
+#define CHROME_BROWSER_HELLO_WORLD_HELLO_WORLD_UI_H_
+
+#include &quot;content/public/browser/web_ui_controller.h&quot;
+
+// The WebUI for chrome://hello-world
+class HelloWorldUI : public content::WebUIController {
+ public:
+  explicit HelloWorldUI(content::WebUI* web_ui);
+  ~HelloWorldUI() override;
+};
+
+#endif // CHROME_BROWSER_HELLO_WORLD_HELLO_WORLD_UI_H_</pre>
+<p><code>chrome/browser/hello_world/hello_world_ui.cc</code></p>
+<pre data-language="c++">#include &quot;chrome/browser/hello_world/hello_world_ui.h&quot;
+
+#include &quot;chrome/common/webui_url_constants.h&quot;
+#include &quot;content/public/browser/browser_context.h&quot;
+#include &quot;content/public/browser/web_contents.h&quot;
+#include &quot;chrome/grit/hello_world_resources.h&quot;
+#include &quot;chrome/grit/hello_world_resources_map.h&quot;
+#include &quot;content/public/browser/web_ui.h&quot;
+#include &quot;content/public/browser/web_ui_data_source.h&quot;
+#include &quot;ui/webui/webui_util.h&quot;
+
+
+HelloWorldUI::HelloWorldUI(content::WebUI* web_ui)
+    : content::WebUIController(web_ui) {
+  // Set up the chrome://hello-world source.
+  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
+      web_ui-&gt;GetWebContents()-&gt;GetBrowserContext(),
+      chrome::kChromeUIHelloWorldHost);
+
+  // Add required resources.
+  webui::SetupWebUIDataSource(source, kHelloWorldResources,
+      IDR_HELLO_WORLD_HELLO_WORLD_HTML);
+
+  // As a demonstration of passing a variable for JS to use we pass in some
+  // a simple message.
+  source-&gt;AddString(&quot;message&quot;, &quot;Hello World!&quot;);
+}
+
+HelloWorldUI::~HelloWorldUI() = default;</pre>
+<p>To ensure that your code actually gets compiled, you need to add a
+<code>BUILD.gn</code> file defining a target for it, and hook up this target in
+<code>chrome/browser/hellow_world/BUILD.gn</code>:</p>
+<p><code>chrome/browser/hello_world/BUILD.gn</code></p>
+<pre data-language="py">source_set(&quot;hello_world&quot;) {
+  sources = [
+    &quot;hello_world_ui.cc&quot;,
+    &quot;hello_world_ui.h&quot;,
+  ]
+  public_deps = [ &quot;//content/public/browser&quot; ]
+  deps = [
+    &quot;//chrome/browser/resources/hello_world:resources&quot;,
+    &quot;//chrome/common&quot;,
+    &quot;//ui/webui&quot;,
+  ]
+}</pre>
+<p>You will also need to reference this from <code>//chrome/browser/BUILD.gn</code></p>
+<p><code>chrome/browser/BUILD.gn</code></p>
+<pre data-language="py">...
+  deps = [
+    ... (lots)
+    &quot;//chrome/browser/hello_world:hello_world&quot;,
+    ... (lots)
+  ]
+...</pre>
+<h3 id="preferred-method-add-a-webuiconfig-class-and-put-it-in-the-webuiconfigmap">Preferred method: Add a WebUIConfig class and put it in the WebUIConfigMap</h3>
+<p><code>WebUIConfig</code>s contain minimal information about the host and scheme served
+by the <code>WebUIController</code> subclass. It also can enable or disable the UI for
+different conditions (e.g. feature flag status). You can create a
+<code>WebUIConfig</code> subclass and register it in the <code>WebUIConfigMap</code> to ensure your
+request handler is instantiated and used to handle any requests to the desired
+scheme + host. If you don&#39;t need to pass any arguments to your controller
+class, inherit from <code>DefaultWebUIConfig</code> to reduce the amount of code required:</p>
+<p><code>chrome/browser/hello_world/hello_world_ui.h</code></p>
+<pre data-language="c++">// Forward declaration so that config definition can come before controller.
+class HelloWorldUI;
+
+class HelloWorldUIConfig : public content::DefaultWebUIConfig&lt;HelloWorldUI&gt; {
+ public:
+  HelloWorldUIConfig()
+      : DefaultWebUIConfig(content::kChromeUIScheme,
+                           chrome::kChromeUIHelloWorldHost) {}
+};</pre>
+<p>Register your config in <code>chrome_web_ui_configs.cc</code>, for trusted UIs, or
+<code>chrome_untrusted_web_ui_configs.cc</code> for untrusted UIs.</p>
+<p><code>chrome/browser/ui/webui/chrome_web_ui_configs.cc</code></p>
+<pre data-language="c++">+ #include &quot;chrome/browser/ui/webui/hello_world/hello_world_ui.h&quot;
+...
++map.AddWebUIConfig(std::make_unique&lt;hello_world::HelloWorldUIConfig&gt;());</pre>
+<p>Hook up the configs target to the build target for your new UI:
+<code>chrome/browser/ui/webui/BUILD.gn</code></p>
+<pre data-language="py">...
+source_set(&quot;configs&quot;) {
+...
+# Add in platform-specific deps += section if not on all platforms.
+deps = [
+  ...
+  &quot;//chrome/browser/ui/webui/hello_world&quot;,
+  ...
+]
+}</pre>
+<h3 id="old-method-add-your-webui-request-handler-to-the-chrome-webui-factory">Old method: Add your WebUI request handler to the Chrome WebUI factory</h3>
+<p>The Chrome WebUI factory is another way to setup your new request handler. This
+is how many older WebUIs in Chrome are registered, since not all UIs have been
+migrated to use the newer <code>WebUIConfig</code> (see
+<a href="https://crbug.com/1317510">migration bug</a>). Only use this method for a new UI
+if the approach above using <code>WebUIConfig</code> does not work, and notify WebUI
+<code>PLATFORM_OWNERS</code>.</p>
+<p><code>chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc:</code></p>
+<pre data-language="c++">+ #include &quot;chrome/browser/ui/webui/hello_world/hello_world_ui.h&quot;
+...
++ if (url.host() == chrome::kChromeUIHelloWorldHost)
++   return &amp;NewWebUI&lt;HelloWorldUI&gt;;</pre>
+<h3 id="check-everything-works">Check everything works</h3>
+<p>You&#39;re done! Assuming no errors (because everyone gets their code perfect the first time) you should be able to compile
+and run chrome and navigate to <code>chrome://hello-world/</code> and see your nifty welcome text!</p>
+<h3 id="registering-the-url-for-metrics">Registering the URL for Metrics</h3>
+<p>To track overall usage, a core metric <code>WebUI.CreatedForUrl</code> is automatically
+recorded when a new WebUIController instance is created.</p>
+<p>To support this, you must add your new URL&#39;s hash to a central list located in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:tools/metrics/histograms/metadata/ui/enums.xml;drc=d31ce80b7f6c4a57ee7964be72fcfe761588c776;l=579">tools/metrics/histograms/metadata/ui/enums.xml</a>.</p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/webui/webui_url_hashes_browsertest.cc">WebUIUrlHashesBrowserTest</a> includes a check that ensures all known
+URLs are in this list. The easiest way to calculate the hash for your new WebUI
+page is to run this test and look at the error output.</p>
+<pre>autoninja -C out/Default browser_tests &amp;&amp; ./out/Default/browser_tests --gtest_filter=&quot;WebUIUrlHashesBrowserTest.UrlsInHistogram&quot;</pre>
+<p>The test is expected to fail. The error message will provide the exact line you
+need. Copy the line and add it to <code>&lt;enum name=&quot;WebUIUrlHashes&quot;&gt;</code></p>
+<h2 id="making-a-webui-dialog">Making a WebUI Dialog</h2>
+<p>Instead of having a full page for your WebUI, you might want a dialog in order to have a fully independent window.  To
+do that, some small changes are needed to your code.  First, we need to add a new class which inherits from
+<code>ui::WebDialogDelegate</code>.  The easiest way to do that is to edit the <code>hello_world_ui.*</code> files</p>
+<p><code>chrome/browser/hello_world/hello_world_ui.h</code></p>
+<pre data-language="c++"> // Leave the old content, but add this new code
+ class HelloWorldDialog : public ui::WebDialogDelegate {
+ public:
+  static void Show();
+  ~HelloWorldDialog() override;
+  HelloWorldDialog(const HelloWorldDialog&amp;) = delete;
+  HelloWorldDialog&amp; operator=(const HelloWorldDialog&amp;) = delete;
+
+ private:
+  HelloWorldDialog();
+  // ui::WebDialogDelegate:
+  ui::mojom::ModalType GetDialogModalType() const override;
+  std::u16string GetDialogTitle() const override;
+  GURL GetDialogContentURL() const override;
+  void GetWebUIMessageHandlers(
+      std::vector&lt;content::WebUIMessageHandler*&gt;* handlers) const override;
+  void GetDialogSize(gfx::Size* size) const override;
+  std::string GetDialogArgs() const override;
+  void OnDialogShown(content::WebUI* webui) override;
+  void OnDialogClosed(const std::string&amp; json_retval) override;
+  void OnCloseContents(content::WebContents* source,
+                       bool* out_close_dialog) override;
+  bool ShouldShowDialogTitle() const override;
+
+  content::WebUI* webui_ = nullptr;
+};</pre>
+<p><code>chrome/browser/hello_world/hello_world_ui.cc</code></p>
+<pre data-language="c++"> // Leave the old content, but add this new stuff
+
+HelloWorldDialog::HelloWorldDialog() = default;
+
+void HelloWorldDialog::Show() {
+  // HelloWorldDialog is self-deleting via OnDialogClosed().
+  chrome::ShowWebDialog(nullptr, ProfileManager::GetActiveUserProfile(),
+                        new HelloWorldDialog());
+}
+
+ui::mojom::ModalType HelloWorldDialog::GetDialogModalType() const {
+  return ui::mojom::ModalType::kNone;
+}
+
+std::u16string HelloWorldDialog::GetDialogTitle() const {
+  return u&quot;Hello world&quot;;
+}
+
+GURL HelloWorldDialog::GetDialogContentURL() const {
+  return GURL(chrome::kChromeUIHelloWorldURL[);
+}
+
+void HelloWorldDialog::GetWebUIMessageHandlers(
+    std::vector&lt;content::WebUIMessageHandler*&gt;* handlers) const {}
+
+void HelloWorldDialog::GetDialogSize(gfx::Size* size) const {
+  const int kDefaultWidth = 544;
+  const int kDefaultHeight = 628;
+  size-&gt;SetSize(kDefaultWidth, kDefaultHeight);
+}
+
+std::string HelloWorldDialog::GetDialogArgs() const {
+  return &quot;&quot;;
+}
+
+void HelloWorldDialog::OnDialogShown(content::WebUI* webui) {
+  webui_ = webui;
+}
+
+void HelloWorldDialog::OnDialogClosed(const std::string&amp; json_retval) {
+  delete this;
+}
+
+void HelloWorldDialog::OnCloseContents(content::WebContents* source,
+                                        bool* out_close_dialog) {
+  *out_close_dialog = true;
+}
+
+bool HelloWorldDialog::ShouldShowDialogTitle() const {
+  return true;
+}
+
+HelloWorldDialog::~HelloWorldDialog() = default;</pre>
+<p>Finally, you will need to do something to actually show your dialog, which can be done by calling <code>HelloWorldDialog::Show()</code>.</p>
+<h2 id="more-elaborate-configurations">More elaborate configurations</h2>
+<h3 id="referencing-resources-from-another-webui-page">Referencing resources from another webui page</h3>
+<p>Any code that is located in <code>ui/webui/resources</code> and served from
+<code>chrome://resources</code> and <code>chrome-untrusted://resources</code> can be used from any
+WebUI page. If you want to share some additional code from another WebUI page
+that is not in the shared resources, first see
+<a href="webui_code_sharing">Sharing Code in WebUI</a> to determine the best approach.</p>
+<p>If you determine that the code should be narrowly shared, the following
+explains how to add the narrowly shared resources to your WebUI data source.</p>
+<p>In the snippet below:</p>
+<pre data-language="cpp">//...
+#include &quot;chrome/grit/hello_world_resources.h&quot;
+#include &quot;chrome/grit/hello_world_resources_map.h&quot;
+
+HelloWorldUI::HelloWorldUI(content::WebUI* web_ui)
+    : content::WebUIController(web_ui) {
+  // ...
+  webui::SetupWebUIDataSource(source, kHelloWorldResources,
+      IDR_HELLO_WORLD_HELLO_WORLD_CONTAINER_HTML);
+}</pre>
+<p><code>kHelloWorldResources</code> comes from from the imported grit-generated
+files, as configured by the build target, and reference the files listed
+in it so they can be served out of the given host name.
+For example, they would contain values like:</p>
+<pre data-language="cpp">const webui::ResourcePath kHelloWorldResources[] = {
+  {&quot;hello_world.html&quot;, IDR_CHROME_BROWSER_RESOURCES_HELLO_WORLD_HELLO_WORLD_HTML},
+  {&quot;hello_world.css&quot;, IDR_CHROME_BROWSER_RESOURCES_HELLO_WORLD_HELLO_WORLD_CSS},
+};</pre>
+<p>Using <code>WebUIDataSource::AddResourcePaths()</code> we can add the resources from grit
+files that are generated by limited sharing <code>build_webui()</code> targets as follows:</p>
+<pre data-language="cpp">#include &quot;chrome/grit/foo_shared_resources.h&quot;
+#include &quot;chrome/grit/bar_shared_resources.h&quot;
+// ...
+HelloWorldUI::HelloWorldUI(content::WebUI* web_ui) {
+  // ...
+  // Add selected resources from foo_shared
+  static constexpr webui::ResourcePath kResources[] = {
+      {&quot;foo_shared/foo_shared.css.js&quot;, IDR_FOO_SHARED_FOO_SHARED_CSS_JS},
+      {&quot;foo_shared/foo_shared_vars.css.js&quot;,
+       IDR_FOO_SHARED_FOO_SHARED_VARS_CSS_JS},
+  };
+  source-&gt;AddResourcePaths(kResources);
+
+  // Add all shared resources from bar_shared
+  source-&gt;AddResourcePaths(kBarSharedResources);
+}</pre>
+<h2 id="development-tips">Development tips</h2>
+<h3 id="turn-off-optimizations">Turn off optimizations</h3>
+<p>It is suggested to turn off any optimizations during WebUI development by adding
+the following in the args.gn file:</p>
+<pre data-language="py">optimize_webui = false</pre>
+<p>This makes the build faster, as well as skips any minification and bundling,
+making it easier to use DevTools to view the code or add any breakpoints. Unless
+you are working on a performance specific issue, prefer this configuration for
+day to day development.</p>
+<h3 id="load-webuis-straight-from-disk-experimental">Load WebUIs straight from disk (experimental)</h3>
+<p>WebUI files are normally packed in a single <code>.pak</code> file (a custom format used in
+Chromium) during the build and are read and served from this file at runtime.
+This means that <strong>every modification to a WebUI file requires</strong></p>
+<ul>
+<li>rebuilding the <code>chrome</code> target <strong>and</strong></li>
+<li>relaunching the browser</li>
+</ul>
+<p>A mechanism has been recently added that allows <strong>loading WebUI resources
+straight from disk</strong> (available on Win, Mac, Linux), such that developers can
+iterate faster by <strong>not having to do the above steps</strong>. In order to use this
+flow, follow the steps below:</p>
+<p><strong>Step 1:</strong> Add the following in your args.gn file and build the <code>chrome</code> target.</p>
+<pre data-language="py">optimize_webui = false # explained in previous section
+load_webui_from_disk = true</pre>
+<p><strong>Step 2:</strong> Launch Chrome with the <code>--load-webui-from-disk</code> command line flag.</p>
+<p><strong>Step 3:</strong> Make a change in a <code>.ts</code>, <code>.css</code> or <code>.html</code> file in the src/
+folder and build only the corresponding <code>:build_ts</code> target, for example</p>
+<pre>autoninja -C out/Default/ chrome/browser/resources/settings:build_ts</pre>
+<p><strong>Step 4:</strong> Refresh the WebUI page. <strong>It should use the latest contents.</strong></p>
+<p>You can now repeat steps 3-4 to quickly iterate, as many times as needed.
+Moreover you can run the helper <code>build_webui_watcher.js</code> script to monitor for
+changes and automatically rebuild for a given target as follows:</p>
+<pre data-language="sh"># Example Linux invocation (adjust NodeJS path according to platform)
+./third_party/node/linux/node-linux-x64/bin/node \
+  ./ui/webui/resources/tools/build_webui_watcher.js \
+   -C out/Default --folder chrome/browser/resources/settings/</pre>
+<p>Notes:</p>
+<ul>
+<li>The above requires that <code>build_webui()</code> is used to build the WebUI and
+<code>webui::AddResourcePaths()</code> or <code>webui::SetupWebUIDataSource()</code> is used to
+register the WebUI&#39;s resources C++ side.</li>
+<li>Removing the runtime flag will revert back to normal loading from the
+<code>.pak</code> file (even without rebuilding <code>chrome</code>)</li>
+<li>Future improvements on this flow might eliminate the need for building
+<code>:build_ts</code> by automatically monitoring for file modifications and triggering
+it automatically, as well as make it faster by leveraging TypeScript&#39;s
+<code>noCheck</code> option. Follow <a href="https://issues.chromium.org/issues/384636724">crbug.com/384636724</a>
+for updates.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_in_chrome.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_in_chrome.md</a>
+  </p>
+</div>

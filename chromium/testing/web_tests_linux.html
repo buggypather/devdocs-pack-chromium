@@ -1,0 +1,111 @@
+<h1>Running web tests on Linux</h1>
+<ol>
+<li>Build <code>blink_tests</code> (see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/build_instructions.md">Linux-specific build instructions</a>)</li>
+<li>Checkout the web tests<ul>
+<li>If you have an entry in your <code>.gclient</code> file that includes
+&quot;web_tests&quot;, you may need to comment it out and sync.</li>
+<li>You can run a subset of the tests by passing in a path relative to
+<code>src/third_party/blink/web_tests/</code>.  For example,
+<code>third_party/blink/tools/run_web_tests.py fast</code> will only run the tests under
+<code>src/third_party/blink/web_tests/fast/</code>.</li>
+</ul>
+</li>
+<li>When the tests finish, any unexpected results should be displayed.</li>
+</ol>
+<p>See <a href="web_tests">Web Tests</a>
+for full documentation about set up and available options.</p>
+<h2 id="pixel-tests">Pixel Tests</h2>
+<p>The pixel test results were generated on Ubuntu 10.4 (Lucid). If you&#39;re running
+a newer version of Ubuntu, you will get some pixel test failures due to changes
+in freetype or fonts.  In this case, you can create a Lucid 64 chroot using
+<code>build/install-chroot.sh</code> to compile and run tests.</p>
+<h2 id="fonts">Fonts</h2>
+<ol>
+<li>Make sure you have all the dependencies installed by running</li>
+</ol>
+<pre data-language="shell">build/install-build-deps.sh</pre>
+<ol start="2">
+<li>Double check that</li>
+</ol>
+<pre data-language="shell">ls third_party/test_fonts/test_fonts/</pre>
+<p>is not empty and lists the fonts downloaded through the <code>test_fonts</code>
+hook in the top level <code>DEPS</code> file.</p>
+<h2 id="plugins">Plugins</h2>
+<p>If <code>fast/dom/object-plugin-hides-properties.html</code> and
+<code>plugins/embed-attributes-style.html</code> are failing, try uninstalling
+<code>totem-mozilla</code> from your system:</p>
+<pre>sudo apt-get remove totem-mozilla</pre>
+<h2 id="configuration-tips">Configuration tips</h2>
+<ul>
+<li><p>Use an optimized <code>content_shell</code> when rebaselining or running a lot of
+tests. (<a href="https://crbug.com/8475">bug 8475</a> is about how the debug output
+differs from the optimized output.)</p>
+<p><code>ninja -C out/Release content_shell</code></p>
+</li>
+<li><p>Make sure you have wdiff installed: <code>sudo apt-get install wdiff</code> to get
+prettier diff output.</p>
+</li>
+<li><p>Some pixel tests may fail due to processor-specific rounding errors. Build
+using a chroot jail with Lucid 64-bit user space to be sure that your system
+matches the checked in baselines.  You can use <code>build/install-chroot.sh</code> to
+set up a Lucid 64 chroot. Learn more about
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/using_a_chroot.md">using a linux chroot</a>.</p>
+</li>
+</ul>
+<h2 id="getting-a-web-test-into-a-debugger">Getting a web test into a debugger</h2>
+<p>There are two ways:</p>
+<ol>
+<li>Run <code>content_shell</code> directly rather than using <code>run_web_tests.py</code>. You
+will need to pass some options:<ul>
+<li><code>--no-timeout</code> to give you plenty of time to debug</li>
+<li>the fully qualified path of the web test (rather than relative to
+<code>blink/web_tests</code>).</li>
+</ul>
+</li>
+<li>Or, run as normal but with the
+<code>--additional-drt-flag=--renderer-startup-dialog --additional-drt-flag=--no-timeout --timeout-ms=86400000</code> flags. The first
+one makes content_shell bring up a dialog before running, which then would
+let you attach to the process via <code>gdb -p PID_OF_DUMPRENDERTREE</code>. The others
+help avoid the test shell and DumpRenderTree timeouts during the debug
+session.</li>
+</ol>
+<h2 id="using-an-embedded-x-server">Using an embedded X server</h2>
+<p>If you try to use your computer while the tests are running, you may get annoyed
+as windows are opened and closed automatically.  To get around this, you can
+create a separate X server for running the tests.</p>
+<ol>
+<li>Install Xephyr (<code>sudo apt-get install xserver-xephyr</code>)</li>
+<li>Start Xephyr as display 4: <code>Xephyr :4 -screen 1024x768x24</code></li>
+<li>Run the web tests in the Xephyr: <code>DISPLAY=:4 run_web_tests.py</code></li>
+</ol>
+<p>Xephyr supports debugging repainting. See the
+<a href="http://cgit.freedesktop.org/xorg/xserver/tree/hw/kdrive/ephyr/README">Xephyr README</a>
+for details. In brief:</p>
+<ol>
+<li><code>XEPHYR_PAUSE=$((500*1000)) Xephyr ...etc...  # 500 ms repaint flash</code></li>
+<li><code>kill -USR1 $(pidof Xephyr)</code></li>
+</ol>
+<p>If you don&#39;t want to see anything at all, you can use Xvfb (should already be
+installed).</p>
+<ol>
+<li>Start Xvfb as display 4: <code>Xvfb :4 -screen 0 1024x768x24</code></li>
+<li>Run the web tests in the Xvfb: <code>DISPLAY=:4 run_web_tests.py</code></li>
+</ol>
+<h2 id="tiling-window-managers">Tiling Window managers</h2>
+<p>The web tests want to run with the window at a particular size down to the
+pixel level.  This means if your window manager resizes the window it&#39;ll cause
+test failures.  This is another good reason to use an embedded X server.</p>
+<h3 id="xmonad">xmonad</h3>
+<p>In your <code>.xmonad/xmonad.hs</code>, change your config to include a manageHook along
+these lines:</p>
+<pre>test_shell_manage = className =? &quot;Test_shell&quot; --&gt; doFloat
+main = xmonad $
+  defaultConfig
+    { manageHook = test_shell_manage &lt;+&gt; manageHook defaultConfig
+    ...</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/web_tests_linux.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/web_tests_linux.md</a>
+  </p>
+</div>

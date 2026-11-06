@@ -1,0 +1,76 @@
+<h1>Debugging</h1>
+<p>It is possible to debug Fuchsia binaries using <code>zxdb</code>. For the sake of these
+examples, we will be using <code>base_unittests</code> as the test suite we wish to
+execute. These instructions assume that your Chromium build has the following gn
+arguments:</p>
+<pre>is_debug = true
+is_component_build = true
+target_os = &quot;fuchsia&quot;
+symbol_level = 2</pre>
+<h2 id="manual-debugging-via-the-command-line">Manual debugging via the command line</h2>
+<ol>
+<li><p>(From Chromium) Install your package(s) and its symbols onto the device.</p>
+<pre data-language="bash">out/fuchsia/bin/install_base_unittests --fuchsia-out-dir=/path/to/fuchsia/out/directory</pre>
+</li>
+<li><p>(From Fuchsia source tree) Run the debugger.</p>
+<pre data-language="bash">fx debug -- --build-dir /path/to/chromium/src/out/directory</pre>
+</li>
+<li><p>Set up the debugger to attach to the process.</p>
+<pre>[zxdb] attach base_unittests.cmx</pre>
+</li>
+<li><p>Configure breakpoint(s).</p>
+<pre>[zxdb] break base::GetDefaultJob</pre>
+</li>
+<li><p>(In another terminal, from Fuchsia source tree) Run the test package.</p>
+<pre data-language="bash">fx shell run fuchsia-pkg://fuchsia.com/base_unittests#meta/base_unittests.cmx</pre>
+</li>
+<li><p>At this point, you should hit a breakpoint in <code>zxdb</code>.</p>
+<pre>[zxdb] f
+▶ 0 base::GetDefaultJob() • default_job.cc:18
+  1 base::$anon::LaunchChildTestProcessWithOptions(…) • test_launcher.cc:335
+  2 base::$anon::DoLaunchChildTestProcess(…) • test_launcher.cc:528
+  3 base::TestLauncher::LaunchChildGTestProcess(…) • test_launcher.cc:877
+  ...</pre>
+</li>
+<li><p>Enjoy debugging! Steps 2 through 6 will also work for things like services
+which aren&#39;t run directly from the command line, such as WebEngine.
+Run <code>help</code> inside ZXDB to see what debugger commands are available.</p>
+</li>
+</ol>
+<h2 id="vs-code-integration">VS Code integration</h2>
+<ol>
+<li><p>Install the <a href="https://marketplace.visualstudio.com/items?itemName=fuchsia-authors.zxdb">zxdb</a>
+extension.</p>
+</li>
+<li><p>Modify the <code>zxdb.command</code> setting in your Chromium workspace to this value:</p>
+<pre data-language="bash">(cd /path/to/fuchsia ; fx debug -- --enable-debug-adapter --build-dir /path/to/chromium/src/out/directory)</pre>
+</li>
+<li><p>Edit your debug launch configurations in <code>.vscode/launch.json</code>:</p>
+<pre data-language="json">{
+    &quot;version&quot;: &quot;0.2.0&quot;,
+    &quot;configurations&quot;: [
+        {
+            &quot;name&quot;: &quot;Attach to base_unittests&quot;,
+            &quot;type&quot;: &quot;zxdb&quot;,
+            &quot;request&quot;: &quot;attach&quot;,
+            &quot;process&quot;: &quot;base_unittests.cmx&quot;
+        }
+    ]
+}</pre>
+<p>You can add more configurations as needed.</p>
+</li>
+<li><p>Start the debug configuration in VS Code. You should get a terminal with zxdb
+running.</p>
+</li>
+<li><p>Launch the test suite in a terminal.</p>
+<pre data-language="bash">out/fuchsia/bin/run_base_unittests -d --fuchsia-out-dir=/path/to/fuchsia/out/directory</pre>
+</li>
+<li><p>Breakpoints set in the IDE should work.</p>
+</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/debug_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/debug_instructions.md</a>
+  </p>
+</div>

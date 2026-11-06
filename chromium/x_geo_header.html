@@ -1,0 +1,45 @@
+<h1>X-Geo Geolocation Header Specification for Search Engines</h1>
+<p>This document describes the <code>X-Geo</code> HTTP header sent by Chromium to eligible
+Default Search Engine providers.</p>
+<hr>
+<h2 id="overview">Overview</h2>
+<p>When a user selects a search suggestion in Chromium using their Default Search
+Engine, Chromium can optionally attach the user&#39;s geographical location in the
+<code>X-Geo</code> HTTP header. This allows the search engine to return localized search
+results (e.g. nearby businesses, local weather) on initial navigation without
+requiring additional JavaScript Geolocation API usage after page load and a
+subsequent reload.</p>
+<hr>
+<h2 id="eligibility-and-opt-in-requirements">Eligibility and Opt-In Requirements</h2>
+<p>For this to work, the Default Search Engine (DSE) provider must opt in by being
+configured in Chromium&#39;s search engine data to receive the header.</p>
+<p>Search engine providers wishing to configure their engine definition in Chromium
+to receive the <code>X-Geo</code> header should follow the instructions in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/search_engines_data/README.chromium">//third_party/search_engines_data/README.chromium</a>
+to set the <code>send_x_geo_header</code> property to <code>true</code>.</p>
+<p>When the DSE has opted in, Chromium will sometimes (based on various factors and
+triggers) send the <code>X-Geo</code> header with search requests.</p>
+<hr>
+<h2 id="http-header-format">HTTP Header Format</h2>
+<p>When attached to a search request, the header is formatted as follows:</p>
+<pre data-language="http">X-Geo: w &lt;base64url_encoded_protobuf&gt;</pre>
+<ul>
+<li><strong>Prefix (<code>w </code>)</strong>: The value always begins with the ASCII characters <code>&#39;w&#39;</code>
+followed by a space (<code>&quot;w &quot;</code>, ASCII <code>0x77 0x20</code>). This prefix identifies the
+string as a Base64-encoded Protocol Buffer message conforming to the <code>X-Geo</code>
+protocol.</li>
+<li><strong>Base64Url Encoding</strong>: Following the <code>&quot;w &quot;</code> prefix, the binary Protobuf
+payload is encoded using <strong>Base64Url</strong> (RFC 4648 Section 5, URL-safe alphabet:
+<code>A-Z</code>, <code>a-z</code>, <code>0-9</code>, <code>-</code>, <code>_</code>) with padding characters (<code>=</code>).</li>
+</ul>
+<hr>
+<h2 id="protocol-buffer-specification">Protocol Buffer Specification</h2>
+<p>The binary payload decodes to an <code>omnibox.LocationDescriptor</code> Protocol Buffer
+message. The <code>.proto</code> schema is defined in Chromium at:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/omnibox/browser/proto/partner_location_descriptor.proto">components/omnibox/browser/proto/partner_location_descriptor.proto</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/x_geo_header.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/x_geo_header.md</a>
+  </p>
+</div>

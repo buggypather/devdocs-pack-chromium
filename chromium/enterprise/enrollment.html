@@ -1,0 +1,67 @@
+<h1>Enterprise Enrollment on ChromeOS</h1>
+<p>Enterprise Enrollment is a process that marks a device as belonging to
+particular organization and enables <a href="management">management</a> of the device
+by organization admins.</p>
+<h2 id="requirements">Requirements</h2>
+<p>Only <strong>devices without owner</strong> can be enrolled. Ownership of the device is
+established either during Enterprise Enrollment (the organization becomes the
+owner of the device) or during first user sign-in (in this case this user
+becomes the owner of the device).</p>
+<p>Ownership of the device can be reset using factory reset (<code>Ctrl+Alt+Shift+R</code>
+on the login screen), if it is not disabled via device policy.</p>
+<p>Developers can reset ownership by running following commands as root in shell:</p>
+<pre>pkill -9 chrome
+rm -rf /home/chronos/Local\ State /var/lib/whitelist /var/lib/devicesettings /var/lib/device_management /home/.shadow
+rm /home/chronos/.oobe_completed
+crossystem clear_tpm_owner_request=1
+reboot</pre>
+<p>Only <strong>enterprise users</strong> can enroll devices (device will be owned by the
+organization user belongs to).</p>
+<h4 id="instructions-for-google-employees">Instructions for Google Employees</h4>
+<p>Are you a Google employee? See
+<a href="https://goto.google.com/managed-devices/faq/using-yaps">http://go/managed-devices/faq/using-yaps</a>
+to learn how to use simple development device management server.</p>
+<p>See
+<a href="https://goto.google.com/managed-devices/faq/test-account">http://go/managed-devices/faq/test-account</a>
+for instuctions on how to get enterprise account for testing.</p>
+<h2 id="enrollment-scenarios">Enrollment scenarios</h2>
+<p>There are several enrollment scenarios, exact choice is made based on
+following factors:</p>
+<ul>
+<li>How the authentication is performed</li>
+<li>If enrollment can be avoided by user</li>
+<li>What initiates enrollment.</li>
+</ul>
+<h4 id="instructions-for-google-employees-1">Instructions for Google Employees</h4>
+<p>Are you a Google employee? See
+<a href="https://goto.google.com/chromeos-enrollment-overview">go/chromeos-enrollment-overview</a>
+for other enrollment scenarios in development.</p>
+<h3 id="manual-enrollment">Manual enrollment</h3>
+<p>Enrollment can be triggered manually on the login screen via <code>Ctrl+Alt+E</code>
+shortcut. User will have to authenticate using username/password. User can
+cancel enrollment attempt and return to login screen.</p>
+<h3 id="re-enrollment">Re-enrollment</h3>
+<p>During initial setup device queries management service to check if it was
+previously enrolled, and if organization admins indicated that device should
+be enrolled again.</p>
+<p>This is set on <a href="https://admin.google.com/">https://admin.google.com/</a> under <code>Enrollment &amp; Access</code> section on
+<code>Device Management&gt;Chrome&gt;Device Settings</code> page.</p>
+<p>Authentication is the same as in <strong>Manual enrollment</strong> case, and whether
+enrollment can be skipped depends on policy set by admins.</p>
+<h3 id="oem-triggered-enrollment">OEM-triggered Enrollment</h3>
+<p>Device manufacturers can provide special <a href="https://cs.chromium.org/chromium/src/chromeos/ash/components/system/statistics_provider.cc?rcl=2e366a611abdd2be6995e625f3281d40fab5b5e3&amp;l=83">OEM manifest</a>
+that controls if device should be enrolled, and if enrollment is forced.
+Authentication is the same as in <strong>Manual enrollment</strong> case.</p>
+<h3 id="offline-demo-mode-enrollment">Offline demo-mode enrollment</h3>
+<p>This mode is intended for demo ChromeOS features e.g. in retail stores. This
+enrollment does not require network connection, it enrolls device to a fixed
+domain and uses policy from a local resource.</p>
+<p>Demo enrollment can be triggered during initial setup on welcome/network
+screens via <code>Ctrl+Alt+D</code> shortcut. No authentication is required during
+enrollment.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/enrollment.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/enrollment.md</a>
+  </p>
+</div>

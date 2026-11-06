@@ -1,0 +1,320 @@
+<h1>Shared Libraries on Android</h1>
+<p>This doc outlines some tricks / gotchas / features of how we ship native code in
+Chrome on Android.</p>
+<h2 id="library-packaging">Library Packaging</h2>
+<p>Current Android versions use Trichrome (TrichromeChrome.aab + TrichromeLibrary.apk).
+Monochrome (MonochromePublic.aab) was used for Android N, O, and P but is now
+deprecated. Note that Trichrome continues to use the native library named
+<code>libmonochrome.so</code>.</p>
+<ul>
+<li>Android Q+ (Trichrome):<ul>
+<li>Trichrome uses the same native library as Monochrome: <code>libmonochrome.so</code>.</li>
+<li><code>libmonochrome.so</code> is stored in the shared APK (TrichromeLibrary.apk)
+so that it can be shared with TrichromeWebView.</li>
+<li>It is loaded by <code>libchromium_android_linker.so</code> using
+<code>android_dlopen_ext()</code> to enable RELRO sharing.</li>
+</ul>
+</li>
+<li>(Legacy) Android N, O &amp; P (Monochrome):<ul>
+<li><code>libmonochrome.so</code> is stored uncompressed within the apk (an
+AndroidManifest.xml attribute disables extraction).</li>
+<li>It is loaded directly from the apk by the system linker.</li>
+<li>It exports all JNI symbols and does not use explicit JNI registration.</li>
+<li>It is not loaded by <code>libchromium_android_linker.so</code> and relies on the
+system&#39;s webview zygote for RELRO sharing.</li>
+</ul>
+</li>
+</ul>
+<h2 id="build-variants-eg-trichrome_library_apk">Build Variants (eg. trichrome_library_apk)</h2>
+<p>The packaging above extends to cover both 32-bit and 64-bit device
+configurations.</p>
+<p>Chrome support 64-bit builds, but these do not ship to Stable.
+The system WebView APK that ships to those devices contains a 32-bit library,
+and for 64-bit devices, a 64-bit library as well (32-bit WebView client apps
+will use the 32-bit library, and vice-versa).</p>
+<h3 id="trichrome">Trichrome</h3>
+<p>Trichrome uses separate apps for Chrome and WebView, but places shared
+resources in a third shared-library APK (TrichromeLibrary). The table below
+shows which native libraries are packaged where. Note that <strong>dummy</strong>
+placeholder libraries are inserted where needed, since Android determines
+supported ABIs from the presence of native libraries, and the ABIs of a shared
+library APK must match its client app.</p>
+<p>Trichrome has 4 permutations on 64-bit to support different device
+configurations:</p>
+<table>
+<thead>
+<tr>
+<th>Builds on</th>
+<th>Variant</th>
+<th>Chrome</th>
+<th>Library</th>
+<th>WebView</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>32-bit</td>
+<td>trichrome</td>
+<td><code>32/dummy</code></td>
+<td><code>32/combined</code></td>
+<td><code>32/dummy</code></td>
+</tr>
+<tr>
+<td>64-bit</td>
+<td>trichrome</td>
+<td><code>32/dummy</code>, <code>64/dummy</code></td>
+<td><code>32/combined</code>, <code>64/dummy</code></td>
+<td><code>32/dummy</code>, <code>64/webview</code></td>
+</tr>
+<tr>
+<td>64-bit</td>
+<td>trichrome_64_32</td>
+<td><code>32/dummy</code>, <code>64/dummy</code></td>
+<td><code>32/dummy</code>, <code>64/combined</code></td>
+<td><code>32/webview</code>, <code>64/dummy</code></td>
+</tr>
+<tr>
+<td>64-bit</td>
+<td>trichrome_64</td>
+<td><code>64/dummy</code></td>
+<td><code>64/combined</code></td>
+<td><code>64/dummy</code></td>
+</tr>
+<tr>
+<td>64-bit</td>
+<td>trichrome_32</td>
+<td><code>32/dummy</code></td>
+<td><code>32/combined</code></td>
+<td><code>32/dummy</code></td>
+</tr>
+</tbody></table>
+<h3 id="legacy-monochrome">(Legacy) Monochrome</h3>
+<p>Monochrome&#39;s intent was to eliminate the duplication between the 32-bit Chrome
+and WebView libraries. In 32-bit Monochrome, a single combined library serves
+both Chrome and WebView needs. The 64-bit version adds an extra WebView-only
+library.</p>
+<p>In each of these cases, the library name of the combined and WebView-only
+libraries must match (an Android platform requirement), so both libs are named
+<code>libmonochrome.so</code> (or <code>libmonochrome_64.so</code> in the 64-bit browser case).</p>
+<p>Naming scheme for the various targets:
+<strong>monochrome_(browser ABI)_(extra_webview ABI)</strong></p>
+<table>
+<thead>
+<tr>
+<th>Builds on</th>
+<th>Variant</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>32-bit</td>
+<td>monochrome</td>
+<td>The original 32-bit-only version</td>
+</tr>
+<tr>
+<td>64-bit</td>
+<td>monochrome</td>
+<td>The original 64-bit version, with 32-bit combined lib and 64-bit WebView. This would be named monochrome_32_64_apk if not for legacy naming.</td>
+</tr>
+<tr>
+<td>64-bit</td>
+<td>monochrome_64_32</td>
+<td>64-bit combined lib with 32-bit WebView library.</td>
+</tr>
+<tr>
+<td>64-bit</td>
+<td>monochrome_64</td>
+<td>64-bit combined lib only, for eventual pure 64-bit hardware.</td>
+</tr>
+<tr>
+<td>64-bit</td>
+<td>monochrome_32</td>
+<td>A mirror of the original 32-bit-only version on 64-bit.</td>
+</tr>
+</tbody></table>
+<h2 id="crashpad-packaging">Crashpad Packaging</h2>
+<ul>
+<li>Crashpad is a native library providing out-of-process crash dumping. When a
+dump is requested (e.g. after a crash), a Crashpad handler process is started
+to produce a dump.</li>
+<li>All of the Crashpad handler code is linked into the package&#39;s native
+library. <code>libcrashpad_handler_trampoline.so</code> is a minimal executable
+packaged with the main native library, stored uncompressed and left
+unextracted. When a dump is requested, <code>/system/bin/linker</code> is executed to
+load the trampoline from the APK, which in turn <code>dlopen()</code>s the main
+native library to load the remaining Crashpad handler code.</li>
+</ul>
+<h2 id="debug-information">Debug Information</h2>
+<p><strong>What is it?</strong></p>
+<ul>
+<li>Sections of an ELF that provide debugging and symbolization information (e.g. ability convert addresses to function &amp; line numbers).</li>
+</ul>
+<p><strong>How we use it:</strong></p>
+<ul>
+<li>ELF debug information is too big to push to devices, even for local development.</li>
+<li>All of our APKs include <code>.so</code> files with debug information removed via <code>strip</code>.</li>
+<li>Unstripped libraries are stored at <code>out/Default/lib.unstripped</code>.<ul>
+<li>Many of our scripts are hardcoded to look for them there.</li>
+</ul>
+</li>
+</ul>
+<h2 id="unwind-info--frame-pointers">Unwind Info &amp; Frame Pointers</h2>
+<p><strong>What are they:</strong></p>
+<ul>
+<li>Unwind info is data that describes how to unwind the stack. It is:<ul>
+<li>It is required to support C++ exceptions (which Chrome doesn&#39;t use).</li>
+<li>It can also be used to produce stack traces.</li>
+<li>It is generally stored in an ELF section called <code>.eh_frame</code> &amp; <code>.eh_frame_hdr</code>, but arm32 stores it in <code>.ARM.exidx</code> and <code>.ARM.extab</code>.<ul>
+<li>You can see these sections via: <code>readelf -S libchrome.so</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>&quot;Frame Pointers&quot; is a calling convention that ensures every function call has the return address pushed onto the stack.<ul>
+<li>Frame Pointers can also be used to produce stack traces (but without entries for inlined functions).</li>
+</ul>
+</li>
+</ul>
+<p><strong>How we use them:</strong></p>
+<ul>
+<li>We disable unwind information (search for <a href="https://cs.chromium.org/search/?q=exclude_unwind_tables+file:%5C.gn&amp;type=cs"><code>exclude_unwind_tables</code></a>).</li>
+<li>For all architectures except arm64, we disable frame pointers in order to reduce binary size (search for <a href="https://cs.chromium.org/search/?q=enable_frame_pointers+file:%5C.gn&amp;type=cs"><code>enable_frame_pointers</code></a>).</li>
+<li>Crashes are unwound offline using <code>minidump_stackwalk</code>, which can create a stack trace given a snapshot of stack memory and the unstripped library (see <a href="testing/using_crashpad_with_content_shell">//docs/testing/using_crashpad_with_content_shell.md</a>)</li>
+<li>To facilitate heap profiling, we ship unwind information to arm32 canary &amp; dev channels as a separate file: <code>assets/unwind_cfi_32</code></li>
+</ul>
+<h2 id="jni-native-methods-resolution">JNI Native Methods Resolution</h2>
+<ul>
+<li>For ChromePublic.apk:<ul>
+<li><code>JNI_OnLoad()</code> is the only exported symbol (enforced by a linker script).</li>
+<li>Native methods registered explicitly during start-up by generated code.</li>
+</ul>
+</li>
+<li>For TrichromeChrome.aab and (legacy) MonochromePublic.apk:<ul>
+<li><code>JNI_OnLoad()</code> and <code>Java_*</code> symbols are exported by linker script.</li>
+<li>No manual JNI registration is done. Symbols are resolved lazily by the runtime.</li>
+</ul>
+</li>
+</ul>
+<h2 id="packed-relocations">Packed Relocations</h2>
+<ul>
+<li>All flavors of <code>lib(mono)chrome.so</code> enable &quot;packed relocations&quot;, or &quot;APS2 relocations&quot; in order to save binary size.<ul>
+<li>Refer to <a href="https://android.googlesource.com/platform/bionic/+/refs/heads/master/tools/relocation_packer/src/delta_encoder.h">this source file</a> for an explanation of the format.</li>
+</ul>
+</li>
+<li>To process these relocations:<ul>
+<li>Pre-M Android: Our custom linker must be used.</li>
+<li>M+ Android: The system linker understands the format.</li>
+</ul>
+</li>
+<li>To see if relocations are packed, look for <code>LOOS+#</code> when running: <code>readelf -S libchrome.so</code></li>
+<li>Android P+ <a href="https://android.googlesource.com/platform/bionic/+/8b14256/linker/linker.cpp#2620">supports an even better format</a> known as RELR.<ul>
+<li>We&#39;ll likely switch non-Monochrome apks over to using it once it is implemented in <code>lld</code>.</li>
+</ul>
+</li>
+</ul>
+<h2 id="relro-sharing">RELRO Sharing</h2>
+<p><strong>What is it?</strong></p>
+<ul>
+<li>RELRO refers to the ELF segment <code>GNU_RELRO</code>. It contains data that the linker marks as read-only after it applies relocations.<ul>
+<li>To inspect the size of the segment: <code>readelf --segments libchrome.so</code></li>
+<li>For <code>lib(mono)chrome.so</code> the region occupies about 3.1MiB on arm32 and 2.6MiB on arm64</li>
+</ul>
+</li>
+<li>If two processes map this segment to the same virtual address space, then pages of memory within the segment which contain only relative relocations (99% of them) will be byte-for-byte identical.</li>
+<li>&quot;RELRO sharing&quot; is when this segment is moved into shared memory and shared by multiple processes.</li>
+<li>Processes <code>fork()</code>ed from the app zygote (where the library is loaded) share RELRO (via <code>fork()</code>&#39;s copy-on-write semantics), but this region is not shared with other process types (privileged, utility, GPU)</li>
+</ul>
+<p><strong>How does it work?</strong></p>
+<ul>
+<li>For a more detailed description, refer to comments in <a href="https://cs.chromium.org/chromium/src/base/android/java/src/org/chromium/base/library_loader/Linker.java">Linker.java</a>.</li>
+<li>For Android Q+ (Trichrome):<ul>
+<li>TrichromeWebView works the same way as on Android N-P.</li>
+<li>TrichromeChrome uses <code>android_dlopen_ext()</code> and <code>ASharedMemory_create()</code> to
+perform RELRO sharing, and then relies on a subsequent call to
+<code>System.loadLibrary()</code> to enable JNI method resolution without loading the
+library a second time.</li>
+<li>For renderer processes, TrichromeChrome <code>fork()</code>s from a chrome-specific
+app zygote. <code>libmonochrome.so</code> is loaded in the zygote before <code>fork()</code>.<ul>
+<li>Similar to O-P, app zygote provides copy-on-write memory semantics so
+RELRO sharing is redundant.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>For Android R+ (still Trichrome)<ul>
+<li>The RELRO region is created in the App Zygote, picked up by the Browser
+process, which then redistributes the region to all other processes. The
+receiving of the region and remapping it on top of the non-shared RELRO
+happens asynchronously after the library has been loaded. Native code is
+generally already running at this point. Hence the replacement must be
+atomic.</li>
+</ul>
+</li>
+<li>(Legacy) For Android N-P (Monochrome):<ul>
+<li>The OS maintains a RELRO file on disk with the contents of the GNU_RELRO segment.</li>
+<li>All Android apps that contain a WebView load <code>libmonochrome.so</code> at the same virtual address and apply RELRO sharing against the memory-mapped RELRO file.</li>
+<li>Chrome uses <code>WebViewLibraryPreloader</code> to call into the same WebView library loading code.<ul>
+<li>When Monochrome is the WebView provider, <code>libmonochrome.so</code> is loaded with the system&#39;s cached RELRO&#39;s applied.</li>
+</ul>
+</li>
+<li><code>System.loadLibrary()</code> is called afterwards.<ul>
+<li>When Monochrome is the WebView provider, this only calls JNI_OnLoad, since the library is already loaded. Otherwise, this loads the library and no RELRO sharing occurs.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>(Legacy) For non-low-end Android O-P (where there&#39;s a WebView zygote):<ul>
+<li>For non-renderer processes, the above Android N+ logic applies.</li>
+<li>For renderer processes, the OS starts all Monochrome renderer processes by <code>fork()</code>ing the WebView zygote rather than the normal application zygote.</li>
+</ul>
+</li>
+</ul>
+<p><strong>Security properties:</strong></p>
+<ul>
+<li>When the Browser process consumes a shared RELRO FD produced by the App
+Zygote, it relies on the App Zygote not hosting untrusted code or data. The
+initial forked child process transferring the <code>IRelroLibInfo</code> parcel during
+<code>ChildProcessService.setupConnection()</code> must be done before any untrusted web
+or network input is processed.</li>
+<li>After populating the shared memory region, the producer unmaps its temporary
+writable mapping and marks the FD read-only.</li>
+<li>For the broader App Zygote threat model and cross-process isolation
+invariants, see <a href="security/android-sandbox#zygote">Chrome Android Sandbox Design</a>.</li>
+</ul>
+<h2 id="library-prefetching">Library Prefetching</h2>
+<ul>
+<li>During start-up, we <code>fork()</code> a process that reads a byte from each page of the library&#39;s memory (or just the ordered range of the library).<ul>
+<li>See <a href="https://github.com/chromium/chromium/blob/HEAD/base/android/library_loader/">//base/android/library_loader/</a>.</li>
+</ul>
+</li>
+</ul>
+<h2 id="historical-tidbits">Historical Tidbits</h2>
+<ul>
+<li>We used to use the system linker on M (<code>ModernLinker.java</code>).<ul>
+<li>This was removed due to <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=719977">poor performance</a>.</li>
+</ul>
+</li>
+<li>We used to use <code>relocation_packer</code> to pack relocations after linking, which complicated our build system and caused many problems for our tools because it caused logical addresses to differ from physical addresses.<ul>
+<li>We now link with <code>lld</code>, which supports packed relocations natively and doesn&#39;t have these problems.</li>
+</ul>
+</li>
+<li>We used to use the Crazy Linker until Android M was deprecated<ul>
+<li>It allowed storing <code>libchrome.so</code> uncompressed within the apk before the
+system linker allowed it (with the name <code>crazy.libchrome.so</code> to avoid extraction).</li>
+<li>It was loaded directly from the apk via <code>libchromium_android_linker.so</code>.</li>
+<li>Only JNI_OnLoad was exported. Explicit JNI registration was required
+because the Android runtime uses the system&#39;s <code>dlsym()</code>, which doesn&#39;t know
+about Crazy-Linker-opened libraries. (see <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/jni_zero/README.md">JNI README</a>).</li>
+</ul>
+</li>
+</ul>
+<h2 id="see-also">See Also</h2>
+<ul>
+<li><a href="android_build_instructions">//docs/android_build_instructions.md</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/base/android/linker/BUILD.gn">//base/android/linker/BUILD.gn</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_native_libraries.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/android_native_libraries.md</a>
+  </p>
+</div>

@@ -1,0 +1,86 @@
+<h1>Chromium Gardening</h1>
+<p>Gardeners have one overarching role: to ensure that the Chromium build
+infrastructure is doing its job of helping developers deliver good software.
+Every other gardener responsibility flows from that one. In priority order,
+gardeners need to ensure that:</p>
+<ol>
+<li><strong>The tree is open</strong>, because when the tree is closed nobody can make
+progress;</li>
+<li><strong>New test failures are not introduced</strong>, because they weaken our assurance
+that we&#39;re shipping good code;</li>
+<li><strong>Existing test failures are repaired</strong>, for the same reason</li>
+</ol>
+<p>As the gardener, you not only have those responsibilities, but you have any
+necessary authority to fulfill them. In particular, you have the authority to:</p>
+<ul>
+<li>Revert changes that you know or suspect are causing breakages</li>
+<li>Disable or otherwise mark misbehaving tests</li>
+<li>Use Owners-Override label to override OWNERS checks freely as part of your
+gardening duties</li>
+<li>Pull in any other engineer or team you need to help you do these duties</li>
+<li>For clean reverts and cherry-picks, add the
+<a href="code_reviews#automated-code_review">Rubber Stamper bot</a>. All other
+changes require a +1 from another committer.</li>
+</ul>
+<p>TBRs were removed in Q1 2021.</p>
+<p>There are a number of different gardening rotations. For more information on
+gardening, including How Tos, Swapping Shifts and rotation updates, please see
+<a href="https://goto.google.com/chrome-gardening">Chromium Trunk Gardening</a>
+(Google-internal link).</p>
+<h2 id="tree-status">Tree Status</h2>
+<p>The <a href="https://ci.chromium.org/ui/tree-status/chromium">Tree Status page</a> tracks
+the current state of the Chromium tree:</p>
+<ul>
+<li><strong>Open</strong>: The Commit Queue (CQ) runs and submits changes as normal.</li>
+<li><strong>Closed</strong>: The CQ will not submit changes while critical build or test
+failures are being fixed. Reverts or fixes for the tree breakage can still
+land by adding <code>No-Tree-Checks: true</code> to the CL description footer.</li>
+<li><strong>Throttled</strong>: Displays a yellow caution banner in Gerrit and the LUCI UI
+(for example, to signal that the tree is stabilizing), but the CQ currently
+treats this state the same as <strong>Open</strong> and continues to submit changes as
+normal.</li>
+<li><strong>Maintenance</strong>: The tree is undergoing maintenance; the CQ will not submit
+changes while the tree is in this state.</li>
+</ul>
+<h2 id="how-to-be-a-gardener">How to be a Gardener</h2>
+<p>To be a gardener, you must be both a Chromium committer and a Google employee.
+For more detailed gardening instructions, please see the internal documentation
+at
+<a href="https://goto.google.com/chrome-gardening-how-to">go/chrome-gardening-how-to</a>
+(Google-internal link).</p>
+<h2 id="contacting-the-gardeners">Contacting the Gardeners</h2>
+<p>The currently oncall gardeners can be viewed in the top-left corner of the
+<a href="https://ci.chromium.org/p/chromium/g/main/console">Chromium Main Console</a>. You
+can also get in touch with gardeners using the
+<a href="https://chromium.slack.com/messages/CGJ5WKRUH/">#gardening Slack channel</a>.</p>
+<h2 id="please-dont-pass-bugs-back-to-the-gardener-that-assigned-them-to-you">Please don&#39;t pass bugs back to the gardener that assigned them to you</h2>
+<p>As part of their role, gardeners will triage open test failures and flakes. If
+possible, they will identify a culprit CL and revert it; however, sometimes this
+is not feasible. In that case, gardeners will assign these bugs to appropriate
+owners. They typically do this by looking for:</p>
+<ol>
+<li>The test author, or last person to make significant changes, or</li>
+<li>A proximal OWNER of the test</li>
+</ol>
+<p><em>Pro-tip: Gardeners, identify yourself in your comments, e.g., &quot;[Gardener]
+assigning to the test author for further triage.&quot;</em></p>
+<p>If you are assigned a bug by a gardener, please don&#39;t pass the bug back to that
+person. Gardeners have likely never seen the code before (or since), and are
+unlikely to be much help. Additionally, if &gt;8 hours have passed, that person is
+no longer gardener, and thus no longer responsible for triaging these bugs.</p>
+<p>Instead, if you aren&#39;t the best owner for the bug, please help to triage it
+more appropriately, since you&#39;re probably the test author, familiar with the
+test, or an OWNER. If have no idea who a good owner for the test is (or were
+assigned the bug in error*), you can reapply the <code>Gardener-Chromium</code> label and
+flip the status to <code>Untriaged</code>; this will put it back in the gardener queue for
+the next gardener to take a look at. Please only do this as a last resort, since
+the next gardener is unlikely to have any more information about the issue.</p>
+<p>*If you believe you were assigned the bug in error, it might be worth finding
+out why the gardener passed it to you, and remedying it if possible - e.g. by
+updating OWNERS files.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gardener.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gardener.md</a>
+  </p>
+</div>

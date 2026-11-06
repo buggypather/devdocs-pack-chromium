@@ -1,0 +1,171 @@
+<h1>Trace Event Best Practices</h1>
+<p>This document outlines best practices for emitting trace events in Chrome,
+focusing on clarity, performance, and effective debugging. It draws from the
+current state of Chrome&#39;s tracing infrastructure and the <a href="https://perfetto.dev/docs">Perfetto
+library</a>.</p>
+<h2 id="trace-category">Trace Category</h2>
+<p>Trace events are grouped into categories, which are essential for filtering and
+organizing trace data. Proper categorization is crucial for effective trace
+analysis.</p>
+<h3 id="built-in-categories">Built-in Categories</h3>
+<ul>
+<li>Refer to <a href="https://cs.chromium.org/chromium/src/base/trace_event/builtin_categories.h"><code>base/trace_event/builtin_categories.h</code></a> for a list of predefined
+categories.</li>
+<li>Familiarize yourself with existing categories before creating new ones to
+avoid duplication.</li>
+</ul>
+<h3 id="naming-convention">Naming Convention</h3>
+<ul>
+<li>Follow the <code>namespace.category(.sub_category)(.debug)</code> naming convention
+  for new categories.<ul>
+<li>Example: <code>base.scheduling</code>, <code>renderer.compositor</code>.</li>
+</ul>
+</li>
+<li>Avoid generic categories like <code>toplevel</code>. These become &quot;junk drawers&quot; and
+are too noisy.</li>
+<li>Use <code>.debug</code> suffix for debug categories instead of <code>TRACE_DISABLED_BY_DEFAULT()</code>.</li>
+</ul>
+<h3 id="category-descriptions">Category Descriptions</h3>
+<ul>
+<li>Document new categories with <code>.SetDescription()</code> to clarify their purpose.</li>
+<li>Identify an owner (e.g., a team or individual) for each category in
+comments.</li>
+<li>Add the <code>&quot;debug&quot;</code> tag for debug categories.</li>
+</ul>
+<h3 id="avoid-category-groups">Avoid Category Groups</h3>
+<ul>
+<li>Avoid emitting events to multiple categories. Category groups need to be
+defined for each combination that’s used in chrome, which can lead to
+combinatorial explosion.</li>
+<li>Prefer leveraging tags to group a set of categories under a common tag
+instead.</li>
+</ul>
+<h2 id="trace-event-usage">Trace Event Usage</h2>
+<h3 id="trace-event-macros">Trace Event Macros</h3>
+<ul>
+<li>Most use cases are served by <code>#include &quot;base/trace_event/trace_event.h&quot;</code></li>
+<li><strong>Use Perfetto Macros:</strong> Employ the modern macros documented in
+<a href="https://cs.chromium.org/chromium/src/third_party/perfetto/include/perfetto/tracing/track_event.h"><code>perfetto/include/perfetto/tracing/track_event.h</code></a>.<ul>
+<li><code>TRACE_EVENT()</code></li>
+<li><code>TRACE_EVENT_BEGIN()</code></li>
+<li><code>TRACE_EVENT_END()</code></li>
+</ul>
+</li>
+<li>See
+<a href="https://cs.chromium.org/chromium/src/third_party/perfetto/docs/instrumentation/track-events.md"><code>third_party/perfetto/docs/instrumentation/track-events.md</code></a> for more details.</li>
+<li><strong>Avoid Legacy Macros:</strong>  Do not use legacy macros defined in
+<code>third_party/perfetto/include/perfetto/tracing/track_event_legacy.h</code>, such
+as <code>TRACE_EVENT0/1/2</code>, <code>TRACE_EVENT_ASYNC_BEGIN0/1/2</code> or any other macro
+that has 0/1/2 suffix.<ul>
+<li>These macros are deprecated and should not be used in new code.</li>
+</ul>
+</li>
+<li>Do not emit synchronous events when a thread is idle. This yields misleading
+process activity summary shown by perfetto UI.</li>
+</ul>
+<h3 id="static-strings">Static Strings</h3>
+<ul>
+<li><strong>Always Use Static Strings:</strong> For event names, <em>always</em> use static strings.<ul>
+<li>Dynamic strings are filtered out due to privacy concerns and appear as
+&quot;filtered&quot; in field traces.</li>
+<li>Use
+<a href="https://cs.chromium.org/chromium/src/third_party/perfetto/include/perfetto/tracing/string_helpers.h"><code>perfetto::StaticString</code></a>
+to mark strings that are not known to be static at compile time but are in
+fact static.</li>
+</ul>
+</li>
+<li>If you need to add sensitive data in the trace event, prefer emitting it as
+arguments or proto fields, and keep the event name a static string.</li>
+</ul>
+<h2 id="asynchronous-events">Asynchronous Events</h2>
+<p>Asynchronous events are emitted outside of the current thread&#39;s execution flow;
+they are not bound to the thread where the <code>TRACE_EVENT_BEGIN</code> or
+<code>TRACE_EVENT_END</code> macros are invoked. Use the <code>perfetto::Track</code> API from
+<a href="https://cs.chromium.org/chromium/src/third_party/perfetto/include/perfetto/tracing/track.h"><code>third_party/perfetto/include/perfetto/tracing/track.h</code></a>
+to specify which track they belong to, which can span across threads or even
+processes. Asynchronous events are best suited for representing high-level,
+long-lived states or operations that are conceptually independent of a single
+thread&#39;s execution.</p>
+<h3 id="careful-usage">Careful Usage</h3>
+<ul>
+<li><strong>Reserve for High-Level State:</strong> Use asynchronous events sparingly,
+primarily for representing high-level, user-perceptible states or
+significant, long-lived operations.<ul>
+<li>Examples: First Contentful Paint (FCP), page visibility changes.</li>
+</ul>
+</li>
+<li><strong>Avoid for Debugging:</strong> Avoid using async events for debugging object
+lifetimes or short-lived events. Async tracks take a lot of vertical space
+and nesting can be visually misleading. Alternatively<ul>
+<li>Put the event in a category with the <code>.debug</code> suffix (e.g., <code>mycomponent.debug</code>). This allows for easy filtering when collecting traces.</li>
+<li>Use instant events with flows to retain threading context.</li>
+</ul>
+</li>
+</ul>
+<pre data-language="cpp">TRACE_EVENT_INSTANT(&quot;my_component.debug.lifetime&quot;, &quot;MyObject::Constructor&quot;,
+    perfetto::Flow::FromPointer(this));
+
+TRACE_EVENT_INSTANT(&quot;my_component.debug.lifetime&quot;, &quot;MyObject::Destructor&quot;,
+    perfetto::TerminatingFlow::FromPointer(this));</pre>
+<h3 id="named-tracks">Named Tracks</h3>
+<ul>
+<li><strong>Use Named Tracks:</strong> Instead of emitting async events directly to a global
+  track, emit them to a <code>NamedTrack</code>. To organize events logically, you can
+  create a track hierarchy.</li>
+</ul>
+<pre data-language="cpp">#include &quot;base/trace_event/track_event.h&quot;
+#include &quot;third_party/perfetto/include/perfetto/tracing/track.h&quot;
+
+perfetto::NamedTrack CreateFrameParentTrack() {
+  return perfetto::NamedTrack(&quot;Frames&quot;, 0, perfetto::Track());
+}
+
+perfetto::NamedTrack GetFrameVisibleTrack(int64_t frame_id) {
+  static const base::NoDestructor&lt;
+      base::trace_event::TrackRegistration&lt;perfetto::NamedTrack&gt;&gt;
+      parent_track(CreateFrameParentTrack());
+  return perfetto::NamedTrack(&quot;Frame Visibility&quot;, frame_id,
+      parent_track-&gt;track());
+}
+
+void MyFunction(int64_t frame_id, int64_t start_ts, int64_t end_ts) {
+  TRACE_EVENT_BEGIN(&quot;renderer&quot;, &quot;Visible&quot;,
+      GetFrameVisibleTrack(frame_id), start_ts);
+  TRACE_EVENT_END(&quot;renderer&quot;, &quot;Visible&quot;,
+      GetFrameVisibleTrack(frame_id), end_ts);
+}</pre>
+<h2 id="4-testing">4. Testing</h2>
+<p>Use <code>base::test::TracingEnvironment</code> to enable tracing in unittests and <code>base::test::TestTraceProcessor</code> to control a tracing session and read events.
+Avoid using legacy base::trace_event::TraceLog in new code.</p>
+<pre data-language="cpp">#include &quot;base/test/tracing/test_trace_processor.h&quot;
+#include &quot;base/test/tracing/trace_test_utils.h&quot;
+#include &quot;base/trace_event/track_event.h&quot;
+#include &quot;testing/gtest/include/gtest/gtest.h&quot;
+
+TEST(MyComponentTest, TestTracing) {
+  base::test::TracingEnvironment tracing_env;
+  base::test::TestTraceProcessor ttp;
+  ttp.StartTrace(&quot;my_category&quot;);
+
+  // Code that emits trace events
+  TRACE_EVENT(&quot;my_category&quot;, &quot;MyScopedEvent&quot;);
+  TRACE_EVENT_BEGIN(&quot;my_category&quot;, &quot;MyScopedEvent&quot;);
+  // ... some work ...
+  TRACE_EVENT_END(&quot;my_category&quot;, &quot;MyScopedEvent&quot;);
+  absl::Status status = ttp.StopAndParseTrace();
+  ASSERT_TRUE(status.ok()) &lt;&lt; status.message();
+  auto result = ttp.RunQuery(R&quot;sql(
+    SELECT count(*) as cnt from slice where name = 'MyScopedEvent'
+  )sql&quot;);
+  ASSERT_TRUE(result.has_value()) &lt;&lt; result.error();
+  // verify that the expected events are present in result.
+  EXPECT_THAT(result.value(),
+              ::testing::ElementsAre(std::vector&lt;std::string&gt;{&quot;cnt&quot;},
+                                     std::vector&lt;std::string&gt;{&quot;2&quot;}));
+}</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/trace_events.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/trace_events.md</a>
+  </p>
+</div>

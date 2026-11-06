@@ -1,0 +1,98 @@
+<h1>ForceField: An iOS Sandbox Primitive</h1>
+<p><em><strong>Status:</strong> Filed as FB9007081</em> <br><em><strong>Author:</strong> rsesek@, palmer@</em> <br><em><strong>Created:</strong> 2021-02-04</em> <br><em><strong>Updated:</strong> 2021-02-16</em></p>
+<h2 id="description">Description</h2>
+<p>This is a request for a new iOS feature (here called <strong>ForceField</strong>), which
+would provide app developers a primitive to process-isolate and sandbox
+memory-unsafe code in a way that is safe for manipulating untrustworthy and
+potentially malicious data.</p>
+<h2 id="objective">Objective</h2>
+<p>The goal of ForceField is to improve the safety and security of users, by
+reducing the privilege level of memory-unsafe code that processes untrustworthy
+data from the Internet.</p>
+<p>Many complex applications have components that are written in memory-unsafe
+languages like C/C++. While iOS does offer Swift as a (mostly) memory-safe
+language, often these components are shared across platforms or are third-party
+dependencies. Today, if an iOS application uses these components to process data
+from the Internet, they make themselves vulnerable to memory unsafety bugs.</p>
+<p>A common solution to mitigate these vulnerabilities is to perform the operations
+on untrustworthy data in a separate process that runs under a tight sandbox,
+following the <a href="https://en.wikipedia.org/wiki/Principle_of_least_privilege">principle of least privilege</a>.
+Currently iOS does not offer apps a mechanism to compose their components into
+high- and low-privilege execution environments. However, iOS itself uses
+<a href="https://googleprojectzero.blogspot.com/2021/01/a-look-at-imessage-in-ios-14.html">process isolation and sandboxing</a>
+for privilege reduction in similar situations. ForceField would give developers
+a primitive to do the same, which would help protect the people who use their
+apps.</p>
+<h2 id="the-ideal-solution">The Ideal Solution</h2>
+<p>A perfect implementation of ForceField would allow app developers to create a
+new component that is packaged in their application bundle. iOS would launch
+this component as a new, sandboxed process running under a security principal
+distinct from the bundle’s primary process. ForceField processes would:</p>
+<ul>
+<li>Not have access to the containing app’s data storage</li>
+<li>Not have access to privileged shared system resources (Keychain, clipboard,
+persistent storage locations)</li>
+<li>Not have access to system services that access user data, such as Location
+Services, Photos, HomeKit, HealthKit, AutoFill, etc.</li>
+<li>By default, not have access to draw to the screen</li>
+<li>By default, not have network access</li>
+</ul>
+<p>Thus, ForceField would provide a compute-only process, which the main app
+process would communicate with over an IPC mechanism. By default, the only
+resources FourceField could access would be the ones explicitly brokered in; and
+the only way to extract data from the ForceField process would be for it to
+likewise send results over IPC to the primary app. ForceField would enable
+running memory-unsafe code in such a way that it would be much safer to process
+untrustworthy and potentially malicious data.</p>
+<p>Furthermore, ForceField could be enhanced by allowing the developer to opt-in to
+specific privileged capabilities, for example network access. This would be
+useful for initiating NSURLSession connections, allowing the ForceField
+component to directly process untrustworthy network data without needing to
+round-trip it through the primary app component. Removing the round-trip would
+be more performant and reduce the risk of mis-handling the data in the trusted,
+primary app component.</p>
+<h2 id="leverage-existing-technologies">Leverage Existing Technologies</h2>
+<p>iOS’s existing technologies provide all the necessary pieces to create ForceField:</p>
+<h3 id="app-extensions">App Extensions</h3>
+<p>iOS provides a mechanism for apps to run context-limited code in a distinct
+process through <a href="https://developer.apple.com/app-extensions/">App Extensions</a>. A
+new type of “Compute” App Extension could be created to implement ForceField.
+The app could engage one of its Compute Extensions at any point during its
+lifecycle, whenever it is necessary to process data in a sandbox. An app should
+be able to launch a Compute App Extension when its foreground, but also
+potentially when processing data downloaded during
+<a href="https://developer.apple.com/documentation/uikit/app_and_environment/scenes/preparing_your_ui_to_run_in_the_background/updating_your_app_with_background_app_refresh?">background refresh</a>.</p>
+<p>The app should also have the ability to forcefully terminate a Compute
+Extension, in response to e.g. user cancellation or memory pressure signals. And
+the app should be able to register a termination handler for the Compute
+Extension, so it can determine if the process exited cleanly, crashed, was
+killed by the app, or was killed by the operating system. The operating system
+could kill all Compute App Extension processes a few seconds after the
+foreground app moves to the background. And the operating system could place
+limits on total resource consumption (CPU and memory) of the Compute App
+Extension. The Compute App Extension should be tightly sandboxed, per the
+description of ForceField above.</p>
+<h3 id="xpc">XPC</h3>
+<p>iOS already exposes
+<a href="https://developer.apple.com/documentation/foundation/nsxpcconnection?language=objc">NSXPCConnection</a>
+and
+<a href="https://developer.apple.com/documentation/foundation/nsxpcinterface?language=objc">NSXPCInterface</a>
+in the iPhoneOS SDK, and it is used to implement e.g.
+<a href="https://developer.apple.com/documentation/fileprovider/nsfileproviderservicesource/2915876-makelistenerendpointandreturnerr?language=objc">File Provider</a>
+app extensions. The NSXPC API is also already <a href="https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingXPCServices.html">used by developers on macOS</a>
+to create application-specific IPC protocols between components. iOS developers
+could use the NSXPC API to define the IPC protocol between the primary app and
+its ForceField components.</p>
+<h3 id="entitlements">Entitlements</h3>
+<p>New iOS entitlements could be created to enable ForceField components to opt
+into additional, privileged capabilities on top of the tightly-sandboxed
+baseline. For example, an entitlement could be created to enable a ForceField
+component to access the network. Another entitlement could enable rendering into
+a CALayer brokered in over IPC, to enable remote rendering of UI by the
+ForceField process into the primary application process.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/design/ios_sandbox_forcefield.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/design/ios_sandbox_forcefield.md</a>
+  </p>
+</div>

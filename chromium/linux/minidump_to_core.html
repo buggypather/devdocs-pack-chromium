@@ -1,0 +1,121 @@
+<h1>Linux Minidump to Core</h1>
+<p>On Linux, Chromium can use Breakpad to generate minidump files for crashes. It
+is possible to convert the minidump files to core files, and examine the core
+file in gdb, cgdb, or Qtcreator. In the examples below cgdb is assumed but any
+gdb based debugger can be used.</p>
+<h2 id="creating-the-core-file">Creating the core file</h2>
+<p>Use <code>minidump-2-core</code> to convert the minidump file to a core file. On Linux, one
+can build the minidump-2-core target in a Chromium checkout, or alternatively,
+build it in a Google Breakpad checkout.</p>
+<pre data-language="shell">$ ninja -C out/Release minidump-2-core
+$ ./out/Release/minidump-2-core foo.dmp &gt; foo.core</pre>
+<h2 id="retrieving-chrome-binaries">Retrieving Chrome binaries</h2>
+<p>If the minidump is from a public build then Googlers can find Google Chrome
+Linux binaries and debugging symbols via <a href="https://goto.google.com/chromesymbols">https://goto.google.com/chromesymbols</a>.
+Otherwise, use the locally built chrome files. Google Chrome uses the
+<em>debug link</em> method to specify the debugging file. Either way be sure to put
+<code>chrome</code> and <code>chrome.debug</code> (the stripped debug information) in the same
+directory as the core file so that the debuggers can find them.</p>
+<p>For Chrome OS release binaries look for <code>debug-*.tgz</code> files on
+GoldenEye.</p>
+<h2 id="loading-the-core-file-into-gdbcgdb">Loading the core file into gdb/cgdb</h2>
+<p>The recommended syntax for loading a core file into gdb/cgdb is as follows,
+specifying both the executable and the core file:</p>
+<pre data-language="shell">$ cgdb chrome foo.core</pre>
+<p>If the executable is not available then the core file can be loaded on its own
+but debugging options will be limited:</p>
+<pre data-language="shell">$ cgdb -c foo.core</pre>
+<p>If symbols do not seem to work, see
+<a href="#advanced-module-loading">Advanced module loading</a> below.</p>
+<h2 id="loading-the-core-file-into-qtcreator">Loading the core file into Qtcreator</h2>
+<p>Qtcreator is a full GUI wrapper for gdb and it can also load Chrome&#39;s core
+files. From Qtcreator select the Debug menu, Start Debugging, Load Core File...
+and then enter the paths to the core file and executable. Qtcreator has windows
+to display the call stack, locals, registers, etc. For more information on
+debugging with Qtcreator see
+<a href="https://www.youtube.com/watch?v=xTmAknUbpB0">Getting Started Debugging on Linux.</a></p>
+<h2 id="source-debugging">Source debugging</h2>
+<p>If you have a Chromium repo that is synchronized to exactly (or even
+approximately) when the Chrome build was created then you can tell
+<code>gdb/cgdb/Qtcreator</code> to load source code. Since all source paths in Chrome are
+relative to the out/Release directory you just need to add that directory to
+your debugger search path, by adding a line similar to this to <code>~/.gdbinit</code>:</p>
+<pre>(gdb) directory /usr/local/chromium/src/out/Release/</pre>
+<h2 id="notes">Notes</h2>
+<ul>
+<li>Since the core file is created from a minidump, it is incomplete and the
+debugger may not know values for variables in memory. Minidump files contain
+thread stacks so local variables and function parameters should be
+available, subject to the limitations of optimized builds.</li>
+<li>For gdb&#39;s <code>add-symbol-file</code> command to work, the file must have debugging
+symbols.<ul>
+<li>In case of separate debug files,
+<a href="https://sourceware.org/gdb/onlinedocs/gdb/Separate-Debug-Files.html">the gdb manual</a>
+explains how gdb looks for them.</li>
+</ul>
+</li>
+<li>If the stack trace involve system libraries, the Advanced module loading
+steps shown below need to be repeated for each library.</li>
+</ul>
+<h2 id="advanced-module-loading">Advanced module loading</h2>
+<p>If gdb doesn&#39;t find shared objects that are needed you can force it to load
+them. In gdb, the <code>add-symbol-file</code> command takes a filename and an address. To
+figure out the address, look near the end of <code>foo.dmp</code>, which contains a copy of
+<code>/proc/pid/maps</code> from the process that crashed.</p>
+<p>One quick way to do this is with <code>grep</code>. For instance, if the executable is
+<code>/path/to/chrome</code>, one can simply run:</p>
+<pre data-language="shell">$ grep -a /path/to/chrome$ foo.dmp
+
+7fe749a90000-7fe74d28f000 r-xp 00000000 08:07 289158        /path/to/chrome
+7fe74d290000-7fe74d4b7000 r--p 037ff000 08:07 289158        /path/to/chrome
+7fe74d4b7000-7fe74d4e0000 rw-p 03a26000 08:07 289158        /path/to/chrome</pre>
+<p>In this case, <code>7fe749a90000</code> is the base address for <code>/path/to/chrome</code>, but gdb
+takes the start address of the file&#39;s text section. To calculate this, one will
+need a copy of <code>/path/to/chrome</code>, and run:</p>
+<pre data-language="shell">$ objdump -x /path/to/chrome | grep '\.text' | head -n 1 | tr -s ' ' | cut -d' ' -f 5
+
+00000000005282c0</pre>
+<p>Now add the two addresses: <code>7fe749a90000 + 5282c0 = 7fe749fb82c0</code> and in gdb, run:</p>
+<pre>(gdb) add-symbol-file /path/to/chrome 0x7fe749fb82c0</pre>
+<p>Then use gdb as normal.</p>
+<h2 id="using-minidump_stackwalk-instead-of-gdb">Using minidump_stackwalk instead of gdb</h2>
+<p>If all you need is a stack trace, you can use minidump_stackwalk instead
+of gdb as follows:</p>
+<ul>
+<li><p>Compile minidump_stackwalk: <code>autoninja -C out/Default minidump_stackwalk</code></p>
+</li>
+<li><p>Download <code>breakpad_info.zip</code> for the correct version from
+  <a href="https://goto.google.com/chromesymbols">go/chromesymbols</a> (Googlers only).</p>
+<p>  You can instead generate the .sym files yourself, if you have a build with
+  symbols: <code>out/Default/dump_syms chrome &gt; chrome.sym</code></p>
+</li>
+<li><p>minidump_stackwalk expects a directory structure like
+  <code>debugfile/BUILDID/debugfile.sym</code>. On Linux and macOS debugfile is just the
+  name of the executable; on Windows, debugfile is that plus a <code>.pdb</code> extension.</p>
+<p>  The buildid is in the first line of the breakpad info file:</p>
+<pre data-language="none">$ head -1 chrome.breakpad.x64
+MODULE Linux x86_64 0ACBB4D08FB145E1656ADD88DF70B1320 chrome.debug</pre>
+<p>  So for this specific example, you&#39;d do:</p>
+<pre data-language="sh">mkdir -p symbols/chrome/0ACBB4D08FB145E1656ADD88DF70B1320
+mv chrome.breakpad.x64 symbols/chrome/0ACBB4D08FB145E1656ADD88DF70B1320</pre>
+</li>
+<li><p>Now you can run minidump_stackwalk:</p>
+<pre data-language="none">$ out/Default/minidump_stackwalk 5aeb7476-3200-41ed-8db8-b5d71bea28d3.dmp symbols/
+[...]
+Thread 0 (crashed)
+  0  chrome!content::protocol::FedCmHandler::OnDialogShown() [vector : 1434 + 0x0]
+     rax = 0x00003b2401be0720   rdx = 0x000000000000002e</pre>
+</li>
+</ul>
+<h2 id="other-resources">Other resources</h2>
+<p>For more discussion on this process see
+[Debugging a Minidump].
+This page discusses the same process in the context of Chrome OS and many of the
+concepts and techniques overlap.</p>
+<p><a href="https://www.chromium.org/chromium-os/packages/crash-reporting/debugging-a-minidump">Debugging a Minidump</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/minidump_to_core.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/minidump_to_core.md</a>
+  </p>
+</div>

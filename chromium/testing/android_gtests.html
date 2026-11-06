@@ -1,0 +1,110 @@
+<h1>How GTests work on Android</h1>
+<p>gtests are <a href="https://github.com/google/googletest">googletest</a>-based C++ tests.
+On Android, they run on a device. In most cases, they&#39;re packaged as APKs, but
+there are a few cases where they&#39;re run as raw executables. The latter is
+necessary in a few cases, particularly when manipulating signal handlers, but
+isn&#39;t possible when the suite needs to call back through the JNI into Java code.</p>
+<h2 id="apks">APKs</h2>
+<h3 id="gn">GN</h3>
+<p>Gtest APKs are built by default by the
+<a href="https://codesearch.chromium.org/chromium/src/testing/test.gni?type=cs&amp;q=file:%5Esrc%5C/testing%5C/test.gni$+template%5C(&quot;test&quot;%5C)&amp;sq=package:chromium">test</a>
+template, e.g.</p>
+<pre data-language="python">test(&quot;sample_gtest&quot;) {
+  # ...
+}</pre>
+<p>This uses gn&#39;s native
+<a href="https://gn.googlesource.com/gn/+/main/docs/reference.md#func_shared_library">shared_library</a>
+target type along with the
+<a href="https://codesearch.chromium.org/chromium/src/build/config/android/rules.gni?type=cs&amp;q=file:%5Esrc%5C/build%5C/config%5C/android%5C/rules.gni$+template%5C(%5C&quot;unittest_apk%5C&quot;%5C)&amp;sq=package:chromium">unittest_apk</a>
+template to build an APK containing:</p>
+<ul>
+<li>One or more .so files containing the native code on which the test suite
+depends</li>
+<li>One or more .dex files containing the Java code on which the test suite
+depends</li>
+<li>A <a href="https://developer.android.com/guide/topics/manifest/manifest-intro.html">manifest</a>
+file that contains <code>&lt;instrumentation&gt;</code> and <code>&lt;activity&gt;</code> elements (among others).</li>
+</ul>
+<h3 id="harness">Harness</h3>
+<p>GTest APKs are packaged with a harness that consists of:</p>
+<ul>
+<li><a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java">NativeTestInstrumentationTestRunner</a>, an instrumentation entry point that
+handles running one or more sequential instances of a test Activity. Typically,
+unit test suites will only use one instance of the Activity and will run all of
+the specified tests in it, while browser test suites will use multiple instances
+and will only run one test per instance.</li>
+<li>Three <a href="https://developer.android.com/reference/android/app/Activity.html">Activity</a>-based
+classes
+(<a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeUnitTestActivity.java">NativeUnitTestActivity</a>,
+<a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeUnitTestNativeActivity.java">NativeUnitTestNativeActivity</a>,
+and
+<a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeBrowserTestActivity.java">NativeBrowserTestActivity</a>)
+that primarily act as process entry points for individual test shards.
+Only one is used in any given suite.</li>
+<li><a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTest.java">NativeTest</a> and <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeUnitTest.java">NativeUnitTest</a>,
+which handle formatting arguments for googletest and transferring control across
+the JNI.</li>
+<li><a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/native_test_launcher.cc?q=file:%5Esrc%5C/testing%5C/android%5C/native_test%5C/native_test_launcher.cc$+RunTests&amp;sq=package:chromium">testing::android::RunTests</a>,
+the function on the native side, which initializes the native command-line,
+redirects stdout either to a FIFO or a regular file, optionally waits for a
+debugger to attach to the process, sets up the test data directories, and then
+dispatches to googletest&#39;s <code>main</code> function.</li>
+</ul>
+<h3 id="runtime">Runtime</h3>
+<ol>
+<li>The test runner calls <code>am instrument</code> with a bunch of arguments,
+includes several extras that are arguments to either
+<a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java">NativeTestInstrumentationTestRunner</a> or <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTest.java">NativeTest</a>. This results in an
+intent being sent to <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java">NativeTestInstrumentationTestRunner</a>.</li>
+<li><a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java">NativeTestInstrumentationTestRunner</a> is created. In its onCreate, it
+parses its own arguments from the intent and retains all other arguments
+to be passed to the Activities it&#39;ll start later. It also creates a
+temporary file in the external storage directory for stdout. It finally
+starts itself.</li>
+<li><a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java">NativeTestInstrumentationTestRunner</a> is started. In its onStart, it prepares
+to receive notifications about the start and end of the test run from the
+Activities it&#39;s about to start. It then creates <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java?q=file:NativeTestInstrumentationTestRunner.java+class:ShardStarter&amp;sq=package:chromium">ShardStarter</a>
+that will start the first test shard and adds that to the current
+<a href="https://developer.android.com/reference/android/os/Handler.html">Handler</a>.</li>
+<li>The <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java?q=file:NativeTestInstrumentationTestRunner.java+class:ShardStarter&amp;sq=package:chromium">ShardStarter</a> is executed, starting the test Activity.</li>
+<li>The Activity starts, possibly doing some process initialization, and hands
+off to the <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTest.java">NativeTest</a>.</li>
+<li>The <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTest.java">NativeTest</a> handles some initialization and informs the
+<a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java">NativeTestInstrumentationTestRunner</a> that it has started. On hearing this,
+the <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java">NativeTestInstrumentationTestRunner</a> creates a <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java?q=file:NativeTestInstrumentationTestRunner.java+class:ShardMonitor&amp;sq=package:chromium">ShardMonitor</a> 
+that will monitor the execution of the test Activity.</li>
+<li>The <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTest.java">NativeTest</a> hands off to testing::android::RunTests. The tests run.</li>
+<li>The <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTest.java">NativeTest</a> informs the <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java">NativeTestInstrumentationTestRunner</a> that is has
+completed. On hearing this, the <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java?q=file:NativeTestInstrumentationTestRunner.java+class:ShardMonitor&amp;sq=package:chromium">ShardMonitor</a> creates a <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java?q=file:NativeTestInstrumentationTestRunner.java+class:ShardEnder&amp;sq=package:chromium">ShardEnder</a>.</li>
+<li>The <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java?q=file:NativeTestInstrumentationTestRunner.java+class:ShardEnder&amp;sq=package:chromium">ShardEnder</a> is executed, killing the child process (if applicable),
+parsing the results from the stdout file, and either launching the next
+shard via <a href="https://codesearch.chromium.org/chromium/src/testing/android/native_test/java/src/org/chromium/native_test/NativeTestInstrumentationTestRunner.java?q=file:NativeTestInstrumentationTestRunner.java+class:ShardStarter&amp;sq=package:chromium">ShardStarter</a> (in which case the process returns to #4) or sending
+the results out to the test runner and finishing the instrumentation.</li>
+</ol>
+<h2 id="executables">Executables</h2>
+<h3 id="gn-1">GN</h3>
+<p>Gtest executables are built by passing
+<code>use_raw_android_executable = True</code> to the 
+<a href="https://codesearch.chromium.org/chromium/src/testing/test.gni?type=cs&amp;q=file:%5Esrc%5C/testing%5C/test.gni$+template%5C(&quot;test&quot;%5C)&amp;sq=package:chromium">test</a>
+template, e.g.</p>
+<pre data-language="python">test(&quot;sample_gtest_executable&quot;) {
+  if (is_android) {
+    use_raw_android_executable = true
+  }
+  # ...
+}</pre>
+<p>This uses gn&#39;s native
+<a href="https://gn.googlesource.com/gn/+/main/docs/reference.md#func_executable">executable</a>
+target type, then copies the resulting executable and any requisite shared libraries
+to <code>${root_out_dir}/${target_name}__dist</code> (e.g. <code>out/Debug/breakpad_unittests__dist</code>).</p>
+<h3 id="harness-1">Harness</h3>
+<p>Unlike APKs, gtest suites built as executables require no Android-specific harnesses.</p>
+<h3 id="runtime-1">Runtime</h3>
+<p>The test runner simply executes the binary on the device directly and parses the
+stdout on its own.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_gtests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_gtests.md</a>
+  </p>
+</div>

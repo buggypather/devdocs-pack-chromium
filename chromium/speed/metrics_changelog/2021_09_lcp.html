@@ -1,0 +1,30 @@
+<h1>Largest Contentful Paint Bug Fixes in M96</h1>
+<h2 id="bug-fixes-in-chrome-96">Bug Fixes in Chrome 96</h2>
+<p>In Chrome 96, a bug fix was made to the Chrome implementation. Previously, a
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2441732">change</a> was
+made to ignore images occupying the full viewport. However, this change used the
+frame&#39;s viewport instead of the page&#39;s viewport. This meant that images embedded
+in an iframe and occupying the full iframe size were ignored. This fixes this
+issue by always using the full page viewport instead of frame viewport when
+considering which images to ignore. <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2965459">Source code for this
+change</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>We saw two main types of sites affected by this change:</p>
+<ul>
+<li><p>Some sites embedding images or videos in smaller iframes could see changes, as
+those images or poster images would no longer be ignored and could potentially
+become the LCP.</p>
+</li>
+<li><p>Certain sites using ads may also see changes to their LCP scores because the
+images embedded in those ads would no longer be ignored despite occupying the
+full ad iframe size.</p>
+</li>
+</ul>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 96 is currently scheduled to be released the week of November 16, 2021.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_09_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_09_lcp.md</a>
+  </p>
+</div>

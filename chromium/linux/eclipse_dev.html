@@ -1,0 +1,490 @@
+<h1>Linux Eclipse Dev</h1>
+<p>Eclipse can be used on Linux (and probably Windows and Mac) as an IDE for
+developing Chromium. It&#39;s unpolished, but here&#39;s what works:</p>
+<ul>
+<li>Editing code works well (especially if you&#39;re used to it or Visual Studio).</li>
+<li>Navigating around the code works well. There are multiple ways to do this
+(F3, control-click, outlines).</li>
+<li>Building works fairly well and it does a decent job of parsing errors so
+that you can click and jump to the problem spot.</li>
+<li>Debugging is hit &amp; miss. You can set breakpoints and view variables. STL
+containers give it (and gdb) a bit of trouble. Also, the debugger can get
+into a bad state occasionally and eclipse will need to be restarted.</li>
+<li>Refactoring seems to work in some instances, but be afraid of refactors that
+touch a lot of files.</li>
+</ul>
+<h2 id="setup">Setup</h2>
+<h3 id="get--configure-eclipse">Get &amp; Configure Eclipse</h3>
+<p>Eclipse 4.6.1 (Neon) is known to work with Chromium for Linux.</p>
+<ul>
+<li><a href="http://www.eclipse.org/downloads/">Download</a> the distribution appropriate
+for your OS. For example, for Linux 64-bit/Java 64-bit, use the Linux 64 bit
+package (Eclipse Packages Tab -&gt; Linux 64 bit (link in bottom right)).<ul>
+<li>Tip: The packaged version of eclipse in distros may not work correctly
+with the latest CDT plugin (installed below). Best to get them all from
+the same source.</li>
+<li>Googlers: The version installed on Goobuntu works fine. The UI will be
+much more responsive if you do not install the google3 plug-ins. Just
+uncheck all the boxes at first launch.</li>
+</ul>
+</li>
+<li>Unpack the distribution and edit the eclipse/eclipse.ini to increase the
+heap available to java. For instance:<ul>
+<li>Change <code>-Xms40m</code> to <code>-Xms1024m</code> (minimum heap) and <code>-Xmx256m</code> to
+<code>-Xmx3072m</code> (maximum heap).</li>
+<li>Googlers: Edit <code>~/.eclipse/init.sh</code> to add this:</li>
+</ul>
+</li>
+</ul>
+<pre>export ECLIPSE_MEM_START=&quot;1024M&quot;
+export ECLIPSE_MEM_MAX=&quot;3072M&quot;</pre>
+<p>The large heap size prevents out of memory errors if you include many Chrome
+subprojects that Eclipse is maintaining code indices for.</p>
+<ul>
+<li>Turn off Hyperlink detection in the Eclipse preferences. (Window -&gt;
+Preferences, search for &quot;Hyperlinking, and uncheck &quot;Enable on demand
+hyperlink style navigation&quot;).</li>
+</ul>
+<p>Pressing the control key on (for keyboard shortcuts such as copy/paste) can
+trigger the hyperlink detector. This occurs on the UI thread and can result in
+the reading of jar files on the Eclipse classpath, which can tie up the editor
+due to the size of the classpath in Chromium.</p>
+<h3 id="a-short-word-about-paths">A short word about paths</h3>
+<p>Before you start setting up your work space - here are a few hints:</p>
+<ul>
+<li>Don&#39;t put your checkout on a remote file system (e.g. NFS filer). It&#39;s too
+slow both for building and for Eclipse.</li>
+<li>Make sure there is no file system link in your source path because Ninja
+will resolve it for a faster build and Eclipse / GDB will get confused.
+(Note: This means that the source will possibly not reside in your user
+directory since it would require a link from filer to your local
+repository.)</li>
+</ul>
+<h3 id="run-eclipse--set-your-workspace">Run Eclipse &amp; Set your workspace</h3>
+<p>Run eclipse/eclipse in a way that your regular build environment (export CC,
+CXX, etc...) will be visible to the eclipse process.</p>
+<p>Set the Workspace to be a directory on a local disk (e.g.
+<code>/work/workspaces/chrome</code>).  Placing it on an NFS share is not recommended --
+it&#39;s too slow and Eclipse will block on access.  Don&#39;t put the workspace in the
+same directory as your checkout.</p>
+<h3 id="install-the-c-development-tools-cdt">Install the C Development Tools (&quot;CDT&quot;)</h3>
+<ol>
+<li>From the Help menu, select Install New Software...<ol>
+<li>Select the &#39;Work with&#39; URL for the CDT
+If it&#39;s not there you can click Add... and add it.
+See <a href="https://eclipse.org/cdt/downloads.php">https://eclipse.org/cdt/downloads.php</a> for up to date versions,
+e.g. with CDT 8.7.0 for Eclipse Mars, use
+<a href="http://download.eclipse.org/tools/cdt/releases/8.7">http://download.eclipse.org/tools/cdt/releases/8.7</a></li>
+<li>Googlers: We have a local mirror, but be sure you run prodaccess before
+trying to use it.</li>
+</ol>
+</li>
+<li>Select &amp; install the Main and Optional features.</li>
+<li>Restart Eclipse</li>
+<li>Go to Window &gt; Open Perspective &gt; Other... &gt; C/C++ to switch to the C++
+perspective (window layout).</li>
+<li>Right-click on the &quot;Java&quot; perspective in the top-right corner and select
+&quot;Close&quot; to remove it.</li>
+</ol>
+<h3 id="create-your-projects">Create your project(s)</h3>
+<p>First, turn off automatic workspace refresh and automatic building, as Eclipse
+tries to do these too often and gets confused:</p>
+<ol>
+<li>Open Window &gt; Preferences</li>
+<li>Search for &quot;workspace&quot;</li>
+<li>Turn off &quot;Build automatically&quot;</li>
+<li>Turn off &quot;Refresh using native hooks or polling&quot;</li>
+<li>Click &quot;Apply&quot;</li>
+</ol>
+<p>Create a single Eclipse project for everything:</p>
+<ol>
+<li>From the File menu, select New &gt; Project...</li>
+<li>Select C/C++ Project &gt; Makefile Project with Existing Code</li>
+<li>Name the project the exact name of the directory: &quot;src&quot; (or &quot;WebKit&quot; if you
+mainly work in Blink and want a faster experience)</li>
+<li>Provide a path to the code, like /work/chromium/src (or
+/work/chromium/src/third_party/WebKit)</li>
+<li>Select toolchain: Linux GCC</li>
+<li>Click Finish.</li>
+</ol>
+<p>Chromium uses C++14, so tell the indexer about it. Otherwise it will get
+confused about things like std::unique_ptr.</p>
+<ol>
+<li>Right-click on &quot;src&quot; and select &quot;Properties...&quot;</li>
+<li>Navigate to C/C++ General &gt; Preprocess Include Paths, Macros etc. &gt;
+Providers</li>
+<li>Select CDT GCC Built-in Compiler Settings</li>
+<li>In the text box entitled Command to get compiler specs append &quot;-std=c++14&quot;
+(leaving out the quotes)</li>
+</ol>
+<p>Chromium has a huge amount of code, enough that Eclipse can take a very long
+time to perform operations like &quot;go to definition&quot; and &quot;open resource&quot;. You need
+to set it up to operate on a subset of the code.</p>
+<p>In the Project Explorer on the left side:</p>
+<ol>
+<li>Right-click on &quot;src&quot; and select &quot;Properties...&quot;</li>
+<li>Open Resource &gt; Resource Filters</li>
+<li>Click &quot;Add Filter...&quot;</li>
+<li>Add the following filter:<ul>
+<li>Include only</li>
+<li>Files, all children (recursive)</li>
+<li>Name matches
+<code>.*\.(c|cc|cpp|h|mm|inl|idl|js|json|css|html|gyp|gypi|grd|grdp|gn|gni|mojom)</code>
+regular expression</li>
+</ul>
+</li>
+<li>Add another filter:<ul>
+<li>Exclude all</li>
+<li>Folders</li>
+<li>Name matches <code>out_.*|\.git|web_tests</code> regular expression<ul>
+<li>If you aren&#39;t working on WebKit, adding <code>|blink</code> will remove more
+files</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Click &quot;Apply and Close&quot;</li>
+</ol>
+<p>Don&#39;t exclude the primary &quot;out&quot; directory, as it contains generated header files
+for things like string resources and Eclipse will miss a lot of symbols if you
+do.</p>
+<p>Eclipse will refresh the workspace and start indexing your code. It won&#39;t find
+most header files, however. Give it more help finding them:</p>
+<ol>
+<li>Open Window &gt; Preferences</li>
+<li>Search for &quot;Indexer&quot;</li>
+<li>Turn on &quot;Allow heuristic resolution of includes&quot;</li>
+<li>Select &quot;Use active build configuration&quot;</li>
+<li>Set Cache limits &gt; Index database &gt; Limit relative... to 20%</li>
+<li>Set Cache limits &gt; Index database &gt; Absolute limit to 256 MB</li>
+<li>Click &quot;Apply and Close&quot;</li>
+</ol>
+<p>Now the indexer will find many more include files, regardless of which approach
+you take below.</p>
+<p>Eclipse will still complain about unresolved includes or invalid declarations
+(semantic errors or code analysis errors in the <code>Problems</code> tab),
+which you can set eclipse to ignore:</p>
+<ol>
+<li>Right-click on &quot;src&quot; and select &quot;Properties...&quot;<ul>
+<li>Open C++ General &gt; Code Analysis</li>
+<li>Change the severity from <code>Error</code> to <code>Warning</code> for each of the
+settings that you want eclipse to ignore.</li>
+</ul>
+</li>
+</ol>
+<h4 id="optional-manual-header-paths-and-symbols">Optional: Manual header paths and symbols</h4>
+<p>You can manually tell Eclipse where to find header files, which will allow it to
+create the source code index before you do a real build.</p>
+<ol>
+<li>Right-click on &quot;src&quot; and select &quot;Properties...&quot;<ul>
+<li>Open C++ General &gt; Paths and Symbols &gt; Includes</li>
+<li>Click &quot;GNU C++&quot;</li>
+<li>Click &quot;Add...&quot;</li>
+<li>Add <code>/path/to/chromium/src</code></li>
+<li>Check &quot;Add to all configurations&quot; and &quot;Add to all languages&quot;</li>
+</ul>
+</li>
+<li>Repeat the above for:<ul>
+<li><code>/path/to/chromium/src/testing/gtest/include</code></li>
+</ul>
+</li>
+</ol>
+<p>You may also find it helpful to define some symbols.</p>
+<ol>
+<li>Add <code>OS_LINUX</code>:<ul>
+<li>Select the &quot;Symbols&quot; tab</li>
+<li>Click &quot;GNU C++&quot;</li>
+<li>Click &quot;Add...&quot;</li>
+<li>Add name <code>OS_LINUX</code> with value 1</li>
+<li>Click &quot;Add to all configurations&quot; and &quot;Add to all languages&quot;</li>
+</ul>
+</li>
+<li>Repeat for <code>ENABLE_EXTENSIONS 1</code></li>
+<li>Repeat for <code>HAS_OUT_OF_PROC_TEST_RUNNER 1</code></li>
+<li>Click &quot;OK&quot;.</li>
+<li>Eclipse will ask if you want to rebuild the index. Click &quot;Yes&quot;.</li>
+</ol>
+<p>Let the C++ indexer run.  It will take a while (10s of minutes).</p>
+<h3 id="optional-building-inside-eclipse">Optional: Building inside Eclipse</h3>
+<p>This allows Eclipse to automatically discover include directories and symbols.
+If you use gold or ninja (both recommended) you&#39;ll need to tell Eclipse about
+your path.</p>
+<ol>
+<li>echo $PATH from a shell and copy it to the clipboard</li>
+<li>Open Window &gt; Preferences &gt; C/C++ &gt; Build &gt; Environment</li>
+<li>Select &quot;Replace native environment with specified one&quot; (since gold and ninja
+must be at the start of your path)</li>
+<li>Click &quot;Add...&quot;</li>
+<li>For name, enter <code>PATH</code></li>
+<li>For value, paste in your path with the ninja and gold directories.</li>
+<li>Click &quot;OK&quot;</li>
+</ol>
+<p>To create a Make target:</p>
+<ol>
+<li>From the Window menu, select Show View &gt; Make Target</li>
+<li>In the Make Target view, right-click on the project and select New...</li>
+<li>name the target (e.g. base_unittests)</li>
+<li>Unclick the Build Command: Use builder Settings and type whatever build
+command you would use to build this target (e.g.
+   <code>ninja -C out/Debug base_unittests</code>).</li>
+<li>Return to the project properties page a under the C/C++ Build, change the
+Build Location/Build Directory to be /path/to/chromium/src<ol>
+<li>In theory <code>${workspace_loc}</code> should work, but it doesn&#39;t for me.</li>
+<li>If you put your workspace in <code>/path/to/chromium</code>, then
+<code>${workspace_loc:/src}</code> will work too.</li>
+</ol>
+</li>
+<li>Now in the Make Targets view, select the target and click the hammer icon
+(Build Make Target).</li>
+</ol>
+<p>You should see the build proceeding in the Console View and errors will be
+parsed and appear in the Problems View. (Note that sometimes multi-line compiler
+errors only show up partially in the Problems view and you&#39;ll want to look at
+the full error in the Console).</p>
+<p>(Eclipse 3.8 has a bug where the console scrolls too slowly if you&#39;re doing a
+fast build, e.g. with remote execution.  To work around, go to Window &gt;
+Preferences and
+search for &quot;console&quot;.  Under C/C++ console, set &quot;Limit console output&quot; to
+2147483647, the maximum value.)</p>
+<h3 id="optional-multiple-build-targets">Optional: Multiple build targets</h3>
+<p>If you want to build multiple different targets in Eclipse (<code>chrome</code>,
+<code>unit_tests</code>, etc.):</p>
+<ol>
+<li>Window &gt; Show Toolbar (if you had it off)</li>
+<li>Turn on special toolbar menu item (hammer) or menu bar item (Project &gt; Build
+configurations &gt; Set Active &gt; ...)<ol>
+<li>Window &gt; Customize Perspective... &gt; &quot;Command Groups Availability&quot;</li>
+<li>Check &quot;Build configuration&quot;</li>
+</ol>
+</li>
+<li>Add more Build targets<ol>
+<li>Project &gt; Properties &gt; C/C++ Build &gt; Manage Configurations</li>
+<li>Select &quot;New...&quot;</li>
+<li>Duplicate from current and give it a name like &quot;Unit tests&quot;.</li>
+<li>Change under “Behavior” &gt; Build &gt; the target to e.g. <code>unit_tests</code>.</li>
+</ol>
+</li>
+</ol>
+<p>You can also drag the toolbar to the bottom of your window to save vertical
+space.</p>
+<h3 id="optional-running-inside-eclipse">Optional: Running inside eclipse</h3>
+<p>Running inside eclipse is fairly straightforward:</p>
+<ol>
+<li>Create a <code>C/C++ Application</code>:<ol>
+<li><code>Run</code> &gt; <code>Run configurations</code></li>
+<li>Double click on <code>C/C++ Application</code></li>
+<li>Pick a  name (e.g. <code>shell</code>)</li>
+<li>Point to <code>C/C++ Application</code>
+(e.g. <code>src/out/Default/content_shell</code>)</li>
+<li>Click <code>Debug</code> to run the program.</li>
+</ol>
+</li>
+</ol>
+<h3 id="optional-debugging">Optional: Debugging</h3>
+<ol>
+<li>From the toolbar at the top, click the arrow next to the debug icon and
+select Debug Configurations...</li>
+<li>Select C/C++ Application and click the New Launch Configuration icon. This
+will create a new run/debug con figuration under the C/C++ Application header.</li>
+<li>Name it something useful (e.g. <code>base_unittests</code>).</li>
+<li>Under the Main Tab, enter the path to the executable (e.g.
+<code>.../out/Debug/base_unittests</code>)</li>
+<li>Select the Debugger Tab, select Debugger: gdb and unclick &quot;Stop on startup
+in (main)&quot; unless you want this.</li>
+<li>Set a breakpoint somewhere in your code and click the debug icon to start
+debugging.</li>
+</ol>
+<h4 id="multi-process-debugging">Multi-process debugging</h4>
+<p>If you set breakpoints and your debugger session doesn&#39;t stop it is because
+both <code>chrome</code> and <code>content_shell </code> spawn sub-processes.
+To debug, you need to attach a debugger to one of those sub-processes.</p>
+<p>Eclipse can attach automatically to forked processes
+(Run -&gt; Debug configurations -&gt; Debugger tab), but that doesn&#39;t seem to
+work well.</p>
+<p>The overall idea is described <a href="https://www.chromium.org/blink/getting-started-with-blink-debugging">here</a>
+, but one way to accomplish this in eclipse is to run two <code>Debug configurations</code>:</p>
+<ol>
+<li>Create a <code>C/C++ Application</code>:<ol>
+<li><code>Run</code> &gt; <code>Debug configurations</code></li>
+<li>Double click on <code>C/C++ Application</code></li>
+<li>Pick a  name (e.g. <code>shell</code>)</li>
+<li>Point to <code>C/C++ Application</code>
+(e.g. <code>src/out/Default/content_shell</code>)</li>
+<li>In the arguments tab, add the following the to program arguments:
+<code>--no-sandbox --renderer-startup-dialog test.html</code></li>
+<li>Click <code>Debug</code> to run the program.</li>
+<li>That will run the application and it will stop with a message like the
+ following:
+<code>Renderer (239930) paused waiting for debugger to attach. Send SIGUSR1 to unpause.</code></li>
+<li><code>239930</code> is the number of the process running waiting for the <code>signal</code>.</li>
+</ol>
+</li>
+<li>Create a <code>C/C++ Attach to Application</code>:<ol>
+<li><code>Run</code> &gt; <code>Debug configurations</code></li>
+<li>Double click on <code>C/C++ Attach to Application</code></li>
+<li>Pick  a name (e.g. <code>shell proc</code>)</li>
+<li>Click <code>Debug</code> to run the configuration.</li>
+<li>In the <code>Select Processes</code> dialog, pick the process that was
+ spawned above (if you type <code>content_shell</code> it will filter by
+ name)</li>
+<li>Click on <code>Debugger console</code> to access the <code>gdb</code> console.</li>
+<li>Send the original process a signal
+ <code>signal SIGUSR1</code></li>
+<li>That should unblock the original process and you should now be able to
+ set breakpoints.</li>
+</ol>
+</li>
+</ol>
+<h3 id="optional-accurate-symbol-information">Optional: Accurate symbol information</h3>
+<p>If setup properly, Eclipse can do a great job of semantic navigation of C++ code
+(showing type hierarchies, finding all references to a particular method even
+when other classes have methods of the same name, etc.). But doing this well
+requires the Eclipse knows correct include paths and pre-processor definitions.
+After fighting with with a number of approaches, I&#39;ve found the below to work
+best for me.</p>
+<ol>
+<li>From a shell in your src directory, run
+<code>gn gen --ide=eclipse out/Debug/</code> (replacing Debug with the output directory you normally use when building).<ol>
+<li>This generates <project root>/out/Debug/eclipse-cdt-settings.xml which
+is used below.</li>
+<li>This creates a single list of include directories and preprocessor
+definitions to be used for all source files, and so is a little
+inaccurate. Here are some tips for compensating for the limitations:<ol>
+<li>If you care about blink, move &#39;third_party/WebKit/Source&#39; to the
+top of the list to better resolve ambiguous include paths (eg.
+<code>config.h</code>).</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>Import paths and symbols<ol>
+<li>Right click on the project and select Properties &gt; C/C++ General &gt; Paths
+and Symbols</li>
+<li>Click Restore Defaults to clear any old settings</li>
+<li>Click Import Settings... &gt; Browse... and select
+<code>&lt;project root&gt;/out/Debug/eclipse-cdt-settings.xml</code></li>
+<li>Click the Finish button.  The entire preferences dialog should go away.</li>
+<li>Right click on the project and select Index &gt; Rebuild</li>
+</ol>
+</li>
+</ol>
+<h3 id="alternative-per-file-accurate-includepre-processor-information">Alternative: Per-file accurate include/pre-processor information</h3>
+<p>Instead of generating a fixed list of include paths and pre-processor
+definitions for a project (above), it is also possible to have Eclipse determine
+the correct setting on a file-by-file basis using a built output parser. I
+(rbyers) used this successfully for a long time, but it doesn&#39;t seem much better
+in practice than the simpler (and less bug-prone) approach above.</p>
+<ol>
+<li>Install the latest version of Eclipse IDE for C/C++ developers
+(<a href="http://www.eclipse.org/downloads/packages/eclipse-ide-cc-developers/junosr1">Juno SR1</a>
+at the time of this writing)</li>
+<li>Setup build to generate a build log that includes the g++ command lines for
+the files you want to index:<ol>
+<li>Project Properties -&gt; C/C++ Build<ol>
+<li>Uncheck &quot;Use default build command&quot;</li>
+<li>Enter your build command, eg: <code>ninja -v</code><ol>
+<li>Note that for better performance, you can use a command that
+doesn&#39;t actually builds, just prints the commands that would be
+run. For ninja/make this means adding -n. This only prints the
+compile commands for changed files (so be sure to move your
+existing out directory out of the way temporarily to force a
+full &quot;build&quot;). ninja also supports &quot;-t commands&quot; which will
+print all build commands for the specified target and runs even
+faster as it doesn&#39;t have to check file timestamps.</li>
+</ol>
+</li>
+<li>Build directory: your build path including out/Debug<ol>
+<li>Note that for the relative paths to be parsed correctly you
+can&#39;t use ninja&#39;s <code>-C &lt;dir&gt;</code> to change directories as you might
+from the command line.</li>
+</ol>
+</li>
+<li>Build: potentially change <code>all</code> to the target you want to analyze,
+eg. <code>chrome</code></li>
+<li>Deselect &#39;clean&#39;</li>
+</ol>
+</li>
+<li>If you&#39;re using Ninja, you need to teach eclipse to ignore the prefix it
+adds (eg. <code>[10/1234]</code> to each line in build output):<ol>
+<li>Project properties -&gt; C/C++ General -&gt; Preprocessor includes</li>
+<li>Providers -&gt; CDT GCC Build Output Parser -&gt; Compiler command pattern</li>
+<li><code>(\[.*\] )?((gcc)|([gc]\+\+)|(clang(\+\+)?))</code></li>
+<li>Note that there appears to be a bug with &quot;Share setting entries
+between projects&quot; - it will keep resetting to off. I suggest using
+per-project settings and using the &quot;folder&quot; as the container to keep
+discovered entries (&quot;file&quot; may work as well).</li>
+</ol>
+</li>
+<li>Eclipse / GTK has bugs where lots of output to the build console can
+slow down the UI dramatically and cause it to hang (basically spends all
+it&#39;s time trying to position the cursor correctly in the build console
+window). To avoid this, close the console window and disable
+automatically opening it on build:<ol>
+<li>Preferences-&gt;C/C++-&gt;Build-&gt;Console -&gt; Uncheck &quot;Open console when
+building&quot;</li>
+<li>note you can still see the build log in
+<code>&lt;workspace&gt;/.metadata/.plugins/org.eclipse.cdt.ui</code></li>
+</ol>
+</li>
+</ol>
+</li>
+<li>Now build the project (select project, click on hammer).  If all went well:<ol>
+<li>Right click on a cpp file -&gt; properties -&gt; C/C++ general -&gt; Preprocessor
+includes -&gt; GNU C++ -&gt; CDT GCC Build output Parser</li>
+<li>You will be able to expand and see all the include paths and
+pre-processor definitions used for this file</li>
+</ol>
+</li>
+<li>Rebuild index (right-click on project, index, rebuild). If all went well:<ol>
+<li>Open a CPP file and look at problems windows</li>
+<li>Should be no (or very few) errors</li>
+<li>Should be able to hit F3 on most symbols and jump to their definitioin</li>
+<li>CDT has some issues with complex C++ syntax like templates (eg.
+<code>PassOwnPtr</code> functions)</li>
+<li>See
+<a href="http://wiki.eclipse.org/CDT/User/FAQ#Why_does_Open_Declaration_.28F3.29_not_work.3F_.28also_applies_to_other_functions_using_the_indexer.29">this page</a>
+for more information.</li>
+</ol>
+</li>
+</ol>
+<h3 id="optional-static-code-and-style-guide-analysis-using-cpplintpy">Optional: static code and style guide analysis using cpplint.py</h3>
+<ol>
+<li>From the toolbar at the top, click the Project -&gt; Properties and go to
+C/C++Build.<ol>
+<li>Click on the right side of the pop up windows, &quot;Manage
+Configurations...&quot;, then on New, and give it a name, f.i. &quot;Lint current
+file&quot;, and close the small window, then select it in the Configuration
+drop down list.</li>
+<li>Under Builder settings tab, unclick &quot;Use default build command&quot; and type
+as build command the full path to your <code>depot_tools/cpplint.py</code></li>
+<li>Under behaviour tab, unselect Clean, select Build(incremental build) and
+in Make build target, add <code>--verbose=0 ${selected_resource_loc}</code></li>
+<li>Go back to the left side of the current window, and to C/C++Build -&gt;
+Settings, and click on error parsers tab, make sure CDT GNU C/C++ Error
+Parser, CDT pushd/popd CWD Locator are set, then click Apply and OK.</li>
+</ol>
+</li>
+<li>Select a file and click on the hammer icon drop down triangle next to it,
+and make sure the build configuration is selected &quot;Lint current file&quot;, then
+click on the hammer.</li>
+<li>Note: If you get the <code>cpplint.py help</code> output, make sure you have selected a
+file, by clicking inside the editor window or on its tab header, and make
+sure the editor is not maximized inside Eclipse, i.e. you should see more
+subwindows around.</li>
+</ol>
+<h3 id="additional-tips">Additional tips</h3>
+<ol>
+<li>Mozilla&#39;s
+<a href="https://developer.mozilla.org/en-US/docs/Eclipse_CDT">Eclipse CDT guide</a>
+is helpful:</li>
+<li>For improved performance, I use medium-granularity projects (eg. one for
+WebKit/Source) instead of putting all of &#39;src/&#39; in one project.</li>
+<li>Running <a href="https://www.chromium.org/developers/content-module"><code>content_shell</code></a>
+as opposed to all of <code>chrome</code>  is a lot faster/smaller.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/eclipse_dev.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/eclipse_dev.md</a>
+  </p>
+</div>

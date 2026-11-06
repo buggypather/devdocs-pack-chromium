@@ -1,0 +1,547 @@
+<h1>Using Sublime Text as your IDE</h1>
+<p>Sublime Text is a fast, powerful and easily extensible code editor. Check out
+some <a href="http://www.sublimetext.com">visual demos</a> for a quick demonstration.</p>
+<p>You can download and install Sublime Text 3 from the <a href="http://www.sublimetext.com/3">Sublime Text
+Website</a>. Assuming you have access to the right
+repositories, you can also install Sublime via apt-get on Linux. Help and
+general documentation is available in the <a href="http://www.sublimetext.com/docs/3/">Sublime Text 3
+Docs</a>.</p>
+<p>Sublime can be used on Linux, Windows and Mac as an IDE for developing Chromium.
+Here&#39;s what works:</p>
+<ul>
+<li>Editing code works well (especially if you&#39;re used to it and get used to the
+shortcuts).</li>
+<li>Navigating around the code works well. There are multiple ways to do this (a
+full list of keyboard shortcuts is available for <a href="http://docs.sublimetext.info/en/latest/reference/keyboard_shortcuts_win.html">Windows/Linux</a>
+and <a href="http://docs.sublimetext.info/en/latest/reference/keyboard_shortcuts_osx.html">Mac</a>).</li>
+<li>Building works fairly well and it does a decent job of parsing errors so
+that you can click and jump to the problem spot.</li>
+</ul>
+<h2 id="setup">Setup</h2>
+<h3 id="configuring-sublime">Configuring Sublime</h3>
+<p>All global configuration for Sublime (including installed packages) is stored in
+<code>~/.config/sublime-text-3</code> (or <code>%APPDATA\Sublime Text 3</code> on Windows, or
+<code>~/Library/Application Support/Sublime Text 3</code> on Mac). We will reference the
+Linux folder for the rest of this tutorial, but replace with your own path if
+using a different OS. If you ever want a clean install, just remove this folder.</p>
+<p><strong>Warning</strong>: If you have installed a license key for a paid version Sublime
+Text, removing this folder will delete the license key, too.</p>
+<p>Most of the packages you will install will be placed in <code>~/.config/sublime- text-3/Packages/User</code>, where Sublime Text can detect them. You can also get to
+this folder by selecting <code>Preferences &gt; Browse Packages...</code> (or <code>Sublime Text &gt; Preferences &gt; Browse Packages...</code> on Mac).</p>
+<h3 id="a-short-word-about-paths">A short word about paths</h3>
+<p>Certain packages require executables to be on your <code>PATH</code>, but Sublime gets the
+<code>$PATH</code> variable from a login shell, not an interactive session (i.e. your path
+needs to be set in <code>~/.bash_profile</code>, <code>~/.zprofile</code>, etc, not <code>~/.bashrc</code>,
+<code>~/.zshrc</code>, etc). For more info, see
+<a href="http://sublimelinter.readthedocs.io/en/latest/troubleshooting.html#debugging-path-problems">Debugging Path Problems</a>.</p>
+<h3 id="editing-preferences">Editing Preferences</h3>
+<p>Sublime configuration (including project files, key bindings, etc) is done via
+JSON files. All configurations have a Default config (usually provided with the
+program or package to document the available commands) and a User config
+(overrides the default; this is where your overrides go). For example, select
+<code>Preferences &gt; Settings - Default</code> to see all the available settings for
+Sublime. You can override any of these in <code>Preferences &gt; Settings - User</code>.</p>
+<p>Here are some settings that help match the Chromium style guide:</p>
+<pre>{
+  // Basic Chromium style preferences
+  &quot;rulers&quot;: [80],
+  &quot;tab_size&quot;: 2,
+  &quot;trim_trailing_white_space_on_save&quot;: true,
+  &quot;ensure_newline_at_eof_on_save&quot;: true,
+  &quot;translate_tabs_to_spaces&quot; : true,
+
+  // Optional, but also useful, preferences
+  &quot;always_show_minimap_viewport&quot;: true,
+  &quot;bold_folder_labels&quot;: true,
+  &quot;draw_white_space&quot;: &quot;all&quot;,
+  &quot;enable_tab_scrolling&quot;: false,
+  &quot;highlight_line&quot;: true,
+
+  // Mainly for Windows, but harmless on Mac/Linux
+  &quot;default_line_ending&quot;: &quot;unix&quot;,
+}</pre>
+<p>The settings will take effect as soon as you save the file.</p>
+<h4 id="tips">Tips</h4>
+<ul>
+<li><code>View &gt; Side Bar &gt; Show Open Files</code> will add a list of open files to the top
+of the sidebar</li>
+<li><code>Ctrl+` </code> will show the console; it shows errors and debugging output, and
+you can run Python</li>
+<li><code>View &gt; Enter Distraction Free Mode</code> goes into fullscreen and removes
+Sublime&#39;s header and footer</li>
+<li><code>View &gt; Layout &gt; ...</code> changes the configuration of files you can open side-
+by-side</li>
+<li><code>Ctrl + P</code> (<code>Cmd + P</code> on Mac) quickly opens a search box to find a file or
+definition</li>
+<li><code>Alt + O</code> (<code>Alt + Cmd + Up</code> on Mac) switches between the source/header file</li>
+<li><code>Alt + PageUp</code>/<code>Alt + PageDown</code> (<code>Alt + Cmd + Left</code>/<code>Alt + Cmd + Right</code> on
+Mac) moves between tabs</li>
+<li><code>F12</code> (<code>Alt + Cmd + Down</code> on Mac) goes to the symbol&#39;s definition</li>
+<li>With text selected, <code>Ctrl + D</code> will multi-select the next occurrence (so
+typing in one types in all of them), and <code>Ctrl+U</code> deselects</li>
+<li>Similarly, after finding something with <code>Ctrl + F</code>, <code>Alt + Enter</code> will
+select all occurrences of the search query, which can be multi-edited</li>
+<li><code>Ctrl + X</code> without anything selected cuts the current line, then move to a
+different line and <code>Ctrl + V</code> pastes it below the current line</li>
+</ul>
+<h3 id="setting-sublime-as-the-default-terminal-editor">Setting Sublime as the default Terminal editor</h3>
+<p>Add <code>export EDITOR=&quot;subl -w&quot;</code> to your <code>~/.bashrc</code> file (or similar) to open git
+commit messages, gn args, etc with Sublime Text. Since you may want to only open
+sublime when using a non-SSH session, you can wrap it in the following:</p>
+<pre>if [ &quot;$SSH_CONNECTION&quot; ]; then
+  export EDITOR='vim'
+else
+  export EDITOR='subl -w'
+fi</pre>
+<h3 id="installing-the-package-manager">Installing the Package Manager</h3>
+<p>The Sublime Package Manager is the way most Sublime packages are installed and
+configured. You can install the package manager by following in the
+<a href="https://packagecontrol.io/installation">installation instructions</a> on their
+website. Once the package manager is installed, restart Sublime.</p>
+<p>To install a package, press <code>Ctrl + Shift + P</code> and select <code>Package Manager: Install Package</code> (the string match is fairly lenient; you can just type
+<code>&quot;instp&quot;</code> and it should find it). Then type or select the package you want to
+install.</p>
+<h4 id="mac-paths-fix">Mac Paths Fix</h4>
+<p>There is a known bug on Mac where Sublime doesn&#39;t detect the current path
+correctly. If you&#39;re using Mac, install the package <code>SublimeFixMacPath</code> to find
+the path from your <code>~/.bashrc</code> file or similar.</p>
+<h2 id="making-a-new-project">Making a New Project</h2>
+<p>Once you have a copy of the Chromium checkout, we&#39;ll make a new Sublime project
+with the src directory as the root.</p>
+<p>To do this, create a new file <code>chromium.sublime-project</code> (or whatever name you&#39;d
+like) in the folder above your <code>src/</code> directory, with the following contents
+(the exclude patterns are needed - Sublime can&#39;t handle indexing all of Chrome&#39;s
+files):</p>
+<pre data-language="json">{
+  &quot;folders&quot;: [
+    {
+      &quot;name&quot;: &quot;chromium&quot;,
+      &quot;path&quot;: &quot;src&quot;,
+      &quot;file_exclude_patterns&quot;:
+      [
+        &quot;*.vcproj&quot;,
+        &quot;*.vcxproj&quot;,
+        &quot;*.sln&quot;,
+        &quot;*.gitignore&quot;,
+        &quot;*.gitmodules&quot;,
+        &quot;*.vcxproj.*&quot;,
+      ],
+      &quot;folder_exclude_patterns&quot;:
+      [
+        &quot;build&quot;,
+        &quot;out&quot;,
+        &quot;third_party&quot;,
+        &quot;.git&quot;,
+      ],
+    },
+    {
+      &quot;name&quot;: &quot;Generated Files&quot;,
+      &quot;path&quot;: &quot;src/out/Debug/gen&quot;,
+    },
+  ],
+}</pre>
+<p>If you are working on Blink, or any other third-party subproject, you can add it
+as a separate entry in the <code>folders</code> array:</p>
+<pre data-language="json">{
+  &quot;name&quot;: &quot;blink&quot;,
+  &quot;path&quot;: &quot;src/third_party/blink&quot;,
+}</pre>
+<p>Once you&#39;ve saved the file, select <code>Project &gt; Switch Project</code> and navigate to
+the <code>chromium.sublime-project</code> file.</p>
+<h3 id="code-linting-with-cpplint-chromium-only">Code Linting with CPPLint (Chromium only)</h3>
+<p><strong>Note:</strong> CPPLint enforces the Google/Chromium style guide, and hence is not
+useful on third_party projects that use another style.</p>
+<ol>
+<li><p>Install the SublimeLinter package (<code>Ctrl + Shift + P &gt; Install Package &gt; SublimeLinter</code>).</p>
+</li>
+<li><p><code>cpplint</code> should be somewhere on your path so that SublimeLinter finds it.
+depot_tools includes <code>cpplint.py</code>, but it needs to be named <code>cpplint</code>, so on
+Linux and Mac you have to make a symlink to it:</p>
+<pre data-language="shell">cd /path/to/depot_tools
+ln -s cpplint.py cpplint
+chmod a+x cpplint</pre>
+</li>
+<li><p>Install the SublimeLinter-cpplint package (<code>Ctrl + Shift + P &gt; Install Package &gt; SublimeLinter-cpplint</code>).</p>
+</li>
+</ol>
+<p>Now when you save a C++ file, red dots should appear next to lines that
+invalidate the style. You can change this behavior with Choose Lint Mode
+(<code>Ctrl + Shift + P &gt; &quot;lint mode&quot;</code>).</p>
+<p>You can also see and navigate all the linter errors with Show All Errors
+(<code>Ctrl + Shift + P &gt; &quot;show all&quot;</code>). You can also use Next Error/Previous Error
+(and their associated shortcuts) to navigate the errors. The gutter at the
+bottom of the screen shows the message for the error on the current line.</p>
+<p>You can also change the style of dot next to the line with Choose Gutter Theme
+(<code>Ctrl + Shift + P &gt; &quot;gutter&quot;</code>)</p>
+<p>For a list of all preferences, see <code>Preferences &gt; Package Settings &gt; SublimeLinter &gt; Settings - Default</code> (or <code>Settings - User</code> to edit your
+preferences).</p>
+<h3 id="format-selection-with-clang-format-chromium-only">Format Selection with Clang-Format (Chromium only)</h3>
+<p><strong>Note:</strong> Like CPPLint, Clang-format enforces the Google/Chromium style guide,
+and hence is not useful on third_party projects that use another style.</p>
+<ol>
+<li><p>Inside <code>src/</code>, run:</p>
+<pre data-language="shell">cd /path/to/chromium/src
+cp third_party/clang-format/script/clang-format-sublime.py ~/.config/sublime-text-3/Packages/User/</pre>
+</li>
+<li><p>This installs a plugin that defines the command &quot;clang_format&quot;. You can add
+the &quot;clang_format&quot; command to <code>Preferences &gt; Key Bindings - User</code>, e.g.:</p>
+<pre data-language="json">[
+    { &quot;keys&quot;: [&quot;ctrl+shift+c&quot;], &quot;command&quot;: &quot;clang_format&quot; },
+]</pre>
+</li>
+<li><p>Select some text and press <code>Ctrl + Shift + C</code> to format, or select no text to
+format the entire file</p>
+</li>
+</ol>
+<h2 id="codesearch-integration-with-chromium-x-refs">CodeSearch Integration with Chromium X-Refs</h2>
+<p>With <a href="https://github.com/karlinjf/ChromiumXRefs/">Chromium X-Refs</a> you can
+perform <a href="https://cs.chromium.org">https://cs.chromium.org</a> cross-reference
+searches in your editor. This gives you the call graph, overrides, references,
+declaration, and definition of most of the code. The results are as fresh as
+the search engine&#39;s index so uncommitted changes won&#39;t be reflected.</p>
+<p>More information on Chromium X-Ref&#39;s functionality (including keyboard and
+mouse shortcuts) can be found on the <a href="https://github.com/karlinjf/ChromiumXRefs/">Chromium X-Refs
+page</a>.</p>
+<h2 id="code-completion-error-highlighting-go-to-definition-and-find-references-with-lsp-clangd">Code Completion, Error Highlighting, Go-to-Definition, and Find References with LSP (clangd)</h2>
+<p>Gives Sublime Text 3 rich editing features for languages with Language Server
+Protocol support. It searches the current compilation unit for definitions and
+references and provides super fast code completion.</p>
+<p>In this case, we&#39;re going to add C/C++ support.</p>
+<ol>
+<li><p>Refer to <a href="clangd">clangd.md</a> to install clangd and build a compilation
+database.</p>
+</li>
+<li><p>Install the <a href="https://github.com/tomv564/LSP">LSP Package</a> and enable clangd
+support by following the <a href="https://clang.llvm.org/extra/clangd/Installation.html#editor-plugins">link</a>
+and following the instructions for Sublime Text.</p>
+</li>
+</ol>
+<p>To remove sublime text&#39;s auto completion and only show LSPs (recommended), set
+the following LSP preference:</p>
+<pre data-language="json">&quot;only_show_lsp_completions&quot;: true</pre>
+<h2 id="code-completion-with-sublimeclang-linux-only-deprecated-see-lsp-above">Code Completion with SublimeClang (Linux Only) [Deprecated, see LSP above]</h2>
+<p>SublimeClang is a powerful autocompletion plugin for Sublime that uses the Clang
+static analyzer to provide real-time type and function completion and
+compilation errors on save. It works with Chromium with a script that finds and
+parses the appropriate *.ninja files to find the necessary include paths for a
+given file.</p>
+<p><strong>Note</strong>: Currently, only the Linux setup of SublimeClang is working. However,
+there are instructions below for Windows/Mac which you are welcome to try -- if
+you can get them to work, please update these instructions ^_^</p>
+<p>More information on SublimeClang&#39;s functionality (including keyboard shortcuts)
+can be found on the <a href="https://github.com/quarnster/SublimeClang">SublimeClang GitHub
+page</a>.</p>
+<h3 id="linux">Linux</h3>
+<p><strong>Note</strong> that there are recent (as of August 2017) changes to support C++14.
+Namely, you must use a more recent clang (3.9 is known to work), and use its
+resource directory instead of that supplied by SublimeClang.</p>
+<ol>
+<li><p>Install a recent libclang-dev to get a copy of libclang.so. 3.4 isn&#39;t
+recent enough, but 3.9 works. If you use something different, change the
+names and paths accordingly:</p>
+<pre data-language="shell">sudo apt-get install libclang-3.9-dev</pre>
+</li>
+<li><p>Build libclang.so and SublimeClang in your packages directory:</p>
+<pre data-language="shell">cd ~/.config/sublime-text-3/Packages
+git clone --recursive https://github.com/quarnster/SublimeClang SublimeClang
+cd SublimeClang
+# Copy libclang.so to the internals dir
+cp /usr/lib/llvm-3.9/lib/libclang.so.1 internals/libclang.so
+# Fix src/main.cpp (shared_ptr -&gt; std::shared_ptr)
+sed -i -- 's/shared_ptr/std::shared_ptr/g' src/main.cpp
+# Make the project - should be really quick, since libclang.so is already built
+cd src &amp;&amp; mkdir build &amp;&amp; cd build
+cmake ..
+make</pre>
+</li>
+<li><p>Edit your project file <code>Project &gt; Edit Project</code> to call the script above
+(replace <code>/path/to/depot_tools</code> with your depot_tools directory):</p>
+<pre data-language="json">{
+  &quot;folders&quot;:
+  [
+    ...
+  ],
+  &quot;settings&quot;:
+  {
+    &quot;sublimeclang_options&quot;:
+    [
+      &quot;-Wno-attributes&quot;,
+      &quot;-resource-dir=/usr/lib/llvm-3.9/lib/clang/3.9.1&quot;,
+    ],
+    &quot;sublimeclang_options_script&quot;: &quot;python ${project_path}/src/tools/sublime/ninja_options_script.py -d '/path/to/depot_tools'&quot;,
+  }
+}</pre>
+</li>
+<li><p>Edit your SublimeClang settings and set <code>dont_prepend_clang_includes</code> to
+true. This way you use the resource directory we set instead of the ancient
+ones included in the repository. Without this you won&#39;t have C++14 support.</p>
+</li>
+<li><p>(Optional) To remove errors that sometimes show up from importing out of
+third_party, edit your SublimeClang settings and set:</p>
+<pre data-language="json">&quot;diagnostic_ignore_dirs&quot;:
+[
+  &quot;${project_path}/src/third_party/&quot;
+],</pre>
+</li>
+<li><p>Restart Sublime. Now when you save a file, you should see a &quot;Reparsing…&quot;
+message in the footer and errors will show up in the output panel. Also,
+variables and function definitions should auto-complete as you type.</p>
+</li>
+</ol>
+<p><strong>Note:</strong> If you&#39;re having issues, adding <code>&quot;sublimeclang_debug_options&quot;: true</code> to
+your settings file will print more to the console (accessed with <code>Ctrl + ` </code>)
+which can be helpful when debugging.</p>
+<p><strong>Debugging:</strong> If things don&#39;t seem to be working, the console <code>Ctrl + ` </code> is
+your friend. Here are some basic errors which have workarounds:</p>
+<ol>
+<li>Bad Libclang args<ul>
+<li><em>problem:</em> <code>tu is None...</code> is showing up repeatedly in the console:</li>
+<li><em>solution:</em> ninja_options_script.py is generating arguments that libclang
+ can&#39;t parse properly. To fix this, make sure to</li>
+</ul>
+<p> <code>export CHROMIUM_OUT_DIR=&quot;{Default Out Directory}&quot;</code>
+ This is because the ninja_options_script.py file will use the most recently
+ modified build directory unless specified to do otherwise. If the chosen
+ build directory has unusual args (say for thread sanitization), libclang may
+ fail.</p>
+</li>
+</ol>
+<h3 id="mac-not-working">Mac (not working)</h3>
+<ol>
+<li><p>Install cmake if you don&#39;t already have it</p>
+</li>
+<li><p>Install Xcode</p>
+</li>
+<li><p>Copy libclang.dylib from Xcode to the SublimeClang/internals folder:</p>
+<pre data-language="shell">cd ~/Library/Application\ Support/Sublime\ Text\ 3/Packages
+git clone --recursive https://github.com/quarnster/SublimeClang SublimeClang
+cd SublimeClang
+cp /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/libclang.dylib internals/libclang.dylib
+# Remove i386 from the build file since Xcode's libclang.dylib is only a 64-bit version
+sed -ie 's/CMAKE_OSX_ARCHITECTURES i386 x86_64/CMAKE_OSX_ARCHITECTURES x86_64/' src/CMakeLists.txt
+# Copy libclang.dylib to the internals dir
+# Make the project - should be really quick, since libclang.dylib is already built
+cd src &amp;&amp; mkdir build &amp;&amp; cd build
+cmake ..
+make</pre>
+</li>
+<li><p>The rest of the instructions are the same, but when adding your project
+settings, add these extra arguments to <code>sublimeclang_options</code>:</p>
+<pre data-language="json">&quot;sublimeclang_options&quot;:
+[
+  ...
+  // MAC-ONLY: Include these options, replacing the paths with the correct installed SDK
+  &quot;-isystem&quot;, &quot;/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/usr/include/&quot;,
+  &quot;-isystem&quot;, &quot;/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/usr/include/c++/4.2.1&quot;,
+  &quot;-F/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk/System/Library/Frameworks/&quot;,
+  &quot;isysroot&quot;, &quot;/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.10.sdk&quot;,
+  &quot;-mmacosx-version-min=10.7&quot;,
+  &quot;-stdlib=libc++&quot;,
+  &quot;-isystem&quot;, &quot;/usr/include&quot;,
+  &quot;-isystem&quot;, &quot;/usr/include/c++/*&quot;,
+]</pre>
+</li>
+</ol>
+<h3 id="windows-not-working">Windows (not working)</h3>
+<p>You&#39;ll need cl.exe which can be installed with <a href="https://blogs.msdn.microsoft.com/vcblog/2016/03/31/announcing-the-official-release-of-the-visual-c-build-tools-2015/">the Visual C++ Build Tools
+2015</a>.
+You should have cl.exe on your <code>$PATH</code>, which you can get by running <code>C:\Program Files (x86)\Microsoft Visual C++ Build Tools\Visual C++ 2015 x64 Native Build Tools Command Prompt</code>.</p>
+<p>Then you&#39;ll need a copy of libclang.so, which can be found on the <a href="http://llvm.org/releases/download.html">LLVM
+website</a>. The instructions should be the
+same as Linux from there.</p>
+<h2 id="alternative-code-completion-with-ctags">Alternative: Code Completion with Ctags</h2>
+<p>For a fast way to look up symbols, we recommend installing the CTags plugin.</p>
+<ol>
+<li>Install Exuberant Ctags and make sure that ctags is in your path:
+<a href="http://ctags.sourceforge.net/">http://ctags.sourceforge.net/</a> (on linux you should be able to just do <code>sudo apt-get install ctags</code>)</li>
+<li>Install the Ctags plugin: <code>Ctrl + Shift + P &gt; Install Package &gt; Ctags</code></li>
+</ol>
+<p>Once installed, you&#39;ll get an entry in the context menu when you right click the
+top level folder(s) in your project that allow you to build the Ctags database.
+If you&#39;re working in a Chrome project however, do not do that at this point,
+since it will index much more than you actually want. Instead, do one of:</p>
+<ol>
+<li><p>Create a batch file (e.g. ctags_builder.bat) that you can run either
+manually or automatically after you do a gclient sync:</p>
+<pre>ctags --languages=C++ --exclude=third_party --exclude=.git --exclude=build --exclude=out -R -f .tmp_tags &amp; ctags --languages=C++ -a -R -f .tmp_tags third_party\platformsdk_win7 &amp; move /Y .tmp_tags .tags</pre>
+<p>This takes a couple of minutes to run, but you can work while it is indexing.</p>
+</li>
+<li><p>Edit the <code>CTags.sublime-settings</code> file for the ctags plugin so that it runs
+ctags with the above parameters.  Note: the above is a batch file - don&#39;t
+simply copy all of it verbatim and paste it into the CTags settings file)</p>
+</li>
+</ol>
+<p>Once installed, you can quickly look up symbols with <code>Ctrl+t, Ctrl+t</code> etc.  More
+information on keyboard shortcuts can be found on the <a href="https://github.com/SublimeText/CTags">CTags GitHub
+page</a>.</p>
+<p>One more hint - Edit your <code>.gitignore</code> file (under <code>%USERPROFILE%</code> or <code>~/</code>) so
+that git ignores the <code>.tags</code> file.  You don&#39;t want to commit it. :)</p>
+<p>If you don&#39;t have a <code>.gitignore</code> in your profile directory, you can tell git
+about it with this command: Windows: <code>git config --global core.excludesfile %USERPROFILE%\.gitignore</code> Mac, Linux: <code>git config --global core.excludesfile ~/.gitignore</code></p>
+<h2 id="building-inside-sublime">Building inside Sublime</h2>
+<p>To build inside Sublime Text, we first have to create a new build system.</p>
+<p>You can add the build system to your project file (<code>Project &gt; Edit Project</code>),
+replacing <code>out/Debug</code> with your output directory (on Windows, replace /&#39;s with
+\s in <code>cmd</code> and <code>working_dir</code>):</p>
+<pre data-language="json">{
+  &quot;folders&quot;: [
+  ...
+  ],
+  &quot;build_systems&quot;:
+  [
+    {
+      &quot;name&quot;: &quot;Build Chrome&quot;,
+      &quot;cmd&quot;: [&quot;autoninja&quot;, &quot;-C&quot;, &quot;out/Debug&quot;, &quot;chrome&quot;],
+      &quot;working_dir&quot;: &quot;${project_path}/src&quot;,
+      &quot;file_regex&quot;: &quot;^[.\\\\/]*([a-z]?:?[\\w.\\\\/]+)[(:]([0-9]+)[,:]?([0-9]+)?[)]?:(.*)$&quot;,
+      &quot;variants&quot;: [],
+    },
+  ],
+}</pre>
+<p>The file regex will allow you to click on errors to go to the error line.</p>
+<p><strong>Regex explanation:</strong> Aims to capture these error formats while respecting
+<a href="http://docs.sublimetext.info/en/latest/reference/build_systems/configuration.html#build-capture-error-output">Sublime&#39;s perl-like group matching</a>:</p>
+<ol>
+<li><code>d:\src\chrome\src\base\threading\sequenced_worker_pool.cc(670): error C2653: &#39;Foo&#39;: is not a class or namespace name</code></li>
+<li><code>../../base/threading/sequenced_worker_pool.cc(670,26) error: use of undeclared identifier &#39;Foo&#39;</code></li>
+<li><code>../../base/threading/sequenced_worker_pool.cc:670:26: error: use of undeclared identifier &#39;Foo&#39;</code></li>
+</ol>
+<pre>&quot;file_regex&quot;: &quot;^[.\\\\/]*([a-z]?:?[\\w.\\\\/]+)[(:]([0-9]+)[,:]?([0-9]+)?[)]?:(.*)$&quot;
+                (   0   ) (   1  )(    2     ) (3 )(  4   )( 5 )(   6   )(7 ) (8 )
+
+(0) Cut relative paths (which typically are relative to the out dir and targeting src/ which is already the &quot;working_dir&quot;)
+(1) Match a drive letter if any
+(2) Match the rest of the file
+(1)+(2) Capture the &quot;filename group&quot;
+(3) File name is followed by open bracket or colon before line number
+(4) Capture &quot;line number group&quot;
+(5) If (6) is non-empty there will be a comma or colon preceding it (but can't put it inside brackets as the &quot;column number group&quot; only wants digits).
+(6) Capture &quot;column number group&quot; if any
+(7) Closing bracket of either &quot;(line)&quot; or &quot;(line,column)&quot; if bracket syntax is in effect
+(8) Everything else until EOL is the error message.</pre>
+<h3 id="building-other-targets">Building other targets</h3>
+<p>You can add build variants to the <code>variants</code> array to have quick access to other
+build targets with <code>Ctrl + Shift + B</code>:</p>
+<pre data-language="json">&quot;variants&quot;:
+  [
+    {
+      &quot;name&quot;: &quot;Unit Tests&quot;,
+      &quot;cmd&quot;: [&quot;ninja&quot;, &quot;-j&quot;, &quot;1000&quot;, &quot;-C&quot;, &quot;out/Debug&quot;, &quot;unit_tests&quot;],
+    },
+    {
+      &quot;name&quot;: &quot;Browser Tests&quot;,
+      &quot;cmd&quot;: [&quot;ninja&quot;, &quot;-j&quot;, &quot;1000&quot;, &quot;-C&quot;, &quot;out/Debug&quot;, &quot;browser_tests&quot;],
+    },
+    {
+      &quot;name&quot;: &quot;Current file&quot;,
+      &quot;cmd&quot;: [&quot;compile_single_file&quot;, &quot;--build-dir&quot;, &quot;out/Debug&quot;, &quot;--file-path&quot;, &quot;$file&quot;],
+    },
+  ]</pre>
+<p>You can also add a variant for running chrome, meaning you can assign a keyboard
+shortcut to run it after building:</p>
+<pre data-language="json">&quot;variants&quot;:
+  [
+    ...
+    {
+      &quot;cmd&quot;: [&quot;out/Debug/chrome&quot;],
+      &quot;name&quot;: &quot;run_chrome&quot;,
+      &quot;shell&quot;: true,
+      &quot;env&quot;: {
+        &quot;CHROME_DEVEL_SANDBOX&quot;: &quot;/usr/local/sbin/chrome-devel-sandbox&quot;,
+      },
+    },
+  ]</pre>
+<h3 id="more-detailed-stack-traces">More detailed stack traces</h3>
+<p>Chrome&#39;s default stack traces don&#39;t have full file paths so Sublime can&#39;t
+parse them. You can enable more detailed stack traces and use F4 to step right
+to the crashing line of code.</p>
+<p>First, add <code>print_unsymbolized_stack_traces = true</code> to your gn args, and make
+sure you have debug symbols enabled too (<code>symbol_level = 2</code>). Then, pipe
+Chrome&#39;s stderr through the asan_symbolize.py script. Here&#39;s a suitable build
+variant for Linux (with tweaked file_regex):</p>
+<pre data-language="json">{
+  &quot;name&quot;: &quot;Build and run with asan_symbolize&quot;,
+  &quot;cmd&quot;: &quot;ninja -j 1000 -C out/Debug chrome &amp;&amp; out/Debug/chrome 2&gt;&amp;1 | ./tools/valgrind/asan/asan_symbolize.py&quot;,
+  &quot;shell&quot;: true,
+  &quot;file_regex&quot;: &quot;(?:^|[)] )[.\\\\/]*([a-z]?:?[\\w.\\\\/]+)[(:]([0-9]+)[,:]?([0-9]+)?[)]?:?(.*)$&quot;
+}</pre>
+<p>You can test it by visiting chrome://crash. You should be able to step through
+each line in the resulting stacktrace with F4. You can also get a stack trace
+without crashing like so:</p>
+<pre data-language="c++">#include &quot;base/debug/stack_trace.h&quot;
+[...]
+base::debug::StackTrace().Print();</pre>
+<h3 id="assigning-builds-to-keyboard-shortcuts">Assigning builds to keyboard shortcuts</h3>
+<p>To assign a build to a keyboard shortcut, select <code>Preferences &gt; Key Bindings - User</code> (or <code>Key Bindings - Default</code> to see the current key bindings). You can add
+the build variants above with the <code>&quot;build&quot;</code> command, like so:</p>
+<pre data-language="json">[
+  ...
+  { &quot;keys&quot;: [&quot;ctrl+shift+u&quot;], &quot;command&quot;: &quot;build&quot;, &quot;args&quot;: {&quot;variant&quot;: &quot;unit_tests&quot;} },
+  { &quot;keys&quot;: [&quot;ctrl+shift+b&quot;], &quot;command&quot;: &quot;build&quot;, &quot;args&quot;: {&quot;variant&quot;: &quot;browser_tests&quot;} },
+  { &quot;keys&quot;: [&quot;ctrl+shift+x&quot;], &quot;command&quot;: &quot;build&quot;, &quot;args&quot;: {&quot;variant&quot;: &quot;run_chrome&quot;} },
+]</pre>
+<p>For more info on custom key bindings, see the
+<a href="http://docs.sublimetext.info/en/latest/customization/key_bindings.html">Sublime Text Key Bindings Documentation</a>.</p>
+<h2 id="other-useful-packages">Other useful packages</h2>
+<p>Some other useful packages that improve sublime can be installed from <code>Ctrl+Shift+P &gt; Install Package</code>:</p>
+<ul>
+<li>Git enhancements<ul>
+<li><a href="https://packagecontrol.io/packages/Git">Git</a></li>
+<li><a href="https://packagecontrol.io/packages/GitCommitMsg">GitCommitMsg</a> -
+Performs a &#39;git blame&#39; for one or more lines of code with <code>Alt + Shift + M</code> (<code>Command + Shift + M</code> on Mac)</li>
+<li><a href="https://packagecontrol.io/packages/GitDiffHelper">GitDiffHelper</a> -
+<code>Ctrl + Alt + G</code> to open all files modified since the last commit</li>
+<li><a href="https://packagecontrol.io/packages/GitOpenChangedFiles">GitOpenChangedFiles</a> -
+<code>Ctrl + Shift + O</code> (<code>Command + Shift + O</code> on Mac) to open all files
+modified on the current branch</li>
+<li><a href="https://packagecontrol.io/packages/Git%20Conflict%20Resolver">Git Conflict
+Resolver</a><ul>
+<li>A GUI for resolving git conflicts</li>
+</ul>
+</li>
+<li><a href="https://packagecontrol.io/packages/GitGutter">GitGutter</a> - Shows an
+icon next to lines that have been inserted, modified or deleted since
+the last commit.</li>
+</ul>
+</li>
+<li>Visual enhancements<ul>
+<li><a href="https://packagecontrol.io/packages/SyncedSideBar">SyncedSideBar</a> -
+Syncs the currently open file with the expanded tree in the sidebar</li>
+<li><a href="https://packagecontrol.io/packages/SideBarEnhancements">SideBarEnhancements</a> -
+Adds more file management options to the sidebar context menu.</li>
+<li><a href="https://packagecontrol.io/packages/SyncedSidebarBg">SyncedSidebarBg</a> -
+A purely aesthetic improvement that syncs the sidebar background with
+the background color for the current theme.</li>
+<li><a href="http://buymeasoda.github.io/soda-theme/">Theme - Soda</a> - A global theme
+for Sublime that matches the default color scheme. Needs <code>&quot;theme&quot;: &quot;Soda Light 3.sublime-theme&quot;</code> in your Preferences &gt; Settings - User` file.</li>
+</ul>
+</li>
+<li>Code navigation tools<ul>
+<li><a href="https://packagecontrol.io/packages/AutoFileName">AutoFileName</a> - Auto-
+completes filenames in #includes</li>
+<li><a href="https://packagecontrol.io/packagenavigations/Open-Include">Open-Include</a><ul>
+<li>Opens the file path under the cursor with <code>Alt + D</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Text tools<ul>
+<li><a href="https://packagecontrol.io/packages/Case%20Conversion">Case Conversion</a> -
+automatically changes the case of selected text, e.g. <code>kConstantName</code> to
+<code>CONSTANT_NAME</code></li>
+<li><a href="https://packagecontrol.io/packages/Text%20Pastry">Text Pastry</a> -
+Inserts incremental number sequences with multi-select</li>
+<li><a href="https://packagecontrol.io/packages/Wrap%20Plus">Wrap Plus</a> - Auto-wraps
+a comment block to 80 columns with <code>Alt + Q</code> (was used to write this
+document! ;-)</li>
+<li><a href="https://packagecontrol.io/packages/Diffy">Diffy</a> - With two files
+opened side-by-side, <code>Ctrl + k Ctrl + d</code> will show the differences</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/sublime_ide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/sublime_ide.md</a>
+  </p>
+</div>

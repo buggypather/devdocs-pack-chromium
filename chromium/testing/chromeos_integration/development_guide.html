@@ -1,0 +1,32 @@
+<h1>Crosier Development Guide</h1>
+<p>This doc assumes you&#39;re already familiar with ChromeOS on-device development.
+If not, please follow
+<a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/simple_chrome_workflow.md">Simple Chrome workflow</a></p>
+<h2 id="demo-test">Demo test</h2>
+<p>We&#39;ve had several tests.</p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/test/base/chromeos/crosier/demo_integration_test.cc">NewTab demo</a>
+is a test that opens a browser and open a tab which can run DUT or VM.</p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ash/bluetooth/bluetooth_integration_test.cc">Bluetooth test</a>
+is a test that toggle to turn on and off bluetooth which can only
+run on DUT.</p>
+<h2 id="how-to-run-ash-test">How to run Ash test</h2>
+<p>Please see: <a href="http://go/crosier-run">go/crosier-run</a></p>
+<h2 id="test-metadata">Test metadata</h2>
+<p>Each Crosier test being added should include test metadata in <code>yaml</code> format.</p>
+<p>See <a href="https://source.chromium.org/chromium/chromium/src/+/main:docs/testing/chromeos_integration/crosier_metadata.md">Crosier metadata guide</a>
+for more information on how to add it.</p>
+<h2 id="debugging-crosier-tests">Debugging Crosier tests</h2>
+<p>Debugging a Crosier test is like debugging any Chrome test on device. Following
+developer library resources are available:</p>
+<p><a href="https://www.chromium.org/chromium-os/developer-library/guides/#debugging">https://www.chromium.org/chromium-os/developer-library/guides/#debugging</a></p>
+<h2 id="continuous-builders">Continuous builders</h2>
+<p><a href="https://ci.chromium.org/ui/p/chromium/builders/ci/chromeos-amd64-generic-rel">https://ci.chromium.org/ui/p/chromium/builders/ci/chromeos-amd64-generic-rel</a></p>
+<p>Target name is &#39;chromeos_integration_tests&#39;.</p>
+<p>When you make contributions, please add &#39;Include-Ci-Only-Tests: true&#39; to the
+changelist footer so the tests can run on CQ.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/chromeos_integration/development_guide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/chromeos_integration/development_guide.md</a>
+  </p>
+</div>

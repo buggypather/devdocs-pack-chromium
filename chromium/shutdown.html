@@ -1,0 +1,119 @@
+<h1>Chrome Shutdown</h1>
+<p>This documents shutdown steps on Windows, Mac and Linux.</p>
+<p>On Android, the system can terminate the Chrome app at any point without running
+any shutdown step.</p>
+<p>See below for how the process differs on ChromeOS.</p>
+<h2 id="step-0-profile-destruction">Step 0: Profile destruction</h2>
+<p>Since M98, Chrome can destroy <code>Profile</code> objects separately from shutdown; on
+Windows and Linux, this happens in multi-profile scenarios. On macOS, it can
+also happen in single-profile scenarios, because Chrome lifetime is separate
+from browser windows.</p>
+<p>Typically, this logic triggers when all browser windows are closed, but other
+things can <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/profiles/keep_alive/profile_keep_alive_types.h">keep a <code>Profile</code>
+alive</a>.</p>
+<p><code>~ScopedProfileKeepAlive</code> posts a task to run <code>RemoveKeepAliveOnUIThread</code>. This
+decrements the refcount in <code>ProfileManager</code>, and if it hits zero then
+<code>DestroyProfileWhenAppropriate</code> is called.</p>
+<pre>ProfileDestroyer::DestroyProfileWhenAppropriate
+...
+ProfileManager::RemoveProfile
+ProfileManager::RemoveKeepAlive
+ScopedProfileKeepAlive::RemoveKeepAliveOnUIThread</pre>
+<p>Unlike regular profiles, OTR profiles are <strong>not</strong> refcounted. Instead,
+<code>~Browser</code> checks the profile&#39;s browser count after removing itself. If it&#39;s
+zero, it calls <code>DestroyProfileWhenAppropriate</code> directly.</p>
+<pre>ProfileDestroyer::DestroyProfileWhenAppropriate
+Browser::~Browser</pre>
+<p>You can use <code>ProfileManager</code> logging to inspect a profile&#39;s keepalive state:</p>
+<pre>$ ./out/Default/chrome --enable-logging=stderr --v=0 --vmodule=profile_manager=1
+[71002:259:0328/133310.430142:VERBOSE1:profile_manager.cc(1489)] AddKeepAlive(Default, kBrowserWindow). keep_alives=[kWaitingForFirstBrowserWindow (1), kBrowserWindow (1)]
+[71002:259:0328/133310.430177:VERBOSE1:profile_manager.cc(1543)] ClearFirstBrowserWindowKeepAlive(Default). keep_alives=[kBrowserWindow (1)]
+[71002:259:0328/133314.468135:VERBOSE1:profile_manager.cc(1489)] AddKeepAlive(Default, kExtensionUpdater). keep_alives=[kBrowserWindow (1), kExtensionUpdater (1)]
+[71002:259:0328/133314.469444:VERBOSE1:profile_manager.cc(1522)] RemoveKeepAlive(Default, kExtensionUpdater). keep_alives=[kBrowserWindow (1)]
+[71002:259:0328/133315.396614:VERBOSE1:profile_manager.cc(1489)] AddKeepAlive(Default, kOffTheRecordProfile). keep_alives=[kBrowserWindow (1), kOffTheRecordProfile (1)]
+[71002:259:0328/133417.078148:VERBOSE1:profile_manager.cc(1522)] RemoveKeepAlive(Default, kBrowserWindow). keep_alives=[kOffTheRecordProfile (1)]
+[71002:259:0328/133442.705250:VERBOSE1:profile_manager.cc(1522)] RemoveKeepAlive(Default, kOffTheRecordProfile). keep_alives=[]
+[71002:259:0328/133442.705296:VERBOSE1:profile_manager.cc(1567)] Deleting profile Default</pre>
+<h2 id="step-1-exiting-the-main-loop">Step 1: Exiting the main loop</h2>
+<p>Shutdown starts when nothing keeps Chrome alive. Typically, this happens when
+all browser windows are closed, but other things can <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/keep_alive_registry/keep_alive_types.h">keep Chrome
+alive</a>.</p>
+<p>When nothing keeps Chrome alive, <code>BrowserProcessImpl::Unpin</code> asks the main
+thread&#39;s message loop to quit as soon as it no longer has tasks ready to run
+immediately.</p>
+<pre>base::RunLoop::QuitWhenIdle
+…
+BrowserProcessImpl::Unpin
+BrowserProcessImpl::OnKeepAliveStateChanged
+KeepAliveRegistry::OnKeepAliveStateChanged
+KeepAliveRegistry::Unregister
+ScopedKeepAlive::~ScopedKeepAlive
+...
+Browser::UnregisterKeepAlive
+BrowserList::RemoveBrowser
+Browser::~Browser</pre>
+<p>Following this request, <code>ChromeBrowserMainParts::MainMessageLoopRun</code> exits. Tasks
+posted to the main thread without a delay prior to this point are guaranteed to
+have run; tasks posted to the main thread after this point will never run.</p>
+<h2 id="step-2-cleaning-up-after-main-loop-exit">Step 2: Cleaning up, after main loop exit</h2>
+<p><code>BrowserMainRunnerImpl::Shutdown</code> is called on the main thread. Within that
+method, <code>BrowserMainLoop::ShutdownThreadsAndCleanUp</code> orchestrates the main
+shutdown steps.</p>
+<p><code>ChromeBrowserMainParts::PostMainMessageLoopRun</code> is invoked. It invokes the
+<code>PostMainMessageLoopRun</code> method of each <code>ChromeBrowserMainExtraParts</code> instance.
+This is a good place to perform shutdown steps of a component that require the
+IO thread, the <code>ThreadPool</code> or the <code>Profile</code> to still be available.</p>
+<p><code>ChromeBrowserMainParts::PostMainMessageLoopRun</code> also invokes
+<code>BrowserProcessImpl::StartTearDown</code> which deletes many services owned by
+<code>BrowserProcessImpl</code> (aka <code>g_browser_process</code>). One of these services is the
+<code>ProfileManager</code>. Deleting the <code>ProfileManager</code> deletes <code>Profiles</code>. As part of
+deleting a <code>Profile</code>, its <code>KeyedServices</code> are deleted, including:</p>
+<ul>
+<li>Sync Service</li>
+<li>History Service</li>
+</ul>
+<h2 id="step-3-joining-other-threads">Step 3: Joining other threads</h2>
+<p>The IO thread is joined. No IPC or Mojo can be received after this.</p>
+<p><code>ThreadPool</code> shutdown starts. At this point, no new <code>SKIP_ON_SHUTDOWN</code> or
+<code>CONTINUE_ON_SHUTDOWN</code> task can start running (they are deleted without
+running). The main thread blocks until all <code>SKIP_ON_SHUTDOWN</code> tasks that started
+running prior to <code>ThreadPool</code> shutdown start are complete, and all
+<code>BLOCK_SHUTDOWN</code> tasks are complete (irrespective of whether they were posted
+before or after <code>ThreadPool</code> shutdown start). When no more <code>SKIP_ON_SHUTDOWN</code> is
+running and no more <code>BLOCK_SHUTDOWN</code> task is queued or running, the main thread
+is unblocked and <code>ThreadPool</code> shutdown is considered complete. Note:
+<code>CONTINUE_ON_SHUTDOWN</code> tasks that started before <code>ThreadPool</code> shutdown may still
+be running.</p>
+<p>At this point, new tasks posted to the IO thread or to the <code>ThreadPool</code> cannot
+run. It is illegal to post a <code>BLOCK_SHUTDOWN</code> task to the <code>ThreadPool</code> (enforced
+by a <code>DCHECK</code>).</p>
+<h2 id="step-4-cleaning-up-after-joining-other-threads">Step 4: Cleaning up, after joining other threads</h2>
+<p><code>ChromeBrowserMainParts::PostDestroyThreads</code> is invoked. It invokes
+<code>BrowserProcessImpl::PostDestroyThreads</code>. Since it is guaranteed that no
+<code>SKIP_ON_SHUTDOWN</code> or <code>BLOCK_SHUTDOWN</code> task is running at this point, it is a
+good place to delete objects accessed directly from these tasks.</p>
+<p>Then, if a new Chrome executable, it is swapped with the current one
+(Windows-only).</p>
+<pre>upgrade_util::SwapNewChromeExeIfPresent
+browser_shutdown::ShutdownPostThreadsStop
+ChromeBrowserMainParts::PostDestroyThreads
+content::BrowserMainLoop::ShutdownThreadsAndCleanUp
+content::BrowserMainLoop::ShutdownThreadsAndCleanUp
+content::BrowserMainRunnerImpl::Shutdown</pre>
+<h2 id="chromeos-differences">ChromeOS differences</h2>
+<p>On ChromeOS, the ash browser is only supposed to exit when the user logs out.</p>
+<p>When the user logs out, the browser sends a <code>StopSession</code> message to the
+<a href="https://chromium.googlesource.com/chromiumos/platform2/+/refs/heads/main/login_manager/README.md">session_manager</a>.
+The session_manager then sends a SIGTERM to the main browser process to cause an
+exit. Once SIGTERM is received, it starts shutting down the main loop and
+cleaning up in the sequence described above.</p>
+<p>Unlike other desktop platforms, the shutdown is time limited. If the browser
+process has not exited within a certain time frame (normally, 3 seconds), the
+session_manager will SIGKILL the browser process since the user is looking at
+a blank screen and unable to use their Chromebook until the browser exits.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/shutdown.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/shutdown.md</a>
+  </p>
+</div>

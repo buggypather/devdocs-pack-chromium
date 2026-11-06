@@ -1,0 +1,140 @@
+<h1>Siso Tips</h1>
+<p>When using Siso, there are a few tips that are particularly useful in
+Chromium codebase.</p>
+<h2 id="compile-a-single-file">Compile a single file</h2>
+<p>Siso/Ninja supports a special <a href="https://ninja-build.org/manual.html#:~:text=There%20is%20also%20a%20special%20syntax%20target%5E%20for%20specifying%20a%20target%20as%20the%20first%20output%20of%20some%20rule%20containing%20the%20source%20you%20put%20in%20the%20command%20line%2C%20if%20one%20exists.%20For%20example%2C%20if%20you%20specify%20target%20as%20foo.c%5E%20then%20foo.o%20will%20get%20built%20(assuming%20you%20have%20those%20targets%20in%20your%20build%20files)">syntax <code>^</code></a> to compile a single object file specifying
+the source file. For example, <code>autoninja -C out/Default ../../base/logging.cc^</code>
+compiles <code>obj/base/base/logging.o</code>.</p>
+<p>In addition to <code>foo.cc^</code>, Siso also supports <code>foo.h^</code> syntax to compile
+the corresponding <code>foo.o</code> if it exists.</p>
+<p>On Windows, you need to add  <code>^^</code> to preserve the trailing <code>^</code>.</p>
+<pre data-language="shell">$ autoninja -C out\Default ..\..\base\logging.cc^^</pre>
+<p>If you run a <code>bash</code> shell, you can use the following script to ease invocation:</p>
+<pre data-language="shell">#!/bin/sh
+files=(&quot;${@/#/..\/..\/}&quot;)
+autoninja -C out/Default ${files[@]/%/^^}</pre>
+<p>This script assumes it is run from <code>src</code> and your output dir is <code>out/Default</code>;
+it invokes <code>autoninja</code> to compile all given files. If you place it in your
+<code>$PATH</code> and name it e.g. <code>compile</code>, you can invoke like this:</p>
+<pre data-language="shell">$ pwd  # Just to illustrate where this is run from
+/c/src
+$ compile base/time/time.cc base/time/time_unittest.cc
+...
+[0/47] 5.56s S CXX obj/base/base/time.obj
+...
+[2/3] 9.27s S CXX obj/base/base_unittests/time_unittest.obj
+...</pre>
+<h2 id="build-gn-target">Build gn target</h2>
+<p>GN emits phony target for a gn target label, dropping <code>//</code>-prefix,
+e.g. <code>base:base</code> for <code>//base:base</code>, which is <code>base</code> target in <code>base/BUILD.gn</code>,
+so you can use this as a build target.</p>
+<pre data-language="shell">$ autoninja -C out/Default base:base</pre>
+<h2 id="preferred-command-line-flags">Preferred command line flags</h2>
+<p>If you keep using the same command line flags, you can put it in
+<code>build/config/siso/.sisorc</code>.  It is in <code>.gitignore</code> and not modified
+by any tool.</p>
+<p>In <code>.sisorc</code>, each line specify the command line flags
+for the siso&#39;s subcommand.</p>
+<p>e.g.</p>
+<pre>ninja -k=0 --verbose_failures=0</pre>
+<p>Then <code>siso ninja</code> or <code>autoninja</code> will use <code>-k=0 --verbose_failures=0</code>
+even if you don&#39;t specify it on command line.  Your command line
+will be added after the command line flags in <code>.sisorc</code> and
+later flags are effective.</p>
+<h2 id="limit-concurrencies">Limit concurrencies</h2>
+<p>Siso automatically sets appropriate concurrencies, but
+if you want to specify them explicitly, you can use the followings</p>
+<h3 id="--remote_jobs"><code>--remote_jobs</code></h3>
+<p><code>--remote_jobs</code> sets maximum number of concurrent remote jobs.</p>
+<h3 id="--local_jobs"><code>--local_jobs</code></h3>
+<p><code>--local_jobs</code> sets maximum number of concurrent local jobs.</p>
+<h3 id="autoninja--j"><code>autoninja -j</code></h3>
+<p><code>autoninja</code> sets <code>--remote_jobs</code> from <code>-j</code> if remote is enabled,
+or sets <code>--local_jobs</code> from <code>-j</code> if remote is disabled and
+number is not larger than number of cpus.</p>
+<h3 id="siso_limits"><code>SISO_LIMITS</code></h3>
+<p>You can specify other limits by using <code>SISO_LIMITS</code> environment
+variables.
+See <a href="https://chromium.googlesource.com/build/+/refs/heads/main/siso/docs/environment_variables.md#siso_limits">SISO_LIMITS documents</a>.</p>
+<h2 id="make-sure-remote-steps-works">Make sure remote steps works.</h2>
+<p>Siso may run steps locally even if step can run remotely to
+make better use of local resources, but it makes it difficult
+to check how step runs with remote execution.</p>
+<p><code>--strict_remote</code> won&#39;t run step locally if it is configured
+to use remote.</p>
+<h2 id="temporary-disable-remote">Temporary disable remote.</h2>
+<p>Use <code>--offline</code>.</p>
+<h2 id="run-steps-as-much-as-possible">Run steps as much as possible.</h2>
+<p>Siso will stop building if it detects step failure.
+If you want to run steps as much as possible to see
+all error messages at once, use <code>-k=0</code> as Ninja.</p>
+<p>If build failed, Siso remembers what targets failed
+and tried to rebuild the failed targets first to
+focus on fixing the failure targets with quick iterations.
+To disable this feature, use <code>-batch</code> or
+<code>-fast_last_failure=false</code> (available since siso v1.4.11).</p>
+<h2 id="check-steps-error-messages">Check step&#39;s error messages.</h2>
+<p>Siso records steps output in <code>siso_output</code> files,
+so you can read it later even if error messages
+scrolled out.</p>
+<p>You can also use <code>--verbose_failures=false</code> to
+reduce command line in console output.</p>
+<p>For AI agents or so, <code>--quiet</code> would be useful.</p>
+<h2 id="rerun-steps-even-if-outputs-seems-to-be-up-to-date">Rerun steps even if outputs seems to be up-to-date.</h2>
+<p>Use <code>--clobber</code>.</p>
+<h2 id="siso-ignores-local-modified-output-files">Siso ignores local modified output files?</h2>
+<p>Siso makes sure output files are generated by sources, but there
+are cases that are convenient to modify output files locally
+and see how build works.</p>
+<p><code>--fs_keep_tainted</code> will keep modified output files.</p>
+<h2 id="use-siso-other-than-current-release-version">Use siso other than current release version.</h2>
+<p>If you want to use different CIPD version than <code>siso_version</code> in <code>DEPS</code>,
+you can use <code>custom_vars</code> in <code>.gclient</code>.</p>
+<p>e.g. To use the latest, non-released version,</p>
+<pre>solutions = [
+ {
+    &quot;name&quot;: &quot;src&quot;,
+    &quot;url&quot;: &quot;https://chromium.googlesource.com/chromium/src.git&quot;,
+    ...,
+    &quot;custom_vars&quot;: {
+       &quot;siso_version&quot;: &quot;latest&quot;,
+       ...
+    },
+ },
+]</pre>
+<p>or to use specific version,</p>
+<pre>      # Git revision is for https://chromium.googlesource.com/build repo,
+      # and the CIPD package for the git revision needs to be exist in
+      # https://chrome-infra-packages.appspot.com/p/build/siso
+      &quot;siso_version&quot;: &quot;git_revision:&lt;git_revision&gt;&quot;,</pre>
+<p>Once you modified <code>.gclient</code>, run <code>gclient sync</code>.</p>
+<p>Or if you might want to pin depot_tools version (for autoninja, siso
+wrapper), checkout specific version of depot_tools, and run
+<code>update_depot_tools_toggle.py --disable</code>.</p>
+<p>If you want to use locally built Siso, Set the siso binary path in
+environment variable <code>SISO_PATH</code>, so <code>depot_tools/siso</code> use it instead
+of <code>third_party/siso/cipd/siso</code>.</p>
+<p>e.g.</p>
+<pre data-language="shell">$ export SISO_PATH=$HOME/go/bin/siso</pre>
+<h2 id="btrfs-workspaces-path-virtualization">Btrfs Workspaces (Path Virtualization)</h2>
+<p>If your workspace is located on a <code>btrfs</code> filesystem (e.g., when using
+virtualized instant workspaces like Rift), you should enable Siso path
+virtualization. This allows Siso to reuse build artifacts and file states from
+the original base workspace by making the workspace directory appear at the
+same virtual path, maximizing cache hits.</p>
+<p>To enable path virtualization, you can:</p>
+<ul>
+<li><p>Use the environment variable <code>DEPOT_TOOLS_USE_VIRTUAL_BUILD_PATH=1</code>
+when running <code>autoninja</code>:</p>
+<pre data-language="shell">$ DEPOT_TOOLS_USE_VIRTUAL_BUILD_PATH=1 autoninja -C out/Default chrome</pre>
+</li>
+<li><p>Or run under <code>run_in_virtual_path</code>.</p>
+<pre data-language="shell">$ run_in_virtual_path autoninja -C out/Default chrome</pre>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/siso_tips.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/siso_tips.md</a>
+  </p>
+</div>

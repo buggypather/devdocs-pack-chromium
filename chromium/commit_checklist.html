@@ -1,0 +1,245 @@
+<h1>Commit Checklist for Chromium Workflow</h1>
+<p>Here is a helpful checklist to go through before uploading change lists (CLs) on
+Gerrit and during the code review process. Gerrit is the code review platform
+for the Chromium project. This checklist is designed to be streamlined. See
+<a href="contributing">contributing to Chromium</a> for a more thorough reference. The
+intended audience is software engineers who are unfamiliar with contributing to
+the Chromium project. Feel free to skip steps that are not applicable to the
+patchset you&#39;re currently uploading.</p>
+<p>According to the Checklist Manifesto by Atul Gawande, checklists are a marvelous
+tool for ensuring consistent quality in the work you produce. Checklists also
+help you work more efficiently by ensuring you never skip a step or waste brain
+power figuring out the next step to take.</p>
+<h2 id="1-create-a-new-branch-or-switch-to-the-correct-branch">1. Create a new branch or switch to the correct branch</h2>
+<p>You should create a new branch before starting any development work. It&#39;s
+helpful to branch early and to branch often in Git. Use the command
+<code>git new-branch &lt;branch_name&gt;</code>. This is equivalent to
+<code>git checkout -b &lt;branch_name&gt; --track origin/main</code>.</p>
+<p>You may also want to set another local branch as the upstream branch. You can do
+that with <code>git checkout -b &lt;branch_name&gt; --track &lt;upstream_branch&gt;</code>. Do this if
+you want to split your work across multiple CLs, but some CLs have dependencies
+on others. Use <code>git new-branch --upstream_current &lt;new_branch_name&gt;</code> to create a
+new branch while setting the current branch as the upstream.</p>
+<p>Mark the associated crbug as &quot;started&quot; so that other people know that you have
+started working on the bug. Taking this step can avoid duplicated work.</p>
+<p>If you have already created a branch, don&#39;t forget to <code>git checkout &lt;branch_name&gt;</code> to the correct branch before resuming development work. There&#39;s
+few things more frustrating than to finish implementing your ideas or feedback,
+and to spend hours debugging some mysterious bug, only to discover that the bug
+was caused by working on the wrong branch this whole time.</p>
+<h2 id="2-if-theres-a-local-upstream-branch-rebase-the-upstream-changes">2. If there&#39;s a local upstream branch, rebase the upstream changes</h2>
+<p>Suppose you have a downstream branch chained to an upstream branch. If you
+commit changes to the upstream branch, and you want the changes to appear in
+your downstream branch, you need to:</p>
+<ul>
+<li><code>git checkout &lt;branch_name&gt;</code> to the downstream branch.</li>
+<li>Run <code>git rebase -i @{u}</code> to pull the upstream changes into the current
+branch.</li>
+<li>Run <code>git rebase -i @{u}</code> again to rebase the downstream changes onto the
+upstream branch.</li>
+</ul>
+<p>Expect to fix numerous merge conflicts. Use <code>git rebase --continue</code> once you&#39;re
+done.</p>
+<h2 id="3-make-your-changes">3. Make your changes</h2>
+<p>Do your thing. There&#39;s no further advice here about how to write or fix code.</p>
+<h2 id="4-make-sure-the-code-builds-correctly">4. Make sure the code builds correctly</h2>
+<p>After making your changes, check that common targets build correctly:</p>
+<ul>
+<li>chrome (for Linux, ChromeOS, etc.)</li>
+<li>unit_tests</li>
+<li>browser_tests</li>
+</ul>
+<p>You can find <a href="https://chromium.googlesource.com/chromium/src.git/+/main/docs/#Checking-Out-and-Building">instructions here</a> for building various
+targets.</p>
+<p>It&#39;s easy to inadvertently break one of the other builds you&#39;re not currently
+working on without realizing it. Even though the Commit Queue should catch any
+build errors, checking locally first can save you some time since the CQ Dry Run
+can take a while to run, on the order of a few hours sometimes.</p>
+<h2 id="5-test-your-changes">5. Test your changes</h2>
+<p>Test your changes manually by running the Chrome binary or deploying your
+changes to a test device. If you&#39;re testing Chrome for ChromeOS, follow the
+<a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/simple_chrome_workflow.md">Simple Chrome</a> instructions to deploy your changes to a test
+device. Make sure you hit every code path you changed.</p>
+<p>Some testing tips:</p>
+<ul>
+<li>Use <code>LOG(ERROR) &lt;&lt; &quot;debug print statement&quot;</code> for debugging. You can find
+the logs in /var/logs/chrome/ on the ChromeOS device. You can add a
+keyword to your print statement to help find your log statements
+more quickly.</li>
+<li>Use GDB for setting breakpoints while debugging.</li>
+</ul>
+<p>Think about testing any edge cases that could break your code. Some common edge
+cases to consider:</p>
+<ul>
+<li>Guest mode</li>
+<li>Enterprise/EDU/Supervised users</li>
+<li>Accessibility</li>
+<li>Official Chrome-branded build (for Googlers)</li>
+</ul>
+<h2 id="6-write-unit-or-browser-tests-for-any-new-code">6. Write unit or browser tests for any new code</h2>
+<p>Consider automating any manual testing you did in the previous step.</p>
+<h2 id="7-ensure-the-code-is-formatted-nicely">7. Ensure the code is formatted nicely</h2>
+<p>Run <code>git cl format --js</code>. The <code>--js</code> option also formats JavaScript changes.</p>
+<h2 id="8-review-your-changes">8. Review your changes</h2>
+<p>Use <code>git diff</code> to review all of the changes you&#39;ve made from the previous
+commit. Use <code>git upstream-diff</code> to review all of the changes you&#39;ve made
+from the upstream branch. The output from <code>git upstream-diff</code> is what will
+be uploaded to Gerrit.</p>
+<h2 id="9-stage-relevant-files-for-commit">9. Stage relevant files for commit</h2>
+<p>Run <code>git add &lt;path_to_file&gt;</code> for all of the files you&#39;ve modified that you want
+to include in the CL. Unlike other version-control systems such as svn, you have
+to specifically <code>git add</code> the files you want to commit before calling
+<code>git commit</code>.</p>
+<h2 id="10-commit-your-changes">10. Commit your changes</h2>
+<p>Run <code>git commit</code>. Be sure to write a useful commit message. Here are some
+<a href="contributing#Uploading-a-change-for-review">tips for writing good commit messages</a>. A
+shortcut for combining the previous step and this one is <code>git commit -a -m &lt;commit_message&gt;</code>.</p>
+<h2 id="11-squash-your-commits">11. Squash your commits</h2>
+<p>If you have many commits on your current branch, and you want to avoid some
+nasty commit-by-commit merge conflicts in the next step, consider collecting all
+your changes into one commit. Run <code>git rebase -i @{u}</code>. The <code>@{u}</code> is a
+short-hand pointer for the upstream branch, which is usually origin/main, but
+can also be one of your local branches. After running the <code>git rebase</code> command,
+you should see a list of commits, with each commit starting with the word
+&quot;pick&quot;. Make sure the first commit says &quot;pick&quot; and change the rest from &quot;pick&quot;
+to &quot;squash&quot;. This will squash each commit into the previous commit, which will
+continue until each commit is squashed into the first commit.</p>
+<p>An alternative way to squash your commits into a single commit is to do <code>git commit --amend</code> in the previous step.</p>
+<p>Alternatively you can also run <code>git squash-branch</code>.</p>
+<h2 id="12-rebase-your-local-repository">12. Rebase your local repository</h2>
+<p>Rebasing is a neat way to sync changes from the remote repository and resolve
+any merge conflict errors on your CL. Run <code>git rebase-update</code>. This command
+updates all of your local branches with remote changes that have landed since
+you started development work, which could&#39;ve been a while ago. It also deletes
+any branches that match the remote repository, such as after the CL associated
+with that branch has been merged. In summary, <code>git rebase-update</code> cleans up your
+local branches.</p>
+<p>You may run into rebase conflicts. Fix them manually before proceeding with
+<code>git rebase --continue</code>.</p>
+<p>Note that rebasing has the potential to break your build, so you might want to
+try re-building afterwards. You need to run <code>gclient sync -D</code> before trying to
+build again after a rebase-update, to update third-party dependencies.</p>
+<h2 id="13-upload-the-cl-to-gerrit">13. Upload the CL to Gerrit</h2>
+<p>Run <code>git cl upload</code>. Some useful options include:</p>
+<ul>
+<li><code>--cq-dry-run</code> (or <code>-d</code>) will set the patchset to do a CQ Dry Run. It is a
+good idea to run try jobs for each new patchset with significant changes.</li>
+<li><code>-r &lt;chromium_username&gt;</code> will add reviewers.</li>
+<li><code>-b &lt;bug_number&gt;</code> automatically populates the bug reference line of the
+commit message. Use <code>-b None</code> if there is no relevant crbug.</li>
+<li><code>-x &lt;bug_number&gt;</code> automatically populates the bug reference line of the
+commit message and will automatically mark the bug as closed when the
+CL is submitted and merged.</li>
+<li><code>--edit-description</code> will let you update the commit message. Using square
+brackets in the commit message title, like [hashtag], will add a hashtag to
+your CL. This feature is useful for grouping related CLs together.</li>
+</ul>
+<p>Check <code>git cl issue</code> to ensure that you are uploading to the correct Gerrit CL.
+If you are uploading a new CL, then the issue number will be none. Uploading
+will automatically create a new CL. Use <code>git cl issue &lt;issue_number&gt;</code> to target
+an existing CL for uploading new patches.</p>
+<p>To help guide your reviewers, it is also recommended to provide a title for each
+patchset summarizing the changes and indicating whose comments the patchset
+addresses. Running <code>git cl upload</code> will upload a new patchset and prompt you for
+a brief patchset title. The title defaults to your most recent commit summary
+(the <code>-T</code> option will use this without prompting). If you tend to squash all
+your commits into one, try to enter a new summary each time you upload. You can
+also modify the patchset title directly in Gerrit.</p>
+<h2 id="14-check-the-cl-again-in-gerrit">14. Check the CL again in Gerrit</h2>
+<p>Run <code>git cl web</code> to go to the Gerrit URL associated with the current branch.
+Open the latest patchset and verify that all of the uploaded files are correct.
+Click <code>Expand All</code> to check over all of the individual line-by-line changes
+again. Basically do a self-review before asking your reviewers for a review.</p>
+<h2 id="15-make-sure-all-auto-regression-tests-pass">15. Make sure all auto-regression tests pass</h2>
+<p>Click <code>CQ Dry Run</code>. Fix any errors because otherwise the CL won&#39;t pass the
+commit queue (CQ) checks. Consider waiting for the CQ Dry Run to pass before
+notifying your reviewers, in case the results require major changes in your CL.</p>
+<p>Alternatively you can run <code>git cl try</code>.</p>
+<h2 id="16-add-reviewers-to-review-your-code">16. Add reviewers to review your code</h2>
+<p>Click <code>Find Owners</code> or run <code>git cl owners</code> to find file owners to review your
+code and instruct them about which parts you want them to focus on. Prefer
+owners who are more specific to files you are modifying, as they usually
+have the best domain knowledge (i.e. prefer <code>//chrome/foo/bar/OWNERS</code> over
+<code>//chrome/OWNERS</code>). Next, add anyone else you think should review your code. The
+blame functionality in Code Search is a good way to identify reviewers who may
+be familiar with the parts of code your CL touches. For your CL to land, you
+need an approval from an owner for each file you&#39;ve changed, unless you are an
+owner of some files, in which case you don&#39;t need separate owner approval for
+those files.</p>
+<p>You are expected to wait for all actively participating reviewers to CR+1 the
+change before submitting (CQ+2), even if your CL already has all required owners
+reviews. Other than preventing confusion and mistakes, this expectation exists
+because:</p>
+<ol>
+<li>Participating reviewers are
+<a href="cr_respect">helping you write sustainable code</a>, and letting them sign
+off is respectful of their efforts.</li>
+<li>The owners system is not perfect, and sometimes you will need an owner who
+<em>can</em> approve the whole change, but will delegate approval of pieces to
+other, more knowledgeable owners.</li>
+</ol>
+<p>If this expectation needs to be broken, then the reason should be justified in a
+comment, and appropriate extra care may be appropriate (e.g. getting a
+post-submit review, monitoring for failing or flaky tests, reverting if any
+problems occur, etc).</p>
+<h2 id="17-start-your-review">17. Start Your Review</h2>
+<p>Click on the <code>Start Review</code> button to begin the actual review process.  Until
+you press this button, nobody will look at your change.  Once pressed, you&#39;ll
+have the opportunity to include an additional message in the notification sent
+to your reviewers.</p>
+<h2 id="18-implement-feedback-from-your-reviewers">18. Implement feedback from your reviewers</h2>
+<p>Then go through this commit checklist again. Reply to all comments from the
+reviewers on Gerrit and mark all resolved issues as resolved. To see all
+unresolved comments, click on the &quot;Comments&quot; tab in Gerrit. Other than freeform
+interaction on the comments (using <code>Reply</code> or <code>Quote</code>), here are common
+conventions:</p>
+<ul>
+<li>Clicking <code>Done</code> on the comment will comment &quot;Done&quot; and resolve this comment.
+This usually is used in response to a requested change by the reviewer, and
+tells the reviewer that you have made the change that they requested.</li>
+<li>Clicking <code>Ack</code> on the comment will comment &quot;Ack&quot; (short for &quot;Acknowledged&quot;)
+and resolve this comment. This usually is used in response to a non-actionable
+comment by the reviewer, and tells the reviewer that you understand.</li>
+</ul>
+<p>Finally, click <code>Reply</code> on the CL to ensure that your reviewers receive a
+notification. Doing this signals that your CL is ready for review again, since
+the assumption is that your CL is not ready for review until you hit reply.</p>
+<p>To ensure a fast, productive, and respectful review, please follow the
+guidelines in <a href="cl_respect">Respectful Changes</a>.</p>
+<p>If your change is simple and you feel confident that your reviewer will approve
+your CL on the next iteration, you can set Auto-Submit +1. The CL will proceed
+to the next step automatically after approval. This feature is useful if your
+reviewer is in a different time zone and you want to land the CL sooner. Setting
+this flag also puts the onus on your reviewer to land the CL.</p>
+<h2 id="19-land-your-cl">19. Land your CL</h2>
+<p>To meet the minimum requirements to land your changes you must have:</p>
+<ul>
+<li>Obtained a Looks Good To Me (LGTM), which is reflected by a
+Code-Review+1 in Gerrit<ul>
+<li>from at least one owner for each file, excluding files you are an owner of</li>
+<li>from two committers, or one committer if you are also a committer</li>
+</ul>
+</li>
+<li>Resolved all code review comments</li>
+</ul>
+<p>As mentioned above, you are generally expected to wait for all of your reviewers
+to approve your changes as well, even if you already have OWNERS approval. Don&#39;t
+use <code>chrome/OWNERS</code> as a blanket stamp if your CL makes significant changes to
+subsystems. Click <code>Submit to CQ</code> (Commit-Queue +2) to both try your change in
+the commit queue (CQ) and automatically land it if successful.</p>
+<p>Alternatively you can run <code>git cl set-commit</code>.</p>
+<p>Just because your CL made it through the CQ doesn&#39;t mean you&#39;re in the clear
+yet. There might be internal non-public try job failures, or bugs that went
+unnoticed during the code review process. Consider monitoring the
+<a href="https://ci.chromium.org/p/chromium/g/main/console">Chromium tree</a> for about a day after your CL lands. If
+the Sheriff or anyone else brings any failures to your attention, revert the CL
+first and ask questions later. Gerrit can automatically generate revert CLs.</p>
+<h2 id="20-cleanup">20. Cleanup</h2>
+<p>After your CL is landed, you can use <code>git rebase-update</code> or <code>git cl archive</code> to
+clean up your local branches. These commands will automatically delete merged
+branches. Please mark the associated crbug as &quot;fixed&quot;.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/commit_checklist.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/commit_checklist.md</a>
+  </p>
+</div>

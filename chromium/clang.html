@@ -1,0 +1,139 @@
+<h1>Clang</h1>
+<p>Chromium ships a prebuilt <a href="http://clang.llvm.org">clang</a> binary.
+It&#39;s just upstream clang built at a known-good revision that we
+bump every two weeks or so.</p>
+<p>This is the only supported compiler for building Chromium.</p>
+<h2 id="using-gcc-on-linux">Using gcc on Linux</h2>
+<p><code>is_clang = false</code> will make the build use system gcc on Linux. There are no
+bots that test this and there is no guarantee it will work, but we accept
+patches for this configuration.</p>
+<h2 id="mailing-list">Mailing List</h2>
+<p><a href="https://groups.google.com/a/chromium.org/group/clang/topics">https://groups.google.com/a/chromium.org/group/clang/topics</a></p>
+<h2 id="using-plugins">Using plugins</h2>
+<p>The
+<a href="https://dev.chromium.org/developers/coding-style/chromium-style-checker-errors">chromium style plugin</a>
+is used by default when clang is used.</p>
+<p>If you&#39;re working on the plugin, you can build it locally like so:</p>
+<ol>
+<li>Run <code>./tools/clang/scripts/build.py --without-android --without-fuchsia</code>
+to build the plugin.</li>
+<li>Run <code>ninja -C third_party/llvm-build/Release+Asserts/</code> to build
+incrementally after making changes.</li>
+<li>Run <code>(cd tools/clang/plugins/tests &amp;&amp; ./test.py ../../../../third_party/llvm-build/Release+Asserts/bin/clang)</code>
+to test the plugin after making changes.</li>
+<li>Build Chromium with clang as usual, but, if you use remote execution,
+disable it (<code>use_remoteexec = false</code>).</li>
+</ol>
+<p>The local plugin will then be used for local builds until the next
+<code>gclient sync</code> restores the default toolchain.</p>
+<p>Since the plugin is rolled with clang changes, behavior changes to the plugin
+should be guarded by flags to make it easy to roll clang without introducing
+unexpected breakage. A general outline:</p>
+<ol>
+<li>Implement new plugin behavior behind a flag, disabled by default.</li>
+<li>Wait for a compiler roll to bring in the flag.</li>
+<li>Start passing the new flag in <code>GN</code> and verify the new behavior.</li>
+<li>Enable the new plugin behavior unconditionally and update the plugin to
+ignore the flag.</li>
+<li>Wait for another compiler roll.</li>
+<li>Stop passing the flag from <code>GN</code>.</li>
+<li>Remove the flag completely.</li>
+</ol>
+<h2 id="using-the-clang-static-analyzer">Using the clang static analyzer</h2>
+<p>See <a href="clang_static_analyzer">clang_static_analyzer.md</a>.</p>
+<h2 id="windows">Windows</h2>
+<p>clang is the default compiler on Windows. It uses MSVC&#39;s SDK, so you still need
+to have Visual Studio with C++ support installed.</p>
+<h2 id="using-a-custom-clang-binary">Using a custom clang binary</h2>
+<p>There are three main ways of using a custom clang (or lld, etc.) binary for the
+build.</p>
+<ol>
+<li><p><strong>Point the Chromium build to your custom clang.</strong></p>
+<p>Set <code>clang_base_path</code> in your args.gn to the llvm build directory
+containing <code>bin/clang</code> (i.e. the directory you ran cmake). This must be an
+absolute path. You also need to disable chromium&#39;s clang plugins.</p>
+<p>Here&#39;s an example that also disables debug info and enables the component
+build (both not strictly necessary, but they will speed up your build):</p>
+<pre>clang_base_path = getenv(&quot;HOME&quot;) + &quot;/src/llvm-build&quot;
+clang_use_chrome_plugins = false
+is_debug = false
+symbol_level = 1
+is_component_build = true</pre>
+<p>On Windows, for <code>clang_base_path</code> use something like this instead:</p>
+<pre>clang_base_path = &quot;c:/src/llvm-build&quot;</pre>
+<p>You can then look in <code>out/gn/toolchain.ninja</code> and check that the <code>rule cc</code> and
+<code>rule cxx</code> commands run your clang binary.  If things look good, run <code>ninja -C out/gn</code> to build.</p>
+<p>Chromium tries to be buildable with its currently pinned clang, and with clang
+trunk. Set <code>llvm_force_head_revision = true</code> in your args.gn if the clang you&#39;re
+trying to build with is closer to clang trunk than to Chromium&#39;s pinned clang
+(which <code>tools/clang/scripts/update.py --print-revision</code> prints).</p>
+</li>
+<li><p><strong>Bring your custom clang into the Chromium tree.</strong></p>
+<p>Chromium&#39;s clang binary lives at
+<code>third_party/llvm-build/Release+Asserts/bin/clang</code> (or <code>clang-cl.exe</code> on
+Windows). You can just copy your custom binary over that. Maybe a
+symlink works too.</p>
+<p>Unless your Clang includes support for Chromium&#39;s plugins, you&#39;ll still
+need to set <code>clang_use_chrome_plugins=false</code>.</p>
+<p>To get back to a default state when you&#39;re done, you can delete
+<code>third_party/llvm-build/</code> and re-sync.</p>
+</li>
+<li><p><strong>Rebuild Chromium&#39;s clang using <code>tools/clang/scripts/build.py</code>.</strong></p>
+<p>The binaries under <code>third_party/llvm-build/</code> are produced by <code>build.py</code>,
+using source code under <code>third_party/llvm/</code>. You can run the script to
+build it yourself, with modifications.</p>
+<p>For example, you can check out a specific revision under <code>third_party/llvm</code>,
+apply any local modifications, and build with <code>build.py --skip-checkout</code> to
+build a toolchain without overwriting your changes.</p>
+</li>
+</ol>
+<p>If you have access to remote execution (RBE), you can use that also with a
+locally built clang binary -- as long as you&#39;re on Linux and the binary is
+located inside the Chromium source tree (methods 2 and 3 above). Just set
+<code>use_remoteexec=true</code> in your <code>gn</code> args.</p>
+<p>See <a href="https://crbug.com/451733085#comment7">crbug.com/451733085</a> for an example
+of using the third approach to bisect over LLVM.</p>
+<h2 id="related-documents">Related documents</h2>
+<ul>
+<li><p><a href="toolchain_support">Toolchain support</a> gives an overview of clang
+rolls, and documents when to revert clang rolls and how to file good
+toolchain bugs.</p>
+</li>
+<li><p><a href="updating_clang">Updating clang</a> documents the mechanics of updating clang,
+and which files are included in the default clang package.</p>
+</li>
+<li><p><a href="clang_sheriffing">Clang Sheriffing</a> contains instructions for how to debug
+compiler bugs, for clang sheriffs.</p>
+</li>
+<li><p><a href="clang_tool_refactoring">Clang Tool Refactoring</a> has notes on how to build
+and run refactoring tools based on clang&#39;s libraries.</p>
+</li>
+<li><p><a href="updating_clang_format_binaries">Updating Clang format binaries</a> has notes
+on how to update clang-format.</p>
+</li>
+<li><p><a href="https://commondatastorage.googleapis.com/chromium-browser-clang/toolchain-dashboard.html">Toolchain Dashboard</a>
+tracks how fresh clang, rust, and libc++ are.
+(Google-internal short link: go/chrome-clang-dash)</p>
+</li>
+<li><p><a href="https://commondatastorage.googleapis.com/chromium-browser-clang/build-time.html">Chromium Build Time</a>
+tracks how long Chromium takes to build.
+(Google-internal short link: go/chrome-build-time)</p>
+</li>
+<li><p><a href="https://commondatastorage.googleapis.com/chromium-browser-clang/chrome_includes-index.html">Chromium #include analysis</a>
+tracks which of Chromium&#39;s headers contribute most to build time.
+(Google-internal short link: go/chrome-includes-archive, go/chrome-includes)
+NOTE: This currently does not handle module headers correctly
+(<a href="https://issues.chromium.org/issues/435303792">bug</a>).</p>
+</li>
+<li><p><a href="https://commondatastorage.googleapis.com/chromium-browser-clang/llvm_includes-index.html">LLVM #include analysis</a>
+tracks which of LLVM&#39;s headers contribute most to LLVM&#39;s build time.
+(LLVM does not use header modules, so it&#39;s unaffected by the bug linked to
+in the previous item.)</p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/clang.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/clang.md</a>
+  </p>
+</div>

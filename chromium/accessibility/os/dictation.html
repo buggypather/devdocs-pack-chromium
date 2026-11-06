@@ -1,0 +1,163 @@
+<h1>ChromeOS Dictation</h1>
+<p>Dictation is a ChromeOS accessibility feature that allows users to type and edit
+text with their voice.</p>
+<h2 id="summary">Summary</h2>
+<h3 id="user-flow">User flow</h3>
+<p>Dictation can be toggled on in two ways: by pressing Search + D or by pressing the
+microphone icon (which has an accessibility label of &quot;toggle dictation&quot;) in the
+status tray. Once toggled, Dictation starts speech
+recognition and the user can start speaking. If a command is recognized, then
+it will execute the command to the best of its ability; otherwise it will input
+the recognized text as-is. Dictation can be turned off in the same two ways
+mentioned above; it will automatically turn off if no speech has been
+recognized within a short period of time. Lastly, Dictation can only be used
+when focus is on an editable field (textarea, input, contenteditable, etc).</p>
+<h3 id="technical-overview">Technical overview</h3>
+<p>Dictation is implemented primarily as a chrome extension in JavaScript. It also
+has a few C++ components, such as the UI and APIs that it uses. After receiving
+a toggle, the Dictation extension starts speech recognition via the
+chrome.speechRecognitionPrivate API. The API forwards all speech recognition
+results to the Dictation extension, where it parses text to see if it matched a
+command. If a command was detected, then it will verify and execute the
+command to the best of its ability; otherwise, it will input the recognized text
+using input method editor (IME) APIs. Throughout this flow, the main Dictation
+object uses the chrome.accessibilityPrivate API to update the Dictation UI
+(which lives in C++) so that the user is aware of Dictation&#39;s internal state.</p>
+<p>It&#39;s also worth noting that Dictation utilizes two <a href="https://chromium.googlesource.com/chromiumos/platform2/+/HEAD/dlcservice/docs/developer.md">DLCs</a>: Pumpkin and SODA.
+Pumpkin is a semantic parser that allows Dictation to extract meaning out of
+recognized text. SODA stands for &quot;speech on-device API&quot; and turns the user&#39;s
+speech into text on-device (without sending it to a Google server). When Pumpkin
+isn&#39;t available or fails to download, Dictation falls back to regex-based
+speech parsing. Similarly, when SODA isn&#39;t available, Dictation falls back to
+network speech recognition.</p>
+<h2 id="code-structure">Code structure</h2>
+<p>The majority of Dictation code lives in the <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/chromeos/accessibility/accessibility_common/dictation/">dictation/</a> extension directory.
+There&#39;s also a small amount of C++ code, most of which is for the Dictation UI.</p>
+<h3 id="dictation-javascript">Dictation JavaScript</h3>
+<p>The <code>dictation/</code> extension directory is broken into a few subdirectories
+organized by functionality:</p>
+<ul>
+<li><p>The <code>parse/</code> directory contains all code related to speech parsing, which
+is the process of turning recognized text into a command. Dictation currently
+utilizes two parsing strategies: regex-based, which uses regular expressions to
+match text to known commands, and Pumpkin-based, which uses a semantic parser
+developed by Google (see more about Pumpkin below).</p>
+</li>
+<li><p>The <code>macros/</code> directory contains all code for macro (also known as a command)
+implementation.</p>
+</li>
+</ul>
+<p>All other Dictation JavaScript code is located in the main <code>dictation/</code>
+directory. Some noteworthy classes are:</p>
+<ul>
+<li><p><code>Dictation</code>, which is the main object. It handles setup/teardown, interacts
+with APIs like chrome.speechRecognitionPrivate and chrome.settingsPrivate, and
+owns many other essential classes.</p>
+</li>
+<li><p><code>InputController</code>, which handles all interaction with editable fields. In its
+current form, it uses various IME APIs to enter text into the editable, as well
+as listen to changes in the editable value. It&#39;s also responsible for
+calculating the data about the focused editable node, the current value, the
+selection start, and selection end. Lastly, it implements many of the editing
+commands supported by Dictation.</p>
+</li>
+<li><p><code>UIController</code>, which handles all interaction with the Dictation UI. Since the
+Dictation UI is implemented as a View in C++, it uses the
+chrome.accessibilityPrivate API to manipulate the UI. Generally, all changes to
+the UI should go through the UIController.</p>
+</li>
+<li><p><code>FocusHandler</code>, which tracks the currently focused node using the automation
+API. Dictation can only work on editable nodes, so FocusHandler is used mostly
+to check this precondition (and also to access to the node&#39;s accessibility
+data).</p>
+</li>
+<li><p><code>LocaleInfo</code>, which is the source of truth for the Dictation locale and whether
+or not certain behaviors are supported in the current locale.</p>
+</li>
+</ul>
+<h3 id="dictation-c">Dictation C++</h3>
+<ul>
+<li><p><code>DictationBubbleController</code> manages the Dictation UI from the C++ side and
+provides an entry point for updating/changing the UI.</p>
+</li>
+<li><p><code>DictationBubbleView</code> is the actual implementation of the Dictation UI.</p>
+</li>
+<li><p><code>Dictation</code>, which used to contain the feature&#39;s implementation before it
+was moved to JavaScript. It now contains a small amount of logic around
+supported locales.</p>
+</li>
+<li><p><code>AccessibilityController</code> exposes several Dictation-related APIs, mostly
+around updating the UI and showing notifications.</p>
+</li>
+<li><p><code>AccessibilityManager</code> contains a fair amount of Dictation logic, specifically
+around setting up/tearing down the extension, managing DLC downloads, and
+showing notifications to the user.</p>
+</li>
+</ul>
+<h3 id="testing">Testing</h3>
+<ul>
+<li><p>See the <code>dictation/</code> extension directory for all JavaScript extension tests.</p>
+</li>
+<li><p>See <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ash/accessibility/dictation_browsertest.cc?q=dictation_browsertest.cc&amp;ss=chromium%2Fchromium%2Fsrc">dictation_browsertest.cc</a> for C++ integration tests. Note that these
+tests hook into a JavaScript class called <code>DictationTestSupport</code> and allows the
+C++ tests to execute JavaScript or wait for information to propagate to the
+JavaScript side before continuing.</p>
+</li>
+</ul>
+<p>Two C++ helper classes that are worth noting are <code>DictationBubbleTestHelper</code>,
+which allows tests to query the state of the Dictation UI or wait for it
+to reach a certain state, and <code>SpeechRecognitionTestHelper</code>, which allows tests
+to easily interact with speech recognizers.</p>
+<h2 id="semantic-parsing-with-pumpkin">Semantic parsing with Pumpkin</h2>
+<h3 id="background">Background</h3>
+<p>Dictation utilizes a semantic parser called Pumpkin to extract meaning and
+intent out of text and allows us to turn recognized text into commands. To use
+Pumpkin in Dictation, a few steps had to be taken:</p>
+<ol>
+<li><p>A Web Assembly port was created so that Pumpkin could be run in JavaScript.
+It currently lives in Google3. For the specific build rule for this, see this
+<a href="https://source.corp.google.com/piper///depot/google3/speech/grammar/pumpkin/api/BUILD;l=154">build file</a>.</p>
+</li>
+<li><p>Pumpkin and associated config files take up roughly 5.9MB of space (estimate
+generated in December 2022). Adding this much memory overhead to rootfs was not
+a feasible option, so we added a <a href="https://source.chromium.org/chromiumos/chromiumos/codesearch/+/main:src/third_party/chromiumos-overlay/app-accessibility/pumpkin/pumpkin-9999.ebuild?q=file:pumpkin%20file:ebuild&amp;ss=chromiumos">DLC for Pumpkin</a>
+so that it could be downloaded and used when needed. We added a
+<a href="https://source.corp.google.com/piper///depot/google3/chrome/chromeos/accessibility/dictation/update_pumpkin_dlc.sh?q=update_pumpkin_dlc">script in Google3</a>
+that would quickly generate the DLC and upload it to Google Cloud Storage
+whenever it needed to be updated.</p>
+</li>
+<li><p>We added logic in Dictation that would initiate a download of the Pumpkin
+DLC. Dictation uses the chrome.accessibilityPrivate.installPumpkinForDictation()
+API to initiate the download. Once the DLC is downloaded, the
+AccessibilityManager reads the bytes of each Pumpkin file and sends them back to
+the Dictation extension. Lastly, the extension spins up a new sandboxed context
+to run pumpkin in.</p>
+</li>
+</ol>
+<h3 id="adding-a-new-pumpkin-command">Adding a new Pumpkin command</h3>
+<ol>
+<li>Update the Dictation <a href="https://source.corp.google.com/piper///depot/google3/chrome/chromeos/accessibility/dictation/semantic_tags.txt">semantic_tags.txt</a>
+file with the tags that correspond to the new commands you’d like to add. All
+Dictation commands can be found in <a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/webui/common/resources/accessibility/macro_names.ts">macro_names.ts</a>.
+See the &quot;creating patterns files&quot; section of the <a href="https://source.corp.google.com/piper///depot/google3/chrome/chromeos/accessibility/dictation/README.md">Dictation google3 documentation</a>
+for more information on semantic tags.</li>
+<li>Update the Pumpkin DLC according to the <a href="https://source.corp.google.com/piper///depot/google3/chrome/chromeos/accessibility/dictation/README.md">documentation</a>.</li>
+<li>Add the newest <code>pumpkin-&lt;version&gt;.tar.xz</code> file to the chromium codebase
+for testing purposes. A copy of the tar file should be placed in your root
+directory (e.g. ~/pumpkin-3.0.tar.xz) if you followed the documentation above.</li>
+<li>Add tests for the new commands to <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/chromeos/accessibility/accessibility_common/dictation/parse/dictation_pumpkin_parse_test.js">dictation_pumpkin_parse_test.js</a>.
+These should fail initially.</li>
+<li>Make your tests pass by connecting the new commands to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/chromeos/accessibility/accessibility_common/dictation/parse/pumpkin_parse_strategy.ts">pumpkin_parse_strategy.ts</a>.</li>
+<li>(Optional, but strongly recommended) Add tests to <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ash/accessibility/dictation_browsertest.cc">dictation_browsertest.cc</a>
+to get end-to-end test coverage.</li>
+</ol>
+<p>Note: It&#39;s important that we never remove semantic tags from the Pumpkin DLC
+because we want to avoid backwards compatibility issues (we never want to
+regress any commands).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/dictation.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/dictation.md</a>
+  </p>
+</div>

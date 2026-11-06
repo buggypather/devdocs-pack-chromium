@@ -1,0 +1,144 @@
+<h1>How to add a new dependency on Linux</h1>
+<p>For this example, imagine we want to add a dependency on the DBus client
+library. Note that this dependency already exists.</p>
+<p>Test locally and do not start committing changes until you finish <a href="#Test-that-you-can-build-and-run-against-the-new-dependency">testing that
+the new dependency
+works</a>.</p>
+<h2 id="debian-determine-which-packages-are-needed">(Debian) Determine which packages are needed</h2>
+<h3 id="which-dev-package-do-we-need">Which dev package do we need?</h3>
+<p>The DBus documentation includes examples that include the DBus header like this:</p>
+<pre>#include &lt;dbus/dbus.h&gt;</pre>
+<p>Searching for <code>dbus/dbus.h</code> on
+<a href="https://packages.debian.org/"><code>packages.debian.org</code></a> yields only 1 result:
+<a href="https://packages.debian.org/buster/libdbus-1-dev"><code>libdbus-1-dev</code></a>. This is the
+dev package that we need.</p>
+<h3 id="which-library-package-do-we-need">Which library package do we need?</h3>
+<p>The page for the dev package shows only two dependencies: <code>pkg-config</code> and
+<a href="https://packages.debian.org/buster/libdbus-1-3"><code>libdbus-1-3</code></a>. The latter is
+the one we want.</p>
+<p>Now is a good time to make sure the package is available (and that the minimum
+version is available) on all supported distros. The source of truth for
+supported Debian-based distros is given in the <code>SUPPORTED_DEBIAN_RELEASES</code> and
+<code>SUPPORTED_UBUNTU_RELEASES</code> variables in
+<a href="https://cs.chromium.org/chromium/src/chrome/installer/linux/debian/update_dist_package_versions.py"><code>//chrome/installer/linux/debian/update_dist_package_versions.py</code></a>.
+Check on both <a href="https://packages.debian.org/"><code>packages.debian.org</code></a> and
+<a href="https://packages.ubuntu.com/"><code>packages.ubuntu.com</code></a>.</p>
+<h2 id="rpm-determine-which-library-is-needed">(RPM) Determine which library is needed</h2>
+<p>Look at the <a href="https://packages.debian.org/buster/amd64/libdbus-1-dev/filelist">list of
+files</a> provided
+by the Debian dev package. There should be at least one file with a <code>.so</code>
+extension. In our case, this is <code>libdbus-1.so</code>: save this for later.</p>
+<p>If the packages were available on all supported Debian-based distros, it&#39;s
+highly likely they will be available on all RPM-based ones too. But if you want
+to double-check, <a href="https://www.rpmfind.net/"><code>rpmfind.net</code></a> is a good resource.
+The source of truth for supported RPM-based distros is given in the
+<code>SUPPORTED_FEDORA_RELEASES</code> and <code>SUPPORTED_OPENSUSE_LEAP_RELEASES</code> variables in
+<a href="https://cs.chromium.org/chromium/src/chrome/installer/linux/rpm/update_package_provides.py"><code>//chrome/installer/linux/rpm/update_package_provides.py</code></a>.</p>
+<h2 id="add-the-dev-and-library-packages-to-the-sysroot">Add the dev and library packages to the sysroot</h2>
+<p>From the earlier section &quot;(Debian) Determine which packages are needed&quot;, we know
+that we need <code>libdbus-1-dev</code> and <code>libdbus-1-3</code>. Add these both to the
+<code>DEBIAN_PACKAGES</code> list in
+<a href="https://cs.chromium.org/chromium/src/build/linux/sysroot_scripts/sysroot_creator.py"><code>//build/linux/sysroot_scripts/sysroot_creator.py</code></a>.
+Building and uploading the sysroot images is detailed in <a href="https://chromium.googlesource.com/chromium/src.git/+/main/docs/sysroot.md">Linux sysroot
+images</a>.
+You may need to add additional dependent libraries for your new library.</p>
+<h2 id="whitelist-the-new-dependencies">Whitelist the new dependencies</h2>
+<h3 id="debian">Debian</h3>
+<p>Add the library package to the <code>PACKAGE_FILTER</code> variable in
+<a href="https://cs.chromium.org/chromium/src/chrome/installer/linux/debian/update_dist_package_versions.py"><code>//chrome/installer/linux/debian/update_dist_package_versions.py</code></a>
+and run the script.</p>
+<h3 id="rpm">RPM</h3>
+<p>Add the library file to the <code>LIBRARY_FILTER</code> variable in
+<a href="https://cs.chromium.org/chromium/src/chrome/installer/linux/rpm/update_package_provides.py"><code>//chrome/installer/linux/rpm/update_package_provides.py</code></a>
+and run the script.</p>
+<h2 id="build-against-the-package">Build against the package</h2>
+<h3 id="using-pkg-config">Using <code>pkg-config</code></h3>
+<p>If the dev package provides a file with a <code>.pc</code> extension, it&#39;s a good idea to
+set up your build config using <code>pkg-config</code>, as this will automatically pass
+include dirs to the compiler, and library files to the linker.</p>
+<p><code>libdbus-1-dev</code> provides <code>dbus-1.pc</code>, so we can add this to our <code>BUILD.gn</code>:</p>
+<pre>import(&quot;//build/config/linux/pkg_config.gni&quot;)
+
+# &quot;dbus&quot; is whatever you want to name the config.
+pkg_config(&quot;dbus&quot;) {
+  # &quot;dbus-1&quot; is the name of the .pc file.
+  packages = [ &quot;dbus-1&quot; ]
+}
+
+component(&quot;my_awesome_component&quot;) {
+  deps = [ &quot;:dbus&quot; ]
+  ...
+}</pre>
+<p>See
+<a href="https://cs.chromium.org/chromium/src/build/config/linux/pkg_config.gni"><code>//build/config/linux/pkg_config.gni</code></a>
+for further details.</p>
+<h3 id="including-the-library-directly">Including the library directly</h3>
+<p>If the dev package doesn&#39;t provide a <code>.pc</code> file, you will need to add the build
+flags manually:</p>
+<pre>config(&quot;dbus&quot;) {
+  # libdbus-1.so is the name of the dev library.
+  libs = [ &quot;dbus-1&quot; ]
+
+  include_dirs = [
+    &quot;/usr/include/dbus-1.0&quot;,
+    ...
+  ]
+}</pre>
+<h2 id="test-that-you-can-build-and-run-against-the-new-dependency">Test that you can build and run against the new dependency</h2>
+<p>For DBus, you might try:</p>
+<pre>#include &lt;dbus/dbus.h&gt;
+
+void TestIt() {
+  DBusConnection* bus = dbus_bus_get(DBUS_BUS_SESSION, nullptr);
+  DCHECK(bus);
+}</pre>
+<p>The purpose of the test is to make sure that:</p>
+<ol>
+<li>The include path is set up properly.</li>
+<li>The library can be dynamically linked at runtime.</li>
+<li>The <code>.deb</code> and <code>.rpm</code> packages can build.</li>
+</ol>
+<p>To test 3, make sure your <code>args.gn</code> has the following:</p>
+<pre>is_component_build = false  # This is required.
+use_sysroot = true  # This is the default.
+# is_*san = false  # This is the default.</pre>
+<p>Next, build <code>chrome/installer/linux</code>. If there are dependency errors, your
+package may not be available on all supported distros.</p>
+<h2 id="add-packages-to-build-deps-script">Add packages to build deps script</h2>
+<p>Add the dev package to the <code>dev_list</code> variable in
+<a href="https://cs.chromium.org/chromium/src/build/install-build-deps.sh?q=install-build-deps.sh"><code>//build/install-build-deps.sh</code></a>,
+and add the library package to the <code>common_lib_list</code> variable in the same file.</p>
+<p>Note that if you are removing a package from this script, be sure to add the
+removed packages to the <code>backwards_compatible_list</code> variable.</p>
+<h2 id="install-packages-on-the-bots">Install packages on the bots</h2>
+<p>After adding the packages to <code>install-build-deps.sh</code>, new swarming images will
+be generated and rolled out to the swarming bots. However, this can take several
+days. To expedite the process, the packages can be added to the Puppet config
+and rolled out immediately. To do this, add the dev package, the library
+package, and the i386 version of the library package to the <a href="https://goto.google.com/ynnzy">Puppet config
+file</a>.  For DBus, this will look like:</p>
+<pre>  # Add packages here temporarily to roll out to the fleet as needed.
+  all:
+    - libdbus-1-dev
+    - libdbus-1-3
+    - libdbus-1-3:i386</pre>
+<h2 id="instrumented-libraries">Instrumented libraries</h2>
+<p>In order for <code>MSAN</code> to work, you will likely need to add your library package to
+the instrumented libraries. To do this, add the library dev package to
+<a href="https://cs.chromium.org/chromium/src/third_party/instrumented_libs/BUILD.gn"><code>third_party/instrumented_libs/BUILD.gn</code></a>:</p>
+<pre>  # This is the minimum you will need. Check other examples in this file if
+  # something goes wrong.
+  instrumented_library(&quot;libdbus-1-3&quot;) {
+    build_method = &quot;debian&quot;
+  }</pre>
+<p>Then add <code>:libdbus-1-3</code> to
+<code>//third_party/instrumented_libs:locally_built</code>&#39;s <code>deps</code>.</p>
+<p>See <a href="https://chromium.googlesource.com/chromium/src.git/+/main/docs/linux/instrumented_libraries.md">Linux Instrumented
+Libraries</a>
+for instructions on building and uploading the instrumented libraries.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/dependencies.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/dependencies.md</a>
+  </p>
+</div>

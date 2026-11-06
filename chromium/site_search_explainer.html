@@ -1,0 +1,429 @@
+<h1>Site Search in Omnibox Explainer</h1>
+<p>This document provides a technical overview of the Omnibox Scoped Search (also referred to as &quot;site
+search&quot; or &quot;keyword search&quot;) functionality for Chrome engineers. The architecture and code paths
+described are shared across Windows, Mac, Linux, and ChromeOS. It is based on a detailed code
+analysis as of this writing (2025-09-24) covers two primary scenarios: scoped search via traditional
+keywords (e.g. youtube.com) and scoped search via built-in keywords (also known as &quot;starter pack&quot;
+keywords), which use the &quot;@&quot; syntax (e.g., @history).</p>
+<h2 id="types-of-keywords">Types of Keywords</h2>
+<p>Keywords in the Omnibox come from various sources and have different behaviors. Here&#39;s a breakdown
+of the most common types:</p>
+<ul>
+<li><strong>Starter Packs</strong>: Built-in keywords with the &quot;@&quot; prefix (e.g., <code>@bookmarks</code>, <code>@history</code>).</li>
+<li><strong>Prepopulated</strong>: Keywords for common search engines (e.g., <code>bing.com</code>, <code>yahoo.com</code>).</li>
+<li><strong>User Created (Traditional)</strong>: A user-created keyword where the template URL contains a %s
+placeholder (e.g., <code>youtube</code> search).</li>
+<li><strong>Non-substituting User Created</strong>: A user-created keyword where the template URL does not contain
+a %s placeholder.</li>
+<li><strong>Default Search Engine (DSE)</strong>: The user&#39;s currently selected default search engine, which is
+kind of orthogonal to the other types here.</li>
+<li><strong>Extension</strong>: Keywords registered by browser extensions (e.g., an <code>ssh</code> keyword registered by the
+Secure Shell extension).</li>
+<li><strong>Enterprise Policy</strong>: Keywords set by a device administrator through enterprise policies. These
+can be further subdivided into:<ul>
+<li><strong>Aggregator</strong>: e.g.,<code>@geminienterprise</code>.</li>
+<li><strong>Non-aggregator</strong>: e.g., <code>microsoft-documents</code>.</li>
+</ul>
+</li>
+<li><strong>Admin Policy</strong>: Keywords set by an admin policy.</li>
+</ul>
+<h2 id="high-level-overview">High-Level Overview</h2>
+<p>The Omnibox uses a sophisticated system of providers, managed by the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/omnibox/browser/autocomplete_controller.h"><code>AutocompleteController</code></a>,
+to generate suggestions. Site Search functionality is primarily handled by two distinct providers:</p>
+<ol>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/omnibox/browser/featured_search_provider.h"><code>FeaturedSearchProvider</code></a></strong>:
+Manages the &quot;Omnibox Starter Pack,&quot; which provides scoped search suggestions like <code>@history</code>,
+<code>@bookmarks</code>, and <code>@tabs</code>, as well as enterprise keywords (e.g. @geminienterprise or
+facebook-internal-documents).</li>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/omnibox/browser/keyword_provider.h"><code>KeywordProvider</code></a></strong>:
+Manages searches directed at specific, non-default search engines using keywords. This is powered
+by the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/search_engines/template_url_service.h"><code>TemplateURLService</code></a>,
+which stores URL templates for various sites.</li>
+</ol>
+<p>While <code>KeywordProvider</code> and <code>FeaturedSearchProvider</code> manage surfacing the keyword entry points, most
+providers (e.g., tabs, bookmarks, history, search, ...) are responsible for populating the
+suggestions when in keyword mode. e.g.</p>
+<ul>
+<li>&#39;youtube.com query<enter>&#39; will be handled by search provider.</li>
+<li>&#39;youtube.com cat video<down><down><enter>&#39; to select a past youtube navigation will be handled by
+a history provider.</li>
+</ul>
+<p>These providers rely on the <code>TemplateURLService</code>, which is populated with
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/search_engines/template_url.h"><code>TemplateURL</code></a>
+objects. These objects can come from several sources:</p>
+<ul>
+<li>For enterprise and policy keywords, they&#39;re set by policy.</li>
+<li>For pre-populated keywords, they&#39;re hardcoded into the binary, but in a json or some sort of data
+file, not necessarily in .cc directly.</li>
+<li>For extensions, they come from the extensions.</li>
+</ul>
+<p>The general flow is as follows:</p>
+<ol>
+<li>User types into the Omnibox.</li>
+<li><code>AutocompleteController</code> starts and queries all registered providers with the user&#39;s input.</li>
+<li><code>FeaturedSearchProvider</code> and <code>KeywordProvider</code>, among others, generate
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/omnibox/browser/autocomplete_match.h"><code>AutocompleteMatch</code></a>
+objects based on the input.</li>
+<li>These matches are ranked and displayed to the user.</li>
+<li>When a user selects a match that happens to have a keyword chip, they will navigate to the match,
+ignoring the keyword chip. When a user selects the keyword chip on the match, they will enter
+keyword mode (to handle subsequent input) which may or may not ultimately navigate to the target
+site. (You can enter youtube keyword mode by typing &#39;youtube.com query&#39; then select a
+drive.google.com document titled &#39;youtube.com query&#39; that does not navigate to youtube.com.)</li>
+</ol>
+<h2 id="key-ui-component-roles">Key UI Component Roles</h2>
+<p>The <code>LocationBarView</code> is the top level component of omnibox view hierarchy. See
+<a href="https://docs.google.com/document/d/1CPAEWojYkGxRL6j3REnWtVFbDz8A7vtFXf9RXmmWyEY">Overview of the OmniboxView Hierarchy</a>
+(internal document) for a picture.</p>
+<ul>
+<li><p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/location_bar/location_bar_view.h"><code>LocationBarView</code></a></strong>
+owns the omnibox view, the popup view, and selected keyword view. It is mostly responsible for
+updating the keyword chip in the input row (e.g., &quot;Search History&quot;).</p>
+</li>
+<li><p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/omnibox/browser/omnibox_view.h"><code>OmniboxView</code></a></strong>:
+This is the text field where the user types. Its implementation (e.g., <code>OmniboxViewViews</code>) is
+responsible for rendering the user&#39;s text, and handling input. It communicates user actions, like
+typing, to the <code>OmniboxEditModel</code>.</p>
+</li>
+<li><p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/omnibox/browser/omnibox_popup_view.h"><code>OmniboxPopupView</code></a></strong>:
+This is the dropdown list of suggestions that appears below the text field. Its implementation
+(e.g., <code>OmniboxPopupViewViews</code>) is responsible for rendering each suggestion line (using
+<code>OmniboxResultView</code>). It receives the list of <code>AutocompleteMatch</code> objects from the model and
+informs the model when the user interacts with the list (e.g., hovering or selecting a
+suggestion).</p>
+</li>
+</ul>
+<p>The <code>OmniboxEditModel</code> acts as a controller for these views. For example, when a user selects a
+suggestion in the <code>OmniboxPopupView</code>, the popup notifies the model. The model then updates its
+internal state and may, in turn, commands the <code>OmniboxView</code> to change its displayed text or show a
+keyword chip.</p>
+<p>While the view and model are mutually aware of each other to facilitate this communication, their
+ownership is hierarchical to prevent circular dependencies. The <code>OmniboxView</code> is owned by its parent
+UI component (e.g., <code>LocationBarView</code>). The view, in turn, owns the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/omnibox/browser/omnibox_controller.h"><code>OmniboxController</code></a>,
+which owns the <code>OmniboxEditModel</code>. This creates a clear ownership chain: <code>OmniboxView</code> →
+<code>OmniboxController</code> → <code>OmniboxEditModel</code>. Communication back up the chain is handled via non-owning
+<code>raw_ptr</code> references.</p>
+<h2 id="scenario-1-scoped-search-history">Scenario 1: Scoped Search (<code>@history</code>)</h2>
+<p>This scenario describes how a user can scope their search to their local browser history.</p>
+<p><strong>User Journey:</strong></p>
+<ol>
+<li>User types <code>@hist</code>.</li>
+<li>An autocomplete suggestion for &quot;Search History&quot; appears.</li>
+<li>User selects this suggestion.</li>
+<li>The text <code>@history</code> disappears from the input field and is replaced by a &quot;Search History&quot; chip.</li>
+<li>User types a query, e.g., <code>foo</code>, and presses Enter.</li>
+<li>The browser navigates to <code>chrome://history/?q=foo</code>.</li>
+</ol>
+<h3 id="technical-deep-dive">Technical Deep Dive</h3>
+<ol>
+<li><p><strong>Suggestion Generation (<code>@hist</code>)</strong></p>
+<ul>
+<li><strong>Component</strong>: <code>FeaturedSearchProvider</code>, <code>TemplateURLService</code></li>
+<li><strong>Mechanism</strong>: The <code>@</code> prefixed suggestions are part of the &quot;Omnibox Starter Pack&quot; feature,
+which are managed as special <code>TemplateURL</code> objects.<ul>
+<li>The <code>TemplateURLService</code> is loaded with a set of default &quot;starter pack&quot; engines, including
+one for History with the keyword <code>@history</code> and a unique <code>starter_pack_id</code>. This data is
+loaded from <code>components/search_engines/template_url_starter_pack_data.cc</code>.</li>
+<li><code>FeaturedSearchProvider::Start()</code> is called on input. It detects that the input starts with
+<code>@</code> and queries the <code>TemplateURLService</code> for matching keywords.</li>
+<li>It finds the <code>@history</code> <code>TemplateURL</code> object.</li>
+<li><code>FeaturedSearchProvider</code> then creates an <code>AutocompleteMatch</code> with the type
+<code>AutocompleteMatch::Type::STARTER_PACK</code>.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>Mode Activation (Selecting the suggestion)</strong></p>
+<ul>
+<li><strong>Component</strong>:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/omnibox/omnibox_edit_model.h"><code>OmniboxEditModel</code></a>,
+<code>AutocompleteController</code></li>
+<li><strong>Mechanism</strong>: When the user selects the <code>STARTER_PACK</code> match, <code>OmniboxEditModel::OpenMatch()</code>
+is called. This activates &quot;keyword mode&quot; with <code>@history</code> as the keyword.<ul>
+<li>The <code>AutocompleteController</code> is restarted with the new input. It recognizes that the omnibox
+is in keyword mode with a <code>TemplateURL</code> that has a <code>starter_pack_id</code> for history.</li>
+<li>Crucially, the controller then adjusts its logic to only run a limited set of providers
+relevant to history search, such as
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/omnibox/browser/history_url_provider.h"><code>HistoryURLProvider</code></a>.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>UI State Management (The Chip and Text Replacement)</strong></p>
+<ul>
+<li><strong>Component</strong>: <code>OmniboxEditModel</code>,
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/omnibox/omnibox_view.h"><code>OmniboxView</code></a></li>
+<li><strong>Mechanism</strong>: The separation between the model&#39;s state and the view&#39;s displayed text is key.<ul>
+<li>The <code>OmniboxEditModel</code> sets its internal state to keyword mode, storing <code>@history</code>
+internally.</li>
+<li>It then clears the user&#39;s visible text, replacing it with an empty string.</li>
+<li>The model notifies the <code>OmniboxView</code>, which sees that the model is in keyword mode
+(<code>is_keyword_selected()</code> is true) and renders the &quot;Search History&quot; chip instead of the
+keyword text.</li>
+<li>Specifically, the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/location_bar/selected_keyword_view.h"><code>SelectedKeywordView</code></a>
+is shown. It retrieves the <code>TemplateURL</code> for <code>@history</code>, gets its short name (&quot;History&quot;), and
+uses this to format a localized string (e.g., &quot;Search History&quot;).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>Final Navigation (<code>foo</code> + Enter)</strong></p>
+<ul>
+<li><strong>Component</strong>: <code>HistoryURLProvider</code>, <code>AutocompleteController</code></li>
+<li><strong>Mechanism</strong>: As the user types <code>foo</code>, the <code>AutocompleteController</code> runs the filtered set of
+providers (e.g., <code>HistoryURLProvider</code>) against the input <code>foo</code>.<ul>
+<li><code>HistoryURLProvider</code> finds matching history entries for &quot;foo&quot;.</li>
+<li>It creates <code>AutocompleteMatch</code> objects with <code>destination_url</code>s pointing to the relevant
+history pages (e.g., <code>chrome://history/?q=foo</code>).</li>
+<li>When the user presses Enter, the browser navigates to the selected history result.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+<h2 id="scenario-2-keyword-search-youtubecom">Scenario 2: Keyword Search (<code>youtube.com</code>)</h2>
+<p>This scenario describes how a user can search a specific website directly from the Omnibox using a
+keyword.</p>
+<p><strong>User Journey:</strong></p>
+<ol>
+<li>User performs a search on <code>youtube.com</code>.</li>
+<li>Chrome automatically generates an inactive <code>TemplateURL</code> for YouTube search by detecting the
+site&#39;s OpenSearch description.</li>
+<li>The user navigates to <code>chrome://settings/searchEngines</code>.</li>
+<li>The YouTube entry appears in the &quot;inactive&quot; list of site search engines.</li>
+<li>The user explicitly activates the YouTube entry.</li>
+<li>Now, when the user types &quot;you&quot; in the Omnibox, a suggestion for <code>youtube.com</code> appears with a
+&quot;Search YouTube&quot; hint, and site search is fully enabled.</li>
+</ol>
+<h3 id="technical-deep-dive-1">Technical Deep Dive</h3>
+<ol>
+<li><p><strong>Search Engine Discovery and Storage</strong></p>
+<ul>
+<li><strong>Component</strong>: <code>TemplateURLService</code></li>
+<li><strong>Mechanism</strong>: When a user submits a search form on a website that provides an
+<a href="https://en.wikipedia.org/wiki/OpenSearch_(specification)">OpenSearch description document</a>,
+Chrome&#39;s renderer process can detect it and send an IPC message to the browser process. The
+<code>TemplateURLService</code> then creates and stores a <code>TemplateURL</code> object. This object contains the
+site&#39;s name, the keyword (e.g., <code>youtube.com</code>), and the URL template for performing a search
+(e.g., <code>https://www.youtube.com/results?search_query={searchTerms}</code>).</li>
+</ul>
+</li>
+<li><p><strong>Automatic Keyword Generation</strong></p>
+<ul>
+<li><strong>Component</strong>:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/search_engines/search_engine_tab_helper.h"><code>SearchEngineTabHelper</code></a>,
+<code>TemplateURLService</code></li>
+<li><strong>Mechanism</strong>: When a user performs a search on a website, Chrome can automatically generate a
+keyword for that site.<ul>
+<li><code>SearchEngineTabHelper::GenerateKeywordIfNecessary()</code> is called on navigation.</li>
+<li>It checks if the navigation is a form submission and if a keyword can be generated from the
+URL.</li>
+<li>If so, it calls <code>TemplateURLService::CanAddAutogeneratedKeyword()</code> to check if a new keyword
+can be added. This is to avoid adding duplicate or conflicting keywords.</li>
+<li>If a new keyword can be added, a
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/search_engines/template_url_data.h"><code>TemplateURLData</code></a>
+object is created and added to the <code>TemplateURLService</code>.</li>
+<li>This newly created <code>TemplateURL</code> is marked as <code>safe_for_autoreplace</code>, meaning it can be
+replaced by a more official keyword later (e.g., one from an OpenSearch description
+document).</li>
+<li>The <code>is_active</code> status is set to <code>kUnspecified</code>, so the keyword is not immediately usable.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>Activation</strong></p>
+<ul>
+<li><strong>Component</strong>: <code>TemplateURLService</code></li>
+<li><strong>Mechanism</strong>: A newly created <code>TemplateURL</code> is not immediately active (<code>is_active</code> is
+<code>kUnspecified</code>). For it to be used for keyword search, it must be activated. There are two
+paths to activation:<ul>
+<li><strong>Manual Activation</strong>: This is the immediate path. When a user goes to
+<code>chrome://settings/searchEngines</code> and activates an entry,
+<code>TemplateURLService::SetIsActiveTemplateURL()</code> is called. This function explicitly sets
+<code>is_active</code> to <code>kTrue</code> and also sets <code>safe_for_autoreplace</code> to <code>false</code>, ensuring the user&#39;s
+choice is preserved. This change takes effect immediately in the current session.</li>
+<li><strong>Automatic Generation</strong>: As described in the previous section, keywords can be generated
+automatically. However, they must be manually activated by the user in
+<code>chrome://settings/searchEngines</code>.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>Suggestion Generation (<code>youtube.com foo</code>)</strong></p>
+<ul>
+<li><strong>Component</strong>: <code>KeywordProvider</code></li>
+<li><strong>Mechanism</strong>: <code>KeywordProvider::Start()</code> is called with the user&#39;s input.<ul>
+<li>It calls <code>AutocompleteInput::ExtractKeywordFromInput()</code> to parse the input into a potential
+keyword (<code>youtube.com</code>) and the remaining query (<code>foo</code>).</li>
+<li>It then calls <code>TemplateURLService::AddMatchingKeywords()</code> with the extracted keyword.</li>
+<li><code>TemplateURLService</code> finds the active <code>TemplateURL</code> object matching <code>youtube.com</code>.</li>
+<li><code>KeywordProvider</code> receives this <code>TemplateURL</code> and proceeds to call its internal
+<code>CreateAutocompleteMatch()</code> method. This creates an <code>AutocompleteMatch</code> of type
+<code>AutocompleteMatch::Type::SEARCH_KEYWORD</code>.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>Final Navigation (Enter)</strong></p>
+<ul>
+<li><strong>Component</strong>: <code>KeywordProvider</code></li>
+<li><strong>Mechanism</strong>: The final URL is constructed within <code>KeywordProvider::FillInUrlAndContents()</code>.<ul>
+<li>This function is called by <code>CreateAutocompleteMatch()</code>.</li>
+<li>It uses the <code>TemplateURLRef</code> from the <code>TemplateURL</code> object. The <code>ReplaceSearchTerms()</code> method
+is called on this reference.</li>
+<li>This method substitutes the <code>{searchTerms}</code> placeholder in the URL template with the user&#39;s
+query (<code>foo</code>).</li>
+<li>The resulting URL (e.g., <code>https://www.youtube.com/results?search_query=foo</code>) is set as the
+<code>destination_url</code> of the <code>AutocompleteMatch</code>. When the user presses Enter, the browser
+navigates to this URL.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+<h2 id="keyword-state-in-core-data-structures">Keyword State in Core Data Structures</h2>
+<p>To fully understand the logic, it&#39;s crucial to see how keyword state is tracked within the core data
+structures: <code>AutocompleteInput</code> and <code>AutocompleteMatch</code>.</p>
+<h3 id="autocompleteinput"><code>AutocompleteInput</code></h3>
+<p>The <code>AutocompleteInput</code> object represents the user&#39;s query and the omnibox&#39;s state. It has two key
+fields, <code>in_keyword_mode_</code> and <code>allow_exact_keyword_match_</code>, which are used to signal that when the
+user is in keyword mode, providers should show more &quot;keyword-y&quot; suggestions. For example, a search
+for &#39;query&#39; should suggest &#39;youtube.com/q=query&#39; instead of &#39;google.com/q=query&#39; when the user is in
+the YouTube keyword mode.</p>
+<h3 id="autocompletematch"><code>AutocompleteMatch</code></h3>
+<p>The <code>AutocompleteMatch</code> object represents a single suggestion and contains several nuanced fields
+for managing keywords:</p>
+<ul>
+<li><p><strong><code>associated_keyword</code></strong>: This field determines which keyword to activate via the keyword chip.
+For example, the <code>@history</code> keyword activates the <code>chrome://history</code>... template URL. This can be
+a source of confusion, because when a user types &quot;youtube&quot;, an autocomplete match might appear
+that navigates to &#39;amazon.com/youtube&#39; but also has a keyword chip to activate the <code>youtube.com</code>
+keyword. In this case, <code>associated_keyword</code> will store &#39;youtube.com&#39;, even though the rest of the
+match fields are Amazon-related.</p>
+</li>
+<li><p><strong><code>keyword</code></strong>: This field tracks which <code>TemplateURL</code> was used to create the match&#39;s destination
+URL. For example, if the user types &#39;youtube.com query&#39;, the <code>keyword</code> field will track &#39;youtube&#39;.
+This can also be confusing, because even when the user isn&#39;t in keyword mode, most search
+suggestions are still generated using a keyword and will have their <code>keyword</code> field set (e.g., to
+<code>google.com</code> for the default search engine).</p>
+</li>
+<li><p><strong><code>from_keyword</code></strong>: This field tracks if the match was generated while the user is in keyword
+mode. This is another potential point of confusion, as it can be <code>true</code> even if the match doesn&#39;t
+have a <code>keyword</code> field set. Conversely, <code>from_keyword</code> can be <code>false</code> even when <code>keyword</code> is set.
+In essence, <code>from_keyword</code> reflects the <em>input state</em> when the match was created, while <code>keyword</code>
+reflects the match&#39;s <em>data source</em>.</p>
+</li>
+</ul>
+<h2 id="methods-for-model-view-interaction">Methods for Model-View Interaction</h2>
+<p>A key aspect of the Omnibox architecture is the interaction between the <code>OmniboxEditModel</code> (the
+model) and its two main views. The model holds the state, while the views are responsible for
+rendering the UI. The views are updated via a tightly-coupled observer-like pattern, where the model
+directly calls methods on the views when its state changes.</p>
+<p>The following table summarizes the key methods that facilitate this interaction within the scope of
+the scenarios described in this document.</p>
+<table>
+<thead>
+<tr>
+<th align="left">Initiator (Caller)</th>
+<th align="left">Target (Callee)</th>
+<th align="left">Method Called</th>
+<th align="left">Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><code>OmniboxView</code></td>
+<td align="left"><code>OmniboxEditModel</code></td>
+<td align="left"><code>OnAfterPossibleChange()</code></td>
+<td align="left">Notifies the model of user text input.</td>
+</tr>
+<tr>
+<td align="left"><code>OmniboxEditModel</code></td>
+<td align="left"><code>OmniboxView</code></td>
+<td align="left"><code>SetWindowTextAndCaretPos()</code></td>
+<td align="left">Instructs the text view to change its content, e.g., when entering keyword mode.</td>
+</tr>
+<tr>
+<td align="left"><code>OmniboxPopupView</code></td>
+<td align="left"><code>OmniboxEditModel</code></td>
+<td align="left"><code>OpenMatch()</code> / <code>SetPopupSelection()</code></td>
+<td align="left">Notifies the model that the user has selected or highlighted a suggestion.</td>
+</tr>
+<tr>
+<td align="left"><code>OmniboxEditModel</code></td>
+<td align="left"><code>OmniboxPopupView</code></td>
+<td align="left"><code>UpdatePopupAppearance()</code></td>
+<td align="left">Instructs the popup to redraw itself based on the model&#39;s current state.</td>
+</tr>
+<tr>
+<td align="left"><code>AutocompleteController</code></td>
+<td align="left"><code>OmniboxEditModel</code></td>
+<td align="left"><code>OnResultChanged()</code></td>
+<td align="left">Notifies the model that the autocomplete results have changed.</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="appendix-architecture-on-chrome-for-android">Appendix: Architecture on Chrome for Android</h2>
+<p>The architecture described above is specific to desktop platforms which use the C++ Views UI
+framework. Chrome for Android has a distinct architecture where the UI is primarily implemented in
+Java and built upon a <code>Coordinator</code> pattern. This pattern distributes responsibilities among several
+specialized components, in contrast to the more monolithic <code>OmniboxEditModel</code> on desktop.</p>
+<p>However, the core suggestion generation logic is shared. The C++ <code>AutocompleteController</code> is used by
+all platforms to generate suggestion results.</p>
+<h3 id="the-coordinator-pattern-on-android">The Coordinator Pattern on Android</h3>
+<p>On Android, the Omnibox (known as the Location Bar) is managed by a top-level
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarCoordinator.java"><code>LocationBarCoordinator</code></a>.
+This coordinator owns and orchestrates a set of sub-components, each with a specific responsibility.
+The responsibilities of the desktop <code>OmniboxEditModel</code> are split among these components:</p>
+<ul>
+<li><p><strong><code>LocationBarCoordinator</code></strong>: The overall owner and assembler. It creates the other coordinators
+and mediators and wires them together.</p>
+</li>
+<li><p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteCoordinator.java"><code>AutocompleteCoordinator</code></a></strong>:
+Manages the suggestion list UI, including the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/OmniboxSuggestionsDropdown.java"><code>OmniboxSuggestionsDropdown</code></a>
+view. It creates and owns the <code>AutocompleteMediator</code>.</p>
+</li>
+<li><p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/AutocompleteMediator.java"><code>AutocompleteMediator</code></a></strong>:
+The primary logic hub for autocomplete. It is responsible for communicating with the C++
+<code>AutocompleteController</code> via JNI, processing the results, and updating the <code>PropertyModel</code> that
+drives the suggestion list UI.</p>
+</li>
+<li><p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBarCoordinator.java"><code>UrlBarCoordinator</code></a></strong>:
+Manages the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/UrlBar.java"><code>UrlBar</code></a>
+view, which is the <code>EditText</code> field the user types into. It handles text state, cursor position,
+and selection, reporting user input to other components.</p>
+</li>
+<li><p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java"><code>LocationBarMediator</code></a></strong>:
+A central logic hub that connects the other components. It handles events like focus changes and
+button clicks, and manages the overall state of the location bar that doesn&#39;t directly involve
+text editing or autocomplete suggestions.</p>
+</li>
+</ul>
+<h3 id="interaction-flow-for-suggestions">Interaction Flow for Suggestions</h3>
+<ol>
+<li>A user types into the <code>UrlBar</code> view (managed by <code>UrlBarCoordinator</code>).</li>
+<li>During initialization, <code>LocationBarCoordinator</code> sets up a listener so that text changes in
+<code>UrlBarCoordinator</code> directly call <code>AutocompleteCoordinator.onTextChanged()</code>.</li>
+<li><code>AutocompleteCoordinator.onTextChanged()</code> forwards the call to
+<code>AutocompleteMediator.onTextChanged()</code>.</li>
+<li>The <code>AutocompleteMediator</code> takes the user&#39;s input and initiates a request to the shared C++
+<code>AutocompleteController</code> through the JNI bridge.</li>
+<li>When results are ready, the C++ <code>AutocompleteController</code> sends them back to the
+<code>AutocompleteMediator</code> via its <code>onSuggestionsReceived</code> JNI callback.</li>
+<li>The <code>AutocompleteMediator</code> receives the <code>AutocompleteResult</code>, processes it, builds a list of view
+models, and updates the main <code>PropertyModel</code> for the suggestion list.</li>
+<li>The <code>PropertyModel</code> change is observed by the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/OmniboxSuggestionsDropdownAdapter.java"><code>OmniboxSuggestionsDropdownAdapter</code></a>,
+which then renders the final views in the suggestion dropdown list.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/site_search_explainer.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/site_search_explainer.md</a>
+  </p>
+</div>

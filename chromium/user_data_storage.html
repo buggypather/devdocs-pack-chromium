@@ -1,0 +1,44 @@
+<h1>User Data Storage</h1>
+<p>This document explains the Chromium policies for files in the <code>User Data</code>
+directory.</p>
+<h2 id="backward-compatibility">Backward Compatibility</h2>
+<p>Due to the nature of frequent updates, Chromium must always support loading data
+from files written by previous versions. A good rule of thumb is to leave
+migration code in place for <em>at least</em> one year (approximately 9 milestones with
+the current 6-week release cadence). It is not uncommon for clients to update
+from very old versions, so use good judgement for deciding when to remove
+migration code -- if the complexity is low, keep it indefinitely.</p>
+<h2 id="version-downgrade-processing">Version Downgrade Processing</h2>
+<p>In cases where Chromium is run against a <code>User Data</code> directory written by a
+newer version, the browser may run to the extent possible with the following
+behaviors:</p>
+<ul>
+<li>Versioned files that are apparently readable by the old version may be used
+as-is and modified as needed. For example, a SQLite file containing a table
+with a compatible version number no higher than that supported by the old
+version.</li>
+<li>Versioned files that cannot be read by the old version and contain user
+configuration or user generated data are left on-disk unmodified. This
+allows the data to be used again once the browser is updated. Furthermore,
+the user should be notified via the <a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/ui/profile_error_dialog.h">profile error
+dialog</a> that their experience
+may be degraded. For example, such a browsing session may not accumulate new
+history database entries.</li>
+<li>Versioned files that cannot be read by the old version and contain computed
+or cached data may be either left on-disk unmodified or deleted and
+replaced.</li>
+</ul>
+<h2 id="post-branch-compatibility">Post-branch Compatibility</h2>
+<p>Breaking changes in data storage are forbidden once a branch has been created
+for a release. This guarantees that data written by a later build on a release
+branch can be read by previous versions on that same release branch.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="user_data_dir">User Data Directory</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_storage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_storage.md</a>
+  </p>
+</div>

@@ -1,0 +1,87 @@
+<h1>Chromium Desktop UI Debugging Tools and Tips</h1>
+<p>To help develop and debug Chromium desktop UI, this doc shares a set of
+developer tools and their usages.</p>
+<h2 id="ui-debugging-shortcuts">UI Debugging Shortcuts</h2>
+<p>After enabling <code>ui-debug-tools</code> flag from <code>chrome://flags</code>, developers will be
+able to use the following keyboard shortcuts:</p>
+<table>
+<thead>
+<tr>
+<th>Actions</th>
+<th align="left">Shortcuts</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Ctrl+Alt+Shift+T</td>
+<td align="left">Toggle between non-Tablet mode and Tablet mode</td>
+</tr>
+<tr>
+<td>Ctrl+Alt+Shift+V</td>
+<td align="left">Print out the current Views tree hierarchy</td>
+</tr>
+<tr>
+<td>Ctrl+Alt+Shift+M</td>
+<td align="left">Print out all the views on the Views tree with their properties in details</td>
+</tr>
+</tbody></table>
+<h2 id="ui-devtools">UI DevTools</h2>
+<p>UI DevTools is a set of graphical inspection and debugging tools for Chromium
+native UI. They largely resemble the Web DevTools used by Web developers.
+There are two ways to enable the tools:</p>
+<ul>
+<li>Enable <code>ui-debug-tools</code> flag from <code>chrome://flags</code></li>
+<li>Execute chromium/chrome with <code>--enable-ui-devtools</code> command line flag</li>
+</ul>
+<p>Once being enabled, UI DevTools can be launched through a button on
+<code>chrome://inspect#native-ui</code> page. Thus, UI developers are able to
+examine the UI structure, individual view&#39;s layout and properties etc.</p>
+<p>Detailed usage information and feature tutorials can be found in this <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/ui_devtools/index.md">doc</a>.</p>
+<h2 id="debugger-extensionsscripts">Debugger Extensions/Scripts</h2>
+<p>For developers who prefer to use debuggers, some debugger extensions or
+scripts can be helpful. Once being loaded into the debugger, they would provide
+custom commands such as printing out a view&#39;s properties or the view hierarchy
+information.</p>
+<table>
+<thead>
+<tr>
+<th>Target Debugger</th>
+<th align="left">Extension/Script Usage</th>
+<th>Code Location</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Windbg</td>
+<td align="left"><a href="https://chromium.googlesource.com/chromium/src/+/main/tools/win/chromeexts/README.md">README</a></td>
+<td><a href="https://source.chromium.org/chromium/chromium/src/+/main:tools/win/chromeexts/">Source</a></td>
+</tr>
+<tr>
+<td>LLDB</td>
+<td align="left">TBA</td>
+<td>TBA</td>
+</tr>
+</tbody></table>
+<h2 id="views-examples">Views examples</h2>
+<p>Ever wonder what common controls the Views framework provides? And how to
+customize them?</p>
+<p><code>views_examples</code> and <code>views_examples_with_content</code> are two programs that list
+those controls and show examples on how to use them. Just build and run the
+following commands:</p>
+<pre data-language="shell">$ autoninja -C out/Default views_examples
+
+$ out/Default/views_examples [--enable-examples=&lt;example1,[example2...]&gt;]</pre>
+<p>The list of all available examples can be found in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/ui/views/examples/README.md">README</a>.</p>
+<h2 id="note">Note</h2>
+<h3 id="adding-metadata-and-properties">Adding Metadata and Properties</h3>
+<p>To be able to inspect the properties of a view through those tools, the
+corresponding view needs to have metadata and properties built in it. This
+requires adding some standard macros. A simple example can be found from this
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h?q=%22Property%20metadata%22&amp;ss=chromium%2Fchromium%2Fsrc">comment</a>.</p>
+<p>More advanced usages of the macros and special property handlings are elaborated
+in this <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/views/metadata_properties.md">doc</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/ui_debugging.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/ui_debugging.md</a>
+  </p>
+</div>

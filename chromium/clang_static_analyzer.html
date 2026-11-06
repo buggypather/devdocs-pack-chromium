@@ -1,0 +1,65 @@
+<h1>The Clang Static Analyzer</h1>
+<p>The Clang C/C++ compiler comes with a static analyzer which can be used to find
+bugs using path sensitive analysis. Path sensitive analysis is
+a technique that explores all the possible branches in code and
+records the codepaths that might lead to bad or undefined behavior,
+like an uninitialized reads, use after frees, pointer leaks, and so on.</p>
+<p>See the <a href="http://clang-analyzer.llvm.org/">official Clang static analyzer page</a>
+for more background information.</p>
+<p>We used to have a bot that continuously ran with the static analyzer,
+but people used to not look at it much.</p>
+<p>The static analyzer can still be invoked with <a href="clang_tidy">clang-tidy</a>.</p>
+<h2 id="recommended-checks">Recommended checks</h2>
+<p>Clang&#39;s static analyzer comes with a wide variety of checkers. Some of the
+checks aren&#39;t useful because they are intended for different languages,
+platforms, or coding conventions than the ones used for Chromium development.</p>
+<p>Checkers we found useful were:</p>
+<pre>-analyzer-checker=core
+-analyzer-checker=cpp
+-analyzer-checker=unix
+-analyzer-checker=deadcode</pre>
+<p>As of this writing, the checker suites we support are
+<a href="https://clang-analyzer.llvm.org/available_checks.html#core_checkers">core</a>,
+<a href="https://clang-analyzer.llvm.org/available_checks.html#cplusplus_checkers">cplusplus</a>, and
+<a href="https://clang-analyzer.llvm.org/available_checks.html#deadcode_checkers">deadcode</a>.</p>
+<p>To easily run these checks against Chromium code via clang-tidy, follow
+<a href="clang_tidy#evaluating_running-clang_tidy-across-chromium">these</a>
+instructions to pull down <code>tricium_clang_tidy.py</code> and then pass the following
+argument when invoking the script (<code>-*</code> disables all checks and then the
+remaining check name globs enable each category of checks):</p>
+<pre>--tidy_checks=&quot;-*,clang-analyzer-core*,clang-analyzer-cplusplus*,clang-analyzer-unix*,clang-analyzer-deadcode*&quot;</pre>
+<p>A full list of Clang analyzer checks can be found in the
+<a href="https://clang.llvm.org/extra/clang-tidy/checks/list.html">Clang-Tidy Checks List</a>.</p>
+<h2 id="addressing-false-positives">Addressing false positives</h2>
+<p>Some of the errors you encounter will be false positives, which occurs when the
+static analyzer naively follows codepaths which are practically impossible to
+hit at runtime. Fortunately, we have a tool at our disposal for guiding the
+analyzer away from impossible codepaths: assertion handlers like
+DCHECK/CHECK/LOG(FATAL).  The analyzer won&#39;t check the codepaths which we
+assert are unreachable.</p>
+<p>An example would be that if the analyzer detected the function argument
+<code>*my_ptr</code> might be null and dereferencing it would potentially segfault, you
+would see the error <code>warning: Dereference of null pointer (loaded from variable &#39;my_ptr&#39;)</code>.  If you know for a fact that my_ptr will not be null in practice,
+then you can place an assert at the top of the function: <code>DCHECK(my_ptr)</code>. The
+analyzer will no longer generate the warning.</p>
+<p>Be mindful about only specifying assertions which are factually correct! Don&#39;t
+DCHECK recklessly just to quiet down the analyzer. :)</p>
+<p>Other types of false positives and their suppressions:</p>
+<ul>
+<li>Unreachable code paths. To suppress, add the <code>ANALYZER_SKIP_THIS_PATH();</code>
+directive to the relevant code block.</li>
+<li>Dead stores. To suppress, use <code>[[maybe_unused]]</code>. This also suppresses dead
+store warnings on conventional builds without static analysis enabled!</li>
+</ul>
+<p>See the definitions of the <code>ANALYZER_*</code> macros in base/logging.h for more
+detailed information about how the annotations are implemented.</p>
+<h2 id="logging-bugs">Logging bugs</h2>
+<p>If you find any issues with the static analyzer, or find Chromium code behaving
+badly with the analyzer, please check the <code>Infra&gt;CodeAnalysis</code> CrBug component
+to look for known issues, or file a bug if it is a new problem.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/clang_static_analyzer.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/clang_static_analyzer.md</a>
+  </p>
+</div>

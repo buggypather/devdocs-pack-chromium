@@ -1,0 +1,23 @@
+<h1>Deploying contentshell and running webtests on Fuchsia</h1>
+<p>General instruction on running and debugging web_tests can be found
+<a href="../testing/web_tests">here</a>.</p>
+<p>Unlike on other platforms, where tests are directly invoked via the
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/tools/blinkpy/web_tests/run_web_tests.py">blink test script</a>,
+Fuchsia layers on top <a href="https://github.com/chromium/chromium/blob/HEAD/build/fuchsia/test/run_test.py">its own test script</a>,
+which handles preparation such as installing the content_shell binary.</p>
+<p>Currently, only
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/TestLists/Default.txt">a small subset of web tests</a>
+can be run on Fuchsia. Build the target <code>blink_web_tests</code> first before running any
+of the commands below:</p>
+<h2 id="hermetic-emulation">Hermetic emulation</h2>
+<p>The test script brings up an emulator, runs the tests on it, and shuts the
+emulator down when finished.</p>
+<pre data-language="bash">$ &lt;output-dir&gt;/bin/run_blink_web_tests</pre>
+<h2 id="run-on-an-physical-device">Run on an physical device.</h2>
+<pre data-language="bash">$ &lt;output-dir&gt;/bin/run_blink_web_tests --target-id=&lt;device-target-id&gt;</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/web_tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/web_tests.md</a>
+  </p>
+</div>

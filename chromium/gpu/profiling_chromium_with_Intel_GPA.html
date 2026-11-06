@@ -1,0 +1,66 @@
+<h1>Profile Chromium with Intel&amp;reg; Graphics Performance Analyzers</h1>
+<p>This page documents how to do graphics profiling on Chromium with <strong>Intel&reg; Graphics Performance Analyzers (GPA)</strong>.</p>
+<h2 id="introduction-to-intelreg-gpa">Introduction to Intel&reg; GPA</h2>
+<p>Intel&reg; GPA is a toolset for graphics performance analysis and optimizations for graphics-intensive applications.</p>
+<p>Currently Intel&reg; GPA works best on Windows when analyzing Chromium. In this document, we will mainly talk about the best practice on how to profile Chromium with latest Intel&reg; GPA on Windows with Intel&amp;reg D3D drivers. All the methods mentioned in this document should work with the latest version of Intel&reg; GPA (2023 R4) and the latest Windows Intel&reg; GPU driver (31.0.101.5330). We will also keep this document up-to-date when there are any big updates about Intel&reg; GPA in the future.</p>
+<h2 id="download-intelreg-gpa">Download Intel&reg; GPA</h2>
+<p>The official link to download Intel&reg; GPA is <a href="https://www.intel.com/content/www/us/en/developer/tools/graphics-performance-analyzers/download.html">here</a>.</p>
+<h2 id="profile-chromium-with-intelreg-gpa">Profile Chromium with Intel&reg; GPA</h2>
+<p>Currently Intel&reg; GPA <strong>doesn&#39;t support capturing frame of Chromium with Graphics Monitor</strong>. Instead we can do performance profiling by recording multi-frame streams with the command line tool <strong>gpa-injector.exe</strong> (under the folder &#39;Streams/&#39; of the install directory of Intel&reg; GPA).</p>
+<p>The steps to record multi-frame streams for D3D11 (for example, WebGL) and D3D12 (for example WebGPU) based graphics applications are different due to some known issues in Intel&reg; GPA. Let&#39;s introduce them for you one by one.</p>
+<p>For simplicity in this document we always suppose Intel&reg; GPA is installed in its default directory (<code>C:\Program Files\IntelSWTools\GPA</code>).</p>
+<h3 id="d3d11-based-applications">D3D11-based applications</h3>
+<p>Here are the steps to profile the WebGL application <a href="https://webglsamples.org/aquarium/aquarium.html">Aquarium</a> with Intel&reg; GPA.</p>
+<ol>
+<li>From a command line window, start recording streams by executing below commands. We will see Chrome is launched and the given url is opened.</li>
+</ol>
+<pre>cd C:\Program Files\IntelSWTools\GPA\Streams
+
+gpa-injector.exe --injection-mode 1 -t &quot;%LOCALAPPDATA%\Google\Chrome SxS\Application\chrome.exe&quot; -L capture -L hud-layer -- --no-sandbox --disable-direct-composition https://webglsamples.org/aquarium/aquarium.html</pre>
+<p>Note that</p>
+<ul>
+<li><code>-t</code> specifies the binary file of the graphics application.</li>
+<li><code>-L hud-layer</code> (optional) enables the HUD of Intel&reg; GPA, where we can see some statistics (for example, the number of frames we have collected) of Intel&reg; GPA.</li>
+<li><code>--</code> specifies the command line parameters that will be used when the graphics application is launched. Currently both <code>--no-sandbox</code> and <code>--disable-direct-composition</code> are required for the latest version of Intel&reg; GPA to work with Chromium.</li>
+</ul>
+<ol start="2">
+<li><p>Close Chrome to stop recording the stream after we have collected enough frames.</p>
+</li>
+<li><p>Open <strong>Graphics Frame Analyzer</strong> (another tool in Intel&reg; GPA), and we can see all the stream files we have collected before. To enable shader profiler we should also enable the option <code>Enable Shader Profiler</code> on <code>General Settings</code> of Graphics Frame Analyzer.</p>
+</li>
+<li><p>Open the stream file we&#39;d like to analyze, and we can see all the frames included in the stream file.</p>
+</li>
+<li><p>Open the frame we are interested in and wait for the completion of stream play back, then we can choose the draw call we&#39;d like to analyze and see all the statistics collected by Intel&reg; GPA.</p>
+</li>
+</ol>
+<h3 id="d3d12-based-applications">D3D12-based applications</h3>
+<p>Here are the steps to profile the WebGPU application <a href="https://austin-eng.com/webgpu-samples/samples/computeBoids">ComputeBoids</a> with Intel&reg; GPA.</p>
+<ol>
+<li>From a command line window, start recording streams by executing below commands. we will see Chrome is launched and the given url is opened.</li>
+</ol>
+<pre>cd C:\Program Files\IntelSWTools\GPA\Streams
+
+gpa-injector.exe --injection-mode 1 --hook-d3d11on12 -t &quot;C:\Program Files\Google\Chrome\Application\chrome.exe&quot; -L capture -L hud-layer -- --enable-unsafe-webgpu --no-sandbox --enable-dawn-features=emit_hlsl_debug_symbols,use_dxc,disable_symbol_renaming --disable_direct_composition=1 https://austin-eng.com/webgpu-samples/samples/computeBoids</pre>
+<p>Note that</p>
+<ul>
+<li><code>--hook-d3d11on12</code> is required to profile WebGPU applications.</li>
+<li><code>--no-sandbox</code> and <code>--disable-direct-composition</code> are both required for the latest version of Intel&reg; GPA to work with Chromium.</li>
+</ul>
+<ol start="2">
+<li><p>Close Chrome to stop recording the stream after we have collected enough frames.</p>
+</li>
+<li><p>Open the stream file we&#39;d like to analyze with <strong>Graphics Frame Analyzer</strong>, and we can see all the stream files we have collected before. To enable shader profiler we should also enable the option <code>Enable Shader Profiler</code> on <code>General Settings</code> of Graphics Frame Analyzer.</p>
+</li>
+<li><p>Click the &quot;<code>Direct Queue 1</code>&quot; tab (on the left of the UI), and open a call of &quot;<code>ExecuteCommandlists</code>&quot; we are interested in.</p>
+</li>
+<li><p>Wait for the completion of stream play back, then we can choose the draw call or the dispatch call we&#39;d like to analyze and see all the statistics collected by Intel&reg; GPA.</p>
+</li>
+</ol>
+<h2 id="more-information">More Information</h2>
+<p>Please visit <a href="https://www.intel.com/content/www/us/en/developer/tools/graphics-performance-analyzers/overview.html">the official website of Intel&reg; GPA</a> for more information.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/profiling_chromium_with_Intel_GPA.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/profiling_chromium_with_Intel_GPA.md</a>
+  </p>
+</div>

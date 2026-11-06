@@ -1,0 +1,27 @@
+<h1>Image loading optimizations in Chrome 118 that impact LCP and CLS</h1>
+<p>We are launching two complementary changes for image loading optimizations:</p>
+<ul>
+<li><a href="#increase-the-priority-of-the-first-5-images">Increase the priority of the first 5 images</a></li>
+<li><a href="#prioritize-image-load-tasks">Prioritize image load tasks</a></li>
+</ul>
+<h2 id="increase-the-priority-of-the-first-5-images">Increase the priority of the first 5 images</h2>
+<p>Starting around Chrome 118, we are launching the <a href="2023_08_image_loading">change</a>
+to 100% of Chrome sessions.</p>
+<h2 id="prioritize-image-load-tasks">Prioritize image load tasks</h2>
+<p>When we have an image load task and a rendering task to choose from, we choose
+the image load task first to prevent layout shift of an intermediate frame
+that doesn&#39;t have the image. For the same reason, LCP improves because we skip
+the intermediate frame.</p>
+<p><a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1416030">Relevant bug</a></p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>As we are increasing the priority of the first 5 images and image loading tasks,
+sites with images might see better CLS and LCP scores.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Both changes were rolled out to 100% of Chrome users around October 1, 2023 which
+roughly corresponds with the release of Chrome 118.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_10_image_loading_optimizations.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_10_image_loading_optimizations.md</a>
+  </p>
+</div>

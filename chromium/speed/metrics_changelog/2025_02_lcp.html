@@ -1,0 +1,27 @@
+<h1>Largest Contentful Paint Changes in Chrome 133</h1>
+<h2 id="expose-coarsened-cross-origin-rendertime-in-element-timinglcp-regardless-of-tao">Expose coarsened cross-origin renderTime in element timing/LCP (regardless of TAO)</h2>
+<p>Prior this change all cross-origin element-timing and LCP performance entries
+would have a zero renderTime, unless they were served with the appropriate
+Timing-Allow-Origin HTTP header to allow access to detailed timings. Without a
+renderTime LCP falls back ot the load time for LCP which can often be well
+before the load time. This can result in anomalies such as LCP appearing to
+happen before FCP, which is of course not possible.</p>
+<p>With this change presentation timestamps (renderTime, paint timing start time,
+event timing end time) are instead just coarsened to a 4ms multiple to mitigate
+the risk of reading cross-origin image information.</p>
+<p>For more details see the <a href="https://chromestatus.com/feature/5128261284397056">Chrome Status entry</a></p>
+<h3 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h3>
+<p>User may notice an increased LCP time in Real User Monitoring (RUM) metrics.
+The issue did not affect the Chrome User Experience Report (CrUX), and this was
+one example of <a href="https://web.dev/articles/crux-and-rum-differences#cross-origin_resources">differences between CrUX and RUM</a>.</p>
+<p>The LCP is now more accurate and more in line with CrUX so this is not a
+performance regression, but more an improvement to measurements of LCP.</p>
+<h3 id="when-were-users-affected">When were users affected?</h3>
+<p>Launch was the week of Feb 27, 2025, when m133 was in stable, but a limited
+number of early adopters might have seen this change as early as m132.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2025_02_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2025_02_lcp.md</a>
+  </p>
+</div>

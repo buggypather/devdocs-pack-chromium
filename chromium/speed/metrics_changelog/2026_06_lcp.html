@@ -1,0 +1,21 @@
+<h1>Largest Contentful Paint Changes in Chrome 151</h1>
+<h2 id="prompt-lcp-entry-emission-for-video-elements-requestmainframeafterfirstvideoframe">Prompt LCP entry emission for video elements (RequestMainFrameAfterFirstVideoFrame)</h2>
+<p>In Chrome 151, Chrome enabled <code>RequestMainFrameAfterFirstVideoFrame</code> by default for Largest Contentful Paint.</p>
+<p>When a <code>&lt;video&gt;</code> element (such as an autoplaying hero video) displays its first video frame, media timing information is provided by the media decoder pipeline. To emit an LCP performance entry to <code>PerformanceObserver</code> in JavaScript, Chrome&#39;s paint timing subsystem requires a compositor animation frame.</p>
+<p>Previously, if a page became idle with no other active animations, the emission of the LCP entry could linger until some future scheduled main frame-- potentially a long time later on an idle page.</p>
+<p>Starting in Chrome 151, Chrome explicitly requests a main frame as soon as the first video frame timing is received. This ensures that the LCP performance entry is created and delivered to JavaScript observers in the very next paint opportunity after the first video frame is available.</p>
+<p>(Note: because video is rendered on a different thread than the main thread, the reported LCP times are typically 1 vsync interval larger than the video was actually rendered when reported to PerformanceObserver.  This may be improved in the future.)</p>
+<p>The source change can be found in <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7981699">crrev.com/c/7981699</a>.</p>
+<h3 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h3>
+<ul>
+<li><strong>Faster entry delivery for video LCP</strong>: Sites whose largest visual element is a video will observe LCP entries delivered to JavaScript callbacks immediately after the initial frame is displayed.</li>
+<li><strong>Improved consistency between RUM and CrUX</strong>: Reduces discrepancies between client-side observer timestamps and underlying PageLoad UKM field metrics.</li>
+</ul>
+<h3 id="when-were-users-affected">When were users affected?</h3>
+<p>Chrome 151 reached stable users in June 2026.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_06_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_06_lcp.md</a>
+  </p>
+</div>

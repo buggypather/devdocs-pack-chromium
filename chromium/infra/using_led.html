@@ -1,0 +1,68 @@
+<h1>Using LED</h1>
+<p>LED is an infrastructure tool used to manually trigger builds on any builder
+running on LUCI. It&#39;s designed to help debug build failures or experiment with
+new builder changes. This doc describes how to use it with Chromium&#39;s builders.</p>
+<p>*** note
+<strong>Note for Googlers:</strong> Ensure that <code>depot_tools</code> appears in front of your system paths
+in your <code>$PATH</code>, so that you are invoking the <code>led</code> in <code>depot_tools</code>.</p>
+<hr>
+<h2 id="when-to-use-it">When to use it</h2>
+<p>Use cases include, but are not limited to, the following:</p>
+<ul>
+<li><strong>Testing a recipe change</strong>: Much of the code in the following repos
+define what and how a builder runs (also known as the builder&#39;s &quot;recipe&quot;):
+<a href="https://chromium.googlesource.com/infra/luci/recipes-py/">recipes-py</a>, <a href="https://chromium.googlesource.com/chromium/tools/depot_tools/">depot_tools</a>, and <a href="https://chromium.googlesource.com/chromium/tools/build/">tools/build</a>. Changes to these
+repos can first be tested out on any builder prior to submitting via LED.</li>
+<li><strong>Debugging a waterfall failure</strong>: If a waterfall builder (that is, <em>not</em> a
+trybot) is exhibitting frequent or strange failures that can&#39;t be reproduced
+locally, LED can be used to retrigger any given build for debugging.</li>
+</ul>
+<h2 id="when-not-to-use-it">When <em>not</em> to use it</h2>
+<p>Certain types of changes to a trybot (this includes all builders on the CQ)
+can be sufficiently tested without the use of LED. This includes changes to a
+trybot&#39;s:</p>
+<ul>
+<li><strong>GN args</strong>: A trybot&#39;s build args are configured via
+<a href="https://chromium.googlesource.com/chromium/src/+/main/tools/mb/mb_config.pyl">mb_config.pyl</a>.</li>
+<li><strong>tests</strong>: The list of tests a trybot runs are set via the *.pyl files in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/testing/buildbot/">//testing/buildbot/</a>. (Some trybots may not be present in
+those files. Instead, change the waterfall builders they mirror. This mapping is
+configured in tools/build&#39;s <a href="https://chromium.googlesource.com/chromium/tools/build/+/HEAD/recipes/recipe_modules/chromium_tests/trybots.py">trybots.py</a>.)</li>
+</ul>
+<p>Simply edit the needed files in a local chromium/src checkout, upload the change
+to Gerrit, then select the affected trybot(s) via the &quot;select tryjobs&quot; menu.</p>
+<h2 id="how-to-use-it">How to use it</h2>
+<p>Provided that a local depot_tools checkout is present on $PATH, LED can be
+used by simply invoking <code>led</code> on the command line. A common use-case for LED is
+to modify the build steps of any given builder. The process for doing this is
+outlined below. (However, LED can be used for many other purposes. See the full
+list of features via <code>led help</code>.)</p>
+<ol>
+<li>Select a builder whose builds you&#39;d like to reproduce. (Example:
+<a href="https://ci.chromium.org/p/chromium/builders/ci/ToTLinux">ToTLinux</a>)</li>
+<li>Record its full builder name, along with its bucket. (The bucket name is
+present in the URL of the builder page, and is very likely &quot;chromium/ci&quot;.)</li>
+<li>Checkout the <a href="https://chromium.googlesource.com/chromium/tools/build/">tools/build</a> repo (if not already present) and navigate to
+the <a href="https://chromium.googlesource.com/chromium/tools/build/+/HEAD/recipes/recipe_modules/chromium/api.py">chromium</a> and/or <a href="https://chromium.googlesource.com/chromium/tools/build/+/HEAD/recipes/recipe_modules/chromium_tests/api.py">chromium_tests</a> recipe modules. These, along with
+the other recipe_modules located in tools/build, are how the majority of a
+Chromium builder&#39;s recipe is defined.</li>
+<li>Make the desired recipe change. (Consider running local recipe unittests
+before proceeding by running <code>recipes.py test train</code> via the <a href="https://chromium.googlesource.com/chromium/tools/build/+/HEAD/recipes/recipes.py">recipes.py</a>
+script.</li>
+<li>Launch a build with the given recipe change. This can be done with a single
+chained LED invocation, eg:
+<code>led get-builder chromium/ci:ToTLinux | led edit-recipe-bundle | led launch</code></li>
+<li>The LED invocation above will print out a link to the build that was
+launched. Repeat steps 4 &amp; 5 until the triggered builds behave as expected
+with the new recipe change.</li>
+</ol>
+<h2 id="questions-feedback">Questions? Feedback?</h2>
+<p>If you&#39;re in need of further assistance, if you&#39;re not sure about
+one or more steps, or if you found this documentation lacking, please
+reach out to <a href="mailto:infra-dev@chromium.org">infra-dev@chromium.org</a> or <a href="https://g.co/bugatrooper">file a bug</a>!</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/infra/using_led.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/infra/using_led.md</a>
+  </p>
+</div>

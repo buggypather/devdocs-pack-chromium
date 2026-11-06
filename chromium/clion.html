@@ -1,0 +1,251 @@
+<h1>CLion Dev</h1>
+<p>CLion is an IDE</p>
+<p>Prerequisite:
+<a href="index#Checking-Out-and-Building">Checking out and building the chromium code base</a></p>
+<h2 id="setting-up-clion">Setting up CLion</h2>
+<ol>
+<li><p>Install CLion</p>
+<ul>
+<li>Googlers only: See
+<a href="https://goto.google.com/intellij-getting-started">go/intellij-getting-started</a>
+for installation and license authentication instructions</li>
+</ul>
+</li>
+<li><p>Run CLion</p>
+</li>
+<li><p>Increase CLion&#39;s memory allocation</p>
+<p>This step will help performance with large projects</p>
+<ol>
+<li>Option 1<ol>
+<li>At the startup dialog, in the bottom left corner, click on the Cog
+icon and then click on <code>Edit Custom VM Options</code>:</li>
+<li>In the textbox, you will see different flags. Add or replace the
+following flags (to learn
+more: <a href="https://www.jetbrains.com/help/idea/tuning-the-ide.html#common-jvm-options">Advanced configuration | IntelliJ IDEA</a>):<pre>-Xss2m
+-Xms1g
+-Xmx31g
+...</pre>
+</li>
+<li>Close the <code>Edit Custom VM Options</code> dialog.</li>
+<li>Again, at the startup dialogue, in the bottom left corner, click on
+the Cog icon and then click on <code>Edit Custom Properties</code>:</li>
+<li>Add or replace the following flags (to learn
+more: <a href="https://www.jetbrains.com/help/idea/tuning-the-ide.html#configure-platform-properties">Platform Properties | IntelliJ IDEA</a>):<pre>idea.max.intellisense.filesize=12500</pre>
+</li>
+</ol>
+</li>
+<li>Option 2; 2017 and prior versions may not include the options to setup
+your <code>VM Options</code> and <code>Properties</code> in the <code>configure</code> menu. Instead:<ol>
+<li><code>Create New Project</code></li>
+<li><code>Help</code> &gt; <code>Edit Custom VM Options</code></li>
+<li><code>Help</code> &gt; <code>Edit Custom Properties</code></li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<h2 id="creating-a-new-clion-project">Creating a new CLion project</h2>
+<ol>
+<li>Import project<ul>
+<li>At the startup dialog, select <code>Import Project</code> and select your <code>chromium</code>
+directory; this should be the parent directory to <code>src</code>. Selecting <code>src</code>
+instead would result in some CLion IDE files appearing in your repository.</li>
+</ul>
+</li>
+</ol>
+<h2 id="building-running-and-debugging-within-clion">Building, Running, and Debugging within CLion</h2>
+<p>Configure CLion to use ninja for building
+(see <a href="https://g3doc.corp.google.com/company/teams/chrome/linux_build_instructions.md">Linux Build Instructions</a>)</p>
+<h3 id="custom-build-targets">Custom Build Targets</h3>
+<p>A custom Build Target allows CLion to compile Chromium similarly to running
+ninja in the command line.</p>
+<h4 id="add-a-custom-build-target">Add a Custom Build Target</h4>
+<p>The first step is to add Ninja (specifically autoninja) as an external tool
+that will be used to create the build targets.</p>
+<ol>
+<li>Go to <code>Settings</code></li>
+<li>Then, to <code>Build, Execution, Deployment &gt; Custom Build Targets</code></li>
+<li>Click on the <code>+</code> sign to add a new build target.</li>
+<li>Fill the Name: <code>Default</code></li>
+<li>Next to <code>Build</code>, click on the three dots (<code>...</code>)</li>
+<li>Click on <code>+</code> to add an External Tool</li>
+<li>Fill the form:<ol>
+<li>Name: <code>autoninja - Default</code></li>
+<li>Program: <code>&lt;absolute path to depot_tools/autoninja&gt;</code></li>
+<li>Arguments: <code>-C out/Default chrome</code></li>
+<li>Working Directory: <code>&lt;absolute path to chromium/src&gt;</code></li>
+</ol>
+</li>
+<li>Click <code>Ok</code> to close the dialog.</li>
+</ol>
+<h4 id="rundebug-configuration">Run/Debug configuration</h4>
+<p>The build target configured in the previous section was necessary to configure
+the Run/Debug configuration.</p>
+<ol>
+<li>Click on the <code>Run</code> menu and then on <code>Edit Configurations</code>.</li>
+<li>Click on the <code>+</code> sign then on <code>Custom Build Application</code></li>
+<li>Fill the form:<ol>
+<li>Name: <code>Default</code></li>
+<li>Target: Select the <code>Default</code> build target that was created previously.</li>
+<li>Executable: Click the three dots (<code>...</code>) and select
+<code>src/out/Default/chrome</code></li>
+</ol>
+</li>
+<li>Click <code>Ok</code> to close the dialog.</li>
+</ol>
+<h3 id="configure-gdbinit">Configure <code>~/.gdbinit</code></h3>
+<p>Before being able to debug, you need to configure <code>~/.gdbinit</code>. Open it with a
+text editor and enter:</p>
+<pre>source &lt;path to chromium&gt;/src/tools/gdb/gdbinit</pre>
+<h3 id="set-the-local-gdb-executable">Set the local gdb executable</h3>
+<p>There have been some reports of slowness while debugging using CLion.
+It seems that using that CLion&#39;s bundled gdb executable is the culprit. To use
+the local one:</p>
+<ol>
+<li>Open <code>Settings</code></li>
+<li>Search for <code>Toolchains</code></li>
+<li>Next to <code>Debugger</code>, select <code>/usr/bin/gdb</code></li>
+</ol>
+<h4 id="run-chrome">Run Chrome!</h4>
+<p>You can now run chrome directly from CLion. You can also debug and add a
+breakpoint. Try it!</p>
+<p><code>Run</code> &gt; <code>Run</code> (<code>shift+f10</code>) or <code>Run</code> &gt; <code>Debug</code> (<code>shift+f9</code>) (screenshot)
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/clion_gui_debugging.png" alt="debugging screenshot"></p>
+<h2 id="autocompletion">Autocompletion</h2>
+<h3 id="approach-1-using-cmakelists">Approach 1: Using CMakeLists</h3>
+<p><strong>Note</strong>: It&#39;s possible that when you open the project, CLion created one for you.</p>
+<ol>
+<li>Create or Modify the <code>chromium/CMakeLists.txt</code> file<ol>
+<li>Open <code>chromium/CMakeLists.txt</code></li>
+<li>Add or Replace the content with:<pre>cmake_minimum_required(VERSION 3.10)
+project(chromium)
+
+set(CMAKE_CXX_STANDARD 14)
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/out/Default/gen)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/protobuf/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/googletest/src/googletest/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/googletest/src/googlemock/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/third_party/abseil-cpp)
+
+# The following file used is irrelevant, it's only to improve CLion
+# performance. Leaving at least 1 file is required in order for CLion
+# to provide code completion, navigation, etc.
+add_executable(chromium src/components/omnibox/browser/document_provider.cc)</pre>
+</li>
+</ol>
+</li>
+</ol>
+<h3 id="approach-2-compilation-database">Approach 2: Compilation database</h3>
+<p>Since Chromium does not use CMake to build, to “benefit from the advanced IDE
+features that CLion provides”, a
+<a href="https://www.jetbrains.com/help/clion/compilation-database.html">Compilation database</a>
+must be created to expose to CLion how Chromium is built.</p>
+<p>In the Chromium code source, there’s a python script
+<code>src/tools/clang/scripts/generate_compdb.py</code> that will generate
+the Compilation Database.</p>
+<p><strong>Note</strong>: The two approaches are not currently compatible and switching between
+one and the other is cumbersome. To go from approach 1 to 2, the
+<code>CMakeWorkspace</code> line from <code>.idea/misc.xml</code> must be removed first.</p>
+<ol>
+<li><p>Run from your <code>chromium</code> folder:</p>
+<pre>python3 src/tools/clang/scripts/generate_compdb.py -p src/out/Default -o ./compile_commands.json --target_os=linux</pre>
+<p>This generates the compilation database at <code>chromium/compile_commands.json</code>.</p>
+</li>
+<li><p>In CLion, select the <code>compile_commands.json</code> file in the project navigator,
+right-click on it, then click on <code>Load Compilation Database Project</code>.</p>
+<p><strong>Note:</strong> This step will produce a few hundred errors but it doesn&#39;t cause
+any issues. It&#39;s simply because some files are not compiled. To remove some
+errors, these flags can be added in <code>src/out/Default/args.gn</code>:</p>
+<pre>enable_nocompile_tests=true</pre>
+</li>
+<li><p>CLion will start processing the files and will start indexing the symbols.
+This step can take a few hours. To expedite this process, see the section
+<a href="#exclude-irrelevant-folders-from-indexing-to-speed-up-clion">Exclude irrelevant folders from indexing to speed up CLion</a>
+below.</p>
+</li>
+</ol>
+<h2 id="optional-steps">Optional Steps</h2>
+<h3 id="create-terminal-cli-or-desktop-entry">Create terminal cli or desktop entry</h3>
+<p>To make it easier to startup CLion or open individual files:</p>
+<ol>
+<li>Open the actions menu (<code>ctrl+shift+a</code>)</li>
+<li>Type <code>create desktop entry</code> and press <code>enter</code></li>
+<li>Open the actions menu and enter <code>create command-line launcher</code></li>
+</ol>
+<h3 id="exclude-irrelevant-folders-from-indexing-to-speed-up-clion">Exclude irrelevant folders from indexing to speed up CLion</h3>
+<p>Exclude folders that are irrelevant to your work from the indexing. Exclude at
+first the following folders and manually include the ones relevant to you. Open
+<code>chromium/.idea/misc.xml</code> and under <code>&lt;project&gt;</code> add or edit the following
+XML component:</p>
+<p><strong>Note</strong>: This step can be done from the UI in the Project view by selecting
+all the folders to exclude, right-clicking on them, selecting
+<code>Mark Directory As</code> and then selecting <code>Excluded</code>.</p>
+<pre>&lt;component name=&quot;CidrRootsConfiguration&quot;&gt;
+    &lt;excludeRoots&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/android_webview&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/apps&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/ash&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/build&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/build_overrides&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/buildtools&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/cc&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/chromecast&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/chromeos&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/codelabs&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/content&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/courgette&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/crypto&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/dbus&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/device&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/docs&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/extensions&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/fuchsia_web&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/gin&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/google_apis&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/google_update&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/gpu&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/headless&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/infra&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/ios&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/ipc&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/media&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/mojo&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/net&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/out&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/pdf&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/ppapi&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/printing&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/remoting&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/rlz&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/sandbox&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/services&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/skia&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/sql&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/storage&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/styleguide&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/testing&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/third_party&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/tools&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/ui&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/url&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/v8&quot; /&gt;
+      &lt;file path=&quot;$PROJECT_DIR$/src/venv&quot; /&gt;
+    &lt;/excludeRoots&gt;
+  &lt;/component&gt;</pre>
+<h3 id="mark-directories-as-library-files">Mark directories as <code>Library Files</code></h3>
+<p>To speed up CLion, optionally mark directories such as <code>src/third_party</code> as
+<code>Library Files</code></p>
+<ol>
+<li>Open the <code>Project</code> navigation (<code>alt+1</code>)</li>
+<li>Select and right-click the directories &gt; <code>Mark directory as</code> &gt;
+<code>Library Files</code></li>
+<li>See <code>https://blog.jetbrains.com/clion/2015/12/mark-dir-as/</code> for more details</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/clion.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/clion.md</a>
+  </p>
+</div>

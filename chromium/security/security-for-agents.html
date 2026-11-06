@@ -1,0 +1,347 @@
+<h1>Security for Agents</h1>
+<p>This document describes the fundamental security architecture and assumptions of
+Chromium, which is called the &quot;security model&quot; of Chromium. It also describes
+common types of violations of that model, which are attacks against Chromium.</p>
+<p>Some parts of this document make reference to V8 as well. V8 can be built as a
+standalone tool called &quot;d8&quot;, which is useful for finding or demonstrating some
+kinds of attacks.</p>
+<p>Notes for humans: this document is <strong>not</strong> part of the VRP rules or guidelines;
+it is advice for AI agents auditing Chromium for bugs.</p>
+<h2 id="security-architecture">Security Architecture</h2>
+<h3 id="processes--sandboxing">Processes &amp; Sandboxing</h3>
+<p>Chromium is separated into several processes, including the browser process, the
+GPU process, the network service process, and potentially many renderer and
+utility processes. Each process except the browser process is inside a
+&quot;sandbox&quot;, which uses primitives supplied by the OS to constrain what that
+process can do. The sandbox is different for each type of process. Renderer and
+utility processes have the strongest sandbox, the network and GPU processes have
+weaker sandboxes, and the browser process has no sandbox at all.</p>
+<p>Communication between processes happens over an IPC system named Mojo. Mojo
+sends messages between processes, with serialization and deserialization at
+either end, and can also pass file handles and some other kinds of object
+between processes. Mojo allows for interprocess calls to methods grouped
+together into interfaces, and not all interfaces are available to all callers.</p>
+<h3 id="site-isolation">Site Isolation</h3>
+<p>Site Isolation is a security architecture that locks some renderer processes to
+a specific site or origin. The process lock allows the browser processes to
+restrict the capabilities of a renderer process. Exactly which capabilities are
+restricted is documented in
+<a href="compromised-renderers"><code>compromised-renderers.md</code></a>.  These restrictions are
+designed to hold even if an attacker can run arbitrary native code in a renderer
+process (after exploiting a separate bug).  For more information about Site
+Isolation please read <code>//content/SECURITY.md</code>.</p>
+<p>If <code>compromised-renderers.md</code> documents that a compromised renderer cannot do
+something (e.g., spoof the <code>Sec-Fetch-Site</code> or <code>Origin</code> HTTP request headers),
+then bypassing this restriction is a security bug.</p>
+<p>If <code>compromised-renderers.md</code> does <em>not</em> document a particular restriction
+(e.g., it does not prohibit spoofing a <code>Referer</code> HTTP request header), then it
+is <em>not</em> a security bug if that restriction is not enforced (e.g., if the
+browser process allows arbitrary <code>Referer</code> header values).</p>
+<p>In some cases, omissions in <code>compromised-renderers.md</code> may be themselves
+considered a security bug.  Human judgement is required to evaluate such bugs,
+because updating the threat model needs to consider various design aspects -
+like 1) the subjective value of the additional security enforcement, 2) the
+feasibility of the enforcement (e.g. whether naive process-lock-based checks
+would block legitimate scenarios), and 3) the engineering and/or performance
+cost of the enforcement (e.g. the cost of re-architecting things in a way that
+avoids trusting renderer-provided values).  Because of the importance of the
+human judgement, AI agents should <strong>not</strong> report such bugs.</p>
+<h3 id="web-security">Web Security</h3>
+<p>The fundamental unit of isolation on the web is the &quot;origin&quot;. A &quot;page&quot; is the
+contents of a tab, which may be composed of content from multiple origins
+combined together. In general, scripts or other content from one origin
+shouldn&#39;t affect or see scripts or content from another origin, unless both
+origins opt into sharing.</p>
+<p>Inside Chromium, a WebContents represents a single loaded page, and may contain
+content from multiple origins which are hosted in separate RenderFrames.
+RenderFrames that are in different origins are usually in separate renderer
+processes, isolated from each other.</p>
+<p>When discussing attacks across origins, we sometimes use the example origins
+&quot;evil.com&quot; to mean an attacker&#39;s origin, and &quot;good.com&quot; to mean an origin they
+are trying to steal or corrupt data from. In this context, both origins are
+generally assumed to be loaded in Chromium at the same time, but in separate
+frames.</p>
+<h3 id="javascript--webassembly">Javascript &amp; Webassembly</h3>
+<p>Chromium exposes several ways for websites to run their own code on the user&#39;s
+machine. The two most common are Javascript and Webassembly. V8 is responsible
+for handling both of these, and V8 should ensure that code supplied by websites
+isn&#39;t able to have dangerous effects inside the renderer process, like
+corrupting memory or causing a use-after-free of an object.</p>
+<p>V8 compiles Javascript or Webassembly into native code to be executed by the
+CPU. V8 must guarantee that that native code it generates doesn&#39;t break certain
+safety properties, such as being unable to overwrite data structures that aren&#39;t
+meant to be exposed to Javascript.</p>
+<h3 id="builds--invariants">Builds &amp; Invariants</h3>
+<p>There are a few different possible build configurations of Chromium or of V8.
+The three that are most relevant for security purposes are:</p>
+<ul>
+<li>&quot;Release&quot;, which means <code>is_asan=false is_debug=false</code> in args.gn</li>
+<li>&quot;Debug&quot;, which means <code>is_asan=false is_debug=true</code> in args.gn</li>
+<li>&quot;ASAN&quot;, which means <code>is_asan=true is_debug=false</code> in args.gn</li>
+</ul>
+<p>There are several different ways that invariants in Chromium and V8 are
+enforced. The CHECK macro enforces an invariant even in released builds, and the
+DCHECK macro enforces an invariant in debug builds only. Some kinds of invariant
+violation, like indexing outside the bounds of a base::span, are also detected
+in release builds and cause an immediate crash.</p>
+<h2 id="attacks">Attacks</h2>
+<p>Every attack comes with a series of steps, which are generally supplied as a
+short program, called a &quot;proof of concept&quot;. A &quot;proof of concept&quot; provides
+evidence that a bug is present, and is not the same thing as an &quot;exploit&quot;, which
+makes use of a bug to achieve a malicious goal. A &quot;proof of concept&quot; is by
+definition harmless, but should have some objective and verifiable external
+effects to demonstrate that the bug is present.</p>
+<p>A security bug report (or vulnerability report) is a description of how to
+execute an attack. Every security bug report must take the form: &quot;An attacker
+can cause Chromium to [something which harms the user] by [attack steps].&quot; For
+example:</p>
+<ul>
+<li>An attacker can cause Chromium to <em>execute arbitrary code in the renderer
+sandbox</em> by <em>calling <code>window.foo(12345)</code></em>.</li>
+<li>An attacker can cause Chromium to <em>execute arbitrary code in the browser
+process</em> by <em>calling Mojo API <code>foo()</code></em>.</li>
+<li>An attacker can cause Chromium to <em>disclose a cookie from good.com</em> by
+<em>loading it in an iframe with the <code>foo</code> attribute set to <code>bar</code></em>.</li>
+</ul>
+<p>Unless you can clearly describe both the security harm to the user, and the
+attack steps, you do not have a security bug report.</p>
+<h3 id="escalated-code-execution">Escalated Code Execution</h3>
+<p>A security bug that allows for execution of arbitrary code of an attacker&#39;s
+choice outside of any sandbox (so in the browser process or elsewhere in the OS
+outside of Chromium) or in a sandbox weaker than the renderer sandbox (some
+target process) is the most severe category of attack. These bugs generally take
+two forms:</p>
+<ul>
+<li>Bugs in the [something] process that are reachable over IPC from the renderer
+process</li>
+<li>Bugs in the operating system itself that are reachable from inside the
+renderer sandbox</li>
+</ul>
+<p>For this kind of bug, the proof of concept must either:</p>
+<ul>
+<li>Cause the target process (which may be the browser process) to crash with an
+ASAN failure indicating an out-of-bounds read, out-of-bounds write,
+use-after-free, or use-after-poison, or</li>
+<li>Cause the target process to directly execute attacker-supplied machine code,
+or</li>
+<li>Cause an operating system service to crash, or</li>
+<li>Cause the operating system to execute an attacker-chosen program with
+attacker-supplied arguments</li>
+</ul>
+<p>To simulate a compromised renderer process, use the MojoJS feature by passing
+<code>--enable-features=MojoJS</code> to Chromium. This allows you to call Mojo methods
+from JavaScript. If that does not work for some reason, the proof of concept
+<strong>may</strong> be in the form of a patch intended to apply to the Chromium source tree.
+If so, this patch must modify code that is only executed in the renderer, to
+simulate a compromised renderer process.</p>
+<p>Anything that does not lead to one of these consequences is almost certainly not
+a valid proof of concept for an escalated code execution bug.</p>
+<h3 id="renderer-code-execution">Renderer Code Execution</h3>
+<p>A security bug that allows for execution of arbitrary code of an attacker&#39;s
+choice inside the renderer sandbox is a renderer code execution bug. These bugs
+generally take two forms:</p>
+<ul>
+<li>Bugs in the implementation of Chromium that allow a crafted webpage to corrupt
+memory</li>
+<li>Bugs in the implementation of V8 that cause a crafted Javascript or
+Webassembly program to be compiled into code which corrupts memory when run</li>
+</ul>
+<p>For V8, code compiled from attacker-supplied Javascript or Webassembly is
+executed inside a &quot;heap sandbox&quot;, which confines memory reads and writes
+performed by that compiled code to a certain region. Bugs which allow for
+reading or writing memory outside the heap sandbox are &quot;heap sandbox escapes&quot;
+and are very valuable bugs. Bugs which allow for reading or writing memory
+inside the heap sandbox are less valuable but still valuable.</p>
+<p>For this kind of bug, the proof of concept must either:</p>
+<ul>
+<li>Cause the renderer process to crash with an ASAN failure indicating an
+out-of-bounds read, out-of-bounds write, use-after-free, or use-after-poison,
+or</li>
+<li>Cause a debug renderer to crash with a DCHECK failure from V8</li>
+<li>Cause an ASAN build of d8 to crash with an ASAN failure</li>
+<li>Cause a debug build of d8 to crash with a DCHECK failure</li>
+</ul>
+<p>Not all DCHECK failures in V8 or d8 are security bugs, but many are, so to be
+conservative we assume that all of them are security bugs until we are confident
+they are not.</p>
+<p>Any proof of concept that uses d8 <strong>must</strong> use <code>--run-as-security-poc</code>, in
+addition to any other command-line arguments it needs. Proofs of concept that do
+not work with <code>--run-as-security-poc</code> are not security bugs.</p>
+<h3 id="cross-site-bugs">Cross-Site Bugs</h3>
+<p>A security bug that allows for one origin to either read data from another
+origin or run code in another origin is a cross-site bug. There are some
+intentional ways to share data between origins, but by default origins shouldn&#39;t
+be able to interact.</p>
+<p>A proof of concept of a cross-site bug must show that:</p>
+<ul>
+<li>evil.com can learn some text from the body of good.com that would only be
+visible with the user&#39;s cookies</li>
+<li>evil.com can cause a script of its choice to run in good.com&#39;s renderer</li>
+<li>evil.com can get the value of a cookie or HTML5 storage scoped to good.com</li>
+</ul>
+<h3 id="extension-bugs">Extension Bugs</h3>
+<p>A bug which allows an extension to take actions it shouldn&#39;t be able to is an
+extension security bug. Extensions have permissions defined in their
+manifest.json, and all extensions have certain implicit permissions like the
+ability to make network requests in their own context.</p>
+<p>For this kind of bug, the proof of concept is an extension which, when loaded,
+takes an action the extension should not be able to take.</p>
+<h3 id="other-bugs">Other Bugs</h3>
+<p>Any other bug which allows a website to cause Chromium to harm a user may be a
+security bug, even if it doesn&#39;t fit one of these categories. Any such bug needs
+a <strong>clear</strong> explanation of the security consequences of the bug, as well as who
+can exploit it. Such a bug also needs clear reproduction steps or an executable
+proof of concept.</p>
+<h2 id="non-bugs">Non-Bugs</h2>
+<p>There are some common kinds of reports which are <strong>not</strong> security bugs in
+Chromium:</p>
+<ul>
+<li>CHECK failures</li>
+<li>DCHECK failures outside V8</li>
+<li>Out-of-bounds accesses of STL containers or base::span via operator[]</li>
+<li>Null pointer reads and writes with small offsets (&lt;= 32 KiB)</li>
+<li>MiraclePtr-protected use-after-frees (those with &quot;MiraclePtr Status:
+PROTECTED&quot;)</li>
+<li>Denial-of-service bugs, including resource exhaustion, browser/GPU hangs, or
+even outright crashes</li>
+<li>Stack overflows</li>
+<li>Bypasses of enterprise policies</li>
+<li>Downloads not being classified as dangerous</li>
+<li>Any attack assuming local administrator access to the user&#39;s machine</li>
+<li>Any attack assuming a remote debug protocol connection to Chromium</li>
+<li>Bugs in other apps reachable via Intents or external URL handlers from
+Chromium</li>
+<li>Bugs in dependencies of Chromium which are not reachable in Chromium itself</li>
+<li>Bugs in tests</li>
+<li>Causing AI features in Chromium to emit misleading or harmful output by
+entering a crafted prompt</li>
+<li>Bugs that use an unsupported flag or feature, including:<ul>
+<li><code>--single-process</code></li>
+<li>any flag whose name contains <code>unsafe</code></li>
+<li>SwiftShader</li>
+</ul>
+</li>
+<li>Bugs that use d8, but don&#39;t reproduce with <code>--run-as-security-poc</code> added to
+the command line.</li>
+<li>Bugs that require an attacker to have created or dropped files onto the system
+in advance</li>
+<li>Bugs that require physical access of any kind</li>
+<li>Architectural weaknesses or missing layers of hardening / mitigation</li>
+<li>Attacks on Linux that require control of a process with an X11 connection,
+such as a compromised GPU process, and act through the X server (e.g. via
+XSETTINGS). See the <a href="x11-threat-model">X11 threat model</a>.</li>
+<li>Attacks that require a compromised child process whose sandbox currently
+permits write access to the user data directory (<code>DIR_USER_DATA</code>)—such as the
+macOS network service prior to <code>kTriggerNetworkDataMigration</code>
+(<a href="https://crbug.com/40214277">crbug.com/40214277</a>,
+<a href="https://crbug.com/567101748">crbug.com/567101748</a>)—to modify files, edit
+preferences (<code>Local State</code>), or plant symlinks/FIFOs in <code>DIR_USER_DATA</code> to
+subvert browser-process file operations. Browser-process accesses to
+<code>DIR_USER_DATA</code> are not a security boundary against processes that can write
+to <code>DIR_USER_DATA</code>.</li>
+</ul>
+<p>These are not security bugs, regardless of how easy they are to trigger. Under
+no circumstances is something matching an entry in this list a security bug.</p>
+<h2 id="reporting-bugs">Reporting Bugs</h2>
+<p>When reporting a bug:</p>
+<ul>
+<li>Do not log <em>anything</em> as part of your proof of concept. If your bug is
+legitimate, it must have external, observable consequences as described above.
+Log messages can be misleading, and we will ignore them when assessing your
+bug.</li>
+<li>Do not include stack traces which do not have symbol names. We cannot use
+these to debug or reproduce the report.</li>
+<li>Do not include your evaluations of CVSS scores or similar. Chromium uses a
+project-specific framework to evaluate severities and we ignore CVSS estimates
+from reporters.</li>
+<li>Do include these sections:<ul>
+<li>Written description of attack steps</li>
+<li>Symbolized ASAN stack trace or debug crash report, if relevant</li>
+<li>A short description of the security consequences of the attack, using the
+terms given above</li>
+<li>Which revision, build arguments (args.gn), and command-line flags you
+supplied</li>
+</ul>
+</li>
+<li>Your proof of concept should use minimal files with standard names:<ul>
+<li><p>For bugs that reproduce via d8, a single Javascript source file called
+&quot;poc.js&quot;</p>
+</li>
+<li><p>For bugs that reproduce via loading in Chromium, a single HTML source file
+called &quot;poc.html&quot;</p>
+</li>
+<li><p>For bugs that reproduce via loading in Chromium, but which cannot be
+served as a single static HTML file (for example, when custom HTTP headers
+or dynamic responses are required), provide both &quot;poc.html&quot; and a Python
+HTTP server called &quot;server.py&quot;.
+The reproduction environment places <code>poc.html</code> and <code>server.py</code> in a
+directory containing a <code>gen</code> symlink to the build&#39;s generated files, then
+runs:</p>
+<ol>
+<li><code>python3 server.py</code></li>
+<li><code>chrome http://localhost:8000/poc.html</code>
+Therefore, <code>server.py</code> must:</li>
+</ol>
+<ul>
+<li>Take no command-line arguments.</li>
+<li>Listen on port 8000 and serve <code>poc.html</code> at
+<code>http://localhost:8000/poc.html</code>.</li>
+<li>Only read <code>poc.html</code> and the Mojo bindings in <code>gen</code> from disk, serving
+the bindings unmodified under the <code>/gen/</code> URL path. All client-side HTML
+and JavaScript payloads should live in <code>poc.html</code> (or be generated
+dynamically by <code>server.py</code>).</li>
+<li>Never copy, vendor, or edit Mojo bindings. They load their dependencies
+by relative path and break when moved.</li>
+<li>Be only an HTTP server: serve payloads and set HTTP headers. It must not
+launch Chromium or modify Chromium&#39;s files or directories.</li>
+</ul>
+<p>The payload in <code>poc.html</code> imports bindings through <code>./gen/</code>:</p>
+<pre data-language="js">import {FooRemote} from './gen/path/to/foo.mojom.m.js';</pre>
+<p>Because <code>server.py</code> serves its own working directory, both <code>/poc.html</code> and
+<code>/gen/</code> resolve directly through <code>SimpleHTTPRequestHandler</code>:</p>
+<pre data-language="python">import http.server, os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))  # poc.html and ./gen live here
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # Add any custom headers required by the exploit, e.g.:
+        # self.send_header('Cross-Origin-Opener-Policy', 'same-origin')
+        # self.send_header('Cross-Origin-Embedder-Policy', 'require-corp')
+        super().end_headers()
+
+http.server.ThreadingHTTPServer(('', 8000), Handler).serve_forever()</pre>
+<p>To run the PoC locally, create the same symlink next to <code>server.py</code> and
+<code>poc.html</code>:
+<code>ln -s &lt;chromium-out-dir&gt;/gen gen</code>.</p>
+</li>
+<li><p>For bugs that simulate a compromised renderer with a source patch, a
+single unified diff called &quot;poc.patch&quot;. This patch must only change code
+that runs in the renderer.</p>
+</li>
+<li><p>For bugs that have a demonstration video, a single mp4 file called
+&quot;poc.mp4&quot;.</p>
+</li>
+</ul>
+</li>
+<li>If you are reporting an extension security bug specifically, attach <strong>all the
+files contained in the extension separately</strong>, along with the zipped extension  (a .crx file).</li>
+<li>You may also include your root-cause analysis, if you have one:<ul>
+<li>Identify the file, line, and function in Chromium which contain the bug</li>
+<li>Identify which Chromium commit you analyzed to find the bug</li>
+<li>Identify which Chromium commit introduced the bug</li>
+</ul>
+</li>
+</ul>
+<p>In general, a shorter bug report is better. Bug reports should be as short as
+possible, but no shorter.</p>
+<h2 id="further-reading">Further Reading</h2>
+<p>The docs/security directory contains other security-related documentation. You
+should also consult the README.md and SECURITY.md files for the directories you
+are looking for bugs in, if they are present.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/security-for-agents.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/security-for-agents.md</a>
+  </p>
+</div>

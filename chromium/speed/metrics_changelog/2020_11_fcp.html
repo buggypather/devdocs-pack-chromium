@@ -1,0 +1,22 @@
+<h1>First Contentful Paint Changes in M89</h1>
+<h2 id="changes-in-chrome-89">Changes in Chrome 89</h2>
+<p>In Chrome 89, an improvement was made to the code that reports First Contentful
+Paint to <a href="https://chromium.googlesource.com/chromium/src/+/main/services/metrics/ukm_api.md">URL-Keyed Metrics</a>.
+This change increases the number of reports of First Contentful Paint that Chrome
+receives right before the user closes a tab.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2552628">Source code for this change</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>We don&#39;t see any difference in the values produced by the metric after this
+change. However, after this change Chrome will now receive more reports of
+First Contentful Paint, which means that some sites which previously had too
+little data to be included in the
+<a href="https://developers.google.com/web/tools/chrome-user-experience-report">Chrome User Experience Report</a>
+will now be included, especially on desktop where tab switching is more common.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 89 is currently scheduled to be released the week of March 2, 2021.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_11_fcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_11_fcp.md</a>
+  </p>
+</div>

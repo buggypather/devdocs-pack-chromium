@@ -1,0 +1,79 @@
+<h1>How accessibility works</h1>
+<h2 id="overview">Overview</h2>
+<p>In modern operating systems, accessibility can be thought of as the set of
+features which allow for alternative interactions with the system. In practice,
+it is all about letting users work in the best way they can, regardless of
+ability or disability. Since users have almost an unbounded set of needs,
+accessibility has to constantly keep up and adapt to include increasing numbers
+of alternate interactions. It is this very challenge which gives accessibility
+at the level of an operating system such complexity, depth, and interest.</p>
+<p>For Chrome OS, this document will provide the reader with a technical survey of
+the major system components to give a good foundation for additional
+exploration.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/os/figures/architecture.png" alt="Chrome OS Accessibility Architecture: entities and how they relate to one
+another."></p>
+<p>At a glance, Chrome OS accessibility roughly decomposes into three major
+entities, separated by large abstractions like process boundaries or api layers.</p>
+<p>Through a slightly different lens, the three entities can also be thought of as the three major stakeholders in any accessibility interaction:</p>
+<ul>
+<li>accessibility feature: an assitive technology (AT) developer can produce services targeting a specific audience. For example, screen readers such as ChromeVox. The extension system serves as a rich runtime with apis to transform the user interface into something a user can use.</li>
+<li>frameworks: an operating system developer abstracts away low-level details to provide for a clean AT developer experience. In Chrome OS, this framework mainly comes by way of extension apis, though other internal api surfaces exist in C++ for Chromium developers as well. The apis are backed by libraries and executables run in native or sandboxed contexts.</li>
+<li>renderers: app developers and web page authors have their content executed and drawn on-screen. This is where all user interactions such as key events end up. The developers and authors here also expose accessibility information for an accessibility tree.</li>
+</ul>
+<h3 id="renderers">Renderers</h3>
+<p>A renderer as used by this document, is any component that draws to the
+screen. Some examples include Blink (for web content), ARC++ (for Android apps).</p>
+<p>Each of these renderers store an in-memory representation of their user
+interfaces. For Blink, this is the DOM or the render tree. For Android, this is
+the application view tree.</p>
+<p>In almost all modern renderers, there is an equivalent parallel structure, built
+off of the source of truth UI tree, called the accessibility tree. It is here
+where Chrome OS accessibility extracts all it needs.</p>
+<p>The accessibility tree is constructed and updated as the user interface changes
+in any way. Every single text change, scroll, load, and more gets
+represented. Likewise, every type of data provided by either a developer or the
+underlying framework is consumed and stored. This includes things like the
+rendered text, styling information, bounding boxes, tree relationships, and much
+more.</p>
+<p>When this construction finishes or updates with new content, the renderer will
+serialize the tree and prepare it for export out of process if needed. That
+moves the data to the framework entity below.</p>
+<p>For the web, PDF, and Android, renderers exist out of process. For the Aura
+windowing system, along with its Views toolkit, the accessible tree lives in the
+Ash process.</p>
+<h4 id="deep-dives">Deep dives</h4>
+<ul>
+<li><a href="../browser/how_a11y_works">Chrome web accessibility</a></li>
+</ul>
+<h3 id="frameworks">Frameworks</h3>
+<p>Here are a few key api surfaces on which accessibility depends.</p>
+<h4 id="public-apis">Public apis</h4>
+<ul>
+<li><a href="https://developer.chrome.com/docs/extensions/reference/automation/">chrome.automation</a></li>
+<li><a href="https://developer.chrome.com/docs/extensions/reference/tts/">chrome.tts</a></li>
+<li><a href="https://developer.chrome.com/docs/extensions/reference/ttsEngine/">chrome.ttsEngine</a></li>
+</ul>
+<h4 id="private-apis-only-available-in-component-accessibility-extensions">Private apis (only available in component accessibility extensions)</h4>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/common/extensions/api/accessibility_private.json">chrome.accessibilityPrivate</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/common/extensions/api/braille_display_private.webidl">chrome.brailleDisplayPrivate</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/common/extensions/api/speech_recognition_private.idl">chrome.speechRecognitionPrivate</a></li>
+</ul>
+<h4 id="libraries-and-system-executables">Libraries and system executables</h4>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/main/app-accessibility/brltty/">BRLTTY</a></li>
+<li><a href="https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/main/app-accessibility/googletts/">Chrome OS text-to-speeech</a></li>
+<li><a href="https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay/+/main/app-accessibility/espeak-ng/">Espeak text-to-speech</a></li>
+</ul>
+<h4 id="deep-dives-1">Deep dives</h4>
+<ul>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/how_tts_works.md">How text-to-speech works on Chrome OS (coming soon)</a>.</li>
+</ul>
+<h3 id="accessibility-features">Accessibility features</h3>
+<p>See <a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/how_a11y_features_work.md">How accessibility features work (coming soon)</a> for more details.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/how_a11y_works.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/how_a11y_works.md</a>
+  </p>
+</div>

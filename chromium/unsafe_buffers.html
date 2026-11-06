@@ -1,0 +1,522 @@
+<h1>The Unsafe Buffers Clang plugin.</h1>
+<p>Our compiler contains a <a href="https://github.com/chromium/chromium/blob/HEAD/tools/clang/plugins/UnsafeBuffersPlugin.cpp">plugin</a>
+which reports places in the code where unsafe buffer operations are present.</p>
+<h2 id="preventing-oob-by-removing-unsafe-buffers-operations">Preventing OOB by removing Unsafe Buffers operations.</h2>
+<p>Out-of-bounds (OOB) security bugs commonly happen through C-style pointers
+which have no bounds information associated with them. We can prevent such
+bugs by always using C++ containers. Furthermore, the plugin will warn
+warn about unsafe pointer usage that should be converted to containers.
+When an unsafe usage is detected, Clang prints a warning similar to</p>
+<pre>error: unsafe buffer access [-Werror,-Wunsafe-buffer-usage]</pre>
+<p>and directs developers to this file for more information. Several common
+<a href="#container_based-ecosystem">Techniques</a> for fixing these issues are presented
+later in this document.</p>
+<p>Clang documentation includes a guide to working with unsafe-buffer-usage
+warnings here: <a href="https://clang.llvm.org/docs/SafeBuffers.html">https://clang.llvm.org/docs/SafeBuffers.html</a></p>
+<h2 id="preventing-oob-by-removing-unsafe-libc-calls">Preventing OOB by removing unsafe libc calls.</h2>
+<p>OOB bugs also commonly happen through C-style library calls such as
+memcpy() and memset() where the programmer is responsible for specifying
+an (unchecked) length. In order to encourage safer alternatives, the
+plugin can warn about unsafe calls which should be converted to safer
+C++ alternatives. When an unsafe libc call is detected, Clang prints
+a warning similar to</p>
+<pre>error: function 'memcpy' is unsafe [-Werror,-Wunsafe-buffer-usage-in-libc-call]</pre>
+<h2 id="unsafe-buffer-warning-suppressions">Unsafe buffer warning suppressions</h2>
+<p>Because the Chromium codebase is not yet compliant with these warnings,
+there are mechanisms to opt out code on a directory, file, or per-occurence
+basis.</p>
+<p>By default, all files are checked for unsafe-buffer-usage.</p>
+<h3 id="opting-out-entire-directories">Opting out entire directories</h3>
+<p>Entire directories are opted out of unsafe buffer usage warnings through
+the <a href="https://github.com/chromium/chromium/blob/HEAD/build/config/unsafe_buffers_paths.txt"><code>//build/config/unsafe_buffers_paths.txt</code></a>
+file. As work progresses, directories will be removed from this list, and
+non-compliant files marked on a per-file basis as below. Early results
+indicate that often 85%+ of files in a directory already happen to be
+compliant, so file-by-file suppression allows this code to be subject
+to enforcement.</p>
+<p>This mechanism opts directories out of all warning categories (unsafe
+buffers and unsafe libc calls).</p>
+<h4 id="syntax-of-unsafe-buffer-paths-file">Syntax of Unsafe Buffer Paths file</h4>
+<p>Note: Paths should be written as relative to the root of the source tree with
+unix-style path separators. Directory prefixes should end with <code>/</code>, such
+as <code>base/</code>.</p>
+<p>Empty lines are ignored.</p>
+<p>The <code>#</code> character introduces a comment until the end of the line.</p>
+<p>Lines starting with <code>.</code> declare which checks are to be enforced, as
+a comma-separated list of values. Currently allowed values are <code>buffers</code>,
+<code>libc</code>, and <code>unique_ptr</code>.</p>
+<p>All other lines specify which paths are to be included/excluded.</p>
+<p>Lines that begin with <code>-</code> are immediately followed by path prefixes that
+will <em>not</em> be checked for unsafe-buffer-usage. They are known to do unsafe
+things and should be changed to use constructs like base::span or containers
+like base::HeapArray and std::vector instead. See <a href="https://crbug.com/40285824">https://crbug.com/40285824</a></p>
+<p>Lines that begin with <code>+</code> are immediately followed by path prefixes that will
+be checked for unsafe-buffer-usage. These have no such usage (or all such
+usage is annotated), and are protected against new unsafe pointer behaviour
+by the compiler. Generally, <code>+</code> lines are used to enable checks for
+sub-directories of a path that has previously disabled checks (with a
+<code>-</code> line).</p>
+<p>If a file matches both a <code>-</code> and <code>+</code> line, the longest matching prefix takes
+precedence.</p>
+<h4 id="removing-directories-from-unsafe-buffers-paths-file">Removing directories from Unsafe Buffers Paths file</h4>
+<p>The recommended process for removing a <code>-dir/</code> line from this file is:</p>
+<ol>
+<li><p>Remove the <code>-dir/</code> line from this paths file. Possibly add some subdirectories
+now needed to reduce scope, like <code>-dir/sub_dir/</code>.</p>
+</li>
+<li><p>Add <code>#pragma allow_unsafe_buffers</code> to every file in the directory that now
+has a compilation error (see the next section).</p>
+</li>
+</ol>
+<h3 id="opting-out-individual-files">Opting out individual files</h3>
+<p>Individual files are opted out of unsafe pointer usage warnings though
+the use of the following snippet, which is to be placed immediately
+following the copyright header in a source file.</p>
+<pre>#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/ABC): Remove this and convert code to safer constructs.
+#pragma allow_unsafe_buffers
+#endif</pre>
+<p>The above mechanism also suppress unsafe libc call warnings in addition
+to the unsafe buffer warnings.</p>
+<p>To prevent back-sliding on files which have been made safe with respect
+to unsafe buffers, there is now a per-file pragma which suppresses the
+libc warnings while still enforcing the unsafe buffer warnings.</p>
+<pre>#ifdef UNSAFE_BUFFERS_BUILD
+// TODO(crbug.com/ABC): Remove libc calls to fix these warnings.
+#pragma allow_unsafe_libc_calls
+#endif</pre>
+<p>An initial set of files containing allow_unsafe_libc_calls has been
+uploaded; please keep these in place until the pending libc enforcement
+is enabled for Chromium.</p>
+<h4 id="removing-pragmas-from-individual-files">Removing pragmas from individual files.</h4>
+<p>The recommended process for removing pragmas from individual files is:</p>
+<ol>
+<li><ol>
+<li>Remove the pragma from the file.</li>
+</ol>
+</li>
+<li><p>Use the compiler warnings now generated to identify the individual
+expressions to suppress (see the next section).</p>
+</li>
+</ol>
+<h3 id="opting-out-individual-expressions">Opting out individual expressions</h3>
+<p>Individual expressions or blocks of code are opted out by using the
+<code>UNSAFE_BUFFERS()</code> macro as defined in <a href="https://github.com/chromium/chromium/blob/HEAD/base/compiler_specific.h"><code>//base/compiler_specific.h</code></a>
+file. These should be rare once a project is fully converted, except
+perhaps when working with C-style external APIs. These must
+always be accompanied by a <code>// SAFETY:</code> comment explaining in detail
+how the code has been evaluated to be safe for all possible input.</p>
+<p>Code introducing <code>UNSAFE_BUFFERS()</code> macro invocations without corresponding
+<code>// SAFETY:</code> comment should be summarily rejected during code review.</p>
+<p>To allow for incremental conversion, code can be temporarily opted out by
+using the <code>UNSAFE_TODO()</code> macro. This provides the same functionality as
+the <code>UNSAFE_BUFFERS()</code> macro, but allows easier searching for code in need
+of revision.</p>
+<p>This mechanism opts expressions out of all warning categories (unsafe
+buffers and unsafe libc calls).</p>
+<h4 id="removing-unsafe_todo-from-individual-expressions">Removing UNSAFE_TODO() from individual expressions</h4>
+<p>We seek to convert code to use owning containers like HeapArray and vector,
+as explained in the next section.</p>
+<h2 id="container-based-ecosystem">Container-based ecosystem</h2>
+<p>Containers may be owning types or view types. The common owning containers that
+us contiguous storage are <code>std::vector</code>, <code>std::string</code>, <code>base::HeapArray</code>,
+<code>std::array</code>. Their common view types are <code>base::span</code>, <code>std::string_view</code>,
+<code>base::cstring_view</code>.</p>
+<p>Other owning containers include maps, sets, deques, etc. These are not
+compatible with <code>base::span</code> as they are not contiguous and generally do not
+have an associated view type at this time.</p>
+<p>We are using <code>base::span</code> instead of <code>std::span</code> in order to provide a type that
+can do more than the standard type. We also have other types and functions to
+work with ranges and spans instead of unbounded pointers and iterators.</p>
+<p>The common conversions to spans are:</p>
+<ul>
+<li><code>base::span&lt;T&gt;</code> replaces <code>T* ptr, size_t size</code>.</li>
+<li><code>base::span&lt;T, N&gt;</code> replaces <code>T (&amp;ptr)[N]</code> (a reference to a compile-time-sized
+array).</li>
+<li><code>base::raw_span&lt;T&gt;</code> replaces <code>base::span&lt;T&gt;</code> (and <code>T* ptr, size_t size</code>) for
+class fields.</li>
+</ul>
+<h3 id="span-construction">Span construction</h3>
+<ul>
+<li><code>base::span()</code> makes a span, deducing the type and size, from any contiguous
+range. It can also take explicit begin/end or data/size pairs.</li>
+<li><code>base::to_fixed_extent&lt;N&gt;()</code> makes a fixed-size span from a dynamic one.</li>
+<li><code>base::as_bytes()</code> and <code>base::as_chars()</code> convert a span’s inner type to
+ <code>uint8_t</code> or <code>char</code> respectively, making a byte-span or char-span.</li>
+<li><code>base::span_from_ref()</code> and <code>base::byte_span_from_ref()</code> make a span, or
+byte-span, from a single object.</li>
+<li><code>base::as_byte_span()</code> and <code>base::as_writable_byte_span()</code> make a
+byte-span from any contiguous range.</li>
+</ul>
+<h4 id="padding-bytes">Padding bytes</h4>
+<p>Note that if the type contains padding bytes that were not somehow explicitly
+initialized, this can create reads of uninitialized memory. Conversion to a
+byte-span is most commonly used for spans of primitive types, such as going from
+<code>char</code> (such as in <code>std::string</code>) or <code>uint32_t</code> (in a <code>std::vector</code>) to
+<code>unit8_t</code>.</p>
+<h3 id="dynamic-readwrite-of-a-span">Dynamic read/write of a span</h3>
+<ul>
+<li><code>base::SpanReader</code> reads heterogeneous values from a (typically, byte-) span
+in a dynamic manner.</li>
+<li><code>base::SpanWriter</code> writes heterogeneous values into a (typically, byte-) span
+in a dynamic manner.</li>
+</ul>
+<h3 id="values-tofrom-byte-spans">Values to/from byte spans</h3>
+<p>In <a href="https://github.com/chromium/chromium/blob/HEAD/base/numerics/byte_conversions.h"><code>//base/numerics/byte_conversions.h</code></a>
+we have conversions between byte-arrays and big/little endian integers or
+floats. For example (and there are many other variations):</p>
+<ul>
+<li><code>base::U32FromBigEndian</code> converts from a big-endian byte-span to an unsigned
+32-bit integer.</li>
+<li><code>base::U32FromLittleEndian</code> converts from a little-endian byte-span to an
+unsigned</li>
+<li><code>base::U32ToBigEndian</code> converts from an integer to a big-endian-encoded
+4-byte-array.</li>
+<li><code>base::U32ToLittleEndian</code> converts from an integer to a little-endian-encoded
+4-byte-array.</li>
+</ul>
+<h3 id="heap-allocated-arrays">Heap-allocated arrays</h3>
+<ul>
+<li><code>base::HeapArray&lt;T&gt;</code> replaces <code>std::unique_ptr&lt;T[]&gt;</code> and places the bounds of
+the array inside the <code>HeapArray</code> which makes it a bounds-safe range.</li>
+</ul>
+<h3 id="copying-and-filling-arrays">Copying and filling arrays</h3>
+<ul>
+<li><code>base::span::copy_from(span)</code> replaces <code>memcpy</code> and <code>memmove</code>, and verifies
+that the source and destination spans have the same size instead of writing
+out of bounds. It lowers to the same code as <code>memmove</code> when possible.<ul>
+<li>Note <code>std::ranges::copy</code> is not bounds-safe (though its name sounds like
+it should be).</li>
+</ul>
+</li>
+<li><code>std::ranges::fill</code> replaces <code>memset</code> and works with a range so you don&#39;t
+need explicit bounds.</li>
+</ul>
+<h3 id="string-pointers">String pointers</h3>
+<p>A common form of pointer is <code>const char*</code> which is used (sometimes) to represent
+a NUL-terminated string. The standard library gives us two types to replace
+<code>char*</code>, which allow us to know the bounds of the character array and work with
+the string as a range:</p>
+<ul>
+<li><code>std::string</code> owns a NUL-terminated string.</li>
+<li><code>std::string_view</code> is a view of a non-NUL-terminated string.</li>
+</ul>
+<p>What’s missing is a view of a string that is guaranteed to be NUL-terminated so
+that you can call <code>.c_str()</code> to generate a <code>const char*</code> suitable for C APIs.</p>
+<ul>
+<li><code>base::cstring_view</code> is a view of a NUL-terminated string. This avoids the
+need to construct a <code>std::string</code> in order to ensure a terminating NUL is
+present. Use this as a view type whenever your code bottoms out in a C API
+that needs NUL-terminated string pointer.</li>
+</ul>
+<h3 id="use-of-stdarray">Use of std::array<T>.</h3>
+<p>The clang plugin is very particular about indexing a C-style array (e.g.
+<code>int arr[100]</code>) with a variable index. Often these issues can be resolved
+by replacing this with <code>std::array&lt;int, 100&gt; arr</code>, which provides safe
+indexed operations. In particular, new code should prefer to use the
+<code>std::array&lt;T, N&gt;</code> mechanism.</p>
+<p>For arrays where the size is determined by the compiler (e.g.
+<code>int arr[] = { 1, 3, 5 };</code>), the <code>std::to_array&lt;T&gt;()</code> helper function
+should be used along with the <code>auto</code> keyword:
+<code>auto arr = std::to_array&lt;int&gt;({1, 3, 5});</code></p>
+<h3 id="avoid-reinterpret_cast">Avoid reinterpret_cast</h3>
+<p>Casts to bytes are common and can be handled as follows.</p>
+<h4 id="writing-to-a-byte-span">Writing to a byte span</h4>
+<p>A common idiom in older code is to write into a byte array by casting
+the array into a pointer to a larger type (such as <code>uint32_t</code> or <code>float</code>)
+and then writing through that pointer. This can result in Undefined Behaviour
+and violates the rules of the C++ abstract machine.</p>
+<p>Instead, keep the byte array as a <code>base::span&lt;uint8_t&gt;</code>, and write to it
+directly by chunking it up into pieces of the size you want to write.</p>
+<p>Using <code>take_first()</code> (good for repeated modifications and loops):</p>
+<pre data-language="cc">void write_floats(base::span&lt;uint8_t&gt; out, float f1, float f2) {
+  // Write `f1` into `out`'s prefix, moving `out` forward.
+  out.take_first&lt;4&gt;().copy_from(base::byte_span_from_ref(f1));
+  // Write `f2` into `out`'s new prefix (after `f1`).
+  out.copy_prefix_from(base::byte_span_from_ref(f2));
+}</pre>
+<p>Using <code>split_at()</code> (good when there are exactly two pieces):</p>
+<pre data-language="cc">void write_floats(base::span&lt;uint8_t&gt; out, float f1, float f2) {
+  // Split `out` into a prefix to write `f1` into, and a remainder.
+  auto [write_f1, rem] = out.split_at&lt;4&gt;();
+  // Write `f1` into the prefix portion, `write_f1`.
+  write_f1.copy_from(base::byte_span_from_ref(f1));
+  // Write `f2` into the beginning of the remainder.
+  rem.copy_prefix_from(base::byte_span_from_ref(f2));
+}</pre>
+<p>Using <code>SpanWriter</code> and endian-aware <code>FloatToLittleEndian()</code> (good when non-fatal
+APIs are desired):</p>
+<pre data-language="cc">void write_floats(base::span&lt;uint8_t&gt; out, float f1, float f2) {
+  auto writer = base::SpanWriter(out);
+  CHECK(writer.Write(base::FloatToLittleEndian(f1)));
+  CHECK(writer.Write(base::FloatToLittleEndian(f2)));
+}</pre>
+<p>Writing big-endian, with <code>SpanWriter</code> and endian-aware <code>U32ToBigEndian()</code>:</p>
+<pre data-language="cc">void write_values(base::span&lt;uint8_t&gt; out, uint32_t i1, uint32_t i2) {
+  auto writer = base::SpanWriter(out);
+  CHECK(writer.Write(base::U32ToBigEndian(i1)));
+  // SpanWriter has a built-in shortcut to do the same thing.
+  CHECK(writer.WriteU32BigEndian(i2));
+  // Verify we wrote to the whole output. We can put a size parameter in the
+  // `out` span to push this check to compile-time when it's a constant.
+  CHECK_EQ(writer.remaining(), 0u);
+}</pre>
+<p>Writing an array to a byte span with <code>copy_from()</code>:</p>
+<pre data-language="cc">void write_floats(base::span&lt;uint8_t&gt; out, std::vector&lt;const float&gt; floats) {
+  base::span&lt;const uint8_t&gt; byte_floats = base::as_byte_span(floats);
+  // Or use copy_from() if you want to CHECK at runtime that all of `out` has
+  // been written to.
+  out.copy_prefix_from(byte_floats);
+}</pre>
+<h4 id="reading-from-a-byte-span">Reading from a byte span</h4>
+<p>Instead of turning a <code>span&lt;const uint8_t&gt;</code> into a pointer of a larger type,
+which can cause Undefined Behaviour, read values out of the byte span and
+convert each one as a value (not as a pointer).</p>
+<p>Using <code>take_first()</code> and endian-aware conversion <code>FloatFromLittleEndian</code>:</p>
+<pre data-language="cc">void read_floats(base::span&lt;const uint8_t&gt; in, float&amp; f1, float&amp; f2) {
+  f1 = base::FloatFromLittleEndian(in.take_first&lt;4&gt;());
+  f2 = base::FloatFromLittleEndian(in.take_first&lt;4&gt;());
+}</pre>
+<p>Using <code>SpanReader</code> and endian-aware <code>U32FromBigEndian()</code>:</p>
+<pre data-language="cc">void read_values(base::span&lt;const uint8_t&gt; in, int&amp; i1, int&amp; i2, int&amp; i3) {
+  auto reader = base::SpanReader(in);
+  i1 = base::U32FromBigEndian(*reader.Read&lt;4&gt;());
+  i2 = base::U32FromBigEndian(*reader.Read&lt;4&gt;());
+  // SpanReader has a built-in shortcut to do the same thing.
+  CHECK(reader.ReadU32BigEndian(i3));
+  // Verify we read the whole input. We can put a size parameter in the `in`
+  // span to push this check to compile-time when it's a constant.
+  CHECK_EQ(reader.remaining(), 0u);
+}</pre>
+<h2 id="patterns-for-spanification">Patterns for spanification</h2>
+<p>Most pointer issues ought to be resolved by converting to containers. In
+particular, one common conversion is to replace <code>T*</code> pointers with
+<code>base::span&lt;T&gt;</code> in a process known as spanification, since most pointers
+are unowned references into an array (or vector). The appropriate
+replacement for the pointer is
+<a href="https://github.com/chromium/chromium/blob/HEAD/base/containers/span.h"><code>base::span</code></a>.</p>
+<h3 id="copying-arrays-memcpy">Copying arrays (<code>memcpy</code>)</h3>
+<p>You have:</p>
+<pre data-language="cc">uint8_t array1[12];
+uint8_t array2[16];
+uint64_t array3[2];
+memcpy(array1, array2 + 8, 4);
+memcpy(array1 + 4, array3, 8);</pre>
+<p>Spanified:</p>
+<pre data-language="cc">uint8_t array1[12];
+uint8_t array2[16];
+uint64_t array3[2];
+base::span&lt;uint8_t&gt; span1(array1);
+span1.take_first&lt;4&gt;().copy_from(base::span(array2).subspan&lt;8, 4&gt;());
+span1.copy_from(base::as_byte_span(array3).first&lt;8&gt;());
+
+// Use `split_at()` to ensure `array1` is fully written.
+auto [from2, from3] = base::span(array1).split_at&lt;4&gt;();
+from2.copy_from(base::span(array2).subspan&lt;8, 4&gt;());
+from3.copy_from(base::as_byte_span(array3).first&lt;8&gt;());</pre>
+<h3 id="zeroing-arrays-memset">Zeroing arrays (<code>memset</code>)</h3>
+<p><code>std::ranges::fill</code> works on any range/container and won&#39;t write out of
+bounds. Converting arbitrary types into a byte array (through
+<code>base::as_writable_byte_span</code>) is only valid when the type holds trivial
+types such as primitives. Unlike <code>memset</code>, a constructed object can be
+given as the value to use as in <code>std::ranges_fill(container, Object())</code>.</p>
+<p>You have:</p>
+<pre data-language="cc">uint8_t array1[12];
+uint64_t array2[2];
+Object array3[4];
+memset(array1, 0, 12);
+memset(array2, 0, 2 * sizeof(uint64_t));
+memset(array3, 0, 4 * sizeof(Object));</pre>
+<p>Spanified:</p>
+<pre data-language="cc">uint8_t array1[12];
+uint64_t array2[2];
+Object array3[4];
+std::ranges::fill(array1, 0);
+std::ranges::fill(array2, 0);
+std::ranges::fill(base::as_writable_byte_span(array3), 0);</pre>
+<h3 id="comparing-arrays-memcmp">Comparing arrays (<code>memcmp</code>)</h3>
+<p>You have:</p>
+<pre data-language="cc">uint8_t array1[12] = {};
+uint8_t array2[12] = {};
+bool eq = memcmp(array1, array2, sizeof(array1)) == 0;
+bool less = memcmp(array1, array2, sizeof(array1)) &lt; 0;
+
+// In tests.
+for (size_t i = 0; i &lt; sizeof(array1); ++i) {
+  SCOPED_TRACE(i);
+  EXPECT_EQ(array1[i], array2[i]);
+}</pre>
+<p>Spanified:</p>
+<pre data-language="cc">uint8_t array1[12] = {};
+uint8_t array2[12] = {};
+// If one side is a span, the other will convert to span too.
+bool eq = base::span(array1) == array2;
+bool less = base::span(array1) &lt; array2;
+
+// In tests.
+EXPECT_EQ(base::span(array1), array2);</pre>
+<h3 id="copying-array-into-an-integer">Copying array into an integer</h3>
+<p>You have:</p>
+<pre data-language="cc">uint8_t array[44] = {};
+uint32_t v1;
+memcpy(&amp;v1, array, sizeof(v1));  // Front.
+uint64_t v2;
+memcpy(&amp;v2, array + 6, sizeof(v2));  // Middle.</pre>
+<p>Spanified:</p>
+<pre data-language="cc">#include &quot;base/numerics/byte_conversions.h&quot;
+...
+uint8_t array[44] = {};
+uint32_t v1 = base::U32FromLittleEndian(base::span(array).first&lt;4u&gt;());  // Front.
+uint64_t v2 = base::U64FromLittleEndian(base::span(array).subspan&lt;6u, 8u&gt;());  // Middle.</pre>
+<h3 id="copy-an-array-into-an-integer-via-cast">Copy an array into an integer via cast</h3>
+<p>Note: This pattern is prone to more UB than out-of-bounds access. It is UB to
+cast pointers if the result is not aligned, so these cases are often buggy or
+were only correct due to subtle assumptions on buffer alignment. The spanified
+version avoids this pitfalls. It has no alignment requirement.</p>
+<p>You have:</p>
+<pre data-language="cc">uint8_t array[44] = {};
+uint32_t v1 = *reinterpret_cast&lt;const uint32_t*&gt;(array);  // Front.
+uint64_t v2 = *reinterpret_cast&lt;const uint64_t*&gt;(array + 16);  // Middle.</pre>
+<p>Spanified:</p>
+<pre data-language="cc">#include &quot;base/numerics/byte_conversions.h&quot;
+...
+uint8_t array[44] = {};
+uint32_t v1 = base::U32FromLittleEndian(base::span(array).first&lt;4u&gt;());  // Front.
+uint64_t v2 = base::U64FromLittleEndian(base::span(array).subspan&lt;16u, 8u&gt;());  // Middle.</pre>
+<h3 id="making-a-byte-array-spanuint8_t-from-a-string-or-any-arrayrange">Making a byte array (<code>span&lt;uint8_t&gt;</code>) from a string (or any array/range)</h3>
+<p>You have:</p>
+<pre data-language="cc">std::string str = &quot;hello world&quot;;
+func_with_const_ptr_size(reinterpret_cast&lt;const uint8_t*&gt;(str.data()), str.size());
+func_with_mut_ptr_size(reinterpret_cast&lt;uint8_t*&gt;(str.data()), str.size());</pre>
+<p>Spanified:</p>
+<pre data-language="cc">std::string str = &quot;hello world&quot;;
+base::span&lt;const uint8_t&gt; bytes = base::as_byte_span(str);
+func_with_const_ptr_size(bytes.data(), bytes.size());
+base::span&lt;uint8_t&gt; mut_bytes = base::as_writable_byte_span(str);
+func_with_mut_ptr_size(mut_bytes.data(), mut_bytes.size());
+
+// Replace pointer and size with a span, though.
+func_with_const_span(base::as_byte_span(str));
+func_with_mut_span(base::as_writable_byte_span(str));</pre>
+<h3 id="making-a-byte-array-spanuint8_t-from-an-object">Making a byte array (<code>span&lt;uint8_t&gt;</code>) from an object</h3>
+<p>You have:</p>
+<pre data-language="cc">uint8_t array[8];
+uint64_t val;
+two_byte_arrays(array, reinterpret_cast&lt;const uint8_t*&gt;(&amp;val));</pre>
+<p>Spanified:</p>
+<pre data-language="cc">uint8_t array[8];
+uint64_t val;
+base::span&lt;uint8_t&gt; val_span = base::byte_span_from_ref(val);
+two_byte_arrays(array, val_span.data());
+
+// Replace an unbounded pointer a span, though.
+two_byte_spans(base::span(array), base::byte_span_from_ref(val));</pre>
+<h3 id="avoid-stdnext-for-silencing-warnings-use-ranges">Avoid std::next() for silencing warnings, use ranges</h3>
+<p>When we convert <code>pointer + index</code> to <code>std::next(pointer, index)</code> we silence the
+<code>Wunsafe-buffer-usage</code> warning by pushing the unsafe pointer arithmetic into
+the <code>std::next()</code> function in a system header, but we have the same unsafety.
+<code>std::next()</code> does no additional bounds checking.</p>
+<p>Instead of using <code>std::next()</code>, rewrite away from using pointers (or iterators)
+entirely by using ranges. <code>span()</code> allows us to take a subset of a contiguous
+range without having to use iterators that we move with arithmetic or
+<code>std::next()</code>.</p>
+<p>Likewise, <code>std::advance()</code> can silence the warning but does not add any safety
+to the pointer arithmetic and should be avoided.</p>
+<p>Instead of using pointer/iterator arithmetic:</p>
+<pre data-language="cc">// Unsafe buffers warning on the unchecked arithmetic.
+auto it = std::find(vec.begin() + offset, vec.end(), 20);
+// No warning... But has the same security risk!
+auto it = std::find(std::next(vec.begin(), offset), vec.end(), 20);</pre>
+<p>Use a range, with <code>span()</code> providing a view of a subset of the range:</p>
+<pre data-language="cc">auto it = std::ranges::find(base::span(vec).subspan(offset), 20);</pre>
+<h3 id="identifying-span-bounds-checking">Identifying span bounds-checking</h3>
+<p>The bounds-checking that is built into the span operations is often elided
+by the compiler at build time. Even when they remain, the cost of a branch
+not taken is typically negligible on any modern CPU. However, given a
+situation where &quot;spans are slow&quot;, the checks that remain can be identified
+via warnings at compile time. The GN args that control this are:</p>
+<pre>is_debug = false  # Must run an optimized build
+treat_warnings_as_errors = false  # Numerous warnings abound.
+enable_check_elision_warning = true</pre>
+<p>Such a build will produce voluminous output as these checks can&#39;t always
+be elided, but investigation will often reveal subtle bugs. Here&#39;s a
+case study:</p>
+<pre data-language="cc">  for (size_t i = 0; i &lt; data.size();) {
+    uint8_t length = data[i];
+    if (i + length &gt;= data.size()) {
+      return nullptr;
+    }
+    texts_.emplace_back(
+        base::as_string_view(base::as_chars(data.subspan(i + 1, length))));
+    i += length + 1;
+  }</pre>
+<p>This produced the chain of warnings:</p>
+<pre>warning: call to 'base::check_not_elided()' declared with 'warning' attribute: check not elided [-Wattribute-warning]
+ 1379 |      SPAN_BOUNDS_CHECK(size_type{offset} &lt;= size() &amp;&amp;
+      |      ^
+note: expanded from macro 'SPAN_BOUNDS_CHECK'
+  294 |      base::check_not_elided(); \
+      |      ^
+note: called by function 'subspan'
+note: inlined by function 'Create'
+  246 |          base::as_string_view(base::as_chars(data.subspan(i + 1, length))));
+      |                                                   ^</pre>
+<p>Take a moment and ponder about why the logic above might not be good
+enough to avoid a bounds check in subspan().</p>
+<p>Hint: The compiler can&#39;t know that data.size() isn&#39;t enormous.
+Hint: Hence i + length might overflow and not return early.
+Hint: Hence i + 1 might not overflow and be out of bounds.</p>
+<p>This is of course fixed by:</p>
+<pre data-language="cc">    if (length &gt;= data.size() - i) {
+       return nullptr;
+     }</pre>
+<p>since we know i &lt; data.size(), data.size() - i can&#39;t underflow.</p>
+<p>Tip: AI models are good at explaining these findings.</p>
+<h3 id="functions-with-array-pointer-parameters">Functions with array pointer parameters</h3>
+<p>Functions that receive a pointer argument into an array may read
+or write out of bounds of that array if subsequent manual size
+calculations are incorrect. Such functions should be avoided if
+possible, or marked with the <code>UNSAFE_BUFFER_USAGE</code> attribute macro
+otherwise.  This macro propagates to their callers that they must
+be called from inside an <code>UNSAFE_BUFFERS()</code> region (along with
+a corresponding safety comment explaining how the caller knows
+the call will be safe).</p>
+<p>The same is true for functions that accept an iterator instead
+of a range type. Some examples of each are <code>memcpy()</code> and
+<code>std::copy()</code>.</p>
+<p>Again, calling such functions is unsafe and should be avoided.
+Replace such functions with an API built on base::span
+or other range types which prevents any chance of OOB memory
+access. For instance, replace <code>memcpy()</code>, <code>std::copy()</code> and
+<code>std::ranges::copy()</code> with <code>base::span::copy_from()</code>. And
+replace <code>memset()</code> with <code>std::ranges::fill()</code>.</p>
+<h3 id="aligned-memory">Aligned memory</h3>
+<p>An aligned heap allocation can be constructed into a <code>base::HeapArray</code> through
+the <code>base::AlignedUninit&lt;T&gt;(size, alignment)</code> function in
+<code>//base/memory/aligned_memory.h</code>. It will allocate space for <code>size</code> many <code>T</code>
+objects aligned to <code>alignment</code>, and return a <code>base::AlignedHeapArray&lt;T&gt;</code> which
+is a <code>base::HeapArray</code> with an appropriate deleter. Note that the returned
+memory is uninitialized.</p>
+<pre data-language="cc">base::AlignedHeapArray&lt;float&gt; array = base::AlignedUninit&lt;float&gt;(size, alignment);</pre>
+<p>Some containers are built on top of buffers of <code>char</code>s that are aligned for
+some other <code>T</code> in order to manage the lifetimes of objects in the buffer
+through in-place construction (<code>std::construct_at</code>) and destruction. While the
+memory is allocated and destroyed as <code>char*</code>, it is accessed as <code>T*</code>. The
+<code>base::AlignedUninitCharArray&lt;T&gt;(size, alignment)</code> function in
+<code>//base/memory/aligned_memory.h</code> handles this by returning both:</p>
+<ul>
+<li>A <code>base::AlignedHeapArray&lt;char&gt;</code> that will not call destructors on anything in its
+buffer.</li>
+<li>A <code>base::span&lt;T&gt;</code> that points to all of the (not-yet-created) objects in the
+<code>AlignedHeapArray</code>. This span can be used to construct <code>T</code> objects in place in the
+buffer, and the caller is responsible for destroying them as well.</li>
+</ul>
+<pre data-language="cc">auto [a, s] = base::AlignedUninitCharArray&lt;float&gt;(size, alignment);
+base::AlignedHeapArray&lt;char&gt; array = std::move(a);
+base::span&lt;float&gt; span = s;</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/unsafe_buffers.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/unsafe_buffers.md</a>
+  </p>
+</div>

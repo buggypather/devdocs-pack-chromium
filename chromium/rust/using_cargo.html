@@ -1,0 +1,22 @@
+<h1>Using cargo</h1>
+<p>If you&#39;re building a tool that&#39;s meant to integrate with Chromium, you should
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/README.md#first-party-crates">use our build system</a>
+(<code>gn</code> and <code>ninja</code>)</p>
+<p>However, if you are building a throwaway or experimental tool, you might like to
+use pure <code>cargo</code> tooling instead. Even then, you may choose
+to restrict yourself to the toolchain and crates that are already approved for
+use in Chromium, by:</p>
+<ul>
+<li>Using <code>tools/crates/run_cargo.py</code> (which will use
+Chromium&#39;s <code>//third_party/rust-toolchain/bin/cargo</code>)</li>
+<li>Configuring <code>.cargo/config.toml</code> to ask to use the crates vendored
+into Chromium&#39;s <code>//third_party/rust/chromium_crates_io</code>.</li>
+</ul>
+<p>An example of how this works can be found in
+<a href="https://crrev.com/c/6320795/5">https://crrev.com/c/6320795/5</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/using_cargo.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/using_cargo.md</a>
+  </p>
+</div>

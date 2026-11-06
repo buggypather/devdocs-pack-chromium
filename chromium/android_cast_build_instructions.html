@@ -1,0 +1,149 @@
+<h1>Checking out and building Cast for Android</h1>
+<p><strong>Note</strong>: it is <strong>not possible</strong> to build a binary functionally equivalent to a
+Chromecast. This is to build a single-page content embedder with similar
+functionality to Cast products.</p>
+<h2 id="instructions-for-google-employees">Instructions for Google Employees</h2>
+<p>Are you a Google employee? See
+<a href="https://goto.google.com/building-android-cast">go/building-android-cast</a>
+instead.</p>
+<h2 id="system-requirements">System requirements</h2>
+<ul>
+<li>An x86-64 machine running Linux with at least 8GB of RAM. More than 16GB is
+highly recommended.</li>
+<li>At least 100GB of free disk space.</li>
+<li>You must have Git and Python installed already.</li>
+</ul>
+<p>Most development is done on Ubuntu. Other distros may or may not work; see the
+<a href="linux/build_instructions">Linux instructions</a> for some suggestions.</p>
+<p>Building the Android client on Windows or Mac is not supported and doesn&#39;t work.</p>
+<h2 id="install-depot_tools">Install <code>depot_tools</code></h2>
+<p>Clone the <code>depot_tools</code> repository:</p>
+<pre data-language="shell">$ git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git</pre>
+<p>Add <code>depot_tools</code> to the end of your PATH (you will probably want to put this in
+your <code>~/.bashrc</code> or <code>~/.zshrc</code>). Assuming you cloned <code>depot_tools</code> to
+<code>/path/to/depot_tools</code>:</p>
+<pre data-language="shell">$ export PATH=&quot;$PATH:/path/to/depot_tools&quot;</pre>
+<h2 id="get-the-code">Get the code</h2>
+<p>Create a <code>chromium</code> directory for the checkout and change to it (you can call
+this whatever you like and put it wherever you like, as long as the full path
+has no spaces):</p>
+<pre data-language="shell">$ mkdir ~/chromium &amp;&amp; cd ~/chromium
+$ fetch --nohooks android</pre>
+<p>If you don&#39;t want the full repo history, you can save a lot of time by adding
+the <code>--no-history</code> flag to <code>fetch</code>.</p>
+<p>You can make this much faster by passing <code>--git-cache</code> to <code>fetch</code>, which
+seeds the checkout from a shared, prebuilt snapshot instead of cloning from
+scratch (and, unlike <code>--no-history</code>, keeps the full history):</p>
+<pre data-language="shell">$ fetch --git-cache android</pre>
+<p>The cache directory is chosen automatically (override with <code>$GIT_CACHE_PATH</code>).
+It mirrors every repo it fetches (~30 GB for Chromium) and is shared by all
+checkouts on the machine: working trees reference it instead of copying the
+objects, so the per-checkout <code>.git</code> stays small.</p>
+<p>Expect the command to take 30 minutes on even a fast connection, and many hours
+on slower ones.</p>
+<p>If you&#39;ve already installed the build dependencies on the machine (from another
+checkout, for example), you can omit the <code>--nohooks</code> flag and <code>fetch</code> will
+automatically execute <code>gclient runhooks</code> at the end.</p>
+<p>When <code>fetch</code> completes, it will have created a hidden <code>.gclient</code> file and a
+directory called <code>src</code> in the working directory. The remaining instructions
+assume you have switched to the <code>src</code> directory:</p>
+<pre data-language="shell">$ cd src</pre>
+<h3 id="converting-an-existing-linux-checkout">Converting an existing Linux checkout</h3>
+<p>If you have an existing Linux checkout, you can add Android support by appending
+<code>target_os = [&#39;android&#39;]</code> to your <code>.gclient</code> file (in the directory above
+<code>src</code>):</p>
+<pre data-language="shell">$ echo &quot;target_os = [ 'android' ]&quot; &gt;&gt; ../.gclient</pre>
+<p>Then run <code>gclient sync</code> to pull the new Android dependencies:</p>
+<pre data-language="shell">$ gclient sync</pre>
+<p>(This is the only difference between <code>fetch android</code> and <code>fetch chromium</code>.)</p>
+<h3 id="install-additional-build-dependencies">Install additional build dependencies</h3>
+<p>Once you have checked out the code, run</p>
+<pre data-language="shell">$ build/install-build-deps.sh</pre>
+<p>to get all of the dependencies you need to build on Linux. If you need to build
+on arm32 (e.g. <code>target_cpu=&quot;arm&quot;</code>), you may need to add <code>--arm</code> to include the
+32-bit deps.</p>
+<pre data-language="shell">$ build/install-build-deps.sh --arm</pre>
+<h3 id="run-the-hooks">Run the hooks</h3>
+<p>Once you&#39;ve run <code>install-build-deps</code> at least once, you can now run the
+Chromium-specific hooks, which will download additional binaries and other
+things you might need:</p>
+<pre data-language="shell">$ gclient runhooks</pre>
+<p><em>Optional</em>: You can also
+<a href="https://www.chromium.org/developers/how-tos/api-keys">install API keys</a> if you
+want your build to talk to some Google services, but this is not necessary for
+most development and testing purposes.</p>
+<h2 id="setting-up-the-build">Setting up the build</h2>
+<p>Chromium uses <a href="https://ninja-build.org">Ninja</a> as its main build tool along with
+a tool called <a href="https://gn.googlesource.com/gn/+/main/docs/quick_start.md">GN</a> to
+generate <code>.ninja</code> files. You can create any number of <em>build directories</em> with
+different configurations. To create a build directory which builds Chrome for
+Android, run:</p>
+<pre data-language="shell">$ gn gen --args='target_os=&quot;android&quot; is_cast_android=true' out/Default</pre>
+<ul>
+<li>You only have to run this once for each new build directory, Ninja will update
+the build files as needed.</li>
+<li>You can replace <code>Default</code> with another name, but it should be a subdirectory
+of <code>out</code>.</li>
+<li>For other build arguments, including release settings, see
+<a href="https://www.chromium.org/developers/gn-build-configuration">GN build configuration</a>.
+The default will be a debug component build matching the current host
+operating system and CPU.</li>
+<li>For more info on GN, run <code>gn help</code> on the command line or read the
+<a href="https://gn.googlesource.com/gn/+/main/docs/quick_start.md">quick start guide</a>.</li>
+</ul>
+<p>Also be aware that some scripts (e.g. <code>tombstones.py</code>, <code>adb_gdb.py</code>) require you
+to set <code>CHROMIUM_OUTPUT_DIR=out/Default</code>.</p>
+<h3 id="faster-builds">Faster builds</h3>
+<p>This section contains some things you can change to speed up your builds, sorted
+so that the things that make the biggest difference are first.</p>
+<h4 id="use-remote-execution">Use Remote Execution</h4>
+<p>*** note <strong>Warning:</strong> If you are a Google employee, do not follow the
+remote execution instructions in this section. Set up remote execution as
+described in
+<a href="https://goto.google.com/building-android-chrome">go/building-android-chrome</a>
+instead.</p>
+<hr>
+<p>Chromium&#39;s build can be sped up significantly by using a remote execution system
+compatible with <a href="https://github.com/bazelbuild/remote-apis">REAPI</a>. This allows
+you to benefit from remote caching and executing many build actions in parallel
+on a shared cluster of workers.</p>
+<p>To use remote execution, follow the corresponding
+<a href="linux/build_instructions#use-remote-execution">Linux build instructions</a>.</p>
+<h2 id="build-cast_browser_apk">Build <code>cast_browser_apk</code></h2>
+<p>Build <code>cast_browser_apk</code> with Ninja using the command:</p>
+<pre data-language="shell">$ autoninja -C out/Default cast_browser_apk</pre>
+<p>(<code>autoninja</code> is a wrapper that automatically provides optimal values for the
+arguments passed to <code>ninja</code>.)</p>
+<h2 id="installing-and-running-cast_browser_apk-on-a-device">Installing and Running <code>cast_browser_apk</code> on a device</h2>
+<h3 id="plug-in-your-android-device">Plug in your Android device</h3>
+<p>Make sure your Android device is plugged in via USB, and USB Debugging is
+enabled.</p>
+<p>To enable USB Debugging:</p>
+<ul>
+<li>Navigate to Settings &gt; About Phone &gt; Build number</li>
+<li>Click &#39;Build number&#39; 7 times</li>
+<li>Now navigate back to Settings &gt; Developer Options</li>
+<li>Enable &#39;USB Debugging&#39; and follow the prompts</li>
+</ul>
+<p>You may also be prompted to allow access to your PC once your device is plugged
+in.</p>
+<p>You can check if the device is connected by running:</p>
+<pre data-language="shell">third_party/android_sdk/public/platform-tools/adb devices</pre>
+<p>Which prints a list of connected devices. If not connected, try unplugging and
+reattaching your device.</p>
+<h3 id="build-the-apk">Build the APK</h3>
+<pre data-language="shell">autoninja -C out/Release cast_browser_apk</pre>
+<p>And deploy it to your Android device:</p>
+<pre data-language="shell">out/Default/bin/cast_browser_apk install
+# Or to install and run:
+out/Default/bin/cast_browser_apk run &quot;http://google.com&quot;</pre>
+<p>The app will appear on the device as &quot;Chromium&quot;.</p>
+<h3 id="testing">Testing</h3>
+<p>For information on running tests, see
+<a href="testing/android_test_instructions">Android Test Instructions</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_cast_build_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/android_cast_build_instructions.md</a>
+  </p>
+</div>

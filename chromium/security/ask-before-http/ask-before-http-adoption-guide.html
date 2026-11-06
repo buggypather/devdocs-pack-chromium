@@ -1,0 +1,206 @@
+<h1>Adapting your website for Chrome’s “Ask-before-HTTP” warning</h1>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/ask-before-http/ask-before-http-warning.png" alt="Screenshot of Chrome&#39;s &#39;Ask-before-HTTP&#39; warning"></p>
+<p><strong>Chrome will start asking for users’ permission before navigating to HTTP pages
+by default in Chrome 154.</strong> For more background on Chrome’s “Always Use Secure
+Connections” setting and the motivations for requiring user permission see our
+<a href="https://security.googleblog.com/2025/10/https-by-default.html">blog post</a>.</p>
+<p>If you have a website that is served over HTTP (either directly or for any
+possible redirect steps a user may go through before reaching your site), this
+document tries to answer common questions and provide guidance on how to adapt
+your website to work in an HTTPS-first future.</p>
+<p>The vast majority of websites are now using HTTPS and will continue working as
+they do today.</p>
+<p>Enterprises also have policy controls available for allowlisting HTTP on
+specific websites. See the <a href="#enterprise-faqs">Enterprise FAQs</a> below for more
+information.</p>
+<h2 id="faqs">FAQs</h2>
+<h3 id="what-is-the-current-scope-of-ask-before-http-in-chrome">What is the current scope of Ask-before-HTTP in Chrome?</h3>
+<p>The Ask-before-HTTP warning is triggered when Chrome was unable to connect to a
+site via HTTPS but believes that it may be able to connect over HTTP. Chrome
+will prompt the user before accessing the site via HTTP.</p>
+<p>Chrome remembers a user&#39;s decision for 15 days, and the exception is renewed
+whenever a user revisits that site – this means that if a user regularly uses an
+HTTP site they may only ever see the warning once for that site.</p>
+<p>If a user explicitly navigates to an HTTPS URL (either because a link specifies
+https://, or the user enters an https:// URL in the omnibox) and the navigation
+fails, the user will see a regular network error page and no fallback to HTTP is
+attempted. Similarly,
+<a href="#how-does-this-relate-to-other-upgrade-mechanisms-like-hsts-and-https-rr">if a site has HSTS configured, Chrome does not try to fall back to HTTP</a>.</p>
+<h3 id="how-can-i-personally-opt-out-of-these-warnings">How can I personally opt out of these warnings?</h3>
+<p>We have tried to balance user friction with security when designing the
+configuration that we will be shipping by default to all Chrome users, and we
+would encourage you to give it a try. However, if you find it too cumbersome,
+you can disable the “Always Use Secure Connections” setting in
+chrome://settings/security.</p>
+<p>If you have previously configured this setting in Chrome, Chrome will continue
+to respect your previously chosen choice, even after the rollout of &quot;Always Use
+Secure Connections&quot; by default in Chrome 154.</p>
+<h3 id="how-does-this-affect-certificate-errors">How does this affect certificate errors?</h3>
+<p>In certain exceptional circumstances, users may see warnings alerting them that
+they could not connect to a server using HTTPS – for example, if your HTTPS
+certificate expires, or your server is misconfigured, or the user is actually
+currently under network attack. These warnings are not changing, and no
+additional warnings of this type will be shown.</p>
+<h3 id="how-can-i-test-my-site-to-identify-pages-that-will-trigger-warnings">How can I test my site to identify pages that will trigger warnings?</h3>
+<p>We recommend you proactively enable “Always Use Secure Connections” for public
+sites at chrome://settings/security. This can help identify any unexpected
+usages of HTTP that cause warnings.</p>
+<h3 id="how-can-i-configure-my-site-to-avoid-having-my-users-see-warnings">How can I configure my site to avoid having my users see warnings?</h3>
+<p>If your site does not yet support HTTPS, you should migrate your site to HTTPS.</p>
+<p>If you run your own server, the
+<a href="https://ssl-config.mozilla.org/">Mozilla SSL Configuration Generator</a> is a
+helpful tool for generating sample TLS configurations for many different common
+web servers. Many web server implementations, including
+<a href="https://httpd.apache.org/docs/trunk/mod/mod_md.html">Apache</a>,
+<a href="https://blog.nginx.org/blog/native-support-for-acme-protocol">Nginx</a> and
+<a href="https://caddyserver.com/">Caddy</a>, have integrated support for the
+<a href="https://www.acmeisuptime.com/">ACME</a> for automatically obtaining an HTTPS
+certificate. Many certificate authorities now offer free HTTPS certificates, and
+optional certificate lifecycle management software.</p>
+<p>If you do not run your own web server, you may need to reach out to your hosting
+provider for support. Modern hosting and cloud providers support HTTPS, but you
+may need to enable it.</p>
+<p>If your site uses redirects, such as from your apex domain to a www. subdomain,
+you should ensure that <em>all</em> steps are configured to support HTTPS. See the
+<a href="#why-am-i-getting-a-warning-even-though-i-end-up-at-an-https-site-after-i-click-through">section on redirects</a>
+below for additional guidance on why it is crucial for every step to support
+HTTPS and how to avoid warnings.</p>
+<h3 id="why-am-i-getting-a-warning-even-though-i-end-up-at-an-https-site-after-i-click-through">Why am I getting a warning even though I end up at an HTTPS site after I click through?</h3>
+<p>If in the process of navigating to an HTTPS site there were any redirect steps
+that do <em>not</em> support HTTPS, Chrome will show an Ask-before-HTTP warning. After
+clicking through that warning, the navigation will continue and proceed to the
+HTTPS site. This exposure to insecure HTTP during redirects is a key risk that
+Chrome is trying to address with these new warnings.</p>
+<p>To avoid these warnings for your users, you should ensure that all inbound links
+and redirect chains fully support HTTPS at every step along the way, not just at
+the final destination page.</p>
+<p>You can
+<a href="#how-can-i-test-my-site-to-identify-pages-that-will-trigger-warnings">test your site with the new warnings enabled</a>
+and inspect the URL each time the Ask-before-HTTP warning is shown to identify
+each host that needs to be configured to support HTTPS. You can also use the
+<a href="https://developer.chrome.com/docs/devtools/network/overview">Network panel in Chrome DevTools</a>
+to inspect each redirect hop that occurs while navigating to the affected site,
+to identify any that do not support HTTPS.</p>
+<blockquote>
+<p><strong>Example:</strong></p>
+<p>If you serve your site on <code>https://www.example.com</code> and have a redirect from
+<code>http://example.com</code> to <code>http://www.example.com</code>, and your server is <em>not</em>
+configured to support connections on <strong><code><span
+style="text-decoration:underline;">https://</span>example.com</code></strong>,
+your users will see warnings when navigating to <code>example.com</code>. You should
+update your server configuration to add HTTPS support to the apex domain
+(<code>example.com</code>) to avoid these warnings.</p>
+</blockquote>
+<p>If your site uses additional redirects (such as for tracking inbound links), all
+steps in the redirect chain must be configured to support connections over
+HTTPS. Multiple insecure redirects could cause your users to see multiple
+Ask-before-HTTP warnings while trying to navigate to your site.</p>
+<p>If you use domain forwarding services, you may need to reach out to your service
+provider to ask whether they support HTTPS and if there is any additional
+configuration required. If your inbound domain is set up as a CNAME to your
+service provider, then it should be possible for the service provider to acquire
+HTTPS certificates on your behalf.</p>
+<h3 id="how-does-this-impact-local-website-development">How does this impact local website development?</h3>
+<p>If you are developing on a server that doesn’t support HTTPS but is using a
+public hostname, you may see the Ask-before-HTTP warning. Clicking through the
+warning will allow local development as today.</p>
+<p>A common local development practice is to serve local files on
+<code>http://localhost</code> -- this is considered secure and will not show warnings.</p>
+<p>Another common development practice is to use local servers deployed to local
+names such as <code>staging.local</code>. Non-unique hostnames, local IP addresses, and
+single-label hostnames will also not show warnings.</p>
+<p>There are some cases where you may need to run your local development site with
+HTTPS. See our articles on
+“<a href="https://web.dev/articles/when-to-use-local-https">When to use HTTPS for local development</a>”
+and
+“<a href="https://web.dev/articles/how-to-use-local-https">Use HTTPS for local development</a>”
+for more information and our current recommended best practices.</p>
+<h3 id="how-does-this-affect-automated-testing-with-chromedriver--selenium--etc">How does this affect automated testing with ChromeDriver / Selenium / etc.?</h3>
+<p>If you use automated browser testing and encounter issues with Chrome’s
+Ask-before-HTTP warnings, you can add hosts to the HTTP allowlist using the
+<code>--unsafely-treat-insecure-origin-as-secure</code> command-line flag, which takes a
+comma-separate list of origins (e.g., <code>http://example.com</code>) or hostname
+wildcards (e.g., <code>*.example.com</code>).</p>
+<blockquote>
+<p><strong>Example:</strong></p>
+<p>If your automated browser testing relies on navigating to <code>insecure.example</code>
+and various subdomains of <code>example.com</code> over HTTP, and your tests are running
+into issues due to Chrome’s Ask-before-HTTP warnings when navigating to these
+sites, you can pass the command-line flag to Chrome to allowlist these
+origins:
+<code>--unsafely-treat-insecure-origin-as-secure=http://insecure.example,*.example.com</code></p>
+</blockquote>
+<p>Prior to the full launch, you can also disable the default “Always Use Secure
+Connections” feature using
+<code>--disable-features=HttpsFirstBalancedModeAutoEnable</code>. We’ll update this post
+with any future capabilities and flags, and you can track updates on
+<a href="http://crbug.com/378022921">this bug</a>.</p>
+<h3 id="what-about-other-browsers-firefox--safari--edge-etc">What about other browsers (Firefox / Safari / Edge/ etc.)?</h3>
+<p>Other browsers have similar features for opportunistically trying to upgrade
+navigations to HTTPS, and for warning users before navigating to insecure HTTP
+pages. Safari, Firefox, and Edge all currently upgrade HTTP navigations to
+HTTPS, and have optional modes to warn users before falling back to HTTP.</p>
+<h3 id="how-does-this-relate-to-other-upgrade-mechanisms-like-hsts-and-https-rr">How does this relate to other upgrade mechanisms (like HSTS and HTTPS RR)?</h3>
+<p>A web server can indicate that it supports HTTPS and browsers should prefer (or
+enforce) that connections use HTTPS:</p>
+<ul>
+<li><a href="https://developer.mozilla.org/en-US/docs/Glossary/HSTS">HTTP Strict Transport Security</a>
+(HSTS) is a mechanism for websites to instruct web browsers that the site
+should only be accessed over HTTP, by sending a special
+<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security"><code>Strict-Transport-Security</code> HTTP header</a>.
+HSTS can provide stronger downgrade protection, as browsers like Chrome
+won’t fall back to HTTP. HSTS takes precedence over Chrome’s automatic HTTPS
+upgrades and Ask-before-HTTP warnings.</li>
+<li><a href="https://developer.mozilla.org/en-US/docs/Glossary/HTTPS_RR">HTTPS Resource Records</a>
+(HTTPS RR) are a special type of DNS record that can indicate that the
+server supports HTTPS, signaling that clients should upgrade HTTP
+connections to HTTPS.</li>
+<li>It is also common for websites to be configured to redirect HTTP connections
+to HTTPS using server-side redirects like a
+<a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/301">301 Moved Permanently</a>
+status code.</li>
+</ul>
+<p>Chrome’s automatic HTTPS upgrades and Ask-before-HTTP warning helps avoid the
+user ever having to connect to a server using insecure HTTP for sites that
+support HTTPS, regardless of whether the sites opt-in to stronger mechanisms
+like HSTS.</p>
+<p>Chrome (since 2020 with Chrome 86) also
+<a href="https://blog.chromium.org/2019/10/no-more-mixed-messages-about-https.html">upgrades passive mixed content to HTTPS</a>.
+This can make it easier for sites to migrate to HTTPS.</p>
+<h3 id="how-can-i-provide-feedback-or-report-bugs-about-chromes-ask-before-http-feature">How can I provide feedback or report bugs about Chrome’s Ask-before-HTTP feature?</h3>
+<p>Please file feedback and bug reports on the
+<a href="https://issues.chromium.org/issues/new?component=1457549">Chromium issue tracker</a>.
+We are actively monitoring bugs in the <code>HttpsUpgrades</code> component, so be sure to
+set the correct component when filing feedback.</p>
+<h2 id="enterprise-faqs">Enterprise FAQs</h2>
+<h3 id="how-can-i-allowlist-certain-http-sites-for-my-users">How can I allowlist certain HTTP sites for my users?</h3>
+<p>If you have specific sites that your users need to access over HTTP and you want
+to suppress the warning on those sites, you can use the
+<a href="https://chromeenterprise.google/policies/#HttpAllowlist">HttpAllowlist</a>
+enterprise policy. The policy takes a list of hostnames or hostname patterns
+(such as “[*.]example.com”) that will not be upgraded to HTTPS and will not
+show a warning when navigating to them over HTTP. See the documentation for this
+policy for more information.</p>
+<h3 id="how-can-i-enforce-http-warnings-for-all-websites-for-my-users">How can I enforce HTTP warnings for all websites for my users?</h3>
+<p>You can use the
+<a href="https://chromeenterprise.google/policies/#HttpsOnlyMode">HttpsOnlyMode</a>
+enterprise policy to enforce a setting for the “Always Use Secure Connections”
+setting in chrome://settings/security. For example, you can set the policy to
+“force_balanced_enabled” to enforce that your users have the (upcoming) default
+setting and can’t turn it off, or you could opt your users into “strict” mode
+where warnings are also shown for private sites by setting the policy to
+“force_enabled”. You can also disable the setting. See the documentation for
+this policy for more information.</p>
+<h3 id="how-do-i-determine-if-any-of-my-users-will-see-warnings">How do I determine if any of my users will see warnings?</h3>
+<p>We recommend you proactively enable “Always Use Secure Connections” for public
+sites at chrome://settings/security, and then go about your normal workflows.
+This can help identify any unexpected usages of HTTP that cause warnings. In
+advance of the default changing, you can either migrate any remaining HTTP you
+identify to HTTPS, or you can proactively allowlist it for your organization.
+This will enable a seamless transition for your users.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/ask-before-http/ask-before-http-adoption-guide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/ask-before-http/ask-before-http-adoption-guide.md</a>
+  </p>
+</div>

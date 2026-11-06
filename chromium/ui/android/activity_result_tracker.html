@@ -1,0 +1,138 @@
+<h1>ActivityResultTracker</h1>
+<h2 id="overview">Overview</h2>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/java/src/org/chromium/ui/base/ActivityResultTracker.java"><code>ActivityResultTracker</code></a>
+is a utility within Chromium for Android designed to more robustly handle
+results from activities started for a result. It ensures that results are not
+lost even if the base Activity is destroyed and recreated by the Android system
+while the launched activity is still active. This is useful for flows like
+account addition starting an activity from a different app, where Chrome can be
+killed by the OS in the background to free memory during the flow.</p>
+<h2 id="how-to-use">How to use</h2>
+<ol>
+<li><p><strong>Implement <code>ActivityResultTracker.ResultListener</code>:</strong> Your component that
+needs to receive an activity result should implement the
+<code>ActivityResultTracker.ResultListener</code> interface. This interface has two
+methods:</p>
+<ul>
+<li><code>onActivityResult(ActivityResult result, @Nullable Bundle savedInstanceData)</code>:
+This is where you handle the result. The <code>savedInstanceData</code> parameter
+contains the optional data that was saved before starting the activity.</li>
+<li><code>getRestorationKey()</code>: This should return a <code>String</code> that uniquely
+identifies the <em>purpose</em> of the activity launch across activity
+recreations. If multiple indistinguishable instances of your component
+must exist in parallel, they can return the same restoration key - an
+arbitrary instance will be chosen to handle the activity result in case
+the base activity is recreated before the new activity finishes.</li>
+</ul>
+<pre data-language="java">class MyComponent implements ActivityResultTracker.ResultListener {
+    private final String mRestorationKey;
+
+    MyComponent(String restorationKey) {
+        mRestorationKey = restorationKey;
+    }
+
+    @Override
+    public void onActivityResult(ActivityResult result, @Nullable Bundle savedInstanceData) {
+        // Handle the result...
+    }
+
+    @Override
+    public String getRestorationKey() {
+        return mRestorationKey;
+    }
+}</pre>
+</li>
+<li><p><strong>Get an <code>ActivityResultTracker</code> Instance:</strong> Get the tracker instance inside
+the base Activity and pass it to your component.</p>
+<pre data-language="java">ActivityResultTracker tracker = getActivityResultTracker();</pre>
+</li>
+<li><p><strong>Register the Listener:</strong> Before you start the activity, register your
+activity result listener with the tracker.</p>
+<pre data-language="java">MyComponent myComponent = new MyComponent(&quot;my_unique_restoration_key&quot;);
+tracker.register(myComponent);</pre>
+</li>
+<li><p><strong>Start the Activity Using the Tracker:</strong></p>
+<pre data-language="java">tracker.startActivity(myComponent, intent, savedInstanceData);</pre>
+<p>The <code>savedInstanceData</code> is optional and can be used to save state that needs
+to be restored after the base activity&#39;s recreation.</p>
+<p><strong>Re-registration is Key:</strong> Components MUST call <code>tracker.register()</code> with
+the same restoration key in case the base activity is recreated and ensures
+it happens automatically. (e.g. it should not be triggered by an user
+action) If a pending result for your listener&#39;s restoration key already
+exists (e.g., from before the activity was recreated), <code>onActivityResult</code>
+will be called immediately.</p>
+<p>If multiple instances of a component were registered using the same
+restoration key and a result matching the restoration key is received:</p>
+<ul>
+<li>if it happens after the base activity&#39;s recreation, an arbitrary listener
+will be called to handle the result, usually the first registered one.</li>
+<li>if it happens without the base activity being killed and restore, the
+component used to start the new activity will be called to handle the
+result.</li>
+</ul>
+</li>
+<li><p><strong>Unregister the listener when closing the UI owning it:</strong></p>
+<pre data-language="java">tracker.unregister(myComponent);</pre>
+</li>
+</ol>
+<h2 id="the-initial-problem-lost-results-on-activity-recreation">The initial problem: lost results on Activity recreation</h2>
+<p>Chrome mainly relies on
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/java/src/org/chromium/ui/base/IntentRequestTracker.java;l=23;drc=f4b1a5f91e14941349a0319b35f71d3efb7350af"><code>IntentRequestTracker</code></a>
+owned by
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/java/src/org/chromium/ui/base/WindowAndroid.java;l=438;drc=f4b1a5f91e14941349a0319b35f71d3efb7350af"><code>WindowAndroid</code></a>
+for activity result handling. This system is straightforward to use, but has one
+limitation: if the base Activity hosting the requesting component is killed by
+the system (e.g., due to memory pressure) and then later recreated when the user
+navigated back, the callback to handle the activity result is lost. This means
+the result from the external activity is effectively discarded, breaking the
+user flow. This was observed to affect a noticeable percentage (~1% in 2024) of
+sign-in attempts, for example.</p>
+<p>The standard Android
+<a href="http://go/android-dev/training/basics/intents/result"><code>ActivityResultRegistry</code></a>
+API does support handling results across Activity recreation. However, its
+limitation is that callbacks must be registered unconditionally during the
+Activity/Fragment initialization or <code>onCreate</code> to catch the in-flight activity
+results after recreation. This model doesn&#39;t fit well with Chrome&#39;s
+architecture, where many features are encapsulated in components (like
+Coordinators) that might be created on demand, much later than the Activity&#39;s
+<code>onCreate</code>. These components, often deeply nested, are the ones that actually
+need to initiate an activity and handle its result.</p>
+<h2 id="the-implemented-solution-the-android-activityresultregistry--result-caching">The implemented solution: the Android ActivityResultRegistry &amp; result caching</h2>
+<p><code>ActivityResultTracker</code> offers to bridge this gap. It&#39;s hosted by the base
+Activity and uses the <code>ActivityResultRegistry</code> from the Android SDK to ensure
+result reception across Activity death and recreation. The key features are:</p>
+<ol>
+<li><strong>State Persistence:</strong> The tracker saves the restoration keys of all
+in-flight activity requests in the Activity&#39;s <code>onSaveInstanceState</code> bundle.</li>
+<li><strong>Internal Re-registration:</strong> On Activity recreation, the tracker uses the
+restored keys to re-register internal listeners with the
+<code>ActivityResultRegistry</code> during <code>onCreate</code>. This ensures the tracker catches
+any result sent back.</li>
+<li><strong>Result Caching:</strong> If a result arrives for a key, and the Chrome component
+that originally made the request hasn&#39;t yet been recreated and re-registered
+its specific callback, the <code>ActivityResultTracker</code> holds the
+<code>ActivityResult</code> and the corresponding restoration key in a temporary cache.</li>
+<li><strong>Delayed Delivery:</strong> When the Chrome component (e.g., Coordinator) is
+eventually recreated and calls <code>ActivityResultTracker.register()</code> with its
+restoration key, the tracker checks the cache. If a result is pending for
+that key, it&#39;s delivered immediately to the newly provided callback
+instance.</li>
+</ol>
+<p>This design allows components to be created at any time and still reliably
+receive activity results, even if the main Activity is destroyed in the
+background.</p>
+<p>Note that the cached results are not persisted with the recreation, so the
+components needs to ensure early registration of the result callback upon
+recreation, to prevent the result from being lost during a second activity
+recreation.</p>
+<h2 id="lifecycle-integration">Lifecycle integration</h2>
+<p>The implementation of <code>ActivityResultTracker</code> (e.g.,
+<code>ActivityResultTrackerImpl</code>) requires hooks into the Activity lifecycle:
+<code>onSaveInstanceState</code>, <code>onRestoreInstanceState</code>, and <code>onDestroy</code>. These are
+handled by the base Activity class (currently <code>ChromeBaseAppCompatActivity</code>).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/activity_result_tracker.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/activity_result_tracker.md</a>
+  </p>
+</div>

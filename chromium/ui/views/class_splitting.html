@@ -1,0 +1,262 @@
+<h1>Class Splitting</h1>
+<h2 id="views-dialog-class-splitting">Views Dialog Class Splitting</h2>
+<p>This document outlines how to refactor a common old Views design pattern into a
+cluster of smaller objects with less individual responsibility that are easier
+to test. The result is broadly similar to the model-view-controller paradigm but
+with some Views-specific differences.</p>
+<p>This document is specifically applicable to dialogs, bubbles, and secondary UI
+surfaces that have their own Widgets. The techniques described here work well
+for subclasses of:</p>
+<ul>
+<li><code>WidgetDelegate</code></li>
+<li><code>DialogDelegate</code></li>
+<li><code>BubbleDialogDelegate</code></li>
+</ul>
+<p>This document generally uses <code>DialogDelegate</code> throughout.</p>
+<h3 id="the-old-pattern-dialogdelegateview-controllers">The Old Pattern: DialogDelegateView Controllers</h3>
+<p>Legacy Views dialogs often have a class like this:</p>
+<pre data-language="c++">class MyDialogView : public views::DialogDelegateView,
+                     public SomeViewListener,
+                     public MyModelListener {
+ public:
+  MyDialogView(MyModel* model);
+  ~MyDialogView() override;
+
+  // DialogDelegate:
+  std::u16string GetWindowTitle() const override;
+  bool ShouldShowCloseButton() const override;
+  ...
+
+  // MyViewListener:
+  void OnMyViewClicked(MyView* view) override;
+
+  // MyModelListener:
+  void OnMyModelChanged(MyModel* model) override;
+
+ private:
+  MyModel* model_;
+  Label* status_;
+
+  ...
+};
+
+void MyDialogView::OnMyViewClicked(MyView* view) {
+  // ... complex business logic ...
+  model_-&gt;Update(new_state);
+}
+
+void MyDialogView::OnModelChanged(Model* model) {
+  // ... complex presentation logic ...
+}</pre>
+<h3 id="the-motivation--the-single-responsibility-principle">The Motivation &amp; The Single Responsibility Principle</h3>
+<p>The single responsibility principle is as follows: each class should have one
+responsibility. The class given above has several responsibilities:</p>
+<ul>
+<li>It functions as a <code>DialogDelegate</code> for a given <code>Widget</code></li>
+<li>It functions as a <code>View</code> within that <code>Widget</code></li>
+<li>It handles translating user actions on the dialog to model updates</li>
+<li>It handles translating model updates into visual changes in the dialog</li>
+</ul>
+<p>To make matters worse, classes of this pattern often do this in their
+constructor:</p>
+<pre data-language="c++">MyDialogView::MyDialogView(MyModel* model) {
+  // ... lots of setup ...
+  views::DialogDelegate::CreateDialogWidget(this, context, parent)-&gt;Show();
+}</pre>
+<p>The last line of code of the constructor packs a lot of meaning:</p>
+<ul>
+<li><code>CreateDialogWidget</code> does or does not take ownership of <code>this</code>, depending on
+whether <code>MyDialogView</code> overrides <code>DeleteDelegate</code></li>
+<li>By default, <code>DialogDelegateView</code> uses itself as the contents view of the
+created widget</li>
+<li>The created widget takes ownership of itself, and is shown on screen as a
+side-effect of the constructor</li>
+</ul>
+<p>Doing this makes classes of this pattern exceptionally difficult to test.</p>
+<h3 id="the-new-pattern-decomposed-classes">The New Pattern: Decomposed Classes</h3>
+<p>Here&#39;s how this class might look in &quot;new style&quot;, using callbacks rather than
+observer/listener interfaces, and using composition instead of inheritance for
+both <code>View</code> and <code>DialogDelegate</code>:</p>
+<pre data-language="c++">class MyDialog {
+ public:
+  MyDialog(MyModel* model);
+  ~MyDialog();
+
+  void Show(gfx::NativeWindow context, gfx::NativeView parent);
+
+ private:
+  void OnModelChanged(MyModel* model);
+  void OnMyViewClicked(MyView* view);
+
+  std::unique_ptr&lt;View&gt; MakeContentsView();
+  std::unique_ptr&lt;DialogDelegate&gt; MakeDialogDelegate();
+
+  base::CallbackListSubscription model_subscription_;
+
+  std::unique_ptr&lt;DialogDelegate&gt; delegate_;
+
+  Widget* widget_ = nullptr;  // if needed
+  const Model* model_;    // usually needed
+
+  Label* status_ = nullptr;   // or similar Views that are needed later
+};
+
+MyDialog::MyDialog(MyModel* model) : model_(model) {
+  model_subscription_ = model-&gt;RegisterUpdateCallback(
+      base::BindRepeating(&amp;MyDialog::OnModelChanged, base::Unretained(this)));
+
+  delegate_ = MakeDialogDelegate(MakeContentsView());
+}
+
+void MyDialog::Show(gfx::NativeWindow context, gfx::NativeView parent) {
+  widget_ = views::DialogDelegate::CreateDialogWidget(
+      std::move(delegate_), context, parent);
+  widget_-&gt;Show();
+  // Or if we don't need to store widget_ we could just do:
+  views::DialogDelegate::CreateDialogWidget(
+      std::move(delegate_), context, parent)-&gt;Show();
+}
+
+std::unique_ptr&lt;View&gt; MyDialog::MakeContentsView() {
+  // Create the contents view, set up its LayoutManager, create any needed
+  // subviews, and store weak pointers to them. For example:
+  auto contents = std::make_unique&lt;BoxLayoutView&gt;();
+
+  auto status = std::make_unique&lt;Label&gt;();
+  status-&gt;ConfigureAsDesired();
+  status_ = contents-&gt;AddChildView(std::move(status));
+
+  // We don't need a reference to this view after creation time so we don't
+  // bother storing it:
+  auto help = std::make_unique&lt;MyView&gt;(
+      base::BindRepeating(&amp;MyDialog::OnMyViewClicked, base::Unretained(this)));
+  contents-&gt;AddChildView(std::move(help));
+}
+
+std::unique_ptr&lt;DialogDelegate&gt; MyDialog::MakeDialogDelegate(
+    std::unique_ptr&lt;View&gt; contents) {
+  // Create a DialogDelegate and configure it as needed:
+  auto delegate = std::make_unique&lt;DialogDelegate&gt;();
+  delegate-&gt;SetContentsView(std::move(contents));
+  delegate-&gt;SetShowCloseButton(...);
+  delegate-&gt;SetTitle(...);
+  return delegate;
+}</pre>
+<p>Now <code>MyDialog</code> has a single responsibility: it ties together a <code>DialogDelegate</code>,
+a <code>View</code>, and a <code>MyModel</code>. The ownership of <code>MyDialog</code> is now very clear:
+<code>MyDialog</code> is always owned by the client regardless of what happens with the
+underlying <code>Widget</code>. The created <code>DialogDelegate</code> is owned by <code>MyDialog</code> unless
+and until it is handed off to a <code>Widget</code>. The contents view (and hence all the
+other views) are owned by the <code>DialogDelegate</code> until they are handed off (by
+<code>DialogDelegate</code> itself) to the <code>Widget</code>&#39;s <code>RootView</code>.</p>
+<h3 id="going-stateless">Going Stateless</h3>
+<p>Some dialogs don&#39;t actually have any meaningful internal state. For example,
+let&#39;s suppose we are displaying a dialog to the user that prompts them for a
+text string, then calls a method on a given controller object with that text
+string.</p>
+<p>In the &quot;old style&quot; that class might look like:</p>
+<pre data-language="c++">class MyPromptView : public DialogDelegateView {
+ public:
+  static void Show(MyController* controller,
+                   gfx::NativeWindow context,
+                   gfx::NativeView parent);
+
+ private:
+  MyPromptView(MyController* controller);
+  ~MyPromptView() override;
+
+  void OnDialogAccepted();
+
+  Textfield* field_;
+  MyController* controller_;
+};
+
+// static
+void MyPromptView::Show(MyController* controller, gfx::NativeWindow context,
+                        gfx::NativeView parent) {
+  views::DialogDelegate::CreateDialogView(
+      new MyPromptView(controller), context, parent)-&gt;Show();
+}
+
+MyPromptView::MyPromptView(MyController* controller) : controller_(controller) {
+  SetDialogButtons(static_cast&lt;int&gt;(ui::mojom::DialogButton::kOk));
+  SetAcceptCallback(base::BindOnce(
+      &amp;MyPromptView::OnDialogAccepted, base::Unretained(this)));
+
+  SetLayoutManager(...);
+  field_ = AddChildView(std::make_unique&lt;Textfield&gt;(...));
+  AddChildView(std::make_unique&lt;Label&gt;(...));
+}
+
+void MyPromptView::OnDialogAccepted() {
+  controller_-&gt;OnUserEnteredText(field_-&gt;GetText());
+}</pre>
+<p>Note that actually, the entire public interface of <code>MyPromptView</code> is a single
+static method, so if we use composition instead, we get:</p>
+<h3 id="the-stateless-way">The Stateless Way</h3>
+<pre data-language="c++">namespace {
+
+void OnDialogAccepted(MyController* controller, Textfield* field) {
+  controller-&gt;OnUserEnteredText(field-&gt;GetText());
+}
+
+std::unique_ptr&lt;DialogDelegate&gt; MakePromptDialog(MyController* controller) {
+  auto contents = std::make_unique&lt;View&gt;(...);
+  contents-&gt;SetLayoutManager(...);
+
+  auto* field = contents-&gt;AddChildView(std::make_unique&lt;Textfield&gt;(...));
+  contents-&gt;AddChildView(std::make_unique&lt;Label&gt;(...));
+
+  auto delegate = std::make_unique&lt;DialogDelegate&gt;(...);
+  delegate-&gt;SetAcceptCallback(base::BindOnce(&amp;OnDialogAccepted,
+      base::Unretained(controller), base::Unretained(field)));
+  return delegate;
+}
+
+}
+
+void ShowPromptDialog(MyController* controller, gfx::NativeWindow context,
+                      gfx::NativeView parent) {
+  DialogDelegate::CreateDialogWidget(MakePromptDialog(controller),
+                                     context, parent)-&gt;Show();
+}</pre>
+<p>... the entire dialog class vanishes in a puff of refactoring, replaced by a
+single function!</p>
+<h3 id="refactoring-step-by-step">Refactoring step-by-step</h3>
+<p>Let&#39;s say we are refactoring <code>MyDialogDelegateView</code> and want to produce
+<code>MyDialog</code>.  Here we&#39;ll assume <code>MyDialogDelegateView</code> subclasses
+<code>DialogDelegateView</code>, but these steps work with any other <code>WidgetDelegate</code>
+subclass.</p>
+<ol>
+<li>Replace every override of a <code>DialogDelegate</code> method with a call to one of the
+new setter methods from that class. This can require some care, since the
+values of getters may depend on state that is not available until after
+construction time.</li>
+<li>Have <code>MyDialogDelegateView</code> construct a separate <code>DialogDelegate</code> as needed,
+possibly storing a reference to it for later use if needed. Migrate all the
+setup code from (1) to target that new, separate delegate instead. Have
+<code>MyDialogDelegateView</code> retain ownership of this new <code>DialogDelegate</code> member.</li>
+<li>Have any code that uses <code>MyDialogDelegateView</code> as a <code>DialogDelegate</code> instead
+use the new <code>DialogDelegate</code> member of that class.</li>
+<li>Make <code>MyDialogDelegateView</code> not inherit from <code>DialogDelegate</code>, and rename it
+to <code>MyDialogView</code> (inheriting from View rather than <code>DialogDelegateView</code>).
+Since <code>MyDialogView</code> is still used as the <code>DialogDelegate</code>&#39;s contents view,
+instances of <code>MyDialogView</code> will end up owned by <code>Views</code>.</li>
+<li>Have <code>MyDialogView</code> construct a separate <code>View</code> to be the dialog&#39;s contents
+view, rather than using itself. Change all calls to <code>View</code> methods on
+<code>MyDialogView</code> to instead target the new contents view member, and have all
+external users that treat <code>MyDialogView</code> as a <code>View</code> instead use that View
+member.</li>
+<li>Make <code>MyDialogView</code> not inherit from <code>View</code>, and rename it to <code>MyDialog</code>.
+Note that instances of <code>MyDialog</code> are not owned by anyone now, which is bad.
+If the class still needs to exist at all, give it ownership semantics;
+otherwise, it may be possible to refactor the <code>MyDialog</code> class away entirely
+into a single function that creates the <code>DialogDelegate</code> and <code>View</code> members,
+sets up the <code>Widget</code>, and returns.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/views/class_splitting.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/views/class_splitting.md</a>
+  </p>
+</div>

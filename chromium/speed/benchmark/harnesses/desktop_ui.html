@@ -1,0 +1,94 @@
+<h1>Desktop UI Benchmark</h1>
+<h2 id="overview">Overview</h2>
+<p>Desktop UI Benchmark is used to measure and monitor Desktop UI performance based on the <a href="https://chromium.googlesource.com/catapult/+/HEAD/telemetry/README.md">Telemetry</a> framework.
+It captures important metrics such as</p>
+<ul>
+<li>Initial load time</li>
+<li>Subsequent load time</li>
+<li>Fetch data time</li>
+<li>Search user input time</li>
+<li>Frame time when scrolling</li>
+</ul>
+<p>in different stories representing different scenarios such as</p>
+<ul>
+<li>tab_search:top10:2020 - Test CUJs with 10 open tabs, after all tabs are loaded</li>
+<li>tab_search:top50:2020 - Test CUJs with 50 open tabs, after all tabs are loaded</li>
+<li>tab_search:top10:loading:2020 - Test CUJs with 10 open tabs, before all tabs are loaded</li>
+<li>tab_search:top50:loading:2020 - Test CUJs with 50 open tabs, before all tabs are loaded</li>
+<li>tab_search:close_and_open:2020 - Test open, close and reopen Tab Search UI</li>
+<li>tab_search:scroll_up_and_down:2020 - Test srolling down, up and down 100 tabs, before all tabs are loaded</li>
+</ul>
+<p>For more information please see this <a href="https://docs.google.com/document/d/1-1ijT7wt05hlBZmSKjX_DaTCzVqpxbfTM1y-j7kYHlc?usp=sharing">doc</a>.</p>
+<h2 id="run-the-benchmark-on-pinpoint">Run the benchmark on pinpoint</h2>
+<p>In most cases, you only need to run the benchmark on <a href="https://pinpoint-dot-chromeperf.appspot.com/">pinpoint</a> before/after a CL that may have performance impact. If you don&#39;t have platform requirement linux-perf is recommended since they are the most stable trybots for this benchmark.</p>
+<h2 id="run-the-benchmark-locally">Run the benchmark locally</h2>
+<p>In some cases, if trybots cannot meet your requirement or you need to debug on your own machine, use the following command to run the benchmark locally. You need an @google account to run some of the recorded tests, or append --use-live-sites to the following command.</p>
+<pre>tools/perf/run_benchmark run desktop_ui --browser-executable=out/Default/chrome --story-filter=tab_search:top10:2020 --pageset-repeat=3</pre>
+<h2 id="add-new-metrics">Add new metrics</h2>
+<p>There are 3 ways to add metrics to the benchmarking code</p>
+<ol>
+<li><p>Add UMA metrics to your code and include them in the <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/desktop_ui/tab_search_story.py">story definition</a>. The listed UMA metrics will show up on the result page automatically.</p>
+</li>
+<li><p>Set C++ trace event names as metric names to your story definition. It will write to the trace file and parsed by custom metric on the other end. For example:</p>
+<p> In C++, add trace events to measure performance</p>
+<pre data-language="c++">void Foo::DoWork() {
+  TRACE_EVENT0(&quot;browser&quot;, &quot;Foo:DoWork&quot;);
+  ...
+}</pre>
+<p> In the story definition, set the trace events you want to see as a metric on the result page.</p>
+<pre data-language="python">from page_sets.desktop_ui.custom_metric_utils import SetMetricNames
+...
+def RunPageInteractions(self, action_runner):
+  SetMetricNames(action_runner, ['Foo:DoWork'])
+  ...</pre>
+<p> or</p>
+<pre data-language="python">from page_sets.desktop_ui.custom_metric_utils import SetMetrics
+...
+def RunPageInteractions(self, action_runner):
+  SetMetrics(action_runner, {'name':'Foo:DoWork','unit':&lt;optional unit name&gt;, 'description':&lt;optional description&gt;})
+  ...</pre>
+<p>This method requires &#39;customMetric&#39; added to your story definition and enable the trace category &#39;blink.user_timing&#39;. If your story extends from <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/desktop_ui/multitab_story.py">MultiTabStory</a> it&#39;s already been taken care of. Also make sure to enable the trace categories you want to add in your story definition.</p>
+</li>
+<li><p>Add Javascript performance.mark() with names end with &quot;:metric_begin&quot; and &quot;:metric_end&quot;. Time between performance.mark(&#39;&lt;YOUR_METRIC_NAME&gt;:metric_begin&#39;) and performance.mark(&#39;&lt;YOUR_METRIC_NAME&gt;:benchmark&#39;) will show up as YOUR_METRIC_NAME on the result page. For example:</p>
+<pre data-language="javascript">function calc() {
+  performance.mark('calc_time:metric_begin');
+  ...
+  performance.mark('calc_time:metric_end');
+}</pre>
+<p>You can also emit metric value directly using performance.mark(&#39;&lt;YOUR_METRIC_NAME&gt;:&lt;YOUR_METRIC_VALUE&gt;:metric_value&#39;). In the case multiple values needs to be measured asynchronously it&#39;s better to do the following instead:</p>
+<pre data-language="javascript">const startTime = performance.now();
+for (const url of urls) {
+  fetch(url).then(() =&gt; {
+    performance.mark(`fetch_time:${performance.now() - startTime}:metric_value`);
+  });
+}</pre>
+<p>This method requires &#39;customMetric&#39; added to your story definition and enable the trace category &#39;blink.user_timing&#39;. If your story extends from <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/desktop_ui/multitab_story.py">MultiTabStory</a> it&#39;s already been taken care of.</p>
+</li>
+</ol>
+<h2 id="how-to-write-user-journey">How to write user journey</h2>
+<p>Destkop UI benchmark leverages UIDevtools to drive the native UI and Devtools to drive WebUI. Follow <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/desktop_ui/desktop_ui_stories.py">existing stories</a> and the <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2646447">demo CL</a> to add user journey for most features.</p>
+<p>Currently global shortcuts and context menus are not supported on Mac due to missing implementation of UIDevtools. Make sure to exclude those interaction on Mac from your performance stories.</p>
+<h2 id="add-new-stories">Add new stories</h2>
+<p>Add new stories to <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/desktop_ui/desktop_ui_stories.py">here</a>.
+Generally we want to put most of the user journeys in the main story so we only need to run 1 story to verify a CL in most cases. However, if the user journey may affect metrics of other user journeys, you should make it a separate story.</p>
+<ul>
+<li>If your new stories don&#39;t need external network requests, you are done now.</li>
+<li>If your new stories need external network requests and extend from MultiTabStory or other existing stories, add an item to <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/data/desktop_ui.json">here</a> to reuse some of the existing recorded stories</li>
+<li>If your new stories need external network requests that can&#39;t be reused from existing stories, follow the next section to record your own stories.</li>
+</ul>
+<p>Finally, run the new stories locally to make sure they work, then upload the CL and run a pinpoint job to make sure they work before starting code review.</p>
+<h2 id="record-new-stories">Record new stories</h2>
+<p>Record and upload new stories to cloud storage using
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:tools/perf/recording_benchmarks.md">these instructions</a>.</p>
+<h2 id="query-benchmark-metrics-from-chrome-perf-waterfall">Query benchmark metrics from chrome perf waterfall</h2>
+<p>Use the following link to query and compare realtime metrics data from any perf bots running on the performance waterfall.</p>
+<p><a href="https://chromeperf.appspot.com/report">https://chromeperf.appspot.com/report</a></p>
+<h2 id="setup-auto-triage-on-perf-waterfall">Setup auto-triage on perf waterfall</h2>
+<p>Follow the <a href="http://go/chromeperf-auto-triage">auto-triage doc</a> to setup metrics you want to monitor for regression(<a href="https://chrome-internal-review.googlesource.com/c/infra/infra_internal/+/3897062">Example CL</a>).
+If there&#39;s a regression detected on the waterfall an email will sent out automatically. You can then auto or manual bisect what commit regresses the performance.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/harnesses/desktop_ui.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/harnesses/desktop_ui.md</a>
+  </p>
+</div>

@@ -1,0 +1,348 @@
+<h1>Technical README: The  Element (PEPC)</h1>
+<p>This document provides a detailed technical overview of the <code>&lt;permission&gt;</code> element feature, also known as PEPC (Permission Element Policy Control). It is intended for developers who want to understand the implementation of this feature in Chromium.</p>
+<h2 id="1-overview">1. Overview</h2>
+<p>The <code>&lt;permission&gt;</code> element is an HTML element that allows websites to embed a permission request UI directly into their content. The goal is to make permission requests more contextual, user-initiated, and trustworthy, leading to a better user experience and higher permission grant rates.</p>
+<p>The core principle of the feature is a two-step permission request process:</p>
+<ol>
+<li>The user clicks the <code>&lt;permission&gt;</code> element on the page.</li>
+<li>The browser displays a secondary, browser-controlled UI (a bubble prompt on desktop, a dialog on Android) to confirm the permission request.</li>
+</ol>
+<p>This two-step process is crucial for security, as it prevents websites from tricking users into granting permissions with a single click.</p>
+<h2 id="2-architectural-overview">2. Architectural Overview</h2>
+<p>The following diagram illustrates the high-level architecture of the <code>&lt;permission&gt;</code> element feature:</p>
+<pre>+-------------------------------------------------------------------------------------------------+
+| Renderer Process (Blink)                                                                        |
+|                                                                                                 |
+|  +-------------------------+                                                                    |
+|  | HTMLPermissionElement   |                                                                    |
+|  +-------------------------+                                                                    |
+|              |                                                                                  |
+|              | 1. RegisterPageEmbeddedPermissionControl                                         |
+|              | 3. RequestPageEmbeddedPermission                                                 |
+|              v                                                                                  |
+|  +-------------------------+                                                                    |
+|  | PermissionService       |                                                                    |
+|  +-------------------------+                                                                    |
+|                                                                                                 |
++-------------------------------------------------------------------------------------------------+
+               |                                                                                  |
+               | Mojo IPC                                                                         |
+               v                                                                                  |
++-------------------------------------------------------------------------------------------------+
+| Browser Process                                                                                 |
+|                                                                                                 |
+|  +-----------------------+      +--------------------------+      +-------------------------+   |
+|  | PermissionServiceImpl |-----&gt;| PermissionControllerImpl |-----&gt;| PermissionPromptFactory |   |
+|  +-----------------------+      +--------------------------+      +-------------------------+   |
+|              |                                                            |                     |
+|              | 2. OnEmbeddedPermissionControlRegistered                   | 4. Create           |
+|              v                                                            v                     |
+|  +---------------------------------+                             +--------------------------+   |
+|  | EmbeddedPermissionControlClient |                             | EmbeddedPermissionPrompt |   |
+|  +---------------------------------+                             +--------------------------+   |
+|                                                                                 |               |
+|                                                                5. Create &amp; Show |               |
+|                                                                                 v               |
+|                                                            +----------------------------------+ |
+|                                                            | EmbeddedPermissionPromptBaseView | |
+|                                                            +----------------------------------+ |
+|                                                                                                 |
++-------------------------------------------------------------------------------------------------+</pre>
+<h2 id="3-component-deep-dive">3. Component Deep Dive</h2>
+<p>The implementation of the <code>&lt;permission&gt;</code> element spans across the renderer (Blink), the browser process, and the UI.</p>
+<h3 id="31-htmlpermissionelement-the-renderer-component">3.1. <code>HTMLPermissionElement</code>: The Renderer Component</h3>
+<p>The renderer-side implementation is responsible for parsing the <code>&lt;permission&gt;</code> element, handling its attributes, and managing its state.</p>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/html_permission_element.h"><code>third_party/blink/renderer/core/html/html_permission_element.h</code></a> / <code>.cc</code></strong></p>
+<ul>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/html_permission_element.h"><code>HTMLPermissionElement</code></a> class:</strong> This is the C++ implementation of the <code>&lt;permission&gt;</code> element. It inherits from <code>HTMLElement</code> and handles all renderer-side logic for the element.</li>
+<li><strong>Attributes:</strong> It handles the <code>type</code> attribute, which specifies the permission to be requested (e.g., &quot;camera&quot;, &quot;geolocation&quot;).</li>
+<li><strong>Communication:</strong> It communicates with the browser process via the <code>PermissionService</code> Mojo interface.</li>
+</ul>
+<p>The <code>HTMLPermissionElement</code> has several complex areas in its implementation, primarily due to the need for robust security and state management.</p>
+<h4 id="311-clickjacking-mitigation">3.1.1. Clickjacking Mitigation</h4>
+<p>The most complex part of the <code>HTMLPermissionElement</code> is its defense against clickjacking. This is achieved through a combination of an <code>IntersectionObserver</code> and geometry checks.</p>
+<ul>
+<li><strong><code>IntersectionObserver</code>:</strong> The element uses an <code>IntersectionObserver</code> to monitor its visibility and occlusion, which is initialized in <code>HTMLPermissionElement::AttachLayoutTree</code>. The observer is configured to track whether the element is at least 90% visible and has been for at least 100ms. The callback for the observer is <code>HTMLPermissionElement::OnIntersectionChanged</code>.</li>
+<li><strong>Geometry Checks:</strong> The element also tracks its own geometry (size and position). The <code>HTMLPermissionElement::DidRecalcStyle</code> and <code>HTMLPermissionElement::DidFinishLifecycleUpdate</code> methods check if the element&#39;s intersection with the viewport has changed. If it has, a timer is started by calling <code>DisableClickingTemporarily</code>, and clicks are ignored until the timer has finished.</li>
+<li><strong>Occlusion Detection:</strong> The <code>IntersectionObserver</code> is configured with <code>expose_occluder_id = true</code> in its parameters. This allows the element to know which element is covering it via the <code>IntersectionObserverEntry</code> in the <code>OnIntersectionChanged</code> callback.</li>
+</ul>
+<h4 id="312-state-management">3.1.2. State Management</h4>
+<p>The <code>HTMLPermissionElement</code> has a complex state machine that tracks the permission status, the element&#39;s validity, and the user&#39;s interaction with the element.</p>
+<ul>
+<li><strong>Permission Status:</strong> The element&#39;s appearance and behavior change based on the current permission status (granted, denied, or prompt). This status is cached in the renderer process (propagated from browser process early when the page completed navigation) and updated by the browser process via the <code>OnPermissionStatusChange</code> method, which is part of the <code>CachedPermissionStatus::Client</code> interface implemented by <code>HTMLPermissionElement</code>.</li>
+<li><strong>Element Validity:</strong> The element can be in an invalid state for several reasons. The <code>isValid()</code> method returns the element&#39;s validity, which is determined by the <code>GetClickingEnabledState()</code> method. This method checks for things like being in a secure context, having a valid <code>type</code> attribute, and having valid CSS.</li>
+<li><strong>User Interaction:</strong> The element tracks user interaction to prevent abuse. For example, in <code>HTMLPermissionElement::DefaultEventHandler</code>, it checks the <code>pending_request_created_</code> timestamp to see if a request is already pending.</li>
+</ul>
+<h4 id="313-shadow-dom-and-internal-structure">3.1.3. Shadow DOM and Internal Structure</h4>
+<p>The <code>&lt;permission&gt;</code> element is not a simple element. It&#39;s composed of a shadow DOM that contains an icon and a text span, which are created in the <code>HTMLPermissionElement::DidAddUserAgentShadowRoot</code> method.</p>
+<ul>
+<li><strong>Shadow DOM:</strong> The use of a shadow DOM encapsulates the element&#39;s internal structure and styling, preventing it from being manipulated by the website&#39;s CSS.</li>
+<li><strong>Icon:</strong> The icon is implemented as a separate custom element, <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/html_permission_icon_element.h"><code>HTMLPermissionIconElement</code></a>, which is added to the shadow DOM. This allows for the icon to have its own dedicated logic and styling.</li>
+<li><strong>Internal Styling:</strong> The element has its own <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/html/resources/permission.css">internal stylesheet</a> that defines the appearance of the icon and text. This stylesheet is carefully constructed to be resistant to tampering.</li>
+</ul>
+<h4 id="314-mojo-communication-and-lifecycle">3.1.4. Mojo Communication and Lifecycle</h4>
+<p>The <code>HTMLPermissionElement</code> has a complex lifecycle that is tied to its communication with the browser process.</p>
+<ul>
+<li><strong>Registration:</strong> When the element is rendered on the page, <code>HTMLPermissionElement::InsertedInto</code> is called, which in turn calls <code>MaybeRegisterPageEmbeddedPermissionControl</code>. This method is responsible for making the <code>RegisterPageEmbeddedPermissionControl</code> Mojo call to the browser process.</li>
+<li><strong>Connection Errors:</strong> The <code>permission_service_</code> mojo remote has a disconnect handler set in <code>GetPermissionService()</code> to call <code>OnPermissionServiceConnectionFailed</code>, which resets the service connection.</li>
+<li><strong>Garbage Collection:</strong> The element&#39;s lifecycle is managed by the Blink garbage collector. The <code>HTMLPermissionElement::RemovedFrom</code> method handles cleanup, including unregistering the element from the browser process by calling <code>EnsureUnregisterPageEmbeddedPermissionControl</code>.</li>
+</ul>
+<h4 id="315-css-validation">3.1.5. CSS Validation</h4>
+<p>To prevent websites from styling the <code>&lt;permission&gt;</code> element in a deceptive way, the element validates its own CSS.</p>
+<ul>
+<li><strong>Restricted Properties:</strong> Only a limited set of CSS properties can be applied to the element. This is enforced by <code>HTMLPermissionElement::GetCascadeFilter()</code>, which filters out properties that are not marked as <code>kValidForPermissionElement</code>.</li>
+<li><strong>Validation Logic:</strong> The <code>HTMLPermissionElement::DidRecalcStyle</code> method calls <code>IsStyleValid()</code> to check the values of the allowed CSS properties. If an invalid value is detected, the element is disabled by calling <code>DisableClickingIndefinitely(DisableReason::kInvalidStyle)</code>.</li>
+</ul>
+<h4 id="316-fallback-mode">3.1.6. Fallback Mode</h4>
+<p>The <code>HTMLPermissionElement</code> includes a graceful degradation mechanism known as &quot;fallback mode.&quot;</p>
+<ul>
+<li><strong>Trigger:</strong> This mode is activated if the element&#39;s <code>type</code> attribute is invalid or requests a permission that is not supported. This is checked in <code>HTMLPermissionElement::AttributeChanged</code>, and if the type is invalid, <code>EnableFallbackMode()</code> is called.</li>
+<li><strong>Behavior:</strong> When in fallback mode, the element essentially reverts to behaving like a generic <code>HTMLUnknownElement</code>. The <code>EnableFallbackMode()</code> method achieves this by adding an <code>&lt;slot&gt;</code> element to the user agent shadow root, which allows the element&#39;s children to render, and removing the internal permission container.</li>
+</ul>
+<h3 id="32-mojo-communication-layer">3.2. Mojo (Communication Layer)</h3>
+<p>The Mojo interface defines the contract for communication between the renderer and the browser process.</p>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/mojom/permissions/permission.mojom"><code>third_party/blink/public/mojom/permissions/permission.mojom</code></a></strong></p>
+<ul>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/mojom/permissions/permission.mojom"><code>PermissionService</code></a> interface:</strong> Implemented in the browser process by <code>PermissionServiceImpl</code>, this interface provides methods for the renderer to interact with the permission system. The key methods for the <code>&lt;permission&gt;</code> element are:<ul>
+<li><code>RegisterPageEmbeddedPermissionControl</code>: The renderer calls this to inform the browser about a new <code>&lt;permission&gt;</code> element.</li>
+<li><code>RequestPageEmbeddedPermission</code>: The renderer calls this when the user clicks the <code>&lt;permission&gt;</code> element.</li>
+</ul>
+</li>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/mojom/permissions/permission.mojom"><code>EmbeddedPermissionControlClient</code></a> interface:</strong> Implemented in the renderer process by <code>HTMLPermissionElement</code>, this interface allows the browser to send messages back to the permission element. The key method is:<ul>
+<li><code>OnEmbeddedPermissionControlRegistered</code>: Called by the browser to inform the renderer of the result of the registration process.</li>
+</ul>
+</li>
+</ul>
+<h3 id="33-browser-process">3.3. Browser Process</h3>
+<p>The browser-side implementation is responsible for handling the permission logic, displaying the UI, and managing the user&#39;s decisions.</p>
+<h4 id="331-instance-per-page-logic">3.3.1. Instance-per-Page Logic</h4>
+<p>A key security and anti-abuse feature of PEPC is that it limits the number of <code>&lt;permission&gt;</code> elements that can be active on a single page at any given time. This logic is managed by the <code>EmbeddedPermissionControlChecker</code> class.</p>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/permissions/embedded_permission_control_checker.h"><code>content/browser/permissions/embedded_permission_control_checker.h</code></a> / <code>.cc</code></strong></p>
+<ul>
+<li><strong><code>EmbeddedPermissionControlChecker</code> class:</strong> This class is attached to a <code>Page</code> object (making it &quot;per page&quot;). It&#39;s responsible for tracking and enforcing the instance limit for <code>&lt;permission&gt;</code> elements.</li>
+<li><strong><code>client_map_</code> Data Structure:</strong> The core of the checker is the <code>client_map_</code>, a <code>std::map</code> that associates a set of permission types with a queue of <code>Client</code> objects. Each <code>Client</code> object represents a single <code>&lt;permission&gt;</code> element on the page.</li>
+<li><strong><code>kMaxPEPCPerPage</code> Limit:</strong> The checker enforces a hard limit of 3 active <code>&lt;permission&gt;</code> elements per permission type on a page. This is defined by the <code>kMaxPEPCPerPage</code> constant. <em>Note: Some element types may have higher limits. See the checker for details.</em></li>
+<li><strong>Queuing Behavior:</strong> When a new <code>&lt;permission&gt;</code> element is registered, <code>CheckPageEmbeddedPermission</code> is called. If the number of active elements for that permission type is less than the limit, the new element is approved. Otherwise, it&#39;s added to the queue but not approved. When an active element is removed (e.g., the user navigates away or the element is removed from the DOM), its corresponding <code>Client</code> is removed from the queue, and the next element in the queue is approved. This creates a queuing behavior that ensures that only a limited number of elements are active at any given time.</li>
+</ul>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/permissions/permission_service_impl.h"><code>content/browser/permissions/permission_service_impl.h</code></a> / <code>.cc</code></strong></p>
+<ul>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/permissions/permission_service_impl.h"><code>PermissionServiceImpl</code></a> class:</strong> This class is the browser-side implementation of the <code>PermissionService</code> Mojo interface.</li>
+<li><strong>Request Dispatching:</strong> It acts as a dispatcher, receiving <code>RegisterPageEmbeddedPermissionControl</code> and <code>RequestPageEmbeddedPermission</code> calls from the renderer and forwarding them to the <code>PermissionControllerImpl</code>.</li>
+<li><strong>Validation:</strong> In the <code>RegisterPageEmbeddedPermissionControl</code> method, it uses <code>EmbeddedPermissionControlChecker</code> to perform security checks on the element.</li>
+<li><strong>Context Management:</strong> It holds a <code>PermissionServiceContext</code> member, which provides information about the renderer frame and the browser context.</li>
+</ul>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/permissions/permission_controller_impl.h"><code>content/browser/permissions/permission_controller_impl.h</code></a> / <code>.cc</code></strong></p>
+<ul>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/permissions/permission_controller_impl.h"><code>PermissionControllerImpl</code></a> class:</strong> This is the central class for permission management in the browser process. It handles permission requests by creating <code>PermissionRequest</code> objects, queries permission statuses, and stores the user&#39;s decisions.</li>
+</ul>
+<h3 id="34-ui-components">3.4. UI Components</h3>
+<p>The UI components are responsible for displaying the secondary permission prompt to the user. The logic for determining which UI screen to show is shared between platforms, while the view implementation is platform-specific.</p>
+<h4 id="341-embeddedpermissionpromptflowmodel-shared-ui-logic">3.4.1. <code>EmbeddedPermissionPromptFlowModel</code>: Shared UI Logic</h4>
+<p>The core logic for the embedded permission prompt&#39;s multi-screen flow is managed by the <code>EmbeddedPermissionPromptFlowModel</code>. This class is not a UI view itself, but a shared model used by both desktop and Android to decide which screen (or &quot;variant&quot;) of the prompt to display.</p>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/embedded_permission_prompt_flow_model.h"><code>components/permissions/embedded_permission_prompt_flow_model.h</code></a> / <code>.cc</code></strong></p>
+<ul>
+<li><strong>State Management:</strong> The model inspects the current state of the permission (e.g., <code>ContentSetting</code>, OS-level status, enterprise policies) to determine the appropriate UI.</li>
+<li><strong>Screen Variants:</strong> It defines an enum, <code>Variant</code>, which represents all possible screens the prompt can show. This includes states like <code>kAsk</code> (the main prompt), <code>kPreviouslyDenied</code> (a prompt variant for previously denied permissions), <code>kOsPrompt</code> (informing the user that an OS prompt is active), and <code>kAdministratorDenied</code> (informing the user that the permission is blocked by policy).</li>
+<li><strong>Platform Agnostic:</strong> Both the desktop and Android UI controllers create an instance of this model and use its <code>DeterminePromptVariant</code> method to decide which view to present to the user. This keeps the complex flow logic consistent across platforms.</li>
+</ul>
+<h4 id="342-desktop-views">3.4.2. Desktop (Views)</h4>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/permissions/permission_prompt_factory.cc"><code>chrome/browser/ui/views/permissions/permission_prompt_factory.cc</code></a></strong></p>
+<ul>
+<li><strong><code>CreatePermissionPrompt</code> function:</strong> This factory function is responsible for creating the correct type of permission prompt.</li>
+<li><strong>Prompt Selection:</strong> It checks if the permission request was initiated by a <code>&lt;permission&gt;</code> element by calling <code>permissions::PermissionUtil::ShouldCurrentRequestUsePermissionElementSecondaryUI</code>. If it was, it creates an <code>EmbeddedPermissionPrompt</code>.</li>
+</ul>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/permissions/embedded_permission_prompt.h"><code>chrome/browser/ui/views/permissions/embedded_permission_prompt.h</code></a> / <code>.cc</code></strong></p>
+<ul>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/permissions/embedded_permission_prompt.h"><code>EmbeddedPermissionPrompt</code></a> class:</strong> This is the high-level controller for the embedded permission prompt. It&#39;s not a view itself, but it manages the lifecycle of the prompt view.</li>
+<li><strong>Flow Management:</strong> The <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/embedded_permission_prompt_flow_model.h"><code>EmbeddedPermissionPromptFlowModel</code></a> is used to manage the different views that can be shown in the prompt. This includes the main prompt view, a view that informs the user that the permission is blocked, and a view that informs the user that the permission has been granted. This state management adds a layer of complexity to the prompt&#39;s implementation.</li>
+<li><strong>Delegate:</strong> It acts as a delegate for the prompt view, handling user actions like &quot;Allow&quot; and &quot;Dismiss&quot;, which in turn call <code>Accept()</code> and <code>Dismiss()</code> on the <code>PermissionRequest</code> delegate.</li>
+</ul>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/permissions/embedded_permission_prompt_base_view.h"><code>chrome/browser/ui/views/permissions/embedded_permission_prompt_base_view.h</code></a> / <code>.cc</code></strong></p>
+<ul>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/permissions/embedded_permission_prompt_base_view.h"><code>EmbeddedPermissionPromptBaseView</code></a> class:</strong> This is the abstract base class for the actual UI of the embedded permission prompt. It&#39;s a <code>views::BubbleDialogDelegateView</code> that provides the common structure for the prompt.</li>
+<li><strong>Dynamic UI:</strong> The <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/permissions/embedded_permission_prompt_base_view.h"><code>EmbeddedPermissionPromptBaseView</code></a> is a highly dynamic view. The text and buttons that are displayed can change based on the state of the permission request. This is handled by the <code>GetRequestLinesConfiguration()</code> and <code>GetButtonsConfiguration()</code> methods, which are implemented by subclasses.</li>
+</ul>
+<h4 id="342-android">3.4.2. Android</h4>
+<p>On Android, the permission prompt is implemented as a modal dialog. The differentiation between a regular prompt and a PEPC prompt is handled by a boolean flag that is passed from the C++ side to the Java side.</p>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/android/permission_prompt/permission_prompt_android.cc"><code>components/permissions/android/permission_prompt/permission_prompt_android.cc</code></a></strong></p>
+<ul>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/android/permission_prompt/permission_prompt_android.h"><code>PermissionPromptAndroid</code></a> class:</strong> This is the C++ part of the Android permission prompt. It acts as a bridge to the Java UI.</li>
+<li><strong>PEPC Detection:</strong> In its constructor, it calls <code>permissions::PermissionUtil::ShouldCurrentRequestUsePermissionElementSecondaryUI()</code> to determine if the current permission request is for a PEPC prompt.</li>
+<li><strong>JNI Bridge:</strong> It passes the result of the PEPC check as a boolean (<code>useRequestElement</code>) to the Java <code>PermissionDialogController</code> when it&#39;s created via a JNI call.</li>
+</ul>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/android/java/src/org/chromium/components/permissions/PermissionDialogController.java"><code>components/permissions/android/java/src/org/chromium/components/permissions/PermissionDialogController.java</code></a></strong></p>
+<ul>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/android/java/src/org/chromium/components/permissions/PermissionDialogController.java"><code>PermissionDialogController</code></a> class:</strong> This is the main controller for the permission prompt on Android.</li>
+<li><strong>PEPC Flag:</strong> It receives the <code>useRequestElement</code> boolean in its constructor. This flag is then used to customize the dialog for a PEPC prompt (e.g., by changing the text or the layout).</li>
+<li><strong>Lifecycle Management:</strong> The <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/android/java/src/org/chromium/components/permissions/PermissionDialogController.java"><code>PermissionDialogController</code></a> has to carefully manage the lifecycle of the <code>PermissionDialog</code>. It needs to handle cases where the dialog is dismissed by the user, the system, or by a screen rotation.</li>
+<li><strong>JNI Bridge:</strong> The controller communicates with the C++ backend through a JNI bridge (<code>mNativePermissionDialogController</code>). This involves passing data between the Java and C++ worlds, which can be complex and error-prone.</li>
+</ul>
+<p><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/android/java/src/org/chromium/components/permissions/PermissionDialogDelegate.java"><code>components/permissions/android/java/src/org/chromium/components/permissions/PermissionDialogDelegate.java</code></a></strong></p>
+<ul>
+<li><strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/android/java/src/org/chromium/components/permissions/PermissionDialogDelegate.java"><code>PermissionDialogDelegate</code></a> class:</strong> This class acts as a bridge between the <code>PermissionRequest</code> (from the C++ side) and the Java UI. It provides the <code>PermissionDialogController</code> with the necessary data to display the prompt (e.g., <code>getMessageText()</code>, <code>getPrimaryButtonText()</code>) and forwards user decisions back to the <code>PermissionRequest</code> (e.g., <code>onAccept()</code>, <code>onDismiss()</code>).</li>
+</ul>
+<p>The view for the permission prompt is defined in the layout files <code>permission_dialog_vertical_buttons_permission.xml</code> and <code>permission_dialog.xml</code>, and is inflated by the <code>PermissionDialogCoordinator</code>.</p>
+<h2 id="4-code-level-flow">4. Code-Level Flow</h2>
+<p>This section describes the step-by-step code flow for a typical permission request initiated by a <code>&lt;permission&gt;</code> element.</p>
+<ol>
+<li><p><strong>Element Creation (Renderer):</strong></p>
+<ul>
+<li>When the HTML parser encounters a <code>&lt;permission&gt;</code> tag, it creates an <code>HTMLPermissionElement</code> instance.</li>
+<li>When the element is rendered on the page, its <code>MaybeRegisterPageEmbeddedPermissionControl</code> method is called.</li>
+<li>This method gets the <code>PermissionService</code> Mojo remote and calls <code>RegisterPageEmbeddedPermissionControl</code>, passing the requested permissions and a pending remote for its <code>EmbeddedPermissionControlClient</code> implementation.</li>
+</ul>
+</li>
+<li><p><strong>Registration (Browser):</strong></p>
+<ul>
+<li>The <code>PermissionServiceImpl</code> receives the <code>RegisterPageEmbeddedPermissionControl</code> call.</li>
+<li>It uses <code>EmbeddedPermissionControlChecker</code> to verify that the element is allowed in the current context.</li>
+<li>It then calls <code>OnEmbeddedPermissionControlRegistered</code> on the <code>EmbeddedPermissionControlClient</code> remote to send the result back to the renderer.</li>
+</ul>
+</li>
+<li><p><strong>User Interaction (Renderer):</strong></p>
+<ul>
+<li>The user clicks the <code>&lt;permission&gt;</code> element.</li>
+<li>The <code>HTMLPermissionElement</code>&#39;s <code>DefaultEventHandler</code> calls <code>RequestPageEmbeddedPermissions</code>.</li>
+<li>This method calls <code>RequestPageEmbeddedPermission</code> on the <code>PermissionService</code> Mojo remote, passing the permission descriptors and the element&#39;s position.</li>
+</ul>
+</li>
+<li><p><strong>Prompt Creation (Browser):</strong></p>
+<ul>
+<li>The <code>PermissionServiceImpl</code> receives the <code>RequestPageEmbeddedPermission</code> call.</li>
+<li>It forwards the request to the <code>PermissionControllerImpl</code>.</li>
+<li>The <code>PermissionControllerImpl</code> creates a <code>PermissionRequest</code> and shows it via the <code>PermissionRequestManager</code>.</li>
+<li>The <code>PermissionRequestManager</code> creates a <code>PermissionPromptAndroid</code> instance.</li>
+<li>Inside the <code>PermissionPromptAndroid</code> constructor, <code>permissions::PermissionUtil::ShouldCurrentRequestUsePermissionElementSecondaryUI()</code> is called.</li>
+<li>The <code>PermissionPromptAndroid</code> then creates a <code>PermissionDialogController</code> on the Java side, passing the boolean result of the check.</li>
+</ul>
+</li>
+<li><p><strong>Prompt Display (Browser):</strong></p>
+<ul>
+<li><strong>Desktop:</strong> The <code>EmbeddedPermissionPrompt</code> (the controller) creates a concrete subclass of <code>EmbeddedPermissionPromptBaseView</code> (the view). The view is shown as a bubble anchored to the position of the <code>&lt;permission&gt;</code> element.</li>
+<li><strong>Android:</strong> The <code>PermissionDialogDelegate</code> holds the information about whether this is a PEPC prompt. The <code>PermissionDialogController</code> passes this delegate to the <code>PermissionDialogCoordinator</code>, which then inflates and customizes the appropriate view, for example by using a different layout.</li>
+</ul>
+</li>
+<li><p><strong>User Decision (Browser):</strong></p>
+<ul>
+<li>The user clicks a button on the prompt (e.g., &quot;Allow&quot;).</li>
+<li><strong>Desktop:</strong> The <code>EmbeddedPermissionPromptBaseView</code> calls a method on its delegate, the <code>EmbeddedPermissionPrompt</code>. The <code>EmbeddedPermissionPrompt</code> calls the appropriate method on its <code>delegate_</code> (the <code>PermissionRequest</code>), such as <code>Accept()</code> or <code>Deny()</code>.</li>
+<li><strong>Android:</strong> User actions on the dialog view are handled by the <code>PermissionDialogMediator</code>, which notifies the <code>PermissionDialogController</code>. The controller then calls the appropriate method on the <code>PermissionDialogDelegate</code>.</li>
+</ul>
+</li>
+<li><p><strong>Decision Handling (Browser and Renderer):</strong></p>
+<ul>
+<li>The <code>PermissionRequest</code> notifies the <code>PermissionControllerImpl</code> of the user&#39;s decision.</li>
+<li>The <code>PermissionControllerImpl</code> stores the decision.</li>
+<li>The result of the <code>RequestPageEmbeddedPermission</code> Mojo call is sent back to the renderer, and the <code>HTMLPermissionElement</code>&#39;s <code>OnEmbeddedPermissionsDecided</code> method is called with the result.</li>
+</ul>
+</li>
+</ol>
+<h3 id="52-bypassing-the-quiet-ui">5.2. Bypassing the Quiet UI</h3>
+<p>The most significant difference is that PEPC requests bypass the &quot;quiet&quot; permission UI. The quiet UI is a less intrusive prompt that is shown when the browser determines that a regular permission prompt would be too disruptive.</p>
+<h2 id="5-behavioral-differences-pepc-vs-regular-requests">5. Behavioral Differences: PEPC vs. Regular Requests</h2>
+<p>PEPC permission requests are treated differently from regular permission requests in a few key ways, primarily because they are considered a stronger signal of user intent.</p>
+<h3 id="51-bypassing-permission-status-check">5.1. Bypassing Permission Status Check</h3>
+<p>A key difference is that PEPC prompts can be shown even if the permission has been previously denied by the user. Regular permission prompts are only shown if the permission status is &quot;ask&quot;.</p>
+<ul>
+<li><p><strong>Logic:</strong> Both regular and PEPC permission requests flow through the same initial path, eventually reaching <code>PermissionContextBase::RequestPermission</code> for the specific permission type. Inside this method, the following sequence occurs:</p>
+<ol>
+<li><code>GetPermissionStatus</code> is called to retrieve the current status of the permission (e.g., GRANTED, DENIED, or ASK). This function also returns the <code>source</code> of the status (e.g., user decision, embargo, kill switch).</li>
+<li>The result is passed to <code>PermissionUtil::CanPermissionRequestIgnoreStatus</code>. This is the critical function for the bypass behavior.</li>
+<li><code>CanPermissionRequestIgnoreStatus</code> checks if the request was initiated by a permission element (via the <code>embedded_permission_element_initiated</code> flag in <code>PermissionRequestData</code>).</li>
+<li>If it is a PEPC request, the function checks the <code>source</code> of the permission status. It returns <code>true</code> if the denial is from a &quot;soft&quot; source that a direct user gesture should be able to override (like a previous user dismissal or ignore). It returns <code>false</code> for &quot;hard&quot; denials (like a kill switch or enterprise policy).</li>
+<li>Back in <code>PermissionContextBase::RequestPermission</code>, there is a check: <code>if (!status_ignorable &amp;&amp; ...)</code><ul>
+<li>For a <strong>regular request</strong>, <code>CanPermissionRequestIgnoreStatus</code> returns <code>false</code>. If the permission is already denied, the condition is met, and the request is immediately rejected without showing a prompt.</li>
+<li>For a <strong>PEPC request</strong> that was previously denied by the user, <code>CanPermissionRequestIgnoreStatus</code> returns <code>true</code>. This makes the <code>!status_ignorable</code> part of the condition <code>false</code>, so the entire block is skipped.</li>
+</ul>
+</li>
+<li>Because the rejection block is skipped, the code proceeds to <code>DecidePermission</code>, which continues the process of showing a prompt to the user.</li>
+</ol>
+</li>
+<li><p><strong>Rationale:</strong> This allows users to easily change their minds about a permission that they have previously denied, without having to go into site settings. The explicit user gesture on the <code>&lt;permission&gt;</code> element is considered a strong enough signal to warrant re-prompting, unless the permission is blocked by a system-level or administrative policy.</p>
+</li>
+</ul>
+<h3 id="52-bypassing-the-quiet-ui-1">5.2. Bypassing the Quiet UI</h3>
+<p>The most significant difference is that PEPC requests bypass the &quot;quiet&quot; permission UI. The quiet UI is a less intrusive prompt that is shown when the browser determines that a regular permission prompt would be too disruptive.</p>
+<ul>
+<li><strong>Logic:</strong> The decision to bypass the quiet UI is made in <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/permission_manager.cc"><code>PermissionManager::RequestPermissions</code></a>. This method checks if the request is a PEPC request by calling <code>permissions::PermissionUtil::ShouldCurrentRequestUsePermissionElementSecondaryUI</code>. If it is, the quiet UI is skipped and the full permission prompt is shown.</li>
+<li><strong>Rationale:</strong> Because a PEPC request is initiated by a direct user interaction with the <code>&lt;permission&gt;</code> element, it&#39;s assumed that the user is expecting a prompt and is ready to make a decision. Therefore, the less intrusive quiet UI is not necessary.</li>
+</ul>
+<h3 id="53-ui-customization">5.3. UI Customization</h3>
+<p>As mentioned in the previous sections, the UI for a PEPC prompt is different from a regular permission prompt.</p>
+<ul>
+<li><strong>Desktop:</strong> On desktop, a PEPC prompt is an <code>EmbeddedPermissionPrompt</code>, which is a bubble that is anchored to the <code>&lt;permission&gt;</code> element. A regular permission prompt is a bubble that is anchored to the omnibox.</li>
+<li><strong>Android:</strong> On Android, the <code>PermissionDialogController</code> receives a <code>useRequestElement</code> boolean that tells it to customize the dialog for a PEPC request. This can include changing the text to be more contextual to the user&#39;s action, or using a different layout.</li>
+</ul>
+<h3 id="54-request-preemption">5.4. Request Preemption</h3>
+<p>PEPC requests have a higher priority than regular permission requests. If a regular permission prompt is already showing and a PEPC request is triggered, the regular prompt will be cancelled and the PEPC prompt will be shown immediately.</p>
+<ul>
+<li><strong>Logic:</strong> This logic is implemented in the <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/permissions/permission_request_queue.cc"><code>PermissionRequestQueue::AddRequest</code></a>. When a new request is added to the queue, it checks if the new request is a PEPC request and if the currently showing request is <em>not</em> a PEPC request. If both are true, the currently showing request is cancelled.</li>
+<li><strong>Rationale:</strong> This ensures that PEPC requests, which are the result of a direct and explicit user action, are not blocked by less urgent, programmatically triggered permission requests.</li>
+</ul>
+<h2 id="6-metrics">6. Metrics</h2>
+<p>The PEPC feature is instrumented with a number of metrics to monitor its usage and performance. These metrics are recorded in UMA and UKM.</p>
+<h3 id="61-renderer-metrics">6.1. Renderer Metrics</h3>
+<p>These metrics are recorded in the renderer process and are related to the <code>&lt;permission&gt;</code> element itself.</p>
+<ul>
+<li><p><strong><code>Blink.PermissionElement.UserInteractionAccepted</code></strong>: A boolean histogram that records whether a user interaction (click) on the <code>&lt;permission&gt;</code> element was accepted or not. A click might be rejected for security reasons, for example if the element is obscured or has a deceptive style.</p>
+</li>
+<li><p><strong><code>Blink.PermissionElement.UserInteractionDeniedReason</code></strong>: An enumeration histogram that records the reason why a user interaction was denied. The possible values are:</p>
+<ul>
+<li><code>kInvalidType</code>: The <code>type</code> attribute of the element is invalid.</li>
+<li><code>kFailedOrHasNotBeenRegistered</code>: The element has not been successfully registered with the browser process.</li>
+<li><code>kRecentlyAttachedToLayoutTree</code>: The element was recently attached to the layout tree.</li>
+<li><code>kIntersectionWithViewportChanged</code>: The element&#39;s intersection with the viewport has recently changed.</li>
+<li><code>kIntersectionVisibilityOutOfViewPortOrClipped</code>: The element is outside the viewport or clipped.</li>
+<li><code>kIntersectionVisibilityOccludedOrDistorted</code>: The element is occluded by another element or has a distorted visual effect.</li>
+<li><code>kInvalidStyle</code>: The element has a deceptive style.</li>
+<li><code>kUntrustedEvent</code>: The click event was not triggered by a real user.</li>
+</ul>
+</li>
+<li><p><strong><code>Blink.PermissionElement.InvalidStyleReason</code></strong>: An enumeration histogram that records the reason why the element&#39;s style was considered invalid.</p>
+</li>
+</ul>
+<h3 id="62-browser-metrics">6.2. Browser Metrics</h3>
+<p>These metrics are recorded in the browser process and are related to the PEPC prompt.</p>
+<ul>
+<li><p><strong><code>Permissions.EmbeddedPermissionPrompt.Flow.Variant</code></strong>: An enumeration histogram that records which variant of the PEPC prompt was shown to the user. The possible values are:</p>
+<ul>
+<li><code>kUninitialized</code></li>
+<li><code>kAdministratorGranted</code></li>
+<li><code>kPreviouslyGranted</code></li>
+<li><code>kOsSystemSettings</code></li>
+<li><code>kOsPrompt</code></li>
+<li><code>kAsk</code></li>
+<li><code>kPreviouslyDenied</code></li>
+<li><code>kAdministratorDenied</code></li>
+</ul>
+</li>
+<li><p><strong><code>Permissions.Prompt.{PermissionType}.ElementAnchoredBubble.{OsScreen}.OsScreenAction</code></strong>: An enumeration histogram that records the user&#39;s action on the OS-related screens of the PEPC prompt.</p>
+<ul>
+<li><code>{PermissionType}</code> can be <code>Camera</code>, <code>Microphone</code>, or <code>Geolocation</code>.</li>
+<li><code>{OsScreen}</code> can be <code>OsPrompt</code> or <code>OsSystemSettings</code>.</li>
+<li><code>OsScreenAction</code> can be:<ul>
+<li><code>kSystemSettings</code></li>
+<li><code>kDismissedXButton</code></li>
+<li><code>kDismissedScrim</code></li>
+<li><code>kOsPromptDenied</code></li>
+<li><code>kOsPromptAllowed</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong><code>Permissions.Prompt.{PermissionType}.ElementAnchoredBubble.{OsScreen}.{OsScreenAction}.TimeToAction</code></strong>: A time histogram that records the time between showing an OS-related screen and the user taking an action on it.</p>
+</li>
+</ul>
+<h3 id="63-ukm">6.3. UKM</h3>
+<p>UKM data is recorded for the PEPC feature to allow for more detailed analysis of user behavior. The <code>ElementAnchoredPermissionPrompt</code> event is recorded with the following metrics:</p>
+<ul>
+<li><strong><code>Action</code></strong>: The user&#39;s action on the prompt. The possible values are defined in the <code>ElementAnchoredBubbleAction</code> enum.</li>
+<li><strong><code>Variant</code></strong>: The variant of the prompt that was shown. The possible values are defined in the <code>ElementAnchoredBubbleVariant</code> enum.</li>
+<li><strong><code>ScreenCounter</code></strong>: The number of screens that were shown to the user during the permission request flow.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/permissions/pepc.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/permissions/pepc.md</a>
+  </p>
+</div>

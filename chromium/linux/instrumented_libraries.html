@@ -1,0 +1,72 @@
+<h1>Linux Instrumented Libraries</h1>
+<p>The instrumented libraries are a collection of Chromium&#39;s dependencies built
+with *SAN enabled. The MSAN libraries are required for an MSAN build to run. The
+others are optional, and are currently unused.</p>
+<h2 id="building-the-instrumented-libraries">Building the instrumented libraries</h2>
+<p>Building the libraries requires <code>apt-get source</code>, so the build must be done in
+an Ubuntu 26.04 (Resolute) environment.
+<code>third_party/instrumented_libs/scripts/build_in_chroot.py</code> takes care of this.
+It sets up an Ubuntu chroot under <code>out/</code> as an unprivileged user, and builds the
+libraries in it, so it works on any Linux distro.</p>
+<p>Apt is pinned to a fixed snapshot.ubuntu.com timestamp (<code>SNAPSHOT</code> in the
+script), so the package sources and build dependencies are reproducible. Bump it
+to pick up newer packages.</p>
+<p>To build both the <code>msan-no-origins</code> and <code>msan-chained-origins</code> libraries:</p>
+<pre data-language="shell">third_party/instrumented_libs/scripts/build_in_chroot.py</pre>
+<p>The first run creates the chroot in <code>out/instrumented_libs_chroot_resolute</code>,
+which takes a while. Later runs reuse it. If only
+<code>third_party/instrumented_libs/resolute/scripts/install-build-deps.sh</code> changed,
+the new packages are installed into the existing chroot. Pass <code>--recreate</code> to
+start from scratch.</p>
+<p>The libraries are built in <code>out/instrumented_libs_build_resolute</code>, and are
+packaged as <code>msan-*-resolute-lib.tar.gz</code> in the root of the source tree.</p>
+<h3 id="isolation-modes">Isolation modes</h3>
+<p>The chroot is entered using one of two mechanisms, selected with <code>--mode</code>:</p>
+<ul>
+<li><code>namespace</code> (the default): Unprivileged user namespaces + <code>chroot</code>. This
+runs at native speed.</li>
+<li><code>proot</code>: For machines that have unprivileged user namespaces disabled. Only
+<code>ptrace</code> is required, but builds are about 3x slower.</li>
+</ul>
+<p>On a 128-thread machine, creating the chroot takes about 13 minutes in
+<code>namespace</code> mode and 20 minutes in <code>proot</code> mode, mostly spent downloading and
+installing packages. A clean build of both sets of libraries then takes about 13
+minutes in <code>namespace</code> mode and 40 minutes in <code>proot</code> mode.</p>
+<h3 id="iterating-on-a-package">Iterating on a package</h3>
+<p>These options are useful when fixing build failures:</p>
+<ul>
+<li><code>--packages=&lt;pkg1&gt;,&lt;pkg2&gt;</code>: Build only these packages (GN target names in
+<code>third_party/instrumented_libs/resolute/BUILD.gn</code>), and skip packaging.</li>
+<li><code>--keep-going</code>: Continue building other packages after a failure.</li>
+<li><code>--no-clobber</code>: Keep each package&#39;s source and build tree, and reuse it on
+the next build. Failed builds always keep their tree, under
+<code>out/instrumented_libs_build_resolute/Instrumented-*/gen/third_party/instrumented_libs/resolute/&lt;pkg&gt;</code>.</li>
+<li><code>--shell</code>: Open a shell in the chroot.</li>
+</ul>
+<p>For example:</p>
+<pre data-language="shell">third_party/instrumented_libs/scripts/build_in_chroot.py --keep-going --packages=nss,pango1.0</pre>
+<p>See <code>--help</code> for the remaining options.</p>
+<h2 id="uploading-the-libraries">Uploading the libraries</h2>
+<p>This requires write permission on the <code>chromium-instrumented-libraries</code> GCS
+bucket. File a ticket at <a href="https://goto.google.com/pdeiosec-bug">go/pdeiosec-bug</a>
+to request access.</p>
+<pre data-language="shell">upload_to_google_storage_first_class.py -b chromium-instrumented-libraries msan-chained-origins-resolute-lib.tar.gz
+upload_to_google_storage_first_class.py -b chromium-instrumented-libraries msan-no-origins-resolute-lib.tar.gz</pre>
+<p>Each command prints an object entry. Add (or update) them in the <code>objects</code> list
+in <code>third_party/instrumented_libs/DEPS</code>.</p>
+<h2 id="testing-and-uploading-a-cl">Testing and uploading a CL</h2>
+<p>After uploading, run <code>gclient sync</code> and test out a build with <code>is_msan = true</code>
+in your <code>args.gn</code>. Try running eg. <code>chrome</code> and <code>unit_tests</code> to make sure it&#39;s
+working. The binaries should work natively on gLinux.</p>
+<p>When uploading a CL, make sure to add the following in the description so that
+the MSAN bot will run on the CQ:</p>
+<pre>CQ_INCLUDE_TRYBOTS=luci.chromium.try:linux_chromium_msan_rel_ng</pre>
+<h2 id="cleaning-up">Cleaning up</h2>
+<p>The chroot, its package cache, and the build directories are all under <code>out/</code>:</p>
+<pre data-language="shell">rm -rf out/instrumented_libs_chroot_resolute* out/instrumented_libs_build_resolute</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/instrumented_libraries.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/instrumented_libraries.md</a>
+  </p>
+</div>

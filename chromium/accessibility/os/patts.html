@@ -1,0 +1,91 @@
+<h1>The Chrome OS PATTS speech synthesis engine</h1>
+<p>Chrome OS comes with a speech synthesis engine developed internally at Google
+called PATTS. It&#39;s based on the same engine that ships with all Android devices.</p>
+<p><a href="../browser/tts">Read more about Text-to-Speech in Chrome</a>.</p>
+<p><a href="espeak">See also the eSpeak engine</a>.</p>
+<h2 id="building-from-source">Building from source</h2>
+<p>This is for Googlers only.</p>
+<p>Visit <a href="http://go/google-tts-web-ports">http://go/google-tts-web-ports</a>
+for instructions on how to build the engine from source and get the
+latest voice files.</p>
+<p>When debugging, start Chrome from the command-line and set the
+NACL_PLUGIN_DEBUG environment variable to 1 to print log messages to stdout.</p>
+<p>If running on Chrome OS on desktop Linux, you can put the unpacked extension in
+your downloads directory, and hide the existing TTS extension by temporarily
+renaming /usr/share/chromeos-assets to something else. Then in
+chrome://extensions you can enable developer mode and &quot;load unpacked extension&quot;.
+You must hide the existing TTS extension because extension keys must not be
+duplicated, and ChromeOS will crash if you try to load the unpacked extension
+while the built-in one is already loaded.</p>
+<p>To test, use the <a href="https://chrome.google.com/webstore/detail/tts-demo/chhkejkkcghanjclmhhpncachhgejoel">TTS Demo extension</a>
+in Chromeos. This should automatically recognize the unpacked TTS extension
+based on its manifest key. You can also use any site that uses a web speech API
+demo. In addition, the Chrome Accessibility team has a 
+<a href="https://chrome.google.com/webstore/detail/idllbaaoaldabjncnbfokacibfehkemd">TTS Debug extension</a>
+which can run several automated tests.</p>
+<h2 id="updating">Updating</h2>
+<p>First, follow the public
+<a href="http://www.chromium.org/chromium-os/developer-guide">Chromium OS Developer Guide</a> to check out the source.
+At a minimum you&#39;ll need to create a chroot and initialize the build for your board.
+You do not need to build everything from source.
+You do need to start the devserver.</p>
+<p>Next, flash your device to a very recent test build. Internally at Google
+you can do this with the following command when the dev server is running,
+where CHROMEBOOK_IP_ADDRESS is the IP address of your Chromebook already
+in developer mode, and $BOARD is your Chromebook&#39;s board name.</p>
+<p><code>cros flash ssh://CHROMEBOOK_IP_ADDRESS xbuddy://remote/$BOARD/latest-dev/test</code></p>
+<p>Before you can make changes to PATTS, the first thing you need to run
+(from the chroot) is call cros_workon with two relevant ebuilds:</p>
+<pre>cros_workon --board=$BOARD start chromiumos-assets
+cros_workon --board=$BOARD start common-assets</pre>
+<p>From outside the root, from anywhere under your top-level <code>&lt;repo-dir&gt;</code>, pull down the relevant sources:</p>
+<pre>repo sync</pre>
+<p>Again, outside the root, make sure you&#39;re in the <code>&lt;repo-dir&gt;/src/platform/assets</code> directory and run
+<code>repo start</code> to create a branch:</p>
+<pre>cd src/platform/assets
+repo start &lt;branch_name&gt; .</pre>
+<p>The PATTS data files can be found in this directory:</p>
+<p><code>src/platform/assets/speech_synthesis/patts</code></p>
+<p>When updating the files, the native client files (nexe) need to be zipped.</p>
+<p>Replace all of the files you need to update. You will probably not need
+to update the manifest.json, tts_main.js or tts_controller.js, as these
+are probably most up-to-date on ChromeOS and not google3. Look at recent
+commit history on both platforms to determine what changes should be
+pushed.</p>
+<p>Commit your changes using git, then from the chroot, run:</p>
+<pre>emerge-$BOARD common-assets
+cros deploy CHROMEBOOK_IP_ADDRESS common-assets</pre>
+<p>Note that you need to call cros_workon on both chromeos-assets and
+common-assets. You will be changing files in chromeos-assets, but
+to flash it onto your device, you need to emerge and deploy
+common-assets.</p>
+<p>After that, reboot your Chromebook and verify that speech works.</p>
+<p>To upload the change, use repo upload, something like this:</p>
+<pre>git commit -a
+  Bug: chromium:12345
+  Test: Write what you tested here
+repo upload .</pre>
+<p>After submitting, inform the <a href="mailto:chrome-a11y-core@google.com">Chrome Accessibility Team</a>
+so that they can update their local copies of TTS per the
+<a href="chromevox_on_desktop_linux">Chromevox instructions</a>.</p>
+<h2 id="ebuild">Ebuild</h2>
+<p>Note that sometimes you&#39;ll have to update the ebuild file that
+takes the patts data files and installs them, unzipping the .nexe
+files in the process.</p>
+<p>For example, you&#39;ll need to edit the ebuild if you add or remove
+a language code, or if you add or remove a file that needs to be
+installed as part of the extension.</p>
+<p>To update the ebuild, edit this file:</p>
+<pre>/third_party/chromiumos-overlay/chromeos-base/common-assets/common-assets-9999.ebuild</pre>
+<p>If you need to land changes to both common-assets and chromiumos-assets,
+upload the changes separately and then make them depend on one another
+using this syntax in the changelog:</p>
+<pre>CQ-DEPEND=CL:12345</pre>
+<p>Note that you can (and often should) have two changes depend on one another
+so they&#39;ll land atomically.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/patts.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/patts.md</a>
+  </p>
+</div>

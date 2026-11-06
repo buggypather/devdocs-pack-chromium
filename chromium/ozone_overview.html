@@ -1,0 +1,295 @@
+<h1>Ozone Overview</h1>
+<p>Ozone is a platform abstraction layer beneath the Aura window system that is
+used for low level input and graphics. Once complete, the abstraction will
+support underlying systems ranging from embedded SoC targets to new
+X11-alternative window systems on Linux such as Wayland or Mir to bring up Aura
+Chromium by providing an implementation of the platform interface.</p>
+<blockquote>
+<p>Note: There are 2 buildflags which target platforms who use OZONE.
+They are slightly different from each other:</p>
+<ul>
+<li>IS_OZONE: Targets Linux, ChromeOS, and Fuchsia.</li>
+<li>SUPPORTS_OZONE_WAYLAND: Targets only Linux systems supporting the Wayland
+  window manager. Does not include ChromeOS or Fuchsia. Note that this flag
+  only indicates that the build supports wayland, it does not mean that the
+  build is running with the Wayland window manager.</li>
+</ul>
+</blockquote>
+<h2 id="guiding-principles">Guiding Principles</h2>
+<p>Our goal is to enable chromium to be used in a wide variety of projects by
+making porting to new platforms easy. To support this goal, ozone follows the
+following principles:</p>
+<ol>
+<li><strong>Interfaces, not ifdefs</strong>. Differences between platforms are handled by
+calling a platform-supplied object through an interface instead of using
+conditional compilation. Platform internals remain encapsulated, and the
+public interface acts as a firewall between the platform-neutral upper
+layers (aura, blink, content, etc) and the platform-specific lower layers.
+The platform layer is relatively centralized to minimize the number of
+places ports need to add code.</li>
+<li><strong>Flexible interfaces</strong>. The platform interfaces should encapsulate just what
+chrome needs from the platform, with minimal constraints on the platform&#39;s
+implementation as well as minimal constraints on usage from upper layers. An
+overly prescriptive interface is less useful for porting because fewer ports
+will be able to use it unmodified. Another way of stating is that the
+platform layer should provide mechanism, not policy.</li>
+<li><strong>Runtime binding of platforms</strong>. Avoiding conditional compilation in the
+upper layers allows us to build multiple platforms into one binary and bind
+them at runtime. We allow this and provide a command-line flag to select a
+platform (<code>--ozone-platform</code>) if multiple are enabled. Each platform has a
+unique build define (e.g. <code>ozone_platform_foo</code>) that can be turned on or off
+independently.</li>
+<li><strong>Easy out-of-tree platforms</strong>. Most ports begin as forks. Some of them
+later merge their code upstream, others will have an extended life out of
+tree. This is OK, and we should make this process easy to encourage ports,
+and to encourage frequent gardening of chromium changes into the downstream
+project. If gardening an out-of-tree port is hard, then those projects will
+simply ship outdated and potentially insecure chromium-derived code to users.
+One way we support these projects is by providing a way to inject additional
+platforms into the build by only patching one <code>ozone_extra.gni</code> file.</li>
+</ol>
+<h2 id="ozone-platform-interface">Ozone Platform Interface</h2>
+<p>Ozone moves platform-specific code behind the following interfaces:</p>
+<ul>
+<li><code>PlatformWindow</code> represents a window in the windowing system underlying
+chrome. Interaction with the windowing system (resize, maximize, close, etc)
+as well as dispatch of input events happens via this interface. Under aura, a
+<code>PlatformWindow</code> corresponds to a <code>WindowTreeHost</code>. Under mojo, it corresponds
+to a <code>NativeViewport</code>. On bare hardware, the underlying windowing system is
+very simple and a platform window corresponds to a physical display.</li>
+<li><code>SurfaceFactoryOzone</code> is used to create surfaces for the Chrome compositor to
+paint on using EGL/GLES2 or Skia.</li>
+<li><code>GpuPlatformSupportHost</code> provides the platform code
+access to IPC between the browser &amp; GPU processes. Some platforms need this
+to provide additional services in the GPU process such as display
+configuration.</li>
+<li><code>OverlayManagerOzone</code> is used to manage overlays.</li>
+<li><code>InputController</code> allows to control input devices such as keyboard, mouse or
+touchpad.</li>
+<li><code>SystemInputInjector</code> converts input into events and injects them to the
+Ozone platform.</li>
+<li><code>NativeDisplayDelegate</code> is used to support display configuration &amp; hotplug.</li>
+<li><code>PlatformScreen</code> is used to fetch screen configuration.</li>
+<li><code>ClipboardDelegate</code> provides an interface to exchange data with other
+applications on the host system using a system clipboard mechanism.</li>
+</ul>
+<h2 id="ozone-in-chromium">Ozone in Chromium</h2>
+<p>Our implementation of Ozone required changes concentrated in these areas:</p>
+<ul>
+<li>Cleaning up extensive assumptions about use of X11 throughout the tree,
+protecting this code behind the <code>USE_X11</code> ifdef, and adding a new <code>IS_OZONE</code>
+path that works in a relatively platform-neutral way by delegating to the
+interfaces described above.</li>
+<li>a <code>WindowTreeHostOzone</code> to send events into Aura and participate in display
+management on the host system, and</li>
+<li>an Ozone-specific flavor of <code>GLSurfaceEGL</code> which delegates allocation of
+accelerated surfaces and refresh syncing to the provided implementation of
+<code>SurfaceFactoryOzone</code>.</li>
+</ul>
+<h2 id="porting-with-ozone">Porting with Ozone</h2>
+<p>Users of the Ozone abstraction need to do the following, at minimum:</p>
+<ul>
+<li>Write a subclass of <code>PlatformWindow</code>. This class (I&#39;ll call it
+<code>PlatformWindowImpl</code>) is responsible for window system integration. It can
+use <code>MessagePumpLibevent</code> to poll for events from file descriptors and then
+invoke <code>PlatformWindowDelegate::DispatchEvent</code> to dispatch each event.</li>
+<li>Write a subclass of <code>SurfaceFactoryOzone</code> that handles allocating accelerated
+surfaces. I&#39;ll call this <code>SurfaceFactoryOzoneImpl</code>.</li>
+<li>Write a subclass of <code>CursorFactory</code> to manage cursors, or use the
+<code>BitmapCursorFactory</code> implementation if only bitmap cursors need to be supported.</li>
+<li>Write a subclass of <code>OverlayManagerOzone</code> or just use <code>StubOverlayManager</code> if
+your platform does not support overlays.</li>
+<li>Write a subclass of <code>NativeDisplayDelegate</code> if necessary or just use
+<code>FakeDisplayDelegate</code>, and write a subclass of <code>PlatformScreen</code>, which is
+used by aura::ScreenOzone then.</li>
+<li>Write a subclass of <code>GpuPlatformSupportHost</code> or just use
+<code>StubGpuPlatformSupportHost</code>.</li>
+<li>Write a subclass of <code>InputController</code> or just use <code>StubInputController</code>.</li>
+<li>Write a subclass of <code>SystemInputInjector</code> if necessary.</li>
+<li>Write a subclass of <code>OzonePlatform</code> that owns instances of
+the above subclasses and provide a static constructor function for these
+objects. This constructor will be called when
+your platform is selected and the returned objects will be used to provide
+implementations of all the ozone platform interfaces.
+If your platform does not need some of the interfaces then you can just
+return a <code>Stub*</code> instance or a <code>nullptr</code>.</li>
+</ul>
+<h2 id="adding-an-ozone-platform-to-the-build-instructions-for-out-of-tree-ports">Adding an Ozone Platform to the build (instructions for out-of-tree ports)</h2>
+<p>The recommended way to add your platform to the build is as follows. This walks
+through creating a new ozone platform called <code>foo</code>.</p>
+<ol>
+<li>Fork <code>chromium/src.git</code>.</li>
+<li>Add your implementation in <code>ui/ozone/platform/</code> alongside internal platforms.</li>
+<li>Patch <code>ui/ozone/ozone_extra.gni</code> to add your <code>foo</code> platform.</li>
+</ol>
+<h2 id="building-with-ozone">Building with Ozone</h2>
+<h3 id="chrome-os---waterfall">Chrome OS - (<a href="https://build.chromium.org/p/chromium.chromiumos/waterfall?builder=Linux+ChromiumOS+Ozone+Builder&amp;builder=Linux+ChromiumOS+Ozone+Tests+%281%29&amp;builder=Linux+ChromiumOS+Ozone+Tests+%282%29&amp;reload=none">waterfall</a>)</h3>
+<p>To build <code>chrome</code>, do this from the <code>src</code> directory:</p>
+<pre data-language="shell">gn args out/OzoneChromeOS --args=&quot;use_ozone=true target_os=\&quot;chromeos\&quot;&quot;
+ninja -C out/OzoneChromeOS chrome</pre>
+<p>Then to run for example the X11 platform:</p>
+<pre data-language="shell">./out/OzoneChromeOS/chrome --ozone-platform=x11</pre>
+<h3 id="embedded">Embedded</h3>
+<p><strong>Warning: Only some targets such as <code>content_shell</code> or unit tests are
+currently working for embedded builds.</strong></p>
+<p>To build <code>content_shell</code>, do this from the <code>src</code> directory:</p>
+<pre data-language="shell">gn args out/OzoneEmbedded --args=&quot;use_ozone=true toolkit_views=false&quot;
+ninja -C out/OzoneEmbedded content_shell</pre>
+<p>Then to run for example the headless platform:</p>
+<pre data-language="shell">./out/OzoneEmbedded/content_shell --ozone-platform=headless \
+                                  --ozone-dump-file=/tmp/</pre>
+<h3 id="linux-desktop---x11-waterfall-">Linux Desktop - (<a href="https://ci.chromium.org/p/chromium/builders/try/linux-rel">X11 waterfall</a> &amp;&amp;</h3>
+<p><a href="https://ci.chromium.org/p/chromium/builders/try/linux-wayland-rel">Wayland waterfall</a>)</p>
+<p>By default, Linux enables the following Ozone backends - X11, Wayland and Headless.</p>
+<p>If you want to disable Ozone/X11 in the build, do this from the <code>src</code> directory:</p>
+<pre data-language="shell">gn args out/OzoneLinuxDesktop --args=&quot;ozone_platform_x11=false&quot;
+ninja -C out/OzoneLinuxDesktop chrome</pre>
+<p>If you want to disable all, but Wayland Ozone backend, do this from the <code>src</code> directory:</p>
+<pre data-language="shell">gn args out/OzoneLinuxDesktop --args=&quot;ozone_auto_platforms=false ozone_platform_wayland=true&quot;
+ninja -C out/OzoneLinuxDesktop chrome</pre>
+<p>Chrome/Linux uses X11 Ozone backend by default. Thus, simply start the browser without any parameters:</p>
+<pre data-language="shell">./out/OzoneLinuxDesktop/chrome</pre>
+<p>Or run for example the Wayland platform:</p>
+<pre data-language="shell">./out/OzoneLinuxDesktop/chrome --ozone-platform=wayland</pre>
+<h3 id="gn-configuration-notes">GN Configuration notes</h3>
+<p>You can turn properly implemented ozone platforms on and off by setting the
+corresponding flags in your GN configuration. For example
+<code>ozone_platform_headless=false ozone_platform_drm=false</code> will turn off the
+headless and DRM (GBM) platforms.
+This will result in a smaller binary and faster builds. To turn ALL platforms
+off by default, set <code>ozone_auto_platforms=false</code>.</p>
+<p>You can also specify a default platform to run by setting the <code>ozone_platform</code>
+build parameter. For example <code>ozone_platform=&quot;x11&quot;</code> will make X11 the
+default platform when <code>--ozone-platform</code> is not passed to the program.
+If <code>ozone_auto_platforms</code> is true then <code>ozone_platform</code> is set to <code>headless</code>
+by default.</p>
+<h2 id="running-with-ozone">Running with Ozone</h2>
+<p>Specify the platform you want to use at runtime using the <code>--ozone-platform</code>
+flag. For example, to run <code>content_shell</code> with the DRM (GBM) platform:</p>
+<pre data-language="shell">content_shell --ozone-platform=drm</pre>
+<p>Caveats:</p>
+<ul>
+<li><code>content_shell</code> always runs at 800x600 resolution.</li>
+<li>For the DRM (GBM) platform, you may need to terminate your X server (or any other
+display server) prior to testing.</li>
+<li>During development, you may need to configure
+<a href="https://github.com/chromium/chromium/blob/HEAD/sandbox/linux/README.md">sandboxing</a> or to disable it.</li>
+</ul>
+<h2 id="ozone-platforms">Ozone Platforms</h2>
+<h3 id="headless">Headless</h3>
+<p>This platform
+draws graphical output to a PNG image (no GPU support; software rendering only)
+and will not output to the screen. You can set
+the path of the directory where to output the images
+by specifying <code>--ozone-dump-file=/path/to/output-directory</code> on the
+command line:</p>
+<pre data-language="shell">content_shell --ozone-platform=headless \
+              --ozone-dump-file=/tmp/</pre>
+<h3 id="drmgbm">DRM/GBM</h3>
+<p>This is Linux direct rending with acceleration via mesa GBM &amp; linux DRM/KMS
+(EGL/GLES2 accelerated rendering &amp; modesetting in GPU process) and is in
+production use on <a href="https://www.chromium.org/chromium-os">Chrome OS</a>.</p>
+<p>Note that all Chrome OS builds of Chrome will compile and attempt to use this.
+See <a href="https://www.chromium.org/chromium-os/how-tos-and-troubleshooting/building-chromium-browser">Building Chromium for Chromium OS</a> for build instructions.</p>
+<h3 id="cast">Cast</h3>
+<p>This platform is used for
+<a href="https://www.google.com/intl/en_us/chromecast/">Chromecast</a>.</p>
+<h3 id="x11">X11</h3>
+<p>This platform provides support for the <a href="https://www.x.org/">X window system</a>.</p>
+<p>X11 is the default Ozone backend. You can try to compile and run it with the following
+configuration:</p>
+<pre data-language="shell">gn args out/OzoneX11
+ninja -C out/OzoneX11 chrome
+./out/OzoneX11/chrome</pre>
+<h3 id="wayland">Wayland</h3>
+<p>This platform provides support for the
+<a href="http://wayland.freedesktop.org/">Wayland</a> display protocol. It was
+initially developed by Intel as
+<a href="https://github.com/01org/ozone-wayland">a fork of chromium</a>
+and then partially upstreamed.</p>
+<p>Currently, the Ozone/Wayland is actively being developed by Igalia in
+the Chromium mainline repository with some features missing at the moment. The
+progress can be tracked in the <a href="https://crbug.com/578890">issue #578890</a>.</p>
+<p>Below are some quick build &amp; run instructions. It is assumed that you are
+launching <code>chrome</code> from a Wayland environment such as <code>weston</code>. Execute the
+following commands (make sure a system version of gbm and drm is used, which
+are required by Ozone/Wayland by design, when running on Linux platforms.):</p>
+<p>Please note that the Wayland Ozone backend is built by default unless
+<code>ozone_auto_platforms=false</code> is set (the same as the X11 Ozone backend).</p>
+<pre data-language="shell">gn args out/OzoneWayland
+ninja -C out/OzoneWayland chrome
+./out/OzoneWayland/chrome --ozone-platform=wayland</pre>
+<p>Native file dialogs are currently supported through the GTK toolkit. That
+implies that the browser is compiled with glib and gtk enabled. Please
+append the following gn args to your configuration:</p>
+<pre data-language="shell">use_ozone=true
+use_system_minigbm=true
+use_system_libdrm=true
+use_xkbcommon=true
+use_glib=true
+use_gtk=true</pre>
+<p>Running some test suites requires a Wayland server. If you&#39;re not running one
+you can use a locally compiled version of Weston or Mutter. This is what the
+build bots do. Please note that this is required for interactive_ui_tests, as
+those tests use a patched version of the compositor.</p>
+<p>Mutter and its dependencies are not checked out by default to keep the disk
+usage optimal for most developers. In order to checkout mutter, add the
+<code>checkout_mutter</code> custom var in your .gclient file and set it to <code>True</code> and run <code>gclient sync</code>.</p>
+<pre>solutions = [
+  {
+    &quot;url&quot;: &quot;https://chromium.googlesource.com/chromium/src.git&quot;,
+    &quot;managed&quot;: False,
+    &quot;name&quot;: &quot;src&quot;,
+    &quot;custom_deps&quot;: {},
+    &quot;custom_vars&quot;: {
+      &quot;checkout_mutter&quot;: True,
+    },
+  },
+]</pre>
+<p>For weston, simply add this to your gn args:</p>
+<pre data-language="shell">use_bundled_weston = true</pre>
+<p>Then after building the test executable, run the xvfb.py wrapper script and tell
+it to start the compositor with the tests:</p>
+<pre data-language="shell">cd out/debug  # or your out directory</pre>
+<pre data-language="shell"># For weston
+../../testing/xvfb.py --use-weston --no-xvfb ./views_unittests --ozone-platform=wayland</pre>
+<pre data-language="shell"># For mutter
+../../testing/xvfb.py --use-mutter --no-xvfb ./views_unittests --ozone-platform=wayland</pre>
+<p>Feel free to discuss with us on freenode.net, <code>#ozone-wayland</code> channel or on
+<code>ozone-dev</code>, or on <code>#ozone-wayland-x11</code> channel in <a href="https://www.chromium.org/developers/slack">chromium slack</a>.</p>
+<h3 id="caca">Caca</h3>
+<p>This platform
+draws graphical output to text using
+<a href="http://caca.zoy.org/wiki/libcaca">libcaca</a>
+(no GPU support; software
+rendering only). In case you ever wanted to test embedded content shell on
+tty.
+It has been
+<a href="https://codereview.chromium.org/2445323002/">removed from the tree</a> and is no
+longer maintained but you can
+<a href="https://github.com/fred-wang/ozone-caca">build it as an out-of-tree port</a>.</p>
+<p>Alternatively, you can try the latest revision known to work. First, install
+libcaca shared library and development files. Next, move to the git revision
+<code>0e64be9cf335ee3bea7c989702c5a9a0934af037</code>
+(you will probably need to synchronize the build dependencies with
+<code>gclient sync --with_branch_heads</code>). Finally, build and run the caca platform
+with the following commands:</p>
+<pre data-language="shell">gn args out/OzoneCaca \
+        --args=&quot;use_ozone=true ozone_platform_caca=true use_sysroot=false ozone_auto_platforms=false toolkit_views=false&quot;
+ninja -C out/OzoneCaca content_shell
+./out/OzoneCaca/content_shell</pre>
+<p>  Note: traditional TTYs are not the ideal browsing experience.<br/>
+  <img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/ozone_caca.jpg" alt="Picture of a workstation using Ozone/caca to display the Google home page in a text terminal"></p>
+<h3 id="drm">drm</h3>
+<p>Ash-chrome client implementation.</p>
+<h3 id="flatland">flatland</h3>
+<p>For fuchsia.</p>
+<h2 id="communication">Communication</h2>
+<p>There is a public mailing list:
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/ozone-dev">ozone-dev@chromium.org</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ozone_overview.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ozone_overview.md</a>
+  </p>
+</div>

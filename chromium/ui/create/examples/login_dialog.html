@@ -1,0 +1,454 @@
+<h1>Example: Creating a Simple Login Dialog</h1>
+<h2 id="introduction">Introduction</h2>
+<p>The goal of this example is to get you familiar with the basics of the Views
+framework and things to watch out for when developing with Views.</p>
+<p>We will be creating the following UI:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/create/examples/login_dialog_ui.png" alt="Login dialog UI"></p>
+<h2 id="setting-up-files">Setting up files</h2>
+<p>To create this simple dialog, you would need to add the following files:</p>
+<p><code>login_bubble_dialog_example.h</code></p>
+<pre data-language="cpp">// Copyright 2020 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#ifndef LOGIN_BUBBLE_DIALOG_EXAMPLE_H_
+#define LOGIN_BUBBLE_DIALOG_EXAMPLE_H_
+
+#include &quot;ui/views/bubble/bubble_border.h&quot;
+#include &quot;ui/views/bubble/bubble_dialog_delegate_view.h&quot;
+
+class LoginBubbleDialogView : public views::BubbleDialogDelegateView {
+ public:
+  static void Show(views::View* anchor_view,
+                   views::BubbleBorder::Arrow anchor_position);
+
+  ~LoginBubbleDialogView() override;
+
+ private:
+  LoginBubbleDialogView(views::View* anchor_view,
+                        views::BubbleBorder::Arrow anchor_position);
+};
+
+#endif  // LOGIN_BUBBLE_DIALOG_EXAMPLE_H_</pre>
+<p><code>login_bubble_dialog_example.cc</code></p>
+<pre data-language="cpp">// Copyright 2020 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include &quot;login_bubble_dialog_example.h&quot;
+
+#include &quot;ui/views/border.h&quot;
+
+// static
+void LoginBubbleDialogView::Show(views::View* anchor_view,
+                                 views::BubbleBorder::Arrow anchor_position) {
+  BubbleDialogDelegateView::CreateBubble(
+      new LoginBubbleDialogView(anchor_view, anchor_position))
+      -&gt;Show();
+}
+
+LoginBubbleDialogView::~LoginBubbleDialogView() = default;
+
+LoginBubbleDialogView::LoginBubbleDialogView(
+    views::View* anchor_view,
+    views::BubbleBorder::Arrow anchor_position)
+    : BubbleDialogDelegateView(anchor_view, anchor_position) {}</pre>
+<p>Make sure to add these files to the relevant build file of your project.</p>
+<p>Calling <code>Show()</code> will create a simple dialog with OK and Cancel buttons and a
+window close button. These UI elements are provided by default by the
+<code>BubbleDialogDelegateView</code>.</p>
+<h2 id="creating-the-layout">Creating the layout</h2>
+<p>To populate the login dialog, we first create a <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/layout_manager.h"><code>LayoutManager</code></a> in the
+dialog’s constructor.</p>
+<p><code>login_bubble_dialog_example.cc</code></p>
+<pre data-language="cpp">LoginBubbleDialogView::LoginBubbleDialogView(
+    views::View* anchor_view,
+    views::BubbleBorder::Arrow anchor_position)
+    : BubbleDialogDelegateView(anchor_view, anchor_position) {
+  ...
+  const LayoutProvider* provider = LayoutProvider::Get();
+  set_margins(provider-&gt;GetDialogInsetsForContentType(
+      views::DialogContentType::kControl, views::DialogContentType::kControl));
+  const int related_control_padding =
+      provider-&gt;GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL);
+  const int label_padding =
+      provider-&gt;GetDistanceMetric(views::DISTANCE_RELATED_LABEL_HORIZONTAL);
+
+  SetLayoutManager(std::make_unique&lt;views::TableLayout&gt;())
+      -&gt;AddColumn(views::LayoutAlignment::kStart,
+                  views::LayoutAlignment::kStretch,
+                  views::TableLayout::kFixedSize,
+                  views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      .AddPaddingColumn(TableLayout::kFixedSize, label_padding)
+      .AddColumn(views::LayoutAlignment::kStretch,
+                 views::LayoutAlignment::kStretch, 1.0f,
+                 views::TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      .AddRows(1, views::TableLayout::kFixedSize)
+      .AddPaddingRow(TableLayout::kFixedSize, related_control_padding)
+      .AddRows(1, views::TableLayout::kFixedSize);
+}</pre>
+<p>This creates a 2x2 <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/table_layout.h"><code>TableLayout</code></a>
+with horizontal padding specified by the layout constant
+<code>DISTANCE_RELATED_LABEL_HORIZONTAL</code>. The first column will hold the form’s
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/label.h"><code>Label</code></a>s and the second will hold the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/textfield/textfield.h"><code>Textfield</code></a>s for user input.</p>
+<p>To help with adding rows to the <code>TableLayout</code>, add the following scoped helper
+and relevant headers.</p>
+<p><code>login_bubble_dialog_example.cc</code></p>
+<pre data-language="cpp">#include &lt;string&gt;
+
+#include &quot;ui/views/controls/label.h&quot;
+#include &quot;ui/views/layout/layout_provider.h&quot;
+#include &quot;ui/views/layout/table_layout.h&quot;
+...
+namespace {
+
+// Adds a label textfield pair to the login dialog's layout.
+views::Textfield* AddFormRow(views::View* parent,
+                             const std::u16string&amp; label_text) {
+  views::Label* label =
+      parent-&gt;AddChildView(std::make_unique&lt;views::Label&gt;(label_text));
+  views::Textfield* textfield =
+      parent-&gt;AddChildView(std::make_unique&lt;views::Textfield&gt;());
+  textfield-&gt;SetAssociatedLabel(label);
+  constexpr int kDefaultTextfieldWidth = 30;
+  constexpr int kMinimumTextfieldWidth = 5;
+  textfield-&gt;SetDefaultWidthInChars(kDefaultTextfieldWidth);
+  textfield-&gt;SetMinimumWidthInChars(kMinimumTextfieldWidth);
+  return textfield;
+}
+
+}  // namespace
+...</pre>
+<p>The call to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/textfield/textfield.h;l=250;drc=291180454e079aa5c3677dc3f3eaf619a1cf1d42"><code>SetAssociatedLabel()</code></a>
+sets the accessible label relationship between the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/label.h"><code>Label</code></a>
+and the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/textfield/textfield.h"><code>Textfield</code></a>
+and copies the <code>Label</code>’s accessible name to the <code>Textfield</code>.</p>
+<h2 id="dealing-with-localized-text">Dealing with localized text</h2>
+<p>Next we need to create localized text constants for the bubble dialog title,
+button label, username and password.
+<a href="https://www.chromium.org/developers/design-documents/ui-localization">UI Localization document</a>
+will guide you on how to create these string constants.</p>
+<p>Create the following string constants:</p>
+<ul>
+<li><code>IDS_LOGIN_DIALOG_TITLE</code></li>
+<li><code>IDS_LOGIN_DIALOG_OK_BUTTON_LABEL</code></li>
+<li><code>IDS_LOGIN_DIALOG_USERNAME_ACCESSIBLE_NAME</code></li>
+<li><code>IDS_LOGIN_DIALOG_PASSWORD_ACCESSIBLE_NAME</code></li>
+</ul>
+<p>Add the following to the bubble dialog header and implementation files.</p>
+<p><code>login_bubble_dialog_example.h</code></p>
+<pre data-language="cpp">#include &quot;ui/views/controls/textfield/textfield.h&quot;
+...
+class LoginBubbleDialogView : public views::BubbleDialogDelegateView {
+  ...
+ private:
+  ...
+  views::Textfield* username_ = nullptr;
+  views::Textfield* password_ = nullptr;
+};</pre>
+<p><code>login_bubble_dialog_example.cc</code></p>
+<pre data-language="cpp">#include &quot;ui/base/l10n/l10n_util.h&quot;
+...
+LoginBubbleDialogView::LoginBubbleDialogView(
+    views::View* anchor_view,
+    views::BubbleBorder::Arrow anchor_position)
+    : BubbleDialogDelegateView(anchor_view, anchor_position) {
+  ...
+  SetTitle(l10n_util::GetStringUTF16(IDS_LOGIN_DIALOG_TITLE));
+  SetButtonLabel(ui::mojom::DialogButton::kOk, l10n_util::GetStringUTF16(
+      IDS_STARTER_DIALOG_OK_BUTTON_LABEL));
+  ...
+  username_ = AddFormRow(this, l10n_util::GetStringUTF16(
+      IDS_LOGIN_DIALOG_USERNAME_ACCESSIBLE_NAME));
+
+  password_ = AddFormRow(this, l10n_util::GetStringUTF16(
+      IDS_LOGIN_DIALOG_PASSWORD_ACCESSIBLE_NAME));
+  password_-&gt;SetTextInputType(ui::TEXT_INPUT_TYPE_PASSWORD);
+}</pre>
+<p>This adds the username and password fields to the form and sets the username
+with default focus.</p>
+<h2 id="handling-user-input">Handling user input</h2>
+<p>To respond to a click on the login button, we define a callback that gets
+passed in by the caller. Update the code as follows.</p>
+<p><code>login_bubble_dialog_example.h</code></p>
+<pre data-language="cpp">#include &lt;string&gt;
+...
+class LoginBubbleDialogView : public views::BubbleDialogDelegateView {
+ public:
+  using OnSubmitCallback = base::OnceCallback&lt;void(std::u16string username,
+                                                   std::u16string password)&gt;;
+
+  static void Show(View* anchor_view,
+                   BubbleBorder::Arrow anchor_position,
+                   OnSubmitCallback accept_callback);
+  ...
+
+ private:
+ LoginBubbleDialogView(View* anchor_view,
+                       BubbleBorder::Arrow anchor_position,
+                       OnSubmitCallback accept_callback);
+...
+}</pre>
+<p><code>login_bubble_dialog_example.cc</code></p>
+<pre data-language="cpp">#include &quot;base/functional/bind.h&quot;
+...
+// static
+void LoginBubbleDialogView::Show(View* anchor_view,
+                                 BubbleBorder::Arrow anchor_position,
+                                 OnSubmitCallback accept_callback) {
+  BubbleDialogDelegateView::CreateBubble(
+      std::make_unique&lt;LoginBubbleDialogView&gt;(anchor_view, anchor_position,
+                                              std::move(accept_callback)))
+      -&gt;Show();
+}
+...
+
+LoginBubbleDialogView::LoginBubbleDialogView(
+    View* anchor_view,
+    BubbleBorder::Arrow anchor_position,
+    OnSubmitCallback accept_callback)
+    : BubbleDialogDelegateView(anchor_view, anchor_position) {
+  ...
+  const auto on_submit = [](const LoginBubbleDialogView* bubble_view,
+                            OnSubmitCallback accept_callback) {
+    std::move(accept_callback)
+        .Run(bubble_view-&gt;username_-&gt;GetText(),
+             bubble_view-&gt;password_-&gt;GetText());
+  };
+  SetAcceptCallback(base::BindOnce(on_submit, base::Unretained(this),
+                                   std::move(accept_callback)));
+  ...
+}</pre>
+<p>Now the dialog will call the <code>accept_callback</code> after the login button has been
+clicked before the dialog closes.</p>
+<h2 id="form-validation--dialog-updates">Form validation &amp; dialog updates</h2>
+<p>Next we want to disable the bubble dialog’s login button until both the
+username and password fields have been populated.</p>
+<p>We achieve this by having the <code>LoginBubbleDialogView</code> inherit from
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/textfield/textfield_controller.h"><code>TextfieldController</code></a>,
+and on each <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/textfield/textfield.h"><code>Textfield</code></a>
+update it checks to make sure that both fields are populated before enabling
+the login button.</p>
+<p>Modify the code as follows:</p>
+<p><code>login_bubble_dialog_example.h</code></p>
+<pre data-language="cpp">#include &quot;ui/views/controls/textfield/textfield_controller.h&quot;
+...
+class LoginBubbleDialogView : public views::BubbleDialogDelegateView,
+                              public views::TextfieldController {
+ public:
+  ...
+  // TextfieldController:
+  void ContentsChanged(Textfield* sender,
+                       const std::u16string&amp; new_contents) override;
+  ...
+};</pre>
+<p><code>login_bubble_dialog_example.cc</code></p>
+<pre data-language="cpp">views::Textfield* AddFormRow(LoginBubbleDialogView* bubble,
+                             const std::u16string&amp; label_text) {
+  ...
+  textfield-&gt;set_controller(bubble);
+  return textfield;
+}
+...
+
+void LoginBubbleDialogView::ContentsChanged(
+    views::Textfield* sender,
+    const std::u16string&amp; new_contents) {
+  SetButtonEnabled(ui::mojom::DialogButton::kOk, !username_-&gt;GetText().empty() &amp;&amp;
+                                             !password_-&gt;GetText().empty());
+  DialogModelChanged();
+}
+
+LoginBubbleDialogView::LoginBubbleDialogView(
+    views::View* anchor_view,
+    views::BubbleBorder::Arrow anchor_position,
+    LoginBubbleDialogController* controller)
+    : BubbleDialogDelegateView(anchor_view, anchor_position),
+      controller_(controller) {
+  SetButtonEnabled(ui::mojom::DialogButton::kOk, false);
+  ...
+  username_ = AddFormRow(
+      this,
+      l10n_util::GetStringUTF16(IDS_LOGIN_DIALOG_USERNAME_ACCESSIBLE_NAME));
+  password_ = AddFormRow(
+      this,
+      l10n_util::GetStringUTF16(IDS_LOGIN_DIALOG_PASSWORD_ACCESSIBLE_NAME));
+  password_-&gt;SetTextInputType(ui::TEXT_INPUT_TYPE_PASSWORD);
+}</pre>
+<h2 id="result">Result</h2>
+<p>The final code should resemble the following:</p>
+<p><code>login_bubble_dialog_example.h</code></p>
+<pre>// Copyright 2020 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#ifndef LOGIN_BUBBLE_DIALOG_EXAMPLE_H_
+#define LOGIN_BUBBLE_DIALOG_EXAMPLE_H_
+
+#include &lt;string&gt;
+
+#include &quot;ui/views/bubble/bubble_border.h&quot;
+#include &quot;ui/views/bubble/bubble_dialog_delegate_view.h&quot;
+#include &quot;ui/views/controls/textfield/textfield.h&quot;
+#include &quot;ui/views/controls/textfield/textfield_controller.h&quot;
+
+namespace views::examples {
+
+class LoginBubbleDialogView : public BubbleDialogDelegateView,
+                              public TextfieldController {
+ public:
+  using OnSubmitCallback = base::OnceCallback&lt;void(std::u16string username,
+                                                   std::u16string password)&gt;;
+
+  static void Show(View* anchor_view,
+                   BubbleBorder::Arrow anchor_position,
+                   OnSubmitCallback accept_callback);
+
+  ~LoginBubbleDialogView() override;
+
+  // TextfieldController:
+  void ContentsChanged(Textfield* sender,
+                       const std::u16string&amp; new_contents) override;
+
+ private:
+  LoginBubbleDialogView(View* anchor_view,
+                        BubbleBorder::Arrow anchor_position,
+                        OnSubmitCallback accept_callback);
+
+  Textfield* username_ = nullptr;
+  Textfield* password_ = nullptr;
+};
+
+}  // namespace views::examples
+
+#endif  // LOGIN_BUBBLE_DIALOG_EXAMPLE_H_</pre>
+<p><code>login_bubble_dialog_example.cc</code></p>
+<pre>// Copyright 2020 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include &quot;login_bubble_dialog_example.h&quot;
+
+#include &lt;memory&gt;
+#include &lt;string&gt;
+
+#include &quot;base/functional/bind.h&quot;
+#include &quot;ui/base/l10n/l10n_util.h&quot;
+#include &quot;ui/views/border.h&quot;
+#include &quot;ui/views/controls/label.h&quot;
+#include &quot;ui/views/layout/table_layout.h&quot;
+#include &quot;ui/views/layout/layout_provider.h&quot;
+
+namespace views::examples {
+
+namespace {
+
+// Adds a label textfield pair to the login dialog's layout.
+Textfield* AddFormRow(LoginBubbleDialogView* bubble,
+                      const std::u16string&amp; label_text) {
+  Label* label = bubble-&gt;AddChildView(std::make_unique&lt;Label&gt;(label_text));
+  Textfield* textfield = bubble-&gt;AddChildView(std::make_unique&lt;Textfield&gt;());
+  textfield-&gt;SetAssociatedLabel(label);
+  textfield-&gt;set_controller(bubble);
+  constexpr int kDefaultTextfieldWidth = 30;
+  constexpr int kMinimumTextfieldWidth = 5;
+  textfield-&gt;SetDefaultWidthInChars(kDefaultTextfieldWidth);
+  textfield-&gt;SetMinimumWidthInChars(kMinimumTextfieldWidth);
+  return textfield;
+}
+
+}  // namespace
+
+// static
+void LoginBubbleDialogView::Show(View* anchor_view,
+                                 BubbleBorder::Arrow anchor_position,
+                                 OnSubmitCallback accept_callback) {
+  BubbleDialogDelegateView::CreateBubble(
+      std::make_unique&lt;LoginBubbleDialogView&gt;(anchor_view, anchor_position,
+                                              std::move(accept_callback)))
+      -&gt;Show();
+}
+
+LoginBubbleDialogView::~LoginBubbleDialogView() = default;
+
+void LoginBubbleDialogView::ContentsChanged(
+    Textfield* sender,
+    const std::u16string&amp; new_contents) {
+  SetButtonEnabled(ui::mojom::DialogButton::kOk, !username_-&gt;GetText().empty() &amp;&amp;
+                                             !password_-&gt;GetText().empty());
+  DialogModelChanged();
+}
+
+LoginBubbleDialogView::LoginBubbleDialogView(
+    View* anchor_view,
+    BubbleBorder::Arrow anchor_position,
+    OnSubmitCallback accept_callback)
+    : BubbleDialogDelegateView(anchor_view, anchor_position) {
+  SetButtonEnabled(ui::mojom::DialogButton::kOk, false);
+
+  const auto on_submit = [](const LoginBubbleDialogView* bubble_view,
+                            OnSubmitCallback accept_callback) {
+    std::move(accept_callback)
+        .Run(bubble_view-&gt;username_-&gt;GetText(),
+             bubble_view-&gt;password_-&gt;GetText());
+  };
+  SetAcceptCallback(base::BindOnce(on_submit, base::Unretained(this),
+                                   std::move(accept_callback)));
+
+  SetTitle(l10n_util::GetStringUTF16(IDS_EXAMPLE_LOGIN_DIALOG_TITLE));
+  SetButtonLabel(
+      ui::mojom::DialogButton::kOk,
+      l10n_util::GetStringUTF16(IDS_EXAMPLE_LOGIN_DIALOG_OK_BUTTON_LABEL));
+
+  const LayoutProvider* provider = LayoutProvider::Get();
+  set_margins(provider-&gt;GetDialogInsetsForContentType(
+      DialogContentType::kControl, DialogContentType::kControl));
+  const int related_control_padding =
+      provider-&gt;GetDistanceMetric(DISTANCE_RELATED_CONTROL_VERTICAL);
+  const int label_padding =
+      provider-&gt;GetDistanceMetric(DISTANCE_RELATED_LABEL_HORIZONTAL);
+
+  SetLayoutManager(std::make_unique&lt;TableLayout&gt;())
+      -&gt;AddColumn(LayoutAlignment::kStart,
+                  LayoutAlignment::kStretch,
+                  TableLayout::kFixedSize,
+                  TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      .AddPaddingColumn(TableLayout::kFixedSize, label_padding)
+      .AddColumn(LayoutAlignment::kStretch,
+                 LayoutAlignment::kStretch, 1.0f,
+                 TableLayout::ColumnSize::kUsePreferred, 0, 0)
+      .AddRows(1, TableLayout::kFixedSize)
+      .AddPaddingRow(TableLayout::kFixedSize, related_control_padding)
+      .AddRows(1, TableLayout::kFixedSize);
+
+  username_ =
+      AddFormRow(this,
+                 l10n_util::GetStringUTF16(
+                     IDS_EXAMPLE_LOGIN_DIALOG_USERNAME_ACCESSIBLE_NAME));
+  password_ =
+      AddFormRow(this,
+                 l10n_util::GetStringUTF16(
+                     IDS_EXAMPLE_LOGIN_DIALOG_PASSWORD_ACCESSIBLE_NAME));
+  password_-&gt;SetTextInputType(ui::TEXT_INPUT_TYPE_PASSWORD);
+}
+
+}  // namespace views::examples</pre>
+<p>The generated UI would be:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/create/examples/login_dialog_ui.png" alt="Login dialog UI"></p>
+<h2 id="run-the-example">Run the Example</h2>
+<p>The example code can be run inside Views example app. You can find the code
+inside the Views example at
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/examples/login_bubble_dialog_example.cc"><code>ui/views/examples/login_bubble_dialog_example.cc</code></a>.
+You can try out this example by running the following command:</p>
+<pre data-language="shell">$ autoninja -C out\Default views_examples
+$ out\Default\views_examples --enable-examples=&quot;Login Bubble Dialog&quot;</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/create/examples/login_dialog.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/create/examples/login_dialog.md</a>
+  </p>
+</div>

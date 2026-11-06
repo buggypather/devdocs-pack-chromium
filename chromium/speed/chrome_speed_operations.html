@@ -1,0 +1,45 @@
+<h1>Chrome Speed Operations</h1>
+<p>Chrome Speed Operations provides tools, framework, and infrastructure
+to track Chrome&#39;s performance and guide optimizations to Chrome.</p>
+<p>TPM: <a href="mailto:ushesh@chromium.org">ushesh@chromium.org</a></p>
+<p>Speed Operations consists of 3 teams, working in tandem:</p>
+<h2 id="benchmarking">Benchmarking</h2>
+<p>The Benchmarking team provides:</p>
+<ul>
+<li>A set of <a href="https://docs.google.com/document/d/1ni2MIeVnlH4bTj4yvEDMVNxgL73PqK_O9_NUm3NW3BA/edit">opinionated benchmarking frameworks</a>
+that make it easy for Chromium developers to add benchmarks for
+the areas of Chrome performance important to them.</li>
+<li>A <a href="perf_waterfall">perf waterfall</a> to run these benchmarks on our continuous build on a dozen
+real device types, on Windows, Mac, Linux, and Android.</li>
+</ul>
+<p>TL: <a href="mailto:johnchen@chromium.org">johnchen@chromium.org</a></p>
+<h2 id="speed-tooling">Speed Tooling</h2>
+<p>The <a href="chrome_speed_tooling">Speed Tooling</a> team provides:</p>
+<ul>
+<li>The <a href="https://chromeperf.appspot.com">Chrome performance dashboard</a>, which
+stores performance timeseries and related debugging data. The dashboard
+automatically detects regressions in these timeseries and has integration
+with Chromium&#39;s bug tracker for easy tracking.</li>
+<li>Tools for <a href="bisects">bisecting regressions</a> on our continuous build down
+to an exact culprit CL.</li>
+<li>A <a href="perf_trybots">performance try job service</a> which allows chromium
+developers to run benchmarks on unsubmitted CLs using the same hardware
+we use in the continuous build.</li>
+</ul>
+<p>TL: <a href="mailto:dberris@chromium.org">dberris@chromium.org</a></p>
+<h2 id="releasing-and-system-health">Releasing and System Health</h2>
+<p>The releasing team provides:</p>
+<ul>
+<li>Tracking of all performance regressions seen in user-visible performance
+both in the wild and in the lab.</li>
+<li>A per-milestone report on Chrome&#39;s performance.</li>
+<li>Recommendations about lab hardware and new test scenarios.</li>
+<li>Management of performance sheriff rotations.</li>
+</ul>
+<p>TPM: <a href="mailto:ushesh@chromium.org">ushesh@chromium.org</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/chrome_speed_operations.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/chrome_speed_operations.md</a>
+  </p>
+</div>

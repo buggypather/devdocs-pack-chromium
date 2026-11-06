@@ -1,0 +1,317 @@
+<h1>Managing Chromium dependencies</h1>
+<p>Chromium uses <code>gclient</code> (part of depot_tools) to manage dependencies (e.g. V8,
+WebRTC). Information such as URLs and hashes is stored in the <code>DEPS</code> file
+located in the root of the project. In addition to <code>DEPS</code>, <code>gclient</code> may read
+git submodules (see
+<a href="https://docs.google.com/document/d/1N_fseFNOj10ETZG3pZ-I30R__w96rYNtvx5y_jFGJWw/view">depot_tools submodules support</a>).</p>
+<p><code>gclient</code> supports three dependency types: git, <a href="gcs_dependencies">gcs</a>, and
+<a href="cipd_and_3pp">cipd</a>.</p>
+<h2 id="adding-to-gob">Adding to GoB</h2>
+<p>If the code is in a Git repo that you want to mirror, please file an <a href="https://bugs.chromium.org/p/chromium/issues/entry?template=Infra-Git">infra git
+ticket</a>
+to get the repo mirrored onto chromium.googlesource.com; we don&#39;t allow direct
+dependencies on non-Google-hosted repositories, so that we can still build
+if an external repository goes down.</p>
+<p>Once the mirror is set up, you can add the actual dependency into <code>DEPS</code>.</p>
+<h2 id="adding-dependencies">Adding dependencies</h2>
+<ol>
+<li>Add your entry in <code>DEPS</code>.</li>
+<li>Run <code>gclient gitmodules</code> to generate git submodules; this will contain the
+<code>.gitmodule</code> change and gitlink.</li>
+<li>Edit the <code>OWNERS</code> file and add the gitlink path.</li>
+</ol>
+<p>Then, run <code>git add DEPS OWNERS</code> to stage those files for commit, followed by
+<code>git commit</code>. Your change is now ready to be sent for a review using <code>git cl upload</code>.</p>
+<p>For example, if your new dependency is &quot;src/foo/bar.git&quot;, its gitlink path is
+&quot;foo/bar&quot;, and the top level <code>OWNERS</code> entry is <code>per-file foo/bar=*</code>. You can
+confirm this by running <code>git status</code>. <a href="https://crrev.com/c/4923074">Example CL</a>.</p>
+<pre># manual edit of DEPS and OWNERS file (see changes below).
+
+ % gclient gitmodules
+.gitmodules and gitlinks updated. Please check `git diff --staged`and commit those staged changes (`git commit` without -a)
+
+ % git add OWNERS DEPS # stage files
+
+ % git diff --cached # see staged changes
+diff --git a/.gitmodules b/.gitmodules
+index 29c355fa92e3d..89866442d45aa 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -1,3 +1,6 @@
++[submodule &quot;foo/bar&quot;]
++       path = foo/bar
++       url = https://chromium.googlesource.com/foo/bar.git
+ [submodule &quot;third_party/clang-format/script&quot;]
+        path = third_party/clang-format/script
+        url = https://chromium.googlesource.com/external/github.com/llvm/llvm-project/clang/tools/clang-format.git
+diff --git a/DEPS b/DEPS
+index 44fbc53a0d53a..05481be5066ed 100644
+--- a/DEPS
++++ b/DEPS
+@@ -555,6 +555,10 @@ allowed_hosts = [
+ ]
+
+ deps = {
++  'src/foo/bar': {
++      'url': Var('chromium_git') + '/foo/bar.git' + '@' +
++        '1111111111111111111111111111111111111111',
++  },
+   'src/third_party/clang-format/script':
+     Var('chromium_git') +
+     '/external/github.com/llvm/llvm-project/clang/tools/clang-format.git@' +
+diff --git a/OWNERS b/OWNERS
+index 55bfe60fcb03b..02b4117fca1ea 100644
+--- a/OWNERS
++++ b/OWNERS
+@@ -37,6 +37,7 @@ per-file README.md=*
+ per-file WATCHLISTS=*
+
+ # git submodules
++per-file foo/bar=*
+ per-file third_party/clang-format/script=*
+ per-file chrome/browser/resources/preinstalled_web_apps/internal=*
+ per-file chrome/installer/mac/third_party/xz/xz=*
+diff --git a/foo/bar b/foo/bar
+new file mode 160000
+index 0000000000000..1111111111111
+--- /dev/null
++++ b/foo/bar
+@@ -0,0 +1 @@
++Subproject commit 1111111111111111111111111111111111111111
+
+ % git status
+On branch test_newdep
+Your branch is up to date with 'origin/main'.
+
+Changes to be committed:
+  (use &quot;git restore --staged &lt;file&gt;...&quot; to unstage)
+        modified:   .gitmodules
+        modified:   DEPS
+        modified:   OWNERS
+        new file:   foo/bar
+
+Changes not staged for commit:
+  (use &quot;git add/rm &lt;file&gt;...&quot; to update what will be committed)
+  (use &quot;git restore &lt;file&gt;...&quot; to discard changes in working directory)
+        deleted:    foo/bar
+
+
+% # At this point, you can run gclient sync if you want to get the dependency.
+% # But it's not required, and you can use `git cl upload`.
+
+ % git commit -m &quot;[DEPS] Example of new dependency&quot;
+[test_newdep 9731cfb680756] [DEPS] Example of new dependency
+ 4 files changed, 9 insertions(+)
+ create mode 160000 foo/bar
+
+ % git cl upload
+Found change with 1 commit...
+Running Python 3 presubmit upload checks ...
+-- snip --
+remote:   https://chromium-review.googlesource.com/c/chromium/src/+/4923074 [DEPS] Example of new dependency [NEW]
+-- snip --</pre>
+<h2 id="changing-dependencies">Making changes to dependencies</h2>
+<p>If you need a change in a dependency, the general process is to first contribute
+the change upstream, then <a href="#rolling-dependencies">roll into Chromium</a>. Some
+projects (e.g. Skia) are autorolled, but it is good practice to manually roll
+after an upstream change to ensure your change can be successfully rolled and
+there are no resulting compile or test failures.</p>
+<p>Upstream projects have a variety of contribution workflows. The two most common
+are Gerrit-based reviews using <code>git cl upload</code> (like Chromium itself) and GitHub
+PRs. Some projects have a <code>CONTRIBUTING.md</code> file in their root that gives
+instructions.</p>
+<p>In most cases, creating a standalone checkout/clone of the project you&#39;re
+modifying, outside your Chromium checkout, is the best way to ensure you&#39;re
+contributing to upstream <code>HEAD</code> and can run the project&#39;s presubmit checks.
+Follow the project&#39;s contribution instructions (e.g. running <code>fetch</code> or
+<code>gclient sync</code> as needed, possibly after downloading or cloning the source). If
+you do attempt to create and upload changes directly inside submodules in your
+Chromium checkout, be careful not to commit the new submodule hashes to any
+Chromium changes. You may also need to
+<a href="#presubmit-symlinks">create symlinks to enable other projects&#39; presubmits</a>, or
+else skip them by uploading with <code>--bypass-hooks</code>.</p>
+<h2 id="rolling-dependencies">Rolling dependencies</h2>
+<h3 id="using-gclient">Using gclient</h3>
+<p>If you want to roll dependency to a specific version, you can do by running the
+following:</p>
+<pre>gclient setdep -r {path to dependency}@{hash}</pre>
+<p>For example, let&#39;s say you want to roll boringssl in chromium/src to commit
+e4acd6cb568214b1c7db4e59ce54ea2e1deae1f5. You would run the following:</p>
+<pre>gclient setdep -r src/third_party/boringssl/src@e4acd6cb568214b1c7db4e59ce54ea2e1deae1f5</pre>
+<p>Under the hood, gclient understands DEPS file, and knows what needs to update.
+In the example above, it actually updates boringssl_revision variable that is
+used in boringssl deps declaration.</p>
+<p>Example of DEPS file: <code>vars = { &#39;boringssl_git&#39;: &#39;https://boringssl.googlesource.com&#39;, &#39;boringssl_revision&#39;: &#39;e4acd6cb568214b1c7db4e59ce54ea2e1deae1f5&#39;, } deps = { &#39;src/third_party/boringssl/src&#39;: Var(&#39;boringssl_git&#39;) + &#39;/boringssl.git&#39; + &#39;@&#39; + Var(&#39;boringssl_revision&#39;), }</code></p>
+<p>It also updates gitlink if git submodules are used. Git status will show the
+following:</p>
+<pre>$ git status
+-- snip --
+Changes to be committed:
+        modified:   DEPS
+        modified:   third_party/boringssl/src</pre>
+<h3 id="using-roll-dep">Using roll-dep</h3>
+<p>depot_tools also provides a <code>roll-dep</code> script which can roll the desired
+repository to the latest commit on main branch. <code>roll-dep</code> handles both DEPS and
+git submodules.</p>
+<h3 id="manual-roll--low-level-roll">Manual roll / low level roll</h3>
+<p>You can update things yourself by modifying the DEPS file directly. If git
+submodules are used, you also need to update gitlinks - an entry for submodules
+in the git database by using:</p>
+<pre>git update-index --add --cacheinfo 160000,{hash},{path}</pre>
+<p>git update-index instructs git to register git submodule change to the index (ie
+stages submodule for commit). Particularly, --cacheinfo argument instructs git
+to directly insert the specified info into the index: 160000 is gitlink mode
+(used by git submodules), {hash} is a new commit hash you want to roll, and path
+is relative path to git submodule.</p>
+<p>Using the boringssl example above, the following will need to be run inside
+chromium/src worktree:</p>
+<pre>git update-index --add --cacheinfo 160000,e4acd6cb568214b1c7db4e59ce54ea2e1deae1f5,third_party/boringssl/src</pre>
+<p>Once executed, <code>git status</code> will report there is an update to the submodule,
+which you can commit as any other file change.</p>
+<p>Alternatively, you can regenerate git submodules once you update DEPS file (see
+section below).</p>
+<h2 id="deleting-dependencies">Deleting dependencies</h2>
+<p>gclient doesn&#39;t provide a way to delete dependencies. You can delete dependency
+by manually editing DEPS file and running the following to update git
+submodules:</p>
+<pre>export DEPENDENCY={dependency}
+git rm --cached &quot;$DEPENDENCY&quot;
+git config -f .gitmodules --remove-section &quot;submodule.$DEPENDENCY&quot;
+git add .gitmodules</pre>
+<p>Using the example from the previous section:</p>
+<pre>export DEPENDENCY=third_party/boringssl/src
+git rm --cached &quot;$DEPENDENCY&quot;
+git config -f .gitmodules --remove-section &quot;submodule.$DEPENDENCY&quot;
+git add .gitmodules</pre>
+<p>Once the commands are executed, you can proceed with committing your change. You
+should see change in DEPS, .gitmodule and {dependency}.</p>
+<h2 id="regenerating-git-submodules">Regenerating git submodules</h2>
+<p>If there are many git dependency changes to DEPS file, it may be impractical to
+manually update-index. For those reasons, gclient provides a convenient way to
+regenerate git modules entries and to update .gitmodules file.</p>
+<p>Once you are done with your DEPS modifications, run the following script in the
+root of you project:</p>
+<pre>gclient gitmodules</pre>
+<p>The script will create a new .gitmodules files and update all gitlinks. Please
+note that old gitlinks won&#39;t be deleted, and you will need to remove them
+manually (see section above for deleting dependencies).</p>
+<h2 id="modularity-and-the-checkdeps-tool">Modularity and the <code>checkdeps</code> Tool</h2>
+<p>While the root <code>DEPS</code> file manages external repositories, Chromium&#39;s internal
+modularity is enforced by a tool called <code>checkdeps</code>. This tool ensures that code
+in one component does not improperly include headers from another, helping to
+maintain a clean and layered architecture.</p>
+<p>If you see an error like this during a build, it&#39;s from <code>checkdeps</code>:</p>
+<pre>ERROR at //some/component/foo.cc:10:11: Include not allowed.
+#include &quot;another/component/bar.h&quot;
+^---------------------------------
+The include file is not allowed to be included from the current file.</pre>
+<p>This error is controlled by special <code>DEPS</code> files located within subdirectories
+of the source tree (e.g., <code>//components/component_a/DEPS</code>).</p>
+<h3 id="understanding-in-tree-deps-files">Understanding In-Tree <code>DEPS</code> Files</h3>
+<p>These <code>DEPS</code> files are much simpler than the root <code>DEPS</code> file. Their primary
+purpose is to define header inclusion rules.</p>
+<ul>
+<li><p><strong><code>include_rules</code>:</strong> This is the most important variable. It&#39;s a list of
+strings that define which directories are allowed to be included by files
+within the current directory (and its subdirectories).</p>
+<ul>
+<li><code>&quot;+//path/to/allowed/dir&quot;</code>: <strong>Allows</strong> including headers from this
+directory.</li>
+<li><code>&quot;-//path/to/forbidden/dir&quot;</code>: <strong>Forbids</strong> including headers from this
+directory. This is useful for creating exceptions to a broader rule.</li>
+<li><code>&quot;!&quot;</code>: A special rule that stops the <code>checkdeps</code> tool from looking in
+parent directories for more <code>DEPS</code> files to apply.</li>
+</ul>
+</li>
+<li><p><strong><code>specific_include_rules</code>:</strong> This works like <code>include_rules</code> but applies
+only to files directly within the directory containing the <code>DEPS</code> file, not
+to its subdirectories.</p>
+</li>
+</ul>
+<h3 id="how-rules-are-evaluated">How Rules are Evaluated</h3>
+<p>When <code>checkdeps</code> runs on a file, it:</p>
+<ol>
+<li>Looks for a <code>DEPS</code> file in the same directory.</li>
+<li>If found, it checks the <code>include_rules</code>.</li>
+<li>If no <code>DEPS</code> file is found, or if one is found but doesn&#39;t contain the <code>!</code>
+rule, it walks up to the parent directory and repeats the process,
+accumulating rules.</li>
+<li>This continues until it reaches the source root.</li>
+</ol>
+<h3 id="diagnosing-and-fixing-checkdeps-violations">Diagnosing and Fixing <code>checkdeps</code> Violations</h3>
+<ol>
+<li><p><strong>Analyze the Error Message:</strong> The <code>checkdeps</code> error is highly informative.
+It tells you the exact file, the problematic include, and often the
+specific rule that caused the violation. Look for a &quot;Because of...&quot; clause:</p>
+<pre>Error: //some/component/foo.cc:10:11: Include not allowed.
+#include &quot;another/component/bar.h&quot;
+^---------------------------------
+The include file is not allowed to be included from the current file.
+It is not in any dependency of
+//some/component:my_target
+Because of &quot;-another/component&quot; in //some/component/DEPS:6</pre>
+<p>This tells you everything you need to know:</p>
+<ul>
+<li><code>//some/component/foo.cc</code> is the file with the bad include.</li>
+<li><code>&quot;another/component/bar.h&quot;</code> is the problematic include.</li>
+<li>The build target is <code>//some/component:my_target</code>.</li>
+<li>The specific rule causing the failure is <code>&quot;-another/component&quot;</code> on line 6
+of <code>//some/component/DEPS</code>.</li>
+</ul>
+</li>
+<li><p><strong>Identify the Source and Target:</strong> The error message tells you which file
+(<code>//some/component/foo.cc</code>) is trying to include which header
+(<code>&quot;another/component/bar.h&quot;</code>).</p>
+</li>
+<li><p><strong>Find the Governing <code>DEPS</code> File:</strong> If the error message doesn&#39;t specify
+the file, start in the directory of the source file (<code>//some/component/</code>)
+and look for a <code>DEPS</code> file. If you don&#39;t find one, look in its parent
+directory, and so on.</p>
+</li>
+<li><p><strong>Analyze the Rules:</strong> Read the <code>include_rules</code> in the <code>DEPS</code> file you
+found. The header you are trying to include is likely not covered by an <code>+</code>
+rule, or is explicitly forbidden by a <code>-</code> rule.</p>
+</li>
+<li><p><strong>Fix the Violation:</strong></p>
+<ul>
+<li><strong>Best Fix:</strong> Can you achieve your goal <em>without</em> adding this new
+dependency? Reusing existing abstractions is always preferred.</li>
+<li><strong>Good Fix:</strong> If the dependency is necessary, you often need to add the
+dependency to the <code>deps</code> list of the target that is trying to include
+the header. In the example above, you would edit
+<code>//some/component/BUILD.gn</code> and add <code>//another/component</code> to the <code>deps</code>
+of the <code>:my_target</code> target.</li>
+<li><strong>Architectural Fix:</strong> In some cases, you may also need to add a new
+<code>&quot;+//another/component&quot;</code> rule to the appropriate <code>DEPS</code> file if the
+dependency is architecturally sound but not yet allowed. Ensure
+this new dependency makes architectural sense and get approval from the
+code owners of the <code>DEPS</code> file.</li>
+</ul>
+</li>
+</ol>
+<h2 id="presubmit-symlinks">Appendix: Symlinks to enable other projects&#39; presubmits</h2>
+<p>Creating the following symlinks (POSIX: <code>ln -s DEST SRC</code>, Windows:
+<code>mklink /D SRC DEST</code> from an Admin <code>cmd</code> prompt) will get other projects&#39;
+presubmit checks working, if you want to upload directly from inside your
+Chromium checkout and don&#39;t want to use <code>--bypass-hooks</code>. All directories assume
+you are in your Chromium <code>src</code> dir. This list is non-exhaustive; please add to
+it as necessary.</p>
+<ul>
+<li><strong>V8:</strong><ul>
+<li>Link <code>v8/buildtools</code> to <code>buildtools</code></li>
+<li>Link <code>v8/third_party/depot_tools</code> to <code>depot_tools</code></li>
+</ul>
+</li>
+<li><strong>WebRTC:</strong><ul>
+<li>Link <code>third_party/webrtc/build</code> to <code>build</code></li>
+<li>Link <code>third_party/webrtc/buildtools</code> to <code>buildtools</code></li>
+<li>Link <code>third_party/src</code> to <code>.</code></li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/dependencies.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/dependencies.md</a>
+  </p>
+</div>

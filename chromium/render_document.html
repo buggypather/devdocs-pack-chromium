@@ -1,0 +1,57 @@
+<h1>What is RenderDocument?</h1>
+<h2 id="tldr">TL;DR</h2>
+<p>Chrome currently switches to a new RenderFrameHost
+when loading a new document
+if the render process is different to the  previous one.
+The RenderDocument project is about making the switch to happen unconditionally.
+This:</p>
+<ul>
+<li>Eliminates the logic for navigating inside the same RenderFrameHost</li>
+<li>Makes RenderFrameHost in the browser process 1:1 with the Document.</li>
+<li>Prevents security bugs,
+e.g. reusing the data/capabilities from the wrong document.</li>
+</ul>
+<h2 id="details">Details</h2>
+<p>Previously when we navigate a frame from one page to another,
+the second page may appear in a new RenderFrame
+or we may reuse the existing RenderFrame to load the second page.
+Which happens depends on many things,
+including which site-isolation policy we are following
+and whether the pages are from the same site or not.
+With RenderDocument,
+the second page will always use a new RenderFrame
+(excluding navigation within a document).</p>
+<p>Also when reloading a crashed frame
+we reused the browser-side RenderFrameHost.
+With RenderDocument we create a new RenderFrameHost
+for crashed frames.</p>
+<h2 id="read-more">Read more</h2>
+<p><a href="https://crbug.com/936696">https://crbug.com/936696</a></p>
+<p><a href="https://docs.google.com/document/d/1C2VKkFRSc0kdmqjKan1G4NlNlxWZqE4Wam41FNMgnmA">design doc</a></p>
+<p><a href="https://docs.google.com/document/d/1UzVOmTj2IJ0ecz7CZicTK6ow2rr9wgLTGfY5hjyLmT4">high-level view of the work needed</a></p>
+<p><a href="https://docs.google.com/document/d/1ZHWWEYT1L5Zgh2lpC7DHXXZjKcptI877KKOqjqxE2Ns">discussion of how we can land it safely</a></p>
+<h1 id="stages">Stages</h1>
+<p>We have 3 stages that are behind flags.</p>
+<ol>
+<li>crashed-frames:
+  A new <code>RenderFrameHost</code> is used for reloading a crashed document.</li>
+<li>subframes:
+  A new <code>RenderFrameHost</code> is used for every nested document.</li>
+<li>main frames:
+  A new <code>RenderFrameHost</code> is used for every document.</li>
+</ol>
+<h1 id="test-changes">Test changes</h1>
+<h2 id="renderframehost-reference-becomes-invalid">RenderFrameHost reference becomes invalid</h2>
+<p>Enabling this for subframes and main frames causes many tests to fail.
+It is common for tests to get a reference to a RenderFrameHost
+and then navigate that frame,
+assuming that the reference will remain valid.
+This assumption is no longer valid.
+The test needs to get a reference to the new RenderFrameHost,
+e.g. by traversing the frame tree again.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/render_document.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/render_document.md</a>
+  </p>
+</div>

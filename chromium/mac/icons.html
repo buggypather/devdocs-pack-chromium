@@ -1,0 +1,114 @@
+<h1>Chromium’s icons</h1>
+<h2 id="asset-catalogs-for-the-app-icon-and-document-icon-badge">Asset catalogs for the app icon and document icon badge</h2>
+<p>Mac Chromium stores its app icon and document icon badge in an asset catalog.
+Unlike iOS Chromium, which compiles an <code>.xcassets</code> directory into a <code>.car</code> file
+at build time, Mac Chromium has the <code>.car</code> file pre-built and checked in. This
+is done because (unlike on iOS) the asset catalog file only holds three items
+and thus isn’t often changing, and because of internal technical constraints in
+tooling. This may change in the future.</p>
+<p>Chromium’s asset catalog contains three logical items:</p>
+<ol>
+<li>A collection of assets (<code>Icon Image</code>, <code>MultiSized Image</code>, <code>PackedImage</code>)
+named <code>AppIcon</code> used for the app icon on macOS releases prior to macOS 26.</li>
+<li>A collection of assets (<code>Color</code>, <code>Image</code>, <code>IconGroup</code>, <code>IconImageStack</code>,
+<code>Named Gradient</code>, <code>Vector</code>) named <code>AppIcon</code> used for the app icon on macOS 26
+and subsequent releases.</li>
+<li>A collection of assets (<code>Icon Image</code>, <code>MultiSized Image</code>) named <code>Icon</code>
+used for badging documents using the
+<code>UTTypeIcons</code>/<code>UTTypeIconBadgeName</code>/<code>UTTypeIconText</code> <code>Info.plist</code> keys.</li>
+</ol>
+<p>The sources for this catalog are an <code>.xcassets</code> directory as well as an <code>.icon</code>
+Icon Composer document package. These sources, as well as the compiled <code>.car</code>
+result, are checked into the <code>//chrome/app/theme</code> directory.</p>
+<p>The current state of app icons (as of July 2025) is that Chrome compiles a
+“split app icon” asset catalog: the <code>AppIcon</code> bitmaps used for macOS releases
+prior to macOS 26 are those of the old, 2022-era app icon, while the <code>AppIcon</code>
+vectors used for macOS 26 and subsequent releases are of the new, 2025-era Icon
+Composer app icon. As users migrate to macOS 26 and subsequent releases, this
+will likely be revisited.</p>
+<h3 id="compiling-the-asset-catalog">Compiling the asset catalog</h3>
+<p>To compile the asset catalog, invoke <code>//tools/mac/icons/compile_car.py</code>:</p>
+<p><code>python3 tools/mac/icons/compile_car.py chrome/app/theme/chromium/mac/Assets.xcassets</code></p>
+<p>(or the path to whichever <code>.xcassets</code> file you want to compile)</p>
+<p>There is no need to specify the corresponding <code>.icon</code> file; its name will be
+derived from the name of the <code>.xcassets</code> file specified. The script will compile
+the two source files, and will put the files resulting from the asset catalog
+compilation into the directory containing the source files that were processed.</p>
+<h2 id="icns-files"><code>.icns</code> files</h2>
+<p>While the app icon and document icon badge are stored in an asset catalog,
+<code>.icns</code> files are still required in certain circumstances (e.g. <code>.dmg</code> icons).
+When such icons are still required, this is the Chromium convention for their
+construction.</p>
+<h3 id="sizes">Sizes</h3>
+<p><code>.icns</code> files contain multiple sizes of icons. Standard <code>.icns</code> files for
+Chromium contain icons of the following sizes:</p>
+<table>
+<thead>
+<tr>
+<th>Size</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>16×16</td>
+<td><code>&#39;is32&#39;</code>/<code>&#39;s8mk&#39;</code></td>
+</tr>
+<tr>
+<td>32×32</td>
+<td><code>&#39;il32&#39;</code>/<code>&#39;l8mk&#39;</code></td>
+</tr>
+<tr>
+<td>128×128</td>
+<td><code>&#39;it32&#39;</code>/<code>&#39;t8mk&#39;</code></td>
+</tr>
+<tr>
+<td>256×256</td>
+<td><code>&#39;ic08&#39;</code> (PNG)</td>
+</tr>
+<tr>
+<td>512×512</td>
+<td><code>&#39;ic09&#39;</code> (PNG)</td>
+</tr>
+</tbody></table>
+<h3 id="rationale">Rationale</h3>
+<p>The rationale behind these choices is to avoid bugs in icon display. As noted in
+a <a href="https://crbug.com/40451709#comment5">bug</a>, having @2x versions of the smaller
+icons causes blockiness on retina Macs, and in fact, sometimes just having @2x
+versions of icons would cause them to be preferred even when it doesn&#39;t make
+sense.</p>
+<p>At least through macOS 10.11, using the modern (<code>&#39;icp4&#39;</code>–<code>&#39;icp6&#39;</code>) types causes
+scrambling of the icons in display. If the old types work, why mess with them?</p>
+<h3 id="source-png-files">Source PNG files</h3>
+<p>Use whatever tools you want to create the PNG files, but please note that the
+dimensions of the images in the PNG files must match exactly the size indicated
+by their filename. This will be enforced by the <code>makeicns2</code> tool below.</p>
+<h3 id="construction">Construction</h3>
+<p>The tools for <code>.icns</code> construction can be found in <code>//tools/mac/icons</code>.
+Compile <code>makeicns2</code> before you begin by following the directions in its header
+comment.</p>
+<p>In addition, you will need <code>optipng</code> and <code>advpng</code>, which can be found in the
+<code>optipng</code> and <code>advancecomp</code> packages, respectively, in your favorite port
+manager.</p>
+<p>To construct an <code>.icns</code> file:</p>
+<ol>
+<li>Assemble a directory (<code>.iconset</code>) containing the five required sizes of icon,
+in PNG format: 16×16, 32×32, 128×128, 256×256, and 512×512, named <code>16.png</code>,
+<code>32.png</code>, <code>128.png</code>, <code>256.png</code>, and <code>512.png</code>, respectively.</li>
+<li>Process the <code>.png</code> files with:<ol>
+<li><code>optipng -o7 -zm1-9</code></li>
+<li><code>advpng -z4 -i50</code></li>
+<li><code>png_fix.py</code></li>
+</ol>
+</li>
+<li>Create the <code>.icns</code> file with the <code>makeicns2</code> you compiled:
+<code>makeicns2 &lt;name&gt;.iconset</code></li>
+</ol>
+<h2 id="historical-tools">Historical tools</h2>
+<p>Tools historically used for <code>.icns</code> file construction and analysis can be found
+in <code>//tools/mac/icons/additional_tools</code>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac/icons.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mac/icons.md</a>
+  </p>
+</div>

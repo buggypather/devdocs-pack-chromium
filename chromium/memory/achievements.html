@@ -1,0 +1,33 @@
+<h1>Achievements</h1>
+<p>This is a non-exhaustive list of results that various chrome people and teams have achieved. It is likely that some big changes are unintentionally missing here, in which case please directly add them without asking.</p>
+<p>Note, this is a community curated list. No one is sitting around trying to tabulate so if you did something cool, it&#39;s your job to add it. :)</p>
+<ul>
+<li><a href="https://groups.google.com/a/chromium.org/forum/#!topic/memory-dev/u4TJOd8FXao">Reduced &gt;50 MB</a> from many System Health benchmarks by dropping CC&#39;s image caches on a page navigation</li>
+<li><a href="https://codereview.chromium.org/2668663002/">Shipped Purge+Suspend</a> to background tabs of Android Chrome. The purging reduces 17 MB per background tab at 50%-tile and 43 MB at 75%-tile.</li>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/detail?id=669348">Reduced &gt;100 MB</a> in some scenarios from bitmaps for ResourceManager&#39;s UI.</li>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/detail?id=641008">&quot;More than 900KiB&quot; bucket population dropped from 50% to 7%</a> in BrotliFilter.</li>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/detail?id=652456">Reduced 1.5 MB</a> in some scenarios by lazily allocating SSLClientSocketImpl buffers.</li>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/detail?id=662019">Reduced 6 - 12 MB</a> from large LevelDB databases in some scenarios.</li>
+<li><a href="https://docs.google.com/document/d/1k-vivOinomDXnScw8Ew5zpsYCXiYqj76OCOYZSvHkaU/edit">Reduced 1 - 5 MB</a> from long-running renderers by implementing a heap compaction on Oilpan&#39;s GC.</li>
+<li><a href="https://chromeperf.appspot.com/report?sid=149453e8cd5a25621f8fbfc0e4fd4488016f4c5481dc20ff388a88e465a573bd&amp;start_rev=405220&amp;end_rev=413071">Reduced 35MB</a> of average (50MB peak) memory consumption of v8 for NYTimes. See further <a href="https://chromeperf.appspot.com/report?sid=7184bf6318b1731a2a3c0aaceb8ceb0d6315c5ad3add8fe503dd6322cb9dc805&amp;start_rev=412061&amp;end_rev=417931">improvements</a> on mobile browsing benchmarks (~25% reduced max v8 heap memory and ~50% reduced max v8 zone memory)</li>
+<li><a href="https://groups.google.com/a/chromium.org/forum/#!topic/project-trim/iLmZoFxall4/discussion">Reduced 15 MB from Tumblr and many image-heavy websites</a> by dropping duplicated encoded images</li>
+<li><a href="https://docs.google.com/document/d/1bKqev1DDb5siDabTnV1oDUdXES75aHMVdG4GtbPE9jU/edit#heading=h.41gx3tjq7iut">Reduced an average of 17.2 MB on Nexus 9 and 5.8 MB</a> on Android one using one-copy tile updates.</li>
+<li><a href="https://chromeperf.appspot.com/report?sid=de0b38c645b4724a67133fc4d37d41134f583ca3c16c9deb3546d9fdafa8445d">Reduced 9MB</a> on N5x of V8 zone peak memory usage.</li>
+<li><a href="https://codereview.chromium.org/1808633002">Reduced 8 MB from Facebook</a> by fixing a color format on low-RAM devices</li>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/detail?id=596881#c17">Reduced 7.4 MB</a> from vimeo.com and ebay.com Nexus 5 using GPU raster.</li>
+<li><a href="https://codereview.chromium.org/1953703004">Reduced 5 MB from the browser process</a> by purging DOMStorage&#39;s cache</li>
+<li><a href="https://chromeperf.appspot.com/report?sid=033d52b8e590bed23d15466eaec8b25809245dafa98ed6a34f169a5b40988daf&amp;start_rev=402092&amp;end_rev=402943">Reduced 3MB</a> on low-end Android devices with the V8 interpreter</li>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/detail?id=482727">Reduced 10 MB</a> in graphics memory inside browser on Svelte by turning off hardware acceleration</li>
+<li><a href="https://codereview.chromium.org/1156003008">Reduced 1.3 MB</a> from browser private dirty by decoding images from ImageManager cache on demand</li>
+<li><a href="https://codereview.chromium.org/1377483003">Reduced 2-10MB</a> from browser process by shrinking IPC buffers after large messages were passed</li>
+<li><a href="https://chromium-review.googlesource.com/c/chromium/src/+/945748">Reduced &lt; 2 MB</a> from background tabs of both Chrome and WebView on Android Go device. See further <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=833769">information</a> on the internal bots for Android.</li>
+<li>Developed <a href="https://chromium.googlesource.com/chromium/src/+/main/components/tracing/docs/memory_infra.md">Memory-Infra</a>, a timeline-based memory profiling system integrated into chrome:://tracing</li>
+<li>Developed <a href="https://docs.google.com/document/d/1BM_6lBrPzpMNMtcyi2NFKGIzmzIQ1oH3OlNG27kDGNU/edit?ts=57e92782">System health benchmarks</a>, a set of benchmarks that give us consistent metrics for our reduction efforts</li>
+<li><a href="https://docs.google.com/document/d/1JfnW6RpRDuuZITQ3xuFUIRBfC_KOG5xXUuW8U_UePJU/edit">Visualized Chrome&#39;s memory consumption in real-world website</a>s</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/achievements.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory/achievements.md</a>
+  </p>
+</div>

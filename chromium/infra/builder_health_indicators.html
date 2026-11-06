@@ -1,0 +1,19 @@
+<h1>Builder Health Indicators</h1>
+<p>Health indicators can be found on a builder&#39;s home page. They provide signal on a few different things like:</p>
+<ul>
+<li>Is it running in a reasonable amount of time?</li>
+<li>Is it persistently flaking/failing?</li>
+<li>Is it having capacity trouble?</li>
+<li>Is it having infra trouble?</li>
+</ul>
+<p>If any of the <a href="https://source.chromium.org/chromium/infra/infra/+/main:go/src/infra/cr_builder_health/thresholds.go?q=f:thresholds.go%20%22type%20BuilderThresholds%22">health criteria</a> is found to be unhealthy,
+the builder is marked unhealthy. Follow the link in the UI to find more health info about that specific builder.</p>
+<p>Health indicators can be turned on, turned off, and <a href="https://source.chromium.org/search?q=builder_health_indicators.star">configured</a> alongside builder infra configs.
+The config end result is this <a href="https://crsrc.org/c/infra/config/generated/health-specs/health-specs.json;l=1?q=health-spec&amp;sq=">json file</a>.</p>
+<p>If a builder is unhealthy it is the owning team&#39;s job to fix it, or remove it.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/infra/builder_health_indicators.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/infra/builder_health_indicators.md</a>
+  </p>
+</div>

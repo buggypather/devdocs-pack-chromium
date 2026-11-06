@@ -1,0 +1,68 @@
+<h1>Cocoa Tips and Tricks</h1>
+<p>A collection of idioms that we use when writing the Cocoa views and controllers
+for Chromium.</p>
+<h2 id="nswindowcontroller-initialization">NSWindowController Initialization</h2>
+<p>To make sure that |window| and |delegate| are wired up correctly in your xib,
+it&#39;s useful to add this to your window controller:</p>
+<pre data-language="objective-c">- (void)awakeFromNib {
+  DCHECK([self window]);
+  DCHECK_EQ(self, [[self window] delegate]);
+}</pre>
+<h2 id="nswindowcontroller-cleanup">NSWindowController Cleanup</h2>
+<p>&quot;You want the window controller to release itself it |-windowDidClose:|, because
+else it could die while its views are still around. if it (auto)releases itself
+in the callback, the window and its views are already gone and they won&#39;t send
+messages to the released controller.&quot;</p>
+<ul>
+<li>Nico Weber (thakis@)</li>
+</ul>
+<p>See
+<a href="http://developer.apple.com/mac/library/documentation/Cocoa/Conceptual/Documents/Concepts/WindowClosingBehav.html#//apple_ref/doc/uid/20000027">Window Closing Behavior, ADC Reference</a>
+for the full story.</p>
+<p>What this means in practice is:</p>
+<pre data-language="objective-c">@interface MyWindowController : NSWindowController&lt;NSWindowDelegate&gt; {
+  IBOutlet NSButton* closeButton_;
+}
+- (IBAction)closeButton:(id)sender;
+@end
+
+@implementation MyWindowController
+- (id)init {
+  if ((self = [super initWithWindowNibName:@&quot;MyWindow&quot; ofType:@&quot;nib&quot;])) {
+  }
+  return self;
+}
+
+- (void)awakeFromNib {
+  // Check that we set the window and its delegate in the XIB.
+  DCHECK([self window]);
+  DCHECK_EQ(self, [[self window] delegate]);
+}
+
+// NSWindowDelegate notification.
+- (void)windowWillClose:(NSNotification*)notif {
+  [self autorelease];
+}
+
+// Action for a button that lets the user close the window.
+- (IBAction)closeButton:(id)sender {
+  // We clean ourselves up after the window has closed.
+  [self close];
+}
+@end</pre>
+<h2 id="unit-tests">Unit Tests</h2>
+<p>There are four Chromium-specific GTest macros for writing ObjC++ test cases.
+These macros are <code>EXPECT_NSEQ</code>, <code>EXPECT_NSNE</code>, and <code>ASSERT</code> variants by the same
+names.  These test <code>-[id&lt;NSObject&gt; isEqual:]</code> and will print the object&#39;s
+<code>-description</code> in GTest-style if the assertion fails. These macros are defined
+in <code>//testing/gtest_mac.h</code>. Just include that file and you can start using them.</p>
+<p>This allows you to write this:</p>
+<pre data-language="objective-c">EXPECT_NSEQ(@&quot;foo&quot;, aString);</pre>
+<p>Instead of this:</p>
+<pre data-language="objective-c">EXPECT_TRUE([aString isEqualToString:@&quot;foo&quot;]);</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/cocoa_tips_and_tricks.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/cocoa_tips_and_tricks.md</a>
+  </p>
+</div>

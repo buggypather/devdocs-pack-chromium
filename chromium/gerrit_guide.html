@@ -1,0 +1,154 @@
+<h1>Gerrit Guide</h1>
+<h2 id="introduction">Introduction</h2>
+<h3 id="everyone-to-get-access-to-the-chromium-gerrit-instance">(EVERYONE) To get access to the Chromium Gerrit instance</h3>
+<ol>
+<li><p>Install
+<a href="https://commondatastorage.googleapis.com/chrome-infra-docs/flat/depot_tools/docs/html/depot_tools_tutorial.html#_setting_up">depot_tools</a>.</p>
+</li>
+<li><p>Set up your account on Gerrit by visiting
+<a href="https://chromium-review.googlesource.com/">https://chromium-review.googlesource.com/</a> and signing in once. This makes
+sure that you have an account, which is needed for uploading CLs.</p>
+</li>
+<li><p>Set your real name on Gerrit by visiting
+<a href="https://chromium-review.googlesource.com/#/settings/">https://chromium-review.googlesource.com/#/settings/</a> and check the &quot;Full
+Name&quot; field.</p>
+</li>
+<li><p>Ensure Git is set up correctly:</p>
+<pre> # Make sure to set your name and email
+ git config --global user.name &quot;CHANGE ME&quot;
+ git config --global user.email CHANGE_ME@chromium.org
+ git config --global depot-tools.useNewAuthStack 1
+ update_depot_tools
+ git cl creds-check --global</pre>
+</li>
+<li><p>If you are using a @google.com account, or a linked @chromium.org account:</p>
+<ol>
+<li>Run <code>gcert</code> once a day to authenticate your account.</li>
+</ol>
+</li>
+<li><p>Otherwise,</p>
+<ol>
+<li><p>Run <code>git credential-luci login</code> to login</p>
+</li>
+<li><p><strong>Committers:</strong> Run <code>git credential-luci reauth</code> once a day to
+Re-Authenticate with your security key. To complete ReAuth over SSH or
+remote desktop, see <a href="gerrit_reauth">Gerrit ReAuth Guide</a> for
+instructions.</p>
+</li>
+</ol>
+</li>
+</ol>
+<h3 id="everyone-verification">(EVERYONE) Verification</h3>
+<p>Run <code>git ls-remote https://chromium.googlesource.com/chromiumos/manifest.git</code></p>
+<p>This should <strong>not</strong> prompt for any credentials, and should just print out a list
+of git references.</p>
+<h3 id="googler-link-chromiumorg--googlecom-accounts">(Googler) Link @chromium.org &amp; @google.com accounts</h3>
+<p>If you have both @chromium.org and @google.com accounts, you may want to link
+them.</p>
+<p>Doing so may make it easier to view all of your CLs at once, and may make it
+less likely that you&#39;ll upload a CL with the wrong account.</p>
+<p>However, if you do choose to link them, you will be prompted to log in using
+only your @google.com account, and that means you have to follow all of the
+security restrictions for @google.com accounts.</p>
+<p><strong>Please note</strong> that linking your accounts does NOT change ownership of CLs
+you&#39;ve already uploaded and <strong>you will lose edit access</strong> to any CLs owned by
+your secondary (@google.com) account. i.e CLs you uploaded with your @google.com
+account, before the link, will not show up in your @chromium.org dashboard. Any
+in-flight changes will have to be re-uploaded, so if you have significant
+in-flight changes we don&#39;t recommend linking accounts.</p>
+<p><strong>To link them:</strong></p>
+<p>If you have two email accounts (@chromium.org and @google.com) but <strong>only have
+one Gerrit account</strong> you can link them yourself:</p>
+<ol>
+<li>Login into <a href="https://chromium-review.googlesource.com">https://chromium-review.googlesource.com</a> using your @chromium.org account.</li>
+<li>Go to <a href="https://chromium-review.googlesource.com/#/settings/EmailAddresses">Settings -&gt; Email Addresses</a>.</li>
+<li>In the &quot;New email address&quot; field, enter your @google.com account, click the
+Send Verification button, and follow the instructions.</li>
+<li>To verify that it worked, open <a href="https://chromium-review.googlesource.com/#/settings/web-identities">Settings -&gt;
+Identities</a>
+and verify your @chromium.org, @google.com and ldapuser/* identities are
+listed.</li>
+<li>Repeat 1-4 on <a href="https://chrome-internal-review.googlesource.com">https://chrome-internal-review.googlesource.com</a>, but use your
+@google.com email to login, and @chromium.org in &quot;Register new email&quot; dialog.</li>
+</ol>
+<p>If you encounter any errors, <a href="https://issues.chromium.org/issues/new?component=2194686&amp;template=2359397">file a ticket</a>.</p>
+<p><strong>If you have two Gerrit accounts</strong> you need an admin to link them. File a
+ticket using go/fix-chrome-git</p>
+<p>Once your accounts are linked, you&#39;ll be able to use both @chromium.org and
+@google.com emails in git commits. This is particularly useful if you have your
+@chromium.org email in global git config, and you try to trigger chrome-internal
+trybots (that otherwise require @google.com email).</p>
+<p>If you have linked accounts, and want to unlink them:</p>
+<ul>
+<li>On chromium-review, go to
+<a href="https://chromium-review.googlesource.com/settings/#EmailAddresses">https://chromium-review.googlesource.com/settings/#EmailAddresses</a>, click
+&quot;Delete&quot; on all addresses associated with the account you don&#39;t want to use
+anymore (e.g. all the @google ones), and then sign in again using the account
+you do want to use (e.g. their @chromium one).</li>
+<li>On chrome-internal-review, go to
+<a href="https://chrome-internal-review.googlesource.com/settings/#EmailAddresses">https://chrome-internal-review.googlesource.com/settings/#EmailAddresses</a> and
+do the same (probably deleting @chromium, and then signing in with your
+@google account).</li>
+</ul>
+<p>If you encounter any errors, <a href="https://issues.chromium.org/issues/new?component=2194686&amp;template=2359397">file a ticket</a>.</p>
+<h2 id="common-issues">Common issues</h2>
+<h3 id="email-address-blahchromiumorg-is-not-registered-in-your-account-and-you-lack-forge-committer-permission">email address <a href="mailto:blah@chromium.org">blah@chromium.org</a> is not registered in your account, and you lack &#39;forge committer&#39; permission</h3>
+<p>This means that the email you&#39;re using to upload CLs is not the same as the
+email you&#39;re making Git commits with.</p>
+<p>To fix this problem, make sure your Git configured email is correct:</p>
+<pre>git config --global user.email CHANGE_ME@chromium.org</pre>
+<p>Run to fix your Gerrit auth:</p>
+<pre>git cl creds-check</pre>
+<p>If you don&#39;t use <code>git cl upload</code> or if you use it with <code>--no-squash</code>, you may
+need to rewrite your commits with the correct email:</p>
+<pre>git rebase -f</pre>
+<h3 id="ssoauthenticator-timeout">SSOAuthenticator: Timeout</h3>
+<p>If you&#39;re getting this error and you&#39;re using SSH to Windows, try using Chrome
+Remote Desktop instead.  (SSH introduces more latency depending on where you&#39;re
+connecting to/from.)</p>
+<h3 id="not-getting-email">Not getting email?</h3>
+<p>In case you think you should be receiving email from Gerrit but don&#39;t see it in
+your inbox, be sure to check your spam folder. It&#39;s possible that your mail
+reader is mis-classifying email from Gerrit as spam.</p>
+<h3 id="still-having-a-problem">Still having a problem?</h3>
+<p>Check out the <a href="https://gerrit-review.googlesource.com/Documentation/index.html">Gerrit
+Documentation</a>
+to see if there are hints in there.</p>
+<p>If you have any problems please <a href="https://bugs.chromium.org/p/chromium/issues/entry?template=Build+Infrastructure">open a Build Infrastructure
+issue</a>
+on the <strong>Chromium</strong> issue tracker (the &quot;Build Infrastructure&quot; template should be
+automatically selected).</p>
+<h2 id="tips">Tips</h2>
+<h3 id="watching-projects--notifications">Watching Projects / Notifications</h3>
+<p>You can select Projects (and branches) you want to &quot;watch&quot; for any changes on by
+adding the Project under <a href="https://chromium-review.googlesource.com/settings/#Notifications">Settings -&gt;
+Notifications</a>.</p>
+<h3 id="how-do-i-build-on-other-ongoing-gerrit-reviews">How do I build on other ongoing Gerrit reviews?</h3>
+<p>Scenario: You have an ongoing Gerrit review, with issue number 123456 (this is
+the number after the last / in the URL for your Gerrit review). You have a local
+branch, with your change, say 2a40ae.</p>
+<p>Someone else has an ongoing Gerrit review, with issue number 456789. You want to
+build on this. Here’s one way to do it:</p>
+<pre>git checkout -b their_branch
+
+git cl patch -f 456789
+
+git checkout -b my_branch # yes, create a new
+
+git cherry-pick 2a40ae # your change from local branch
+
+git branch --set-upstream-to=their_branch
+
+git rebase
+
+git cl issue 123456
+
+&lt;any more changes to your commit(s)&gt;
+
+git cl upload</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gerrit_guide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gerrit_guide.md</a>
+  </p>
+</div>

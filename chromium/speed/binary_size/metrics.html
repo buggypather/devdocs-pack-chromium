@@ -1,0 +1,125 @@
+<h1>Binary Size Metrics</h1>
+<p>This document lists metrics used to track binary size.</p>
+<h2 id="metrics-for-desktop">Metrics for Desktop</h2>
+<ul>
+<li>Sizes are collected by
+<a href="https://cs.chromium.org/chromium/build/scripts/slave/chromium/sizes.py">//build/scripts/slave/chromium/sizes.py</a><ul>
+<li><a href="https://chromeperf.appspot.com/report?sid=b3dcc318b51f3780924dfd3d82265ca901ac690cb61af91919997dda9821547c">Win32 Telemetry Graphs</a></li>
+<li><a href="https://chromeperf.appspot.com/report?sid=bd18d34b6d29f26877e7075cb5c34c56c011d99803e9120d61610d7eaef38e9c">Linux Telemetry Graphs</a></li>
+<li><a href="https://chromeperf.appspot.com/report?sid=2cb6e0a9941e63418e7b83f91583282fa9fbaaafc2d19b3fa1179b28e7d3f7eb">Mac Telemetry Graphs</a></li>
+</ul>
+</li>
+</ul>
+<h3 id="alerting">Alerting</h3>
+<ul>
+<li>Alerts are sheriffed as part of the main perf sheriff rotation.</li>
+<li>Alerts generally fire for ~100kb jumps.</li>
+</ul>
+<h2 id="metrics-for-android">Metrics for Android</h2>
+<p>For Googlers, more information available at <a href="https://goto.google.com/chrome-apk-size">go/chrome-apk-size</a>.</p>
+<ul>
+<li>Sizes are collected by
+<a href="https://cs.chromium.org/chromium/src/build/android/resource_sizes.py">//build/android/resource_sizes.py</a>.</li>
+<li>How to analyze Android binary size discussed in <a href="../apk_size_regressions#debugging-apk-size-increase">apk_size_regressions.md#debugging-apk-size-increase</a>.</li>
+<li>Sizes for <code>ChromePublic.apk</code>, <code>ChromeModernPublic.apk</code>, <code>ChromePublic.aab</code>, <code>SystemWebView.aab</code> are tracked.<ul>
+<li>But only <code>ChromePublic.aab</code> and <code>SystemWebView.aab</code>, measured together,
+are actively monitored.</li>
+</ul>
+</li>
+<li>We care most about on-disk size (for users with small device storage)<ul>
+<li>But also care about patch size (so that browser updates get applied)</li>
+</ul>
+</li>
+</ul>
+<h3 id="normalized-apk-size">Normalized APK Size</h3>
+<ul>
+<li><a href="https://chromeperf.appspot.com/report?sid=e55e2189727a5bc410196e8cb7492879f9a224dc1383c6cdf9409edc0a8a1050">Telemetry Graph</a></li>
+<li>Monitored by <a href="../apk_size_regressions">Binary Size Sheriffs</a>.<ul>
+<li>Alerts fire for changes of 16kb or more.</li>
+</ul>
+</li>
+<li>Computed as:<ul>
+<li>The size of an APK</li>
+<li>With all native code as the sum of section sizes (except .bss), uncompressed.<ul>
+<li>Why: Removes effects of ELF section alignment.</li>
+</ul>
+</li>
+<li>With all dex code as if it were stored uncompressed.<ul>
+<li>Why: Best practice is to store dex uncompressed on Android P and above.</li>
+<li>On prior versions, or when stored compressed, dex is extracted upon installation.</li>
+</ul>
+</li>
+<li>With all zipalign padding removed.<ul>
+<li>Why: Removes effects of file alignment (esp. relevant because native libraries are 4k-aligned).</li>
+</ul>
+</li>
+<li>With size of apk signature block removed.<ul>
+<li>Why: Size fluctuates by several KB based on how hash values turn out.</li>
+</ul>
+</li>
+<li>With all translations as if they were not missing (estimates size of missing translations based on size of english strings).<ul>
+<li>Why: Without translation-normalization, translation dumps cause jumps.</li>
+<li>Translation-normalization applies only to apks (not to Android App Bundles).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>For Android App Bundles, the normalized size is the sum of the normalized size of all splits that have onDemand=&quot;false&quot; (those installed by default).</li>
+</ul>
+<h3 id="native-code-size-metrics">Native Code Size Metrics</h3>
+<ul>
+<li><a href="https://chromeperf.appspot.com/report?sid=7b392aa248c77bd4c4fe03ca870e30863e3dcb7f06167cb50c9d7d99010687a9">Telemetry Graph</a></li>
+<li>File size of <code>libchrome.so</code></li>
+<li>Code vs data sections (.text vs .data + .rodata)</li>
+</ul>
+<h3 id="java-code-size-metrics">Java Code Size Metrics</h3>
+<ul>
+<li><a href="https://chromeperf.appspot.com/report?sid=d2f2a1dfefd89c43902299efeddf6e4e6521db5e01d3716b8202f6ad8ad960da">Telemetry Graph</a></li>
+<li>File size of <code>classes.dex</code></li>
+<li>&quot;Dex&quot;: Counts of the number of fields, methods, strings, types.</li>
+<li>&quot;DexCache&quot;: The number of bytes of RAM required to load our dex file (computed from counts)</li>
+</ul>
+<h3 id="breakdown-metrics">Breakdown Metrics</h3>
+<ul>
+<li><a href="https://chromeperf.appspot.com/report?sid=c7f4afc0f438e7868b81be12c44aca7d0e9f7379bf1ae862df261fcd28d222f1">Telemetry Graph</a></li>
+<li>Compressed size of each apk component.</li>
+<li>The sum of these equals APK Size (which can be found under &quot;Install Size Metrics&quot;: &quot;APK Size&quot;)</li>
+</ul>
+<h3 id="install-metrics">Install Metrics</h3>
+<ul>
+<li><a href="https://chromeperf.appspot.com/report?sid=33515ace819bc607a742c8748316ffe6a36b3fcbc598efd35cd80d0a83c190ae">Telemetry Graph</a></li>
+<li>Estimated installed size: How much disk is required to install Chrome on a device.<ul>
+<li>This is just an estimate, since actual size depends on Android version (e.g. Dex overhead is very different for pre-L vs L+).</li>
+<li>Does not include disk used up by profile, etc.</li>
+<li>We believe it to be fairly accurate for all L+ devices (less space is required for Dalvik runtime pre-L).</li>
+</ul>
+</li>
+<li>The sum of these equals Estimated installed size.</li>
+</ul>
+<h3 id="transfer-size-metrics">Transfer Size Metrics</h3>
+<ul>
+<li>Deflated apk size:<ul>
+<li><a href="https://chromeperf.appspot.com/report?sid=c7dcbe09dee57f6dab19f9307acd97a044a150710357ad25bf217ce004b3b4bb">Telemetry Graph</a></li>
+<li>Only relevant for non-patch updates of Chrome (new installs, or manual app updates)</li>
+</ul>
+</li>
+<li>Patch Size (no longer available):<ul>
+<li>Is too slow to be running on the Perf Builder</li>
+<li>Was found to be fairly unactionable</li>
+<li>Used to use <a href="https://github.com/googlesamples/apk-patch-size-estimator">https://github.com/googlesamples/apk-patch-size-estimator</a></li>
+<li>Functionality now exists in <code>//third_party/android_sdk/public/cmdline-tools/latest/bin/apkanalyzer download-size</code></li>
+</ul>
+</li>
+</ul>
+<h3 id="uncompressed-metrics">Uncompressed Metrics</h3>
+<ul>
+<li><a href="https://chromeperf.appspot.com/report?sid=33f59871f4e9fa3d155be3c13a068d35e6e621bcc98d9b7b103e0c8485e21097">Telemetry Graph</a></li>
+<li>Uncompressed size of classes.dex, locale .pak files, etc</li>
+<li>Reported only for things that are compressed within the .apk</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/metrics.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/metrics.md</a>
+  </p>
+</div>

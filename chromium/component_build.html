@@ -1,0 +1,209 @@
+<h1>The Chrome Component Build</h1>
+<h2 id="introduction">Introduction</h2>
+<p>Release builds are “static” builds which compile to one executable and
+zero-to-two shared libraries (depending on the platform). This is efficient at
+runtime, but can take a long time to link because so much code goes into a
+single binary.</p>
+<p>In a component build, many smaller shared libraries will be generated. This
+speeds up link times, and means that many changes only require that the local
+shared library be linked rather than the full executable, but at the expense of
+program load-time performance and binary size.</p>
+<p>The component build is currently the default for debug non-Android, non-iOS
+builds (they don&#39;t work for iOS, and the increased binary size leads to slow
+APK installs on Android). You can force it on for release builds using the
+<a href="https://www.chromium.org/developers/gn-build-configuration">GN build arg</a>:</p>
+<pre data-language="python">is_component_build = true</pre>
+<p>There are <em>many</em> gotchas with component builds and they are being tracked in
+<a href="https://crbug.com/40280306">crbug/40280306</a></p>
+<h3 id="how-to-make-a-component">How to make a component</h3>
+<p>Defining a component just means using the GN “component” template instead
+of a shared library, static library, or source set. The template will
+generate a shared library when <code>is_component_build</code> is enabled, and a static
+library otherwise.</p>
+<pre data-language="python">component(&quot;browser&quot;) {
+  output_name = &quot;chrome_browser&quot;
+  sources = ...
+  ...
+}</pre>
+<p>Shared libraries in GN must have globally unique output names. According to GN
+style, your target should be named something simple and convenient (often
+matching your directory name). If this is non-unique, override it with the
+<code>output_name</code> variable.</p>
+<p><strong>Note</strong>: for information about <code>mojom_component</code> targets, see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/tools/bindings/README.md#Component-targets">Mojo documentation</a>.</p>
+<h3 id="dependencies-between-targets">Dependencies between targets</h3>
+<p>When a component directly or indirectly depends on a static library or source
+set, it will be linked into this component. If other components do the same,
+the static library or source set’s code will be duplicated.</p>
+<p>In a few cases (for defining some constants) this duplication is OK, but in
+general this is a bad idea. Globals and singletons will get duplicated which
+will wreak havoc. Therefore, you should normally ensure that components only
+depend on other components.</p>
+<h3 id="component-granularity">Component granularity</h3>
+<p>Creating lots of small components isn’t desirable. Some code can easily get
+duplicated, it takes extra time to create the shared libraries themselves, load
+time will get worse, and the build and code can get complicated. On the other
+extreme, very large components negate the benefits of the component build. A
+good rule of thumb is that components should be medium sized, somewhere in the
+range of several dozen to several hundred files.</p>
+<h2 id="exporting-and-importing-symbols">Exporting and importing symbols</h2>
+<p>When a shared library or executable uses a symbol from a shared library, it is
+“imported” by the user of the symbol, and “exported” from the shared library
+that defines the symbol. Don’t confuse exported symbols with the public API of
+a component. For example, unit tests will often require implementation details
+to be exported. Export symbols to make the build link the way you need it, and
+use GN’s public headers and visibility restrictions to define your public API.</p>
+<p>Component library headers can use the <code>COMPONENT_EXPORT()</code> macro defined in
+<code>base/component_export.h</code> to annotate symbols which should be exported by
+the component. This macro takes a globally unique component name as an
+argument:</p>
+<pre data-language="c++">#include &quot;base/component_export.h&quot;
+
+class COMPONENT_EXPORT(YOUR_COMPONENT) YourClass { ... };
+
+COMPONENT_EXPORT(YOUR_COMPONENT) void SomeFunction();</pre>
+<p>When defining the target for your component, set:</p>
+<pre data-language="python">defines = [ &quot;IS_YOUR_COMPONENT_IMPL&quot; ]</pre>
+<p>This ensures that the corresponding <code>COMPONENT_EXPORT(YOUR_COMPONENT)</code>
+invocations result in symbols being marked for export when compiling the
+component target. All other targets which include the component&#39;s headers
+will not have defined <code>IS_YOUR_COMPONENT_IMPL</code>, so they will have the same
+symbols marked for import instead.</p>
+<h2 id="chromes-deprecated-pattern-for-exports">Chrome’s deprecated pattern for exports</h2>
+<p><strong>NOTE</strong>: This section is included for posterity, as many components in the tree
+still use this pattern for exports. New components should use
+<code>base/component_export.h</code> as described above.</p>
+<p>Write a header with the name <code>&lt;component_name&gt;_export.h</code>. Copy an <a href="https://cs.chromium.org/chromium/src/ipc/ipc_export.h">existing
+one</a>
+and update the macro names. It will key off of two macros:</p>
+<ul>
+<li><code>COMPONENT_BUILD</code>: A globally defined preprocessor definition set when the
+component build is on.</li>
+<li><code>&lt;component_name&gt;_IMPLEMENTATION</code>: A macro you define for code inside your
+component, and leave undefined for code outside of your component. The
+naming should match your <code>*_export.h</code> header.</li>
+</ul>
+<p>It will define a macro <code>&lt;component_name&gt;_EXPORT</code>. This will use the
+<code>*_IMPLEMENTATION</code> macro to know whether code is being compiled inside or outside
+of your component, and the <code>*_EXPORT</code> macro will set it to being exported or
+imported, respectively. You should copy an existing file and update the
+<code>*_EXPORT</code> macro naming for your component.</p>
+<p>When defining the target for your component, set:</p>
+<pre data-language="python">defines = [ &quot;FOO_IMPLEMENTATION&quot; ]</pre>
+<p>In your BUILD.gn file. If you have source sets that also make up your
+component, set this on them also. A good way to share this is to put the
+definition in a GN config:</p>
+<pre data-language="python">config(&quot;foo_implementation&quot;) {
+  defines = [ &quot;FOO_IMPLEMENTATION&quot; ]
+}</pre>
+<p>and set the config on the targets that use it:</p>
+<pre data-language="python">configs += [ &quot;:foo_implementation&quot; ]</pre>
+<p>The component build is only reason to use the <code>*_IMPLEMENTATION</code> macros. If
+your code is not being compiled into a component, don’t define such a macro
+(sometimes people do this by copying other targets without understanding).</p>
+<h3 id="marking-symbols-for-export">Marking symbols for export</h3>
+<p>Use the <code>*_EXPORT</code> macros on function and class declarations (don’t annotate
+the implementations) as follows:</p>
+<pre data-language="c++">#include &quot;yourcomponent/yourcomponent_export.h&quot;
+
+class YOURCOMPONENT_EXPORT YourClass { ... };
+
+YOURCOMPONENT_EXPORT void SomeFunction();</pre>
+<h2 id="creating-components-from-multiple-targets">Creating components from multiple targets</h2>
+<h3 id="static-library-symbol-export-issues">Static library symbol export issues</h3>
+<p>Components can be made up of static libraries and GN source sets. A source set
+results in all object files from that compilation being linked into the
+component. But when code is in a static library, only those object files needed
+to define undefined symbols will be pulled in to the link. If an object file is
+not needed to link the component itself, it won’t be pulled into the link, even
+though it might have exported symbols needed by other components.</p>
+<p>Therefore, all code with exported symbols should be either on the component
+target itself or in source sets it depends on.</p>
+<h3 id="splitting-targets-differently-in-static-and-component-builds">Splitting targets differently in static and component builds</h3>
+<p>Sometimes you might have something consisting of multiple sub-targets. For
+example: a browser, a renderer, and a common directory, each with their own
+target. In the static build, they would all be linked into different places. In
+the component build, you may want to have these be in a single component for
+performance and sanity reasons. Content is such an example.</p>
+<p>The important thing is that the sub-projects not be depended on directly from
+outside of the component in the component build. This will duplicate the code
+and the import/export of symbols will get confused (see “Common mistakes”
+below).</p>
+<p>Generally the way to do this is to create browser and renderer group targets
+that forward to the right place. In static builds these would forward to
+internal targets with the actual code in them. In component builds, these would
+forward to the component.</p>
+<p>In the static build the structure will be: <code>//external/thing</code> ➜ <code>//foo:browser</code>
+➜ <code>//foo:browser_impl</code></p>
+<p>In the component build the structure will be: <code>//external/thing</code> ➜
+<code>//foo:browser</code> ➜ <code>//foo:mycomponent</code> ➜ <code>//foo:browser_impl</code></p>
+<p>Set GN visibility so that the targets with the code can only be depended on by
+targets inside your component.</p>
+<pre data-language="python">if (is_component_build) {
+  component(&quot;mycomponent&quot;) {
+    public_deps = [ &quot;:browser_impl&quot;, &quot;:renderer_impl&quot; ]
+  }
+}
+
+# External targets always depend on this or the equivalent “renderer” target.
+group(&quot;browser&quot;) {
+  if (is_component_build) {
+    public_deps = [ &quot;:mycomponent&quot; ]
+  } else {
+    public_deps = [ &quot;:browser_impl&quot; ]
+  }
+}
+
+source_set(&quot;browser_impl&quot;) {
+  visibility = [ &quot;:*&quot; ]  # Prevent accidental dependencies.
+  defines = [ &quot;IS_MYCOMPONENT_IMPL&quot; ]
+  sources = [ ... ]
+}</pre>
+<h2 id="common-mistakes">Common mistakes</h2>
+<h3 id="forgetting-or-misspelling-component_export">Forgetting or misspelling <code>COMPONENT_EXPORT(*)</code></h3>
+<p>If a function is not marked with your <code>COMPONENT_EXPORT(FOO)</code> annotation or the
+component name (<code>FOO</code>) is misspelled, other components won’t see the symbol when
+linking and you’ll get undefined symbols during linking:</p>
+<pre>some_file.obj : error LNK2001: unresolved external symbol &lt;some definition&gt;</pre>
+<p>This will only happen on Windows component builds, which makes the error more
+difficult to debug. However, if you see such an error only for Windows
+component builds, you know it’s this problem.</p>
+<h3 id="not-defining-is__impl-for-code-in-your-component">Not defining <code>IS_*_IMPL</code> for code in your component</h3>
+<p>When code is compiled that sees a symbol marked with <code>__declspec(dllimport)</code>,
+it will expect to find that symbol in another shared library. If that symbol
+ends up in the same shared library, you’ll see the error:</p>
+<pre>some_file.obj : warning LNK4217: locally defined symbol
+&lt;horrendous mangled name&gt; imported in function &lt;some definition&gt;</pre>
+<p>The solution is to make sure your <code>IS_*_IMPL</code> define is set consistently for all
+code in the component. If your component links in source sets or static
+libraries, the <code>IS_*_IMPL</code> macro must be set on those as well.</p>
+<h3 id="defining-is__impl-for-code-outside-your-component">Defining <code>IS_*_IMPL</code> for code outside your component</h3>
+<p>If your <code>IS_*_IMPL</code> macro is set for code compiled outside of the
+component, that code will expect the symbol to be in the current shared
+library, but it won’t be found. It won’t even go looking in other libraries and
+the result will be an undefined symbol:</p>
+<pre>some_file.obj : error LNK2001: unresolved external symbol &lt;some definition&gt;</pre>
+<h3 id="depending-on-a-source-set-or-static-library-from-both-inside-and-outside-a-component">Depending on a source set or static library from both inside and outside a component</h3>
+<p>If the source set or static library has any <code>*_EXPORT</code> macros and ends up both
+inside and outside of the component boundary, those symbols will fall under the
+cases above where <code>IS_*_IMPL</code> is inappropriately defined or inappropriately
+undefined. Use GN visibility to make sure callers don’t screw up.</p>
+<h3 id="putting-exported-symbols-in-static-libraries">Putting exported symbols in static libraries</h3>
+<p>As discussed above, exported symbols should not be in static libraries because
+the object file might not be brought into the link. Even if it is brought in
+today, it might not be brought in due to completely unrelated changes in the
+future. The result will be undefined symbol errors from other components. Use
+source sets if your component is made up of more than one target.</p>
+<h3 id="exporting-functions-and-classes-implemented-in-headers">Exporting functions and classes implemented in headers</h3>
+<p>When you implement a symbol in a header the compiler will put that in every
+necessary translation unit and the linker will pick one. If the symbol is never
+referenced by code in the shared library it&#39;s supposed exported from, it will
+never be instantiated and never exported. The result will be undefined external
+symbol errors when linking. Exported symbols should be declared in a header but
+always implemented in a .cc file.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/component_build.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/component_build.md</a>
+  </p>
+</div>

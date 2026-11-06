@@ -1,0 +1,45 @@
+<h1>Sandbox Debugging</h1>
+<p>The <a href="https://github.com/chromium/chromium/blob/HEAD/sandbox/mac/seatbelt_sandbox_design.md">macOS sandbox</a> confines
+Chrome processes that handle untrustworthy data or code (or both). It works by
+blocking the process from accessing OS resources, which can have unintended side
+effects that cause compatibility issues or crashes. This document provides
+instructions for debugging such issues.</p>
+<h2 id="determining-if-the-sandbox-is-responsible">Determining if the Sandbox is Responsible</h2>
+<p>The easiest way to test if the sandbox is causing a compatibility issue is to
+<strong>temporarily</strong> disable it. This can be done like so:</p>
+<pre>open -a 'Google Chrome' --args --no-sandbox</pre>
+<blockquote>
+<p>Running with <code>--no-sandbox</code> is an insecure configuration. After performing the
+test, you should quit Chrome and re-launch normally.</p>
+</blockquote>
+<p>If the issue still persists, then the issue is not caused by the sandbox. If the
+issue no longer occurs, continue to help provide further debugging information.</p>
+<h2 id="debugging-the-sandbox">Debugging the Sandbox</h2>
+<p>If you have determined that the sandbox is responsible for the issue, the next
+step is to determine what the sandbox is blocking. Sandbox violations are
+written to the system log (rather than Chrome&#39;s standard output/error), so a
+separate command is needed to access the data.</p>
+<p>Start the <code>log</code> command to show sandbox violation errors:</p>
+<pre>log stream --predicate '((processID == 0) AND (senderImagePath CONTAINS &quot;/Sandbox&quot;)) OR (subsystem == &quot;com.apple.sandbox.reporting&quot;)'</pre>
+<p>Then launch Chrome with with the <code>--enable-sandbox-logging</code> argument:</p>
+<pre>open -a 'Google Chrome' --args --enable-sandbox-logging</pre>
+<p>After you reproduce the issue, quit Chrome and <code>Ctrl-C</code> the <code>log</code> command to
+stop it. Copy and paste the entire output of the log command to a text file and
+attach it to the bug tracker.</p>
+<p>You can also access historical sandbox violations using the <code>log</code> command like
+so:</p>
+<pre>log show --start '2020-09-21 17:45:00' --predicate '((processID == 0) AND (senderImagePath CONTAINS &quot;/Sandbox&quot;)) OR (subsystem == &quot;com.apple.sandbox.reporting&quot;)'</pre>
+<p>Adjust the <code>--start</code> (and potentially add an <code>--end</code> date/time in the same
+format) to limit the amount of output.</p>
+<h2 id="breaking-on-sandbox-violations">Breaking on Sandbox Violations</h2>
+<p>In order to determine what is causing a sandbox violation, it can be helpful to
+use the <code>send-signal</code> action on a sandbox rule, like so:</p>
+<pre>(deny file-write (path &quot;/foo/bar&quot;) (with send-signal SIGSTOP))</pre>
+<p>That will cause the process to stop until a debugger is attached or <em>SIGCONT</em> is
+sent to the process.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac/sandbox_debugging.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mac/sandbox_debugging.md</a>
+  </p>
+</div>

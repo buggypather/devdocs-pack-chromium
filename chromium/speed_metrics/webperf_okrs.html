@@ -1,0 +1,420 @@
+<h1>Web Performance Objectives</h1>
+<h2 id="2021-q2-objectives">2021 Q2 Objectives</h2>
+<ul>
+<li>Publish public proposal on <strong>smoothness</strong>.</li>
+<li><strong>Responsiveness</strong>:<ul>
+<li>Socialize publicly our definition of interactions and normalization options.</li>
+<li>Implement <a href="https://docs.google.com/presentation/d/1nxNFwsGqYy7WmIZ3uv_0HsSIQMSXQA9_PqlOD3V74Us/edit#slide=id.p">interactionID</a>.</li>
+</ul>
+</li>
+<li>Enable exposing information about <strong>Single Page Apps</strong> via
+<a href="https://docs.google.com/presentation/d/1snPIu2GJ_JO7esJ_3YmOAiXC_g4PeQW3jclYx1u3Qzs/edit#slide=id.p">navigation IDs</a>.</li>
+<li>Expose performance information about <strong>back-forward cache</strong> navigations to performance timeline.</li>
+<li>Specify and launch redefined (window-based) <strong>Cumulative Layout Shift</strong>.</li>
+<li>Ship <strong>JS Sampling Profiler</strong>.</li>
+<li>Facilitate <strong>Resource Timing</strong> integration into Fetch and change implementation as needed.</li>
+<li>Obtain more accurate <strong>abandonment</strong> rates on Chrome to determine what to do about the problem.</li>
+<li>Implement and ship <a href="https://w3c.github.io/performance-timeline/#dom-performanceobservercallbackoptions-droppedentriescount">droppedEntriesCount</a>.</li>
+</ul>
+<h2 id="2021-q1-progress">2021 Q1 Progress</h2>
+<ul>
+<li><strong>performance.measureMemory</strong> was shipped! See the blog <a href="https://web.dev/monitor-total-page-memory-usage/">post</a>.</li>
+<li><strong>Single Page Apps</strong>:<ul>
+<li>Provided feedback to the AppHistory <a href="https://github.com/WICG/app-history/blob/main/README.md">explainer</a>.</li>
+<li>Discussed how to extend performance timeline to include SPAs in the WebPerf WG.</li>
+</ul>
+</li>
+<li>Improved <strong>abandonment</strong> data on Chrome to account for FCP more accurately.</li>
+<li>Continued work on <strong>smoothness</strong> and <strong>responsiveness</strong> proposals.</li>
+<li>Proposed way to include <strong>back-forward cache</strong> performance information to the WebPerf WG.</li>
+<li>Organized <strong>A/B testing workshop</strong> to better understand the problem space: see
+<a href="https://docs.google.com/document/d/1rmVjH7-5hGk_VB0EwErM1tcEVz100XZDYlaSd75WbRE/edit?ts=601c4a9c">notes</a>.</li>
+<li>Completed GC integration work for the <strong>JS Sampling Profiler</strong>.</li>
+<li>Various improvements for <strong>Layout Instability</strong> which especially impact carousels. See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/cls.md">changelog</a>.</li>
+<li>Decided redefinition of <strong>Cumulative Layout Shift</strong> and announced in <a href="https://web.dev/evolving-cls/">post</a>.</li>
+</ul>
+<h2 id="2021-q1-objectives">2021 Q1 Objectives</h2>
+<ul>
+<li><strong>performance.measureMemory</strong>: ship the API.</li>
+<li><strong>Single Page Apps</strong>:<ul>
+<li>Publish an explainer about SPA issues.</li>
+<li>Determine whether User Timing hints conventions are still useful.</li>
+</ul>
+</li>
+<li><strong>Abandonment</strong>:<ul>
+<li>Gather concrete feedback form analytics providers and other potential users of this API.</li>
+<li>Improve confidence on the abandonment rates computed by implementing a renderer-side flushing.</li>
+<li>Update analysis on rates when the above fix has reached Chrome Stable.</li>
+</ul>
+</li>
+<li><strong>Smoothness</strong>:<ul>
+<li>Continue refining the definition of dropped frames.</li>
+<li>Move proposal to WICG.</li>
+</ul>
+</li>
+<li><strong>Back-forward cache</strong>:<ul>
+<li>Expand scope to include FCP and FID in the values reported after back-forward navigations.</li>
+<li>Investigate backwards compatibility of adding new entries and propose an API shaped based on the outcome.</li>
+</ul>
+</li>
+<li><strong>Responsiveness</strong>:<ul>
+<li>Investigate correctness of existing internal metrics and implement fixes as needed.</li>
+<li>Further investigate scrolling performance and how it should be integrated with metric.</li>
+<li>Define user interactions that we care about for this API.</li>
+<li>Create a manual test corpus to test ideas about the &#39;end time&#39; of a user interaction.</li>
+</ul>
+</li>
+<li><strong>First Contentful Paint</strong>: improve implementation to pass more
+  <a href="https://wpt.fyi/results/paint-timing?label=master&amp;label=experimental">tests</a>.</li>
+<li><strong>Longtasks</strong>: add system time, including garbage collection
+(<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1091754">bug</a>).<ul>
+<li>Present proposal to security team, and begin socializing the proposal externally.</li>
+</ul>
+</li>
+<li><strong>A/B testing</strong>: organize workshop on client-side A/B testing.</li>
+<li><strong>JS Sampling Profiler</strong>:<ul>
+<li>Complete the GC integration work.</li>
+<li>Ship the API.</li>
+</ul>
+</li>
+</ul>
+<h2 id="2020-q4-progress">2020 Q4 Progress</h2>
+<h3 id="new-web-performance-apis">New web performance APIs</h3>
+<ul>
+<li><strong>performance.measureMemory</strong>: added support for cross-origin iframes in the same process and sent
+<a href="https://groups.google.com/a/chromium.org/g/blink-dev/c/RExJ9a3SmQw">Intent to Ship</a>.</li>
+<li><strong>Page abandonment</strong>: made some data available publicly and socialized it in a
+<a href="https://calendar.perfplanet.com/2020/abandonment/">blogpost</a>.</li>
+<li><strong>JS Sampling Profiler</strong>:<ul>
+<li>Implemented the API so it requires COOP/COEP and gated it behind Document Policy.</li>
+<li>Finished a prototype of GC integration for the V8 sampling profiler (which will help reduce profiler startup time).</li>
+<li>Landed some initial support for code object refcounting.</li>
+</ul>
+</li>
+<li><strong>Smoothness</strong>: published a proposal around dropped frames and presented it at TPAC.</li>
+<li><strong>Back-forward cache</strong>: determined that it is backwards compatible to expose a PerformanceNavigationTiming
+entry for back-forward navigations.</li>
+<li><strong>Responsiveness</strong>:<ul>
+<li>Investigated some internal metrics, but found some metric quality issues that need to be investigated.</li>
+<li>Started brainstorm on capturing asynchronous work as well as which user interactions to capture.</li>
+<li>Did investigation on scrolling and determined that in most cases pages do not seem to suffer from poor
+scrolling performance.</li>
+</ul>
+</li>
+</ul>
+<h3 id="existing-web-performance-api-improvements">Existing web performance API improvements</h3>
+<ul>
+<li><strong>Largest Contentful Paint</strong>: include removed nodes (<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1045640">bug</a>)
+and ignored images occupying the full viewport (<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1133883">bug</a>).</li>
+<li><strong>Cumulative Layout Shift</strong>: implemented various fixes, see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/README.md">changelog</a>.</li>
+</ul>
+<h2 id="2020-q4-objectives">2020 Q4 Objectives</h2>
+<h3 id="new-web-performance-apis-1">New web performance APIs</h3>
+<ul>
+<li>{#measure-memory-20204}<strong>performance.measureMemory</strong>:<ul>
+<li>Add support for cross-origin iframes.</li>
+<li>Send Intent to Ship and ship --- API would become available early next year.</li>
+</ul>
+</li>
+<li>{#spas-20204}<strong>Single Page Apps</strong>:<ul>
+<li>Publish document for feedback on measurement issues, attributions issues, and other issues specific
+to SPAs.</li>
+<li>Land support for User Timing hints in Chrome, and get 2+ frameworks to start using such hints.</li>
+</ul>
+</li>
+<li>{#page-abandonment-20204}<strong>Page abandonment</strong>: publish data on abandonment rates, making a case for or against
+an abandonment API.</li>
+<li>{#js-profiler-20204}<strong>JS Sampling Profiler</strong>:<ul>
+<li>Implement the API so it requires COOP/COEP.</li>
+<li>Add support for warm codemap initialization.</li>
+<li>Add web platform tests.</li>
+<li><em>(Stretch)</em> Send Intent to Ship.</li>
+</ul>
+</li>
+<li>{#smoothness-20204}<strong>Smoothness</strong> (FrameTiming):<ul>
+<li>Discuss and socialize API shape.</li>
+<li>Propose API on WICG.</li>
+<li>Start a TAG review.</li>
+</ul>
+</li>
+<li>{#bf-cache-20204}<strong>Back-forward cache</strong>: document and socialize a concrete proposal on a web API that supports
+monitoring performance of sites on browsers that may perform back-forward navigations.</li>
+<li>{#responsiveness-20204}<strong>Responsiveness</strong>:<ul>
+<li>Investigate internal metrics and potentially add new metrics to capture end-to-end responsiveness.</li>
+<li>Document how popular frameworks handle user interactions.</li>
+<li>Brainstorm on how to expand Event Timing to capture user handling for asynchronous work and to handle multiple
+events referring to a single user interaction.</li>
+<li>Complete on-going investigation on whether scroll performance is also a problem in the web that needs a web API.</li>
+</ul>
+</li>
+</ul>
+<h3 id="existing-web-performance-api-improvements-1">Existing web performance API improvements</h3>
+<ul>
+<li>{#lcp-20204}<strong>Largest Contentful Paint</strong>:<ul>
+<li>Complete <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1045640">investigation</a> on removed nodes
+and if needed update the API.</li>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1133883">Ignore</a> images that occupy the full viewport.</li>
+</ul>
+</li>
+<li>{#cls-20204}<strong>Cumulative Layout Shift</strong>: evaluate the impact of triggering on empty or invisible content and update
+<a href="https://github.com/WICG/layout-instability/issues/61">spec</a> and implementation accordingly.</li>
+<li>{#fcp-20204}<strong>First Contentful Paint</strong>: improve implementation to pass more
+<a href="https://wpt.fyi/results/paint-timing?label=master&amp;label=experimental">tests</a>.</li>
+<li>{#rt-worker-20204}<strong>Navigation Timing</strong>: <a href="https://crbug.com/925239">Fix</a> encoded/decoded body sizes when going
+through service workers.</li>
+</ul>
+<h2 id="2020-q3-progress">2020 Q3 Progress</h2>
+<h3 id="new-web-performance-apis-2">New web performance APIs</h3>
+<ul>
+<li><a href="#measure-memory-20203">performance.measureMemory</a>:<ul>
+<li>Spec was reviewed and polished.</li>
+<li>API support was added for workers (available from Chrome 87).</li>
+</ul>
+</li>
+<li><a href="#page-abandonment-20203">Page abandonment</a>: improved data was gathered, but more accuracy improvements are needed.</li>
+<li><a href="#page-visibility-20203">VisibilityStateEntry</a>:
+<a href="https://docs.google.com/document/d/1l5kHiJRkdQwEN-CYI5_mUNODhQVB5rCyjN4jHDdXDHA/edit#">explainer</a>,
+<a href="https://github.com/w3c/performance-timeline/issues/105">discussion</a>, and TAG
+<a href="https://github.com/w3ctag/design-reviews/issues/534">review</a> kicked off, but no consensus yet on API shape.</li>
+<li><a href="#frame-timing-20203">FrameTiming</a>: a lot of research on defining a good metric to capture smoothness.</li>
+<li><a href="#fb-driven-20203">isInputPending</a>: shipped and available from Chrome 87!</li>
+</ul>
+<h3 id="existing-web-performance-api-improvements-2">Existing web performance API improvements</h3>
+<ul>
+<li><a href="#lcp-20203">LargestContentfulPaint</a>:<ul>
+<li>Did analysis on how LCP would change when removed content is included.</li>
+<li>Ignored paints occurring with opacity 0.</li>
+</ul>
+</li>
+<li>CumulativeLayoutShift <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/cls.md">fixes</a>:<ul>
+<li>Ignored shifts from video thumb sliders.</li>
+<li>Fixed computations for ink overflow and transforms.</li>
+<li>Updated computations when child moves alongside their parent element.</li>
+</ul>
+</li>
+</ul>
+<h3 id="interop">Interop</h3>
+<ul>
+<li><a href="#vitals-specs-20203">Web vitals specs</a>: triaged new
+<a href="https://github.com/search?q=is%3Aissue+created%3A2020-06-01..2020-09-30+repo%3Awicg%2Flayout-instability+repo%3Awicg%2Flargest-contentful-paint+repo%3Awicg%2Fevent-timing&amp;type=issues">issues</a>
+as well as existing ones.</li>
+<li><a href="#paint-timing-20203">Paint Timing</a>: fixed two FCP tests by improving our implementation.</li>
+</ul>
+<h2 id="2020-q3-objectives">2020 Q3 Objectives</h2>
+<h3 id="new-web-performance-apis-3">New web performance APIs</h3>
+<ul>
+<li>{#measure-memory-20203}Continue <a href="#measure-memory-20202">previous work</a> on <strong>performance.measureMemory</strong>.<ul>
+<li>Extend the scope of the API to workers and cross-site iframes.</li>
+<li>Do a review over the spec and polish it.</li>
+</ul>
+</li>
+<li>{#spas-20203}Continue <a href="#spas-20202">previous work</a> on <strong>Single Page Apps</strong> (SPAs).<ul>
+<li>Complete partnerships with frameworks and begin gathering data using the strategy based on User Timing annotations.</li>
+</ul>
+</li>
+<li>{#page-abandonment-20203}Continue <a href="#page-abandonment-20202">previous work</a> on <strong>page load abandonment</strong>.<ul>
+<li>Decide a path forward for a potential new web API based on data from the metric we recently implemented.</li>
+</ul>
+</li>
+<li>{#page-visibility-20203}Continue <a href="#page-visibility-20202">previous work</a> on exposing full
+<strong><a href="https://github.com/w3c/page-visibility/">Page Visibility</a></strong> history. We intend to spec and ship the
+<a href="https://docs.google.com/document/d/1l5kHiJRkdQwEN-CYI5_mUNODhQVB5rCyjN4jHDdXDHA/edit">VisibilityStateEntry</a>.</li>
+<li>{#frame-timing-20203}Work on the
+<strong><a href="https://docs.google.com/document/d/1t3A56iTN01ReEELJ18_jLYrvc13L3hDTXWK46AafKwE/edit">Frame Timing</a></strong> proposal.<ul>
+<li>Draft a spec.</li>
+<li><em>(Stretch)</em> Land a prototype of the API.</li>
+</ul>
+</li>
+<li>{#fb-driven-20203}Continue <a href="#fb-driven-20202">previous work</a> on Facebook-driven APIs.<ul>
+<li>Based on the iframe layerization experiment results, send Intent to Ship for <strong>isInputPending</strong>.</li>
+<li><em>(Stretch)</em> Implement warm initialization logic for the <strong>JS Self-Profiling</strong> API.</li>
+</ul>
+</li>
+</ul>
+<h3 id="existing-web-performance-api-improvements-3">Existing web performance API improvements</h3>
+<ul>
+<li>{#lcp-20203}Improve quality of <strong><a href="https://github.com/WICG/largest-contentful-paint">Largest Contentful Paint</a></strong>.<ul>
+<li>Decide whether LCP including removals is better than the current definition (which excludes removals).</li>
+<li>Address problems with LCP not correctly accounting for opacity in some cases due to optimizations in paint code: see
+relevant <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1092473">bug</a>.</li>
+</ul>
+</li>
+<li>{#normalization-20203}Brainstorm ideas around better <strong>normalization</strong> techniques for existing web performance metrics and
+socialize these ideas with the W3C Web Perf WG.</li>
+</ul>
+<h3 id="interop-1">Interop</h3>
+<ul>
+<li>{#vitals-specs-20203}Triage spec issues filed on GitHub. We intend to give higher priority to feeedback on
+<a href="https://web.dev/vitals/">web vitals</a> specs.</li>
+<li>{#event-timing-20203}Reduce WPT test flakiness on <strong><a href="https://github.com/WICG/event-timing">Event Timing</a></strong>.</li>
+<li>{#paint-timing-20203}Change more of Chrome&#39;s <strong><a href="https://github.com/w3c/paint-timing">Paint Timing</a></strong> implementation to pass more
+of the currently failing WPTs.</li>
+</ul>
+<h2 id="2020-q2-progress">2020 Q2 Progress</h2>
+<ul>
+<li><a href="#measure-memory-20202">performance.measureMemory</a>:<ul>
+<li>Crafted a plan to enable extending the API to workers as well as to cross-site iframes with the appropriate COEP headers.</li>
+<li>Drafted a <a href="https://ulan.github.io/misc/measure-memory-spec/">spec</a>, but it requires review.</li>
+</ul>
+</li>
+<li><a href="#spas-20202">Single Page Apps</a>:<ul>
+<li>Designed a strategy for routing frameworks to report the start and end of SPAs via User Timing.</li>
+<li>Began conversations with such frameworks but haven&#39;t started gathering data with the strategy we designed.</li>
+<li>Presented our data-driven approach to the W3C Web Perf WG.</li>
+</ul>
+</li>
+<li><a href="#page-abandonment-20202">Page abandonment</a>: Socialized a proposal for how to define abandonment and brainstormed ways in which
+we could expose the data to web developers. However, we have not yet reached a decision on how we plan to expose the data because
+there is no one actively working on solving design issues with <a href="https://wicg.github.io/origin-policy/">Origin Policy</a>.</li>
+<li><a href="#event-timing-20202">Event Timing</a>: Shipped the API, which should be available on Chrome 85 (see chromestatus
+<a href="https://www.chromestatus.com/feature/5167290693713920">entry</a>).</li>
+<li><a href="#page-visibility-20202">Page Visibility</a>: Socialized our proposal and based on feedback will work on shipping
+VisibilityStateEntry (see the <a href="https://docs.google.com/document/d/1l5kHiJRkdQwEN-CYI5_mUNODhQVB5rCyjN4jHDdXDHA/edit">explainer</a>).</li>
+<li><a href="#cls-sources-20202">Layout Instability sources</a>: Shipped the <code>sources</code> attribute, which should be available on Chrome 84 (see
+chromestatus <a href="https://www.chromestatus.com/feature/5712483207610368">entry</a>).</li>
+<li>Fixed layout shifts being reported from controls in the video element, see relevant <a href="https://crbug.com/1088311">bug</a>. The fix is
+available on Chrome 85.</li>
+<li><a href="#lcp-removal-20202">Largest Contentful Paint removal</a>: Added a metric that computes an experimental version of LCP which
+includes content that is removed from the page. We&#39;re waiting to get Stable data in order to decide whether this is an
+improvement over the existing LCP metric.</li>
+<li><a href="#final-lcp-20202">Final Largest Contentful Paint</a>: Wrote a
+<a href="https://docs.google.com/document/d/1a24lxTmSycox5HS1mdtj09Sinf1mJCifdv-oREUJQ1A/edit">proposal</a> on how to surface the final LCP
+candidate to a page, but this work has been deprioritized for the time being.</li>
+<li><a href="#paint-timing-20202">Paint Timing</a>: Implemented a couple of fixes and now pass two more tests, but more work is needed to pass
+all of them.</li>
+<li><a href="#documentation-20202">Documentation</a>: Submitted feedback on some of the metrics content on web.dev, most of which was actioned
+upon. Updated MDN entries for core web vitals metrics.</li>
+<li><a href="#fb-driven-20202">Facebook-driven APIs</a>: Landed support for predicting touch and gesture events for isInputPending.</li>
+</ul>
+<h2 id="2020-q2-objectives">2020 Q2 Objectives</h2>
+<h3 id="new-web-performance-apis-4">New web performance APIs</h3>
+<ul>
+<li><p>{#measure-memory-20202}Work towards shipping
+<strong><a href="https://github.com/WICG/performance-measure-memory">performance.measureMemory</a></strong>.
+This API intends to provide memory measurements for web pages without
+leaking information. It will replace the non-standard performance.memory and
+provide more accurate information, but will require the website to be
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/WindowOrWorkerGlobalScope/crossOriginIsolated">cross-origin
+isolated</a>.
+Try it out with the Origin Trial
+<a href="https://web.dev/monitor-total-page-memory-usage/#using-performance.measurememory()">here</a>!
+Deliverables for this quarter:</p>
+<ul>
+<li>Extend the scope of the API to workers.</li>
+<li>Draft a spec.</li>
+</ul>
+</li>
+<li><p>{#spas-20202}Work towards web perf support for <strong>Single Page Apps</strong> (SPAs). SPAs have
+long been mistreated by our web performance APIs, which mostly focus on the
+initial page load for ‘multi-page apps’. It will be a long process to
+resolve all measurement gaps, but we intend to start making progress on
+better performance measurements for SPAs by using a data-driven approach.
+Deliverables for this quarter:</p>
+<ul>
+<li>Implement a strategy for measuring the performance of SPA navigations in
+RUM, based on explicit navigation annotations via User Timing.</li>
+<li>Partner with some frameworks to gather data using said strategy.</li>
+<li>Socialize an explainer with our ideas.</li>
+</ul>
+</li>
+<li><p>{#page-abandonment-20202}Work towards web perf support for <strong>page abandonment</strong>. Currently, our APIs
+are blind to a class of users that decide to leave the website very early
+on, before the performance measurement framework of the website is set into
+place. This quarter, we plan to create and socialize a proposal about
+measuring early page abandonment.</p>
+</li>
+<li><p>{#event-timing-20202}Ship the full <strong><a href="https://github.com/WICG/event-timing">Event Timing</a></strong> API.
+Currently, Chrome ships only ‘first-input’ to enable users to measure their
+<a href="https://web.dev/fid/">First Input Delay</a>. We intend to ship support for
+‘event’ so that developers can track all slow events. Each entry will
+include a ‘target’ attribute to know which was the EventTarget. We’ll
+support a durationThreshold parameter in the observer to tweak the duration
+of events being observed. Finally, we’ll also have performance.eventCounts
+to enable computing estimated percentiles based on the data received.</p>
+</li>
+<li><p>{#page-visibility-20202}Ship a <strong><a href="https://github.com/w3c/page-visibility/">Page Visibility</a></strong>
+observer. Right now, the Page Visibility API allows registering an event
+listener for future changes in visibility, but any visibility states prior
+to that are missed. The solution to this is having an observer which enables
+‘buffered’ entries, so a full history of the visibility states of the page
+is available. An alternative considered was having a boolean flag in the
+PerformanceEntry stating that the page was backgrounded before the entry was
+created, but there was overwhelming
+<a href="https://lists.w3.org/Archives/Public/public-web-perf/2020Apr/0005.html">support</a>
+for the observer instead.</p>
+</li>
+<li><p>{#fb-driven-20202}Provide support for two Facebook-driven APIs:
+<a href="https://github.com/WICG/is-input-pending">isInputPending</a> and <a href="https://github.com/WICG/js-self-profiling">JavaScript
+Self-Profiling</a>. The
+<strong>isInputPending</strong> API enables developers to query whether the browser has
+received but not yet processed certain kinds of user inputs. This way, work
+can be scheduled on longer tasks while still enabling the task to stopped
+when higher priority work arises. The <strong>JS Self-Profiling</strong> API enables
+developers to collect JS profiles from real users, given a sampling rate and
+capacity. It enables measuring the performance impact of specific JS
+functions and finding hotspots in JS code.</p>
+</li>
+</ul>
+<h3 id="existing-web-performance-api-improvements-4">Existing web performance API improvements</h3>
+<ul>
+<li><p>{#cls-sources-20202}Ship the
+<a href="https://github.com/WICG/layout-instability#Source-Attribution">sources</a>
+attribute for the
+<strong><a href="https://github.com/WICG/layout-instability">LayoutInstability</a></strong> API. The
+Layout Instability API provides excellent information about content shifting
+on a website. This API is already shipped in Chrome. However, it’s often hard
+to figure out which content is shifting. This new attribute will inform
+developers about the shifting elements and their locations within the
+viewport.</p>
+</li>
+<li><p>{#lcp-removal-20202}<strong><a href="https://github.com/WICG/largest-contentful-paint">LargestContentfulPaint</a></strong>:
+gather data about LCP without excluding DOM nodes that were removed. The
+Largest Contentful Paint API exposes the largest image or text that is painted
+in the page. Currently, content removed from the website is also removed as a
+candidate for LCP. However, this negatively affects some websites, for
+instance those with certain types of image carousels. This quarter, we’ll
+gather data internally to determine whether we should start including removed
+DOM content. The API itself will not change for now.</p>
+</li>
+<li><p>{#final-lcp-20202}<em>(Stretch)</em> Work on exposing the <strong>‘final’ LargestContentfulPaint</strong> candidate.
+Currently LCP just emits a new entry whenever a new candidate is found. This
+means that a developer has no way to know when LCP is ‘done’, which can happen
+early on if there is some relevant user input in the page. We could consider
+surfacing an entry to indicate that LCP computations are finished and
+including the final LCP value, when possible. There’s also an
+<a href="https://github.com/WICG/largest-contentful-paint/issues/43#issuecomment-608569132">idea</a>
+to include some heuristics to get a higher quality signal regarding whether
+the LCP obtained seems ‘valid’. If we have time this quarter, we’d be happy to
+do some exploration on this.</p>
+</li>
+<li><p><em>(Stretch)</em> <strong><a href="https://github.com/w3c/resource-timing">ResourceTiming</a></strong>:
+outline a plan to fix the problem of TAO (Timing-Allow-Origin) being an opt-in
+for non-timing information such as transferSize. This may mean using a new
+header or relying on some of the upcoming new security primitives in the web.
+If we have time this quarter, we’d like to begin tackling this problem by
+socializing a concrete proposal for a fix.</p>
+</li>
+</ul>
+<h3 id="interop-and-documentation">Interop and documentation</h3>
+<ul>
+<li><p>{#paint-timing-20202}<strong><a href="https://github.com/w3c/paint-timing">Paint Timing</a></strong>: change the Chromium
+implementation so it passes <a href="https://wpt.fyi/results/paint-timing/fcp-only?label=experimental&amp;label=master&amp;aligned">new web platform
+tests</a>.
+These tests are based on the feedback from WebKit. They intend to ship First
+Contentful Paint in the near future!</p>
+</li>
+<li><p>{#documentation-20202}Improve the <strong>documentation</strong> of our APIs on MDN and web.dev. We have been
+busily shipping new web perf APIs, but some of the documentation of them has
+lagged behind. For instance, we’ll make sure that there’s MDN pages on all of
+the new APIs we’ve shipped, and we’ll collaborate with DevRel to ensure that
+the documentation on web.dev is accurate.</p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed_metrics/webperf_okrs.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed_metrics/webperf_okrs.md</a>
+  </p>
+</div>

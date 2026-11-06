@@ -1,0 +1,317 @@
+<h1>Inversion Of Control</h1>
+<h2 id="inversion-of-control">Inversion of Control</h2>
+<p>&quot;Inversion of control&quot; is a design pattern used to allow users of a framework
+or library (often called clients) to customize the behavior of the framework.</p>
+<h3 id="our-example">Our Example</h3>
+<p>Examples in this document will be given by extending or modifying this example
+API, which is hopefully self-explanatory:</p>
+<pre data-language="cpp">class StringKVStore {
+ public:
+  StringKVStore();
+  virtual ~StringKVStore();
+
+  using KeyPredicate = base::RepeatingCallback&lt;bool(const string&amp;)&gt;;
+
+  void Put(const string&amp; key, const string&amp; value);
+  void Remove(const string&amp; key);
+  void Clear();
+
+  string Get(const string&amp; key) const;
+  set&lt;string&gt; GetKeys() const;
+  set&lt;string&gt; GetKeysMatching(const KeyPredicate&amp; predicate) const;
+
+  void SaveToPersistentStore();
+};</pre>
+<h3 id="what-is-inversion-of-control">What is inversion of control?</h3>
+<p>Normally, client code calls into the library to do operations, so control flows
+from a high-level class to a low-level class:</p>
+<pre data-language="cpp">void YourFunction() {
+  // GetKeys() calls into the StringKVStore library
+  for (const auto&amp; key : kv_store_.GetKeys()) {
+    ...
+  }
+}</pre>
+<p>In &quot;inverted&quot; control flow, the library calls back into your code after you
+call into it, so control flows back from a low-level class to a high-level
+class:</p>
+<pre data-language="cpp">bool IsKeyInteresting(const string&amp; key) { ... }
+
+void YourFunction() {
+  StringKVStore::KeyPredicate predicate =
+      base::BindRepeating(&amp;IsKeyInteresting);
+  // GetKeysMatching() calls into the StringKVStore library, but it calls
+  // back into IsKeyInteresting defined in this file!
+  for (const auto&amp; key : kv_store_.GetKeysMatching(predicate)) {
+    ...
+  }
+}</pre>
+<p>It is also often inverted in the Chromium dependency sense. For example, in
+Chromium, code in //content can&#39;t call, link against, or generally be aware of
+code in //chrome - the normal flow of data and control is only in one direction,
+from //chrome &quot;down&quot; to //content. When //content calls back into //chrome, that
+is an inversion of control.</p>
+<p>Abstractly, inversion of control is defined by a low-level class defining an
+interface that a high-level class supplies an implementation of. In the example
+fragment given above, <code>StringKVStore</code> defines an interface called
+<code>StringKVStore::KeyPredicate</code>, and <code>YourFunction</code> supplies an implementation of
+that interface - namely the bound instance of <code>IsKeyInteresting</code>. This allows
+the low-level class to use functionality of the high-level class without being
+aware of the specific high-level class&#39;s existence, or a high-level class to
+plug logic into a low-level class.</p>
+<p>There are a few main ways this is done in Chromium:</p>
+<ul>
+<li>Callbacks</li>
+<li>Observers</li>
+<li>Listeners</li>
+<li>Delegates</li>
+</ul>
+<p><strong>Inversion of control should not be your first resort. It is sometimes useful
+for solving specific problems, but in general it is overused in Chromium.</strong></p>
+<h3 id="callbacks">Callbacks</h3>
+<p>Callbacks are one of the simplest ways to do inversion of control, and often are
+all you need. Callbacks can be used to split out part of the framework&#39;s logic
+into the client, like so:</p>
+<pre data-language="cpp">void StringKVStore::GetKeysMatching(const KeyPredicate&amp; predicate) {
+  set&lt;string&gt; keys;
+  for (const auto&amp; key : internal_keys()) {
+    if (predicate.Run(key))
+      keys.insert(key);
+  }
+  return keys;
+}</pre>
+<p>where <code>predicate</code> was supplied by the client of
+<code>StringKVStore::GetKeysMatching</code>. They can also be used for the framework
+library to notify clients of events, like so:</p>
+<pre data-language="cpp">void StringKVStore::Put(const string&amp; key, const string&amp; value) {
+  ...
+  // In real code you would use CallbackList instead, but for explanatory
+  // purposes:
+  for (const auto&amp; callback : key_changed_callbacks_)
+    callback.Run(...);
+}</pre>
+<p>making use of <a href="https://github.com/chromium/chromium/blob/HEAD/base/callback_list.h">Subscription</a>.</p>
+<p>Callbacks can also be used to supply an implementation of something deliberately
+omitted, like so:</p>
+<pre data-language="cpp">class StringKVStore {
+  using SaveCallback = base::RepeatingCallback&lt;void(string, string)&gt;;
+  void SaveToPersistentStore(const SaveCallback&amp; callback);
+};</pre>
+<h3 id="observers">Observers</h3>
+<p>An &quot;observer&quot; receives notifications of events happening on an object. For
+example, an interface like this might exist:</p>
+<pre data-language="cpp">class StringKVStore::Observer {
+ public:
+  virtual void OnKeyChanged(StringKVStore* store,
+                            const string&amp; key,
+                            const string&amp; from_value,
+                            const string&amp; to_value) {}
+  virtual void OnKeyRemoved(StringKVStore* store,
+                            const string&amp; key,
+                            const string&amp; old_value) {}
+  ...
+}</pre>
+<p>and then on the StringKVStore class:</p>
+<pre data-language="cpp">class StringKVStore {
+ public:
+  ...
+  void AddObserver(Observer* observer);
+  void RemoveObserver(Observer* observer);
+}</pre>
+<p>So an example of a <code>StringKVStore::Observer</code> might be:</p>
+<pre data-language="cpp">class HelloKeyWatcher : public StringKVStore::Observer {
+ public:
+  void OnKeyChanged(StringKVStore* store,
+                    const string&amp; key,
+                    const string&amp; from_value,
+                    const string&amp; to_value) override {
+    if (key == &quot;hello&quot;)
+      ++hello_changes_;
+  }
+  void OnKeyRemoved(StringKVStore* store,
+                    const string&amp; key,
+                    const string&amp; old_value) override {
+    if (key == &quot;hello&quot;)
+      hello_changes_ = 0;
+  }
+}</pre>
+<p>where the <code>StringKVStore</code> arranges to call the relevant method on each
+<code>StringKVStore::Observer</code> that has been added to it whenever a matching event
+happens.</p>
+<p>Use an observer when:</p>
+<ul>
+<li>More than one client may care to listen to events happening</li>
+<li>Clients passively observe, but do not modify, the state of the framework
+object being observed</li>
+</ul>
+<h3 id="listeners">Listeners</h3>
+<p>A listener is an observer that only observes a single type of event. These were
+very common in C++ and Java before the introduction of lambdas, but these days
+are not as commonly seen, and you probably should not introduce new listeners -
+instead, use a plain <a href="https://github.com/chromium/chromium/blob/HEAD/base/functional/callback.h">Callback</a>.</p>
+<p>Here&#39;s an example:</p>
+<pre data-language="cpp">class StringKVStore::ClearListener {
+ public:
+  virtual void OnCleared(StringKVStore* store) = 0;
+}</pre>
+<p>Use a listener when:</p>
+<ul>
+<li>There is only a single client listener instance at most per framework object</li>
+<li>There is only a single event being listened for</li>
+</ul>
+<h3 id="delegates">Delegates</h3>
+<p>A delegate is responsible for implementing part of the framework that is
+deliberately missing. While observers and listeners are generally passive with
+respect to the framework object they are attached to, delegates are generally
+active.</p>
+<p>One very common use of delegates is to allow clients to make policy decisions,
+like so:</p>
+<pre data-language="cpp">class StringKVStore::Delegate {
+ public:
+  virtual bool ShouldPersistKey(StringKVStore* store, const string&amp; key);
+  virtual bool IsValidValueForKey(StringKVStore* store,
+                                  const string&amp; key,
+                                  const string&amp; proposed_value);
+};</pre>
+<p>Another common use is to allow clients to inject their own subclasses of
+framework objects that need to be constructed by the framework, by putting
+a factory method on the delegate:</p>
+<pre data-language="cpp">class StringKVStore::Delegate {
+ public:
+  virtual unique_ptr&lt;StringKVStoreBackend&gt;
+      CreateBackend(StringKVStore* store);
+}</pre>
+<p>And then these might exist:</p>
+<pre data-language="cpp">class MemoryBackedStringKVStoreDelegate : public StringKVStore::Delegate;
+class DiskBackedStringKVStoreDelegate : public StringKVStore::Delegate;
+...</pre>
+<p>Use a delegate when:</p>
+<ul>
+<li>There needs to be logic that happens synchronously with what&#39;s happening in
+the framework</li>
+<li>It does not make sense to have a decision made statically per instance of a
+framework object</li>
+</ul>
+<h3 id="observer-vs-listener-vs-delegate">Observer vs Listener vs Delegate</h3>
+<p>If every call to the client could be made asynchronous and the API would still
+work fine for your use case, you have an observer or listener, not a delegate.</p>
+<p>If there might be multiple interested client objects instead of one, you have an
+observer, not a listener or delegate.</p>
+<p>If any method on your interface has any return type other than <code>void</code>, you have
+a delegate, not an observer or listener.</p>
+<p>You can think of it this way: an observer or listener interface <em>notifies</em> the
+observer or listener of a change to a framework object, while a delegate usually
+helps <em>cause</em> the change to the framework object.</p>
+<h3 id="callbacks-vs-observerslistenersdelegates">Callbacks vs Observers/Listeners/Delegates</h3>
+<p>Callbacks have advantages:</p>
+<ul>
+<li>No separate interface is needed</li>
+<li>Header files for client classes are not cluttered with the interfaces or
+methods from them</li>
+<li>Client methods don&#39;t need to use specific names, so the name-collision
+problems above aren&#39;t present</li>
+<li>Client methods can be bound (using <a href="https://github.com/chromium/chromium/blob/HEAD/base/functional/bind.h">Bind</a>) with any needed state, including
+which object they are attached to, so there is no need to pass the framework
+object of interest back into them</li>
+<li>The handler for an event is placed in object setup, rather than being implicit
+in the presence of a separate method</li>
+<li>They sometimes save creation of &quot;trampoline&quot; methods that simply discard or
+add extra parameters before invoking the real handling logic for an event</li>
+<li>Forwarding event handlers is a lot easier, since callbacks can easily be
+passed around by themselves</li>
+<li>They avoid multiple inheritance</li>
+</ul>
+<p>They also have disadvantages:</p>
+<ul>
+<li>They can lead to deeply-nested setup code</li>
+<li>Callback objects are heavyweight (performance and memory wise) compared to
+virtual method calls</li>
+</ul>
+<h3 id="design-tips">Design Tips</h3>
+<ol>
+<li><p>Observers should have empty method bodies in the header, rather than having
+their methods as pure virtuals. This has two benefits: client classes can
+implement only the methods for events they care to observe, and it is
+obvious from the header that the base observer methods do not need to be
+called.</p>
+</li>
+<li><p>Similarly, delegates should have sensible base implementations of every
+method whenever this is feasible, so that client classes (subclasses of the
+delegate class) can concern themselves only with the parts that are
+relevant to their use case.</p>
+</li>
+<li><p>When inverting control, always pass the framework object of interest back to
+the observer/listener/delegate; that allows the client, if it wants to, to
+reuse the same object as the observer/listener/delegate for multiple
+framework objects. For example, if ButtonListener (given above) didn&#39;t pass
+the button in, the same ButtonListener instance could not be used to listen
+to two buttons simultaneously, since there would be no way to tell which
+button received the click.</p>
+</li>
+<li><p>Large inversion-of-control interfaces should be split into smaller
+interfaces when it makes sense to do so. One notorious Chromium example
+is <a href="https://github.com/chromium/chromium/blob/HEAD/content/public/browser/web_contents_observer.h">WebContentsObserver</a>, which observes dozens of different events.
+Whenever <em>any</em> of these events happens, <em>every</em> registered
+WebContentsObserver has to be notified, even though virtually none of them
+might care about this specific event. Using smaller interfaces helps with
+this problem and makes the intent of installing a specific observer clearer.</p>
+</li>
+<li><p>The framework class <em>should not</em> take ownership of observers or listeners.
+For delegates the decision is less clear, but in general, err on the side of
+not taking ownership of delegates either. It is common to hold raw pointers
+to observers and listeners, and raw or weak pointers to delegates, with
+lifetime issues managed via AddObserver/RemoveObserver or the helper classes
+discussed below.</p>
+</li>
+<li><p>Depending on your application and how widely-used you expect your observer,
+listener, or delegate to be, you should probably use names that are longer
+and more specific than you might otherwise. This is because client classes
+may be implementing multiple inversion-of-control interfaces, so it is
+important that their method names not collide with each other. For example,
+instead of having <code>PageObserver::OnLoadStarted</code>, you might have
+<code>PageObserver::OnPageLoadStarted</code> to reduce the odds of an unpleasant
+collision with <code>NetworkRequestObserver::OnLoadStarted</code> (or similar). Note
+that callbacks entirely avoid this problem.</p>
+</li>
+<li><p>A callback is probably a better fit for what you&#39;re trying to do than one
+of the other patterns given above!</p>
+</li>
+</ol>
+<h3 id="inversion-of-control-in-chromium">Inversion of Control in Chromium</h3>
+<p>Some key classes in <code>//base</code>:</p>
+<ul>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/base/scoped_observation.h">base::ScopedObservation</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/base/observer_list.h">ObserverList</a> and <a href="https://github.com/chromium/chromium/blob/HEAD/base/observer_list_types.h">CheckedObserver</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/base/callback_list.h">Subscription</a> and <a href="https://github.com/chromium/chromium/blob/HEAD/base/callback_list.h">CallbackList</a></li>
+</ul>
+<p>And some production examples:</p>
+<ul>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/content/public/browser/web_contents_observer.h">WebContentsObserver</a> and <a href="https://github.com/chromium/chromium/blob/HEAD/content/public/browser/web_contents_delegate.h">WebContentsDelegate</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/ui/browser_list_observer.h">BrowserListObserver</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/net/url_request/url_request_job_factory.h">URLRequestJobFactory::ProtocolHandler</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/ui/views/widget/widget_observer.h">WidgetObserver</a> and <a href="https://github.com/chromium/chromium/blob/HEAD/ui/views/view_observer.h">ViewObserver</a></li>
+</ul>
+<h3 id="when-not-to-use-this-pattern">When Not To Use This Pattern</h3>
+<p>Inverted control can be harder to reason about, and more expensive at runtime,
+than other approaches. In particular, beware of using delegates when static data
+would be appropriate. For example, consider this hypothetical interface:</p>
+<pre data-language="cpp">class StringKVStore::Delegate {
+  virtual bool ShouldSaveAtDestruction() { return true; }
+}</pre>
+<p>It should be clear from the naming that this method will only be called once per
+StringKVStore instance and that its value cannot meaningfully change within the
+lifetime of a given instance; in this case, &quot;should save at destruction&quot; should
+instead be a parameter given to StringKVStore directly.</p>
+<p>A good rule of thumb is that any method on a delegate that:</p>
+<ul>
+<li>Will only be called once for a given framework object, or</li>
+<li>Has a value that can&#39;t meaningfully change for a given framework object, and</li>
+<li>Serves primarily to return that value, rather than doing some other work
+like constructing a helper object</li>
+</ul>
+<p>should be a property on the framework object instead of a delegate method.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/inversion-of-control.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/inversion-of-control.md</a>
+  </p>
+</div>

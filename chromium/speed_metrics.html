@@ -1,0 +1,112 @@
+<h1>Chrome Speed Metrics</h1>
+<h2 id="mission">Mission</h2>
+<p>The Chrome Speed Metrics team aims to quantify users&#39; experience of the web to
+provide Chrome engineers and web developers the metrics, insights, and
+incentives they need to improve it. We aim to:</p>
+<ul>
+<li><strong>Quantify</strong> web UX via a high quality set of UX metrics which Chrome devs
+align on.</li>
+<li><strong>Expose</strong> these metrics consistently to Chrome and Web devs, in the lab and
+the wild.</li>
+<li><strong>Analyze</strong> these metrics, producing actionable reports driving our UX
+efforts.</li>
+<li><strong>Own</strong> implementation for these metrics for TBMv2, UMA/UKM, and web perf
+APIs.</li>
+</ul>
+<h2 id="goals">Goals</h2>
+<h3 id="quantify-users-experience-of-the-web">Quantify Users’ Experience of the Web</h3>
+<p>Chrome needs a small, consistent set of high quality user experience metrics.
+Chrome Speed Metrics is responsible for authoring reference implementations of
+these metrics implemented using Trace Based Metrics v2 (TBMv2) in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/catapult/tracing/tracing/metrics/">tracing/metrics</a>.
+These reference implementations will often require adding C++ instrumentation.
+Some metrics work will also be driven by more focused metrics teams, such as the
+work on Frame Throughput. Chrome Speed Metrics also owns UMA/UKM metrics, and
+speed metrics related Web Perf APIs.</p>
+<p>The wider set of folks involved in defining these metrics will include:</p>
+<ul>
+<li>Area domain experts.</li>
+<li>Focused metrics teams.</li>
+<li>Devtools folks.</li>
+<li>DevX, documenting what these metrics mean for external developers.</li>
+<li>Occasional other experts (e.g., UMA folks).</li>
+</ul>
+<h3 id="expose-consistent-metrics-everywhere">Expose Consistent Metrics Everywhere</h3>
+<p>Chrome Speed Metrics is responsible for ensuring that our core metrics are
+exposed everywhere. This includes collaborating with devtools, lighthouse, etc.
+to make sure our metrics are easy to expose, and are exposed effectively.</p>
+<h3 id="analyze-chrome-performance-providing-data-to-drive-our-performance-efforts">Analyze Chrome Performance, providing data to drive our performance efforts</h3>
+<p>Metrics aren’t useful if no one looks at them. Chrome Speed Metrics performs
+detailed analysis on our key metrics and breakdown metrics, providing actionable
+reports on how Chrome performs in the lab and in the wild. These reports are
+used to guide regular decision making processes as part of Chrome’s planning
+cycle, as well as to inspire Chrome engineers with concrete ideas for how to
+improve Chrome’s UX.</p>
+<h3 id="own-core-metrics">Own Core Metrics</h3>
+<p>The Chrome Speed Metrics team will gradually gain ownership of
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/catapult/tracing/tracing/metrics/">tracing/metrics</a>,
+and will be responsible for the long term code health of this directory. We’re
+also ramping up ownership in the Web Perf API space.</p>
+<h2 id="contact-information">Contact information</h2>
+<ul>
+<li><strong>Email</strong>: <a href="mailto:speed-metrics-dev@chromium.org">speed-metrics-dev@chromium.org</a></li>
+<li><strong>Tech lead</strong>: <a href="mailto:sullivan@chromium.org">sullivan@chromium.org</a></li>
+<li><strong>File a bug</strong>:<ul>
+<li>For issues related to web performance APIs, file a bug
+<a href="https://bugs.chromium.org/p/chromium/issues/entry?template=Defect+report+from+developer&amp;components=Blink%3EPerformanceAPIs">here</a></li>
+<li>For other kinds of issues, file a bug
+<a href="https://bugs.chromium.org/p/chromium/issues/entry?template=Defect+report+from+developer&amp;components=Speed%3EMetrics">here</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="apis-we-own">APIs we own</h2>
+<ul>
+<li><a href="https://github.com/WICG/element-timing">Element Timing</a></li>
+<li><a href="https://github.com/WICG/event-timing">Event Timing</a></li>
+<li><a href="https://github.com/w3c/hr-time/">HR Time</a></li>
+<li><a href="https://github.com/WICG/largest-contentful-paint">Largest Contentful Paint</a></li>
+<li><a href="https://github.com/WICG/layout-instability">Layout Instability</a></li>
+<li><a href="https://github.com/w3c/longtasks/">Longtasks</a></li>
+<li>We own some of the implementation details of <a href="https://github.com/w3c/navigation-timing/">Navigation
+Timing</a></li>
+<li>We are ramping up on <a href="https://github.com/w3c/page-visibility/">Page
+Visibility</a></li>
+<li><a href="https://github.com/w3c/paint-timing/">Paint Timing</a></li>
+<li><a href="https://github.com/w3c/performance-timeline">Performance Timeline</a></li>
+<li>We own some of the implementation details of <a href="https://github.com/w3c/resource-timing">Resource
+Timing</a></li>
+<li><a href="https://github.com/w3c/user-timing">User Timing</a></li>
+</ul>
+<h2 id="web-performance-objectives">Web performance objectives</h2>
+<ul>
+<li>See our <a href="speed_metrics/webperf_okrs">web performance objectives</a>.</li>
+</ul>
+<h2 id="metrics-changelog">Metrics changelog</h2>
+<p>We realize it&#39;s important to keep developers on the loop regarding important
+changes to our metric definitions. For this reason, we have created a <a href="speed/metrics_changelog">metrics
+changelog</a> which will be updated over time.</p>
+<h2 id="user-docs">User Docs</h2>
+<ul>
+<li><a href="https://web.dev/metrics/">Metrics for web developers</a>.</li>
+<li><a href="speed/good_toplevel_metrics">Properties of a good metric</a></li>
+<li><a href="https://docs.google.com/document/d/1Ww487ZskJ-xBmJGwPO-XPz_QcJvw-kSNffm0nPhVpj8/edit">Survey of current
+metrics</a></li>
+<li><a href="http://bit.ly/debug-cls">Debugging CLS</a></li>
+</ul>
+<h2 id="talks">Talks</h2>
+<ul>
+<li><a href="https://www.youtube.com/watch?v=ctavZT87syI">Lessons learned from performance monitoring in
+Chrome</a>, by Annie Sullivan.</li>
+<li><a href="https://ftp.osuosl.org/pub/fosdem/2020/H.1309/webperf_chromium_development.webm">Shipping a performance API on
+Chromium</a>,
+by Nicolás Peña Moreno.</li>
+<li><a href="https://www.youtube.com/watch?v=zIJuY-JCjqw">Understanding Cumulative Layout
+Shift</a>, by Annie Sullivan and
+Steve Kobes.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed_metrics/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed_metrics/README.md</a>
+  </p>
+</div>

@@ -1,0 +1,210 @@
+<h1>Binary Size Explainer</h1>
+<p>This document explains the overhead of each kind of binary size, where
+&quot;overhead&quot; is the performance cost of existing (e.g.  does not include the
+overhead of loading an image, just the overhead of an image existing).  This
+document focuses on Android, but several types of size are the same on other
+platforms.</p>
+<p>*** note
+See <a href="optimization_advice">optimization_advice.md</a> for ideas on how to reduce
+size.</p>
+<hr>
+<h2 id="how-big-is-chrome">How big is Chrome?</h2>
+<ul>
+<li>Chrome&#39;s per-commit size is tracked in <a href="https://chromeperf.appspot.com/report">chromeperf</a>:<ul>
+<li>For Android, look for &quot;resource_sizes&quot;.<ul>
+<li>Googlers, see also <a href="http://go/chromeapksizes">go/chromeapksizes</a>, and <a href="http://go/chromemilestonesizes">go/chromemilestonesizes</a>.</li>
+</ul>
+</li>
+<li>For other platforms: look for &quot;sizes&quot;.</li>
+</ul>
+</li>
+<li>As of 2019, Chrome for Android (arm32) grows by about 100kb per week.</li>
+<li>To get a feeling for how large individual features are, open a
+<a href="https://goto.google.com/chrome-supersize">milestone size breakdown</a> and group by &quot;Component&quot; (Googlers only).<ul>
+<li>For non-googlers, run <code>//tools/binary_size/supersize archive</code> on a release
+build to create a <code>.size</code> file, and upload it to <a href="https://chrome-supersize.firebaseapp.com/viewer.html">the viewer</a>.</li>
+</ul>
+</li>
+</ul>
+<h2 id="why-care-about-binary-size">Why care about binary size?</h2>
+<ul>
+<li>Takes disk space away from users.<ul>
+<li>Much less so than Chrome&#39;s cache, but this is space that cannot be
+cleared, and on Android is displayed prominently in the Play Store and in
+system settings.</li>
+</ul>
+</li>
+<li>Takes disk space on system images for Android and Chrome OS.<ul>
+<li>It routinely happens that system images fill up, and all components need
+to do their part to fit into the space.</li>
+</ul>
+</li>
+<li>Binary size is a &quot;proxy metric&quot; for other performance metrics.<ul>
+<li>It&#39;s a metric that is trivial to measure, and correlates to RAM usage,
+start-up speed etc.  (there are nuances, which we try to capture in this
+doc).</li>
+</ul>
+</li>
+<li>Binary size affects users&#39; perception of Chrome&#39;s performance.<ul>
+<li>E.g. Large app size leads users to think Chrome is &quot;bloated&quot;.</li>
+</ul>
+</li>
+<li>Binary size is much easier to stay on top of than it is to retroactively fix.</li>
+</ul>
+<p>Googlers - see <a href="http://go/chromebinarysizematters">go/chromebinarysizematters</a> for more links to studies.</p>
+<h3 id="how-much-effort-should-i-spend-to-reduce-binary-size">How much effort should I spend to reduce binary size?</h3>
+<p>Chrome is currently not under any hard growth limits, but to mitigate
+unnecessary bloat of this shared resource, everyone should ensure that
+reasonable diligence is taken to minimize growth.</p>
+<ul>
+<li>&quot;Reasonable diligence&quot; requires judgement and varies depending on the change.
+A rough guideline:<ul>
+<li>For small (&lt;50kb) increases: spend a day trying to reduce (unless it&#39;s obviously not possible).</li>
+<li>For larger increases: Try to understand and document why the change requires so much size.</li>
+<li>If you are unsure, reach out on <a href="https://groups.google.com/a/chromium.org/g/binary-size/">binary-size@</a> for advice.</li>
+</ul>
+</li>
+<li>The <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/android_binary_size_trybot.md">android-binary-size</a> trybot will alert for single commits that increase
+binary size on 32-bit Android by more than 16kb.<ul>
+<li>While such increases are often fine, this helps prevent unexpected
+increases.</li>
+</ul>
+</li>
+<li>It typically takes about a week of engineering time to reduce Android&#39;s binary size by 50kb.</li>
+</ul>
+<h2 id="how-chrome-is-packaged">How Chrome is Packaged</h2>
+<h3 id="webview-vs-chrome">WebView vs Chrome</h3>
+<p>Android WebView is used by the majority of Android apps, so overhead (other
+than clean memory) introduced into WebView has a multiplicative effect on the
+OS.  See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_build_instructions.md#Multiple-Chrome-Targets">android_build_instructions.md</a>
+for how packaging of Chrome / WebView changes by OS version.</p>
+<h3 id="apk-splits">APK Splits</h3>
+<p>Chrome ships as an <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_dynamic_feature_modules.md#about-bundles">Android App Bundle</a>, and consists of several APK splits.</p>
+<h4 id="the-base-split">The &quot;base&quot; split</h4>
+<ul>
+<li>Loaded on start-up by every process.</li>
+<li>Keeping its dex size minimal is crucial, since it has both RAM and start-up
+overhead <em>per-renderer</em>.</li>
+</ul>
+<h4 id="in-the-chrome-feature-split">In the &quot;chrome&quot; feature split</h4>
+<ul>
+<li>Loaded on start-up by the browser process.</li>
+<li>Important to keep dex size small in order to have Chrome start-up quickly,
+and to minimize our baseline memory requirement.</li>
+</ul>
+<h4 id="in-another-feature-split">In another feature split</h4>
+<ul>
+<li>Since they are loaded on-demand, binary size matters proportionally to the
+number of users that use the module.</li>
+</ul>
+<h4 id="in-a-dfm">In a DFM</h4>
+<ul>
+<li>These are feature splits that are not even downloaded until needed. Binary
+size matters proportionally to the number of users that use the module.</li>
+</ul>
+<h2 id="types-of-overhead">Types of Overhead</h2>
+<p>Here we define some terms used to describe overhead.</p>
+<p><strong>Clean Memory:</strong></p>
+<ul>
+<li>Backed by a file on disk, and mapped to virtual memory via <code>mmap()</code>.</li>
+<li>Shared between processes.</li>
+<li>Paged into RAM on-demand by the OS.</li>
+<li>Fast when disk cache is hot, and slower when disk cache is cold.</li>
+</ul>
+<p><strong>Dirty Memory:</strong></p>
+<ul>
+<li>Not backed by a file, and thus cannot be safely paged out (except to zram)</li>
+</ul>
+<h2 id="overhead-for-each-type-of-binary-size">Overhead for Each Type of Binary Size</h2>
+<h3 id="native-code-size">Native code Size</h3>
+<h4 id="code-text">Code (.text)</h4>
+<p>Machine instructions.</p>
+<ul>
+<li><strong>RAM:</strong> <em>Clean Memory</em>, with good locality thanks to PGO.</li>
+<li><strong>Start-up:</strong> No effect beyond page faults.</li>
+</ul>
+<h4 id="read-only-data-rodata">Read-only Data (.rodata)</h4>
+<p>String literals, global constants, etc.</p>
+<ul>
+<li><strong>RAM:</strong> <em>Clean Memory</em>, with poor locality (most is paged in after a short amount of time)</li>
+<li><strong>Start-up:</strong> No effect beyond page faults.</li>
+</ul>
+<h4 id="read-only-after-relocated-data-datarelro">Read-only-after-relocated Data (.data.rel.ro)</h4>
+<p>Read-only data that must be adjusted based on the base load address of the executable.</p>
+<ul>
+<li><strong>RAM:</strong> <em>Dirty-ish Memory</em>. It&#39;s complicated.  Refer to
+[native_relocations.md].</li>
+<li><strong>Start-up:</strong> Some overhead. Again, read the linked doc.</li>
+</ul>
+<h4 id="mutable-data-data">Mutable Data (.data)</h4>
+<p>Global non-const variables.</p>
+<ul>
+<li><strong>RAM:</strong> <em>Dirty Memory</em></li>
+<li><strong>Start-up:</strong> The entire section is loaded before any code is run.</li>
+</ul>
+<h3 id="native-resources-pak">Native resources (.pak)</h3>
+<p>UI Images, chrome:// pages, UI strings, etc.</p>
+<ul>
+<li><strong>RAM:</strong> <em>Clean Memory</em></li>
+<li><strong>Start-up:</strong> Platform-dependent. None on Android. Page faults on desktop.</li>
+<li>Locality improved <a href="https://chromium.googlesource.com/chromium/src/+/main/tools/gritsettings/README.md#:~:text=internal%20translation%20process.-,startup_resources_%5Bplatform%5D.txt,-%3A%20These%20files%20provide">using an orderfile</a> on some platforms.</li>
+</ul>
+<h3 id="android-java-code-size-dex">Android: Java code size (.dex)</h3>
+<p>Java bytecode in the <a href="https://source.android.com/devices/tech/dalvik/dex-format">DEX file format</a>, stored in <code>classes.dex</code>, <code>classes2.dex</code>,
+...  When Android installs Chrome, this bytecode is turned into machine code and
+stored as <code>.odex</code> &amp; <code>.vdex</code> files.  The size of these files depends on the OS
+version and dex compilation profile.  Generally, they are 1x the size of
+uncompressed <code>.dex</code> on Android Go, and 4x the size of uncompressed <code>.dex</code> on
+other devices.</p>
+<ul>
+<li><strong>RAM:</strong> Mostly <em>Clean Memory</em>, but Some <em>Dirty Memory</em> as well.<ul>
+<li>E.g.: The number of method declarations (referred to as &quot;method count&quot;)
+directly corresponds to dirty RAM, where 1 entry = 4 bytes (on arm32).</li>
+</ul>
+</li>
+<li><strong>Start-up:</strong> Impact proportional to overall size.  Mitigated by packaging
+code into <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_dynamic_feature_modules.md#:~:text=files%2C%20known%20as%20%E2%80%9C-,feature%20splits,-%E2%80%9D.%20Feature%20splits%20have">feature splits</a> when possible.</li>
+</ul>
+<h4 id="more-about-method-count">More about Method Count</h4>
+<p>When changing <code>.java code</code>, the change in method count is
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/android_binary_size_trybot.md">shown in code reviews</a>. The count is the number of method
+references added/removed after optimization.  Which methods are added/removed
+can be seen in the &quot;APK Breakdown&quot; link by checking &quot;Method Count Mode&quot;.</p>
+<p>Method count is a useful thing to look at because:</p>
+<ul>
+<li>Each method reference has overhead within the dex file format, and for smallish methods, contributes more to binary size than its corresponding executable code.</li>
+<li>Method references that survive R8 optimization show how optimizable your abstractions are. Try to use low-overhead (or zero-overhead) abstractions. If you find that you&#39;re adding a lot of methods, you should see whether a different abstraction would result in fewer methods.</li>
+</ul>
+<h3 id="android-resources">Android: Resources</h3>
+<h4 id="resourcesarsc">resources.arsc</h4>
+<p>All files within <code>res/</code>, as well as individual entries with <code>res/values</code> files
+contribute to this file.  It consists of a string table, plus one 2D array
+for each resource type (strings, drawable, etc).  The overhead (not included
+actual data) for each table is: <code># [unique configs] * # of resources * sizeof(entry)</code>.</p>
+<ul>
+<li><strong>RAM:</strong> <em>Clean Memory</em>, with poor locality (most is paged in after a short
+amount of time)</li>
+<li><strong>Start-up:</strong> No effect beyond page faults.</li>
+<li>Its table-based file format means it&#39;s important to keep the number of unique
+configs as small as possible.</li>
+</ul>
+<h4 id="res-drawableslayoutsxml">res/... (drawables/layouts/xml)</h4>
+<p>Files that are packaged within the <code>res/</code> directory of the <code>.apk</code>.  These also
+have an entry within <code>resources.arsc</code> that maps to them from a resource ID.</p>
+<ul>
+<li><strong>RAM:</strong> None unless resources are accessed.</li>
+<li><strong>Start-up</strong>: None unless resources are accessed.</li>
+</ul>
+<h3 id="other-assets">Other Assets</h3>
+<p>ICU data, V8 snapshot, etc.</p>
+<ul>
+<li><strong>RAM:</strong> <em>Clean Memory</em></li>
+<li><strong>Start-up:</strong> No effect beyond page faults.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/binary_size_explainer.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/binary_size_explainer.md</a>
+  </p>
+</div>

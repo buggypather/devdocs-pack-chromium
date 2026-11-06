@@ -1,0 +1,112 @@
+<h1>Largest Contentful Paint Changelog</h1>
+<p>This is a list of changes to <a href="https://web.dev/lcp">Largest Contentful Paint</a>.</p>
+<ul>
+<li>Chrome 153<ul>
+<li>Metric bug fix: Fixed race conditions in presentation timestamp attribution for animated images and first video frames (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/8178904">8178904</a>, <a href="https://chromium-review.googlesource.com/c/chromium/src/+/8177704">8177704</a>).</li>
+</ul>
+</li>
+<li>Chrome 151<ul>
+<li>Launch feature: <a href="2026_06_lcp">Prompt LCP entry emission for video elements (RequestMainFrameAfterFirstVideoFrame)</a></li>
+<li>Metric bug fix: Prevent premature garbage collection of VideoTiming metadata to ensure video LCP entries are accurately reported (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7911270">7911270</a>).</li>
+</ul>
+</li>
+<li>Chrome 147<ul>
+<li>Metric definition improvement: <a href="2026_02_lcp">Emit LCP candidates based on largest painted image instead of largest pending image</a></li>
+</ul>
+</li>
+<li>Chrome 145<ul>
+<li>Launch feature: Shipped <code>PaintTimingMixin</code> exposing standard paint timing properties across entry types (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7224616">7224616</a>).</li>
+</ul>
+</li>
+<li>Chrome 144<ul>
+<li>Metric bug fix: Corrected LCP and FCP handling when document opacity changes from zero to non-zero (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7137609">7137609</a>, <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7164696">7164696</a>).</li>
+</ul>
+</li>
+<li>Chrome 143<ul>
+<li>Metric bug fix: <a href="2025_09_lcp">Fixed text presentation timestamps reporting too early, impacting LCP (introduced in M140)</a></li>
+</ul>
+</li>
+<li>Chrome 140<ul>
+<li>Bug: <a href="2025_09_lcp">Text presentation timestamps reporting too early, impacting LCP</a></li>
+</ul>
+</li>
+<li>Chrome 133<ul>
+<li>Implementation optimizations: <a href="2025_02_lcp">Expose coarsened cross-origin renderTime in element timing/LCP (regardless of TAO)</a></li>
+</ul>
+</li>
+<li>Chrome 130<ul>
+<li>Launch feature: <a href="2024_10_lcp">Exclude transparent text from being LCP eligible</a></li>
+</ul>
+</li>
+<li>Chrome 126<ul>
+<li>Launch feature: <a href="2024_06_inp_lcp_fcp">Enable NewPresentationFeedbackTimeStamps on Mac to improve the accuracy of the frame display time</a></li>
+</ul>
+</li>
+<li>Chrome 118<ul>
+<li>Implementation optimizations: <a href="2023_10_image_loading_optimizations">Image loading prioritizations</a></li>
+</ul>
+</li>
+<li>Chrome 117<ul>
+<li>Bug: <a href="2023_10_lcp">Spurious LCP entries after user interaction</a></li>
+</ul>
+</li>
+<li>Chrome 116<ul>
+<li>Metric definition improvement: <a href="2023_08_lcp">Changes to how LCP handles videos and animated images</a></li>
+<li>Implementation optimizations: <a href="2023_08_image_loading">Optimizing image load scheduling</a></li>
+</ul>
+</li>
+<li>Chrome 112<ul>
+<li>Metric definition improvement: <a href="2023_04_lcp">Largest Contentful Paint ignores low-entropy images</a></li>
+</ul>
+</li>
+<li>Chrome 111<ul>
+<li>Implementation optimizations: <a href="2023_03_lcp_fcp">Changes related to LCP, FCP and Paint Holding</a></li>
+</ul>
+</li>
+<li>Chrome 99<ul>
+<li>Implementation optimizations: <a href="2022_03_lcp_fcp">Navigation optimizations and timeOrigin changes</a></li>
+</ul>
+</li>
+<li>Chrome 98<ul>
+<li>Metric bug fix: <a href="2021_11_lcp">Text paints are more accurate</a></li>
+</ul>
+</li>
+<li>Chrome 96<ul>
+<li>Metric bug fix: <a href="2021_09_lcp">Largest Contentful Paint uses the page viewport</a></li>
+</ul>
+</li>
+<li>Chrome 88<ul>
+<li>Metric definition improvement: <a href="2020_11_lcp">Largest Contentful Paint ignores full viewport images</a></li>
+<li>Metric definition improvement: <a href="2020_11_lcp">Largest Contentful Paint stops recording after input in an iframe</a></li>
+<li>Metric definition improvement: <a href="2020_11_lcp">Largest Contentful Paint bug fix for some images with source changes</a></li>
+<li>Metric definition improvement: <a href="2020_11_lcp_2">Largest Contentful Paint ignores removed content by default</a></li>
+</ul>
+</li>
+<li>Chrome 86<ul>
+<li>Metric definition improvement: <a href="2020_08_lcp">Largest Contentful Paint ignores paints with opacity 0</a></li>
+</ul>
+</li>
+<li>Chrome 83<ul>
+<li>Metric definition improvement: <a href="2020_05_lcp">Largest Contentful Paint measurement stops at first input or scroll</a></li>
+<li>Metric definition improvement: <a href="2020_05_lcp">Largest Contentful Paint properly accounts for visual size of background images</a></li>
+</ul>
+</li>
+<li>Chrome 81<ul>
+<li>Metric definition improvement: <a href="2020_04_lcp">Largest Text Paint correctly reported while largest image is loading</a></li>
+</ul>
+</li>
+<li>Chrome 79<ul>
+<li>Metric is elevated to stable; changes in metric definition will be reported in this log.</li>
+</ul>
+</li>
+<li>Chrome 77<ul>
+<li>Experimental metric exposed via API: <a href="https://web.dev/lcp/">Largest Contentful Paint</a> available via <a href="https://wicg.github.io/largest-contentful-paint/">PerformanceObserver API</a></li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/lcp.md</a>
+  </p>
+</div>

@@ -1,0 +1,134 @@
+<h1>Updating Clang format binaries</h1>
+<p>Instructions on how to update the <a href="clang_format">clang-format binaries</a> that
+come with a checkout of Chromium.</p>
+<h2 id="prerequisites">Prerequisites</h2>
+<p>You&#39;ll also need permissions to upload to the appropriate google storage
+bucket. Chromium infrastructure team members have this, and others can be
+granted the permission based on need. If you need this permission, mention this
+in the tracking bug.</p>
+<h2 id="fetch-and-upload-prebuilt-clang-format-binaries-from-recent-clang-rolls">Fetch and upload prebuilt clang-format binaries from recent clang rolls</h2>
+<p>Recent clang rolls can be found via looking at the history of
+<a href="https://crsrc.org/c/tools/clang/scripts/update.py">update.py</a>. You can also
+use clang-format packages built in recent successful dry run attempts at
+updating clang as mentioned <a href="clang_sheriffing">here</a>.</p>
+<p>The following will, for each supported host architecture,</p>
+<ul>
+<li>Fetch the corresponding clang-format package from the specified clang roll</li>
+<li>Extract and copy the clang-format binary to the proper directory</li>
+<li>Upload the binary into a publicly accessible google storage bucket, also
+updating the deps entries in DEPS files in the local checkout of Chrome</li>
+</ul>
+<pre data-language="shell">cd $SRC/chromium/src
+
+GS_PATH=gs://chromium-browser-clang-staging
+CLANG_REV=llvmorg-15-init-234-g567890abc-2
+
+echo Linux
+gsutil cp $GS_PATH/Linux_x64/clang-format-$CLANG_REV.tar.xz /tmp
+tar xf /tmp/clang-format-$CLANG_REV.tar.xz -C buildtools/linux64 --strip-component=1 bin/clang-format
+
+echo Win
+gsutil cp $GS_PATH/Win/clang-format-$CLANG_REV.tar.xz /tmp
+tar xf /tmp/clang-format-$CLANG_REV.tar.xz -C buildtools/win --strip-component=1 bin/clang-format.exe
+
+echo 'Mac x64'
+gsutil cp $GS_PATH/Mac/clang-format-$CLANG_REV.tar.xz /tmp
+tar xf /tmp/clang-format-$CLANG_REV.tar.xz -C buildtools/mac --strip-component=1 bin/clang-format
+mv buildtools/mac/clang-format buildtools/mac/clang-format.x64
+
+echo 'Mac arm64'
+gsutil cp $GS_PATH/Mac_arm64/clang-format-$CLANG_REV.tar.xz /tmp
+tar xf /tmp/clang-format-$CLANG_REV.tar.xz -C buildtools/mac --strip-component=1 bin/clang-format
+mv buildtools/mac/clang-format buildtools/mac/clang-format.arm64
+
+# TODO(crbug.com/339490714): Remove sha1 file creation once all downstream repos that
+# use clang-format are migrated over to recursedeps into buildtools.
+echo '(Legacy) Uploading to GCS and creating sha1 files'
+upload_to_google_storage.py --bucket=chromium-clang-format buildtools/linux64/clang-format
+upload_to_google_storage.py --bucket=chromium-clang-format buildtools/win/clang-format.exe
+upload_to_google_storage.py --bucket=chromium-clang-format buildtools/mac/clang-format.x64
+upload_to_google_storage.py --bucket=chromium-clang-format buildtools/mac/clang-format.arm64
+
+echo 'Uploading to GCS and updating DEPS files'
+# helper function to set deps entries in DEPS file using `gclient setdep`
+# first argument relative DEPS path.
+# second argument object_info
+function set_deps {
+  gclient setdep -r src/buildtools/$1@$2
+  gclient setdep -r $1@$2 --deps-file=buildtools/DEPS
+}
+# helper function to upload content to GCS and set DEPS
+# first argument: google storage path
+# second argument: relative DEPS path
+# This function parses out the object info outputted by upload_to_google_storage_first_class.py
+# and formats it into a format that gclient setdep understands
+function upload_and_set {
+	object_info=$(upload_to_google_storage_first_class.py --bucket=chromium-clang-format $1 | jq -r .path.objects[0][] | sed -z 's/\n/,/g;s/,$/\n/')',clang-format'
+	if [[ $2 == 'win/format' ]]; then
+		object_info+='.exe'
+	fi;
+	set_deps $2 $object_info
+}
+
+upload_and_set buildtools/linux64/clang-format linux64-format
+upload_and_set buildtools/win/clang-format.exe win-format
+upload_and_set buildtools/mac/clang-format.x64 mac-format
+upload_and_set buildtools/mac/clang-format.arm64 mac_arm64-format
+
+# Clean up
+rm /tmp/clang-format-$CLANG_REV.tgz
+# These aren't in .gitignore because these mac per-arch paths only exist when updating clang-format.
+# gclient runhooks puts these binaries at buildtools/mac/clang-format.
+rm buildtools/mac/clang-format.x64 buildtools/mac/clang-format.arm64</pre>
+<h2 id="check-that-the-new-clang-format-works-as-expected">Check that the new clang-format works as expected</h2>
+<p>Compare the diffs created by running the old and new clang-format versions to
+see if the new version does anything unexpected. Running them on some
+substantial directory like <code>third_party/blink</code> or <code>base</code> should be sufficient.
+Upload the diffs as two patchsets in a CL for easy inspection of the
+clang-format differences by choosing patchset 1 as the base for the gerrit diff.</p>
+<pre data-language="shell">## New gerrit CL with results of old clang-format.
+
+# For mac, use:
+# export NPROC=$(sysctl -n hw.logicalcpu)
+export NPROC=$(nproc --all)
+
+# use old clang-format
+find base -name '*.cc' -o -name '*.c' -o -name '*.h' -o -name '*.mm' | xargs -P $NPROC -n1 ./buildtools/linux64-format/clang-format -i
+git commit -a
+git cl upload --bypass-hooks
+## New patchset on gerrit CL with results of new clang-format.
+# update to new clang-format
+find base -name '*.cc' -o -name '*.c' -o -name '*.h' -o -name '*.mm' | xargs -P $NPROC -n1 ./buildtools/linux64/clang-format -i
+git commit -a --amend --no-edit
+git cl upload --bypass-hooks</pre>
+<p>If there are any unexpected diffs, file a bug upstream (and fix it if you can :)).</p>
+<h2 id="upload-a-cl-according-to-the-following-template">Upload a CL according to the following template</h2>
+<pre>Update clang-format binaries and scripts for all platforms.
+
+I followed these instructions:
+https://chromium.googlesource.com/chromium/src/+/main/docs/updating_clang_format_binaries.md
+
+The binaries were built at clang revision ####### on ##CRREV##.
+
+Diff on base/ from previous revision of clang-format to this version:
+https://crrev.com/c/123123123/1..2
+
+Bug: #######</pre>
+<p>The change should <strong>always</strong> include new <code>.sha1</code> files for each platform (we
+want to keep these in lockstep), should <strong>never</strong> include <code>clang-format</code>
+binaries directly. The change should <strong>always</strong> update <code>README.chromium</code></p>
+<p>clang-format binaries should weigh in at 1.5MB or less. Watch out for size
+regressions.</p>
+<h2 id="clean-up-downloaded-binaries">Clean up downloaded binaries</h2>
+<p>Delete the binaries that were just extracted. To use the new binaries that were
+updated in the DEPS files, run gclient sync.</p>
+<pre data-language="shell">rm buildtools/linux64/clang-format
+rm buildtools/win/clang-format.exe
+rm buildtools/mac/clang-format.x64
+rm buildtools/mac/clang-format.arm64</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updating_clang_format_binaries.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updating_clang_format_binaries.md</a>
+  </p>
+</div>

@@ -1,0 +1,19 @@
+<h1>First Input Delay Changes in Chrome 91</h1>
+<h3 id="disable-double-tap-to-zoom-on-mobile-viewports">Disable double-tap-to-zoom on mobile viewports</h3>
+<p>Double-tap-to-zoom (DTZ) is a gesture used to zoom into text. Previously, DTZ
+was disabled when either zooming was disabled (min-zoom equal to max-zoom) or
+when the content width fits the viewport width. After this change, we also
+disable DTZ when the viewport meta tag specifies <code>width=device-width</code> or
+<code>initial-scale&gt;=1.0</code>, even when implicitly doing so, like for example in
+<code>minimum-scale=1.5, maximum-scale=2</code>.</p>
+<p>Because DTZ negatively impacts FID and the amount of pages where DTZ is disabled
+is increased, we expect some sites to see better FID scores.</p>
+<p><a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1108987">Relevant bug</a></p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 91 is currently scheduled to be released the week of May 25, 2021.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_05_fid.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_05_fid.md</a>
+  </p>
+</div>

@@ -1,0 +1,602 @@
+<h1>Chrome Vulnerability Reward Program (VRP) News and FAQ</h1>
+<h2 id="news-and-updates">News and Updates</h2>
+<p>Please report all Chromium security bugs in the tracker using
+<a href="https://bughunters.google.com/report/vrp">Google Bughunters</a> and select
+ -&gt; Chrome VRP. (Directly reporting to the Chromium tracker is deprecated.)</p>
+<p>Please check here for any news and updates about the Chrome VRP.</p>
+<ul>
+<li>October 2026: Updates for external fuzzer contribution.</li>
+<li>April 2026 : Updates for new reward structure.</li>
+<li>March 2026 : Updated formatting criteria &amp; added self-service hotlists.</li>
+</ul>
+<h2 id="about-the-program">About the Program</h2>
+<p>The Chrome Vulnerability Rewards Program (VRP) is the &quot;security bug bounty&quot; for
+Google Chrome Browser. Please visit the <a href="https://g.co/chrome/vrp">Chrome VRP Rewards and
+Policies</a> page for full details.</p>
+<h3 id="top-reporters">Top Reporters</h3>
+<ul>
+<li><a href="https://crbug.com/473635778">2025</a>.</li>
+<li><a href="https://crbug.com/386306231">2024</a>.</li>
+<li><a href="https://crbug.com/1509898">2023</a>.</li>
+</ul>
+<h3 id="interesting-security-bug-write-ups">Interesting Security Bug Write-Ups</h3>
+<p>Here are some interesting write-ups of past Chrome security bugs:</p>
+<ul>
+<li><a href="https://tiszka.com/blog/CVE_2021_21225.html">A Bug&#39;s Life: CVE-2021-21225</a></li>
+<li><a href="https://tiszka.com/blog/CVE_2021_21225_exploit.html">Exploiting CVE-2021-21225 and disabling
+W^X</a></li>
+<li><a href="https://readme.synack.com/exploits-explained-zip-embedding-attack-on-google-chrome-extensions">ZIP embedding attack on Google Chrome
+extension</a>,
+by Malcolm Stagg, reporter of CVE-2024-0333</li>
+</ul>
+<p>We only post links to articles with the author&#39;s consent. Please let us know if
+you would like your work to be shared here.</p>
+<h2 id="best-practices-for-security-bug-reporting">Best Practices for Security Bug Reporting</h2>
+<p>To help make the process of security bug triage as efficient and smooth as
+possible, please consider the following best practices for Chromium security bug
+reports:</p>
+<ul>
+<li>Report issues using <a href="https://bughunters.google.com/report/vrp">Google Bughunters</a>
+and select -&gt; Chrome VRP.<ul>
+<li>This will allow the bug report to be included in the security bug triage
+queue immediately.</li>
+</ul>
+</li>
+<li>Include the version number and OS used to reproduce the bug and please
+consider including a bisection.</li>
+</ul>
+<h3 id="proof-of-concept-poc">Proof of Concept (PoC)</h3>
+<ul>
+<li>Upload PoC files directly to the report itself as separate attachments.</li>
+<li>Please name the PoC file <em>poc.html</em> or <em>index.html</em> in the case of multiple
+files.<ul>
+<li>This allows <a href="shepherd">Security Shepherds</a> to run the PoC in ClusterFuzz
+immediately for triage.</li>
+</ul>
+</li>
+<li>Ensure the PoC is as minimized as possible.<ul>
+<li>This is useful in root cause analysis and also improves the changes of
+reproduction by ClusterFuzz or the Security Shepherd triaging your report.</li>
+</ul>
+</li>
+<li>Please format your PoCs so they do not require running python as root.<ul>
+<li>Your PoC should be constructed to reproduce locally when at all possible.</li>
+</ul>
+</li>
+<li>Do <em>not</em> provide links to websites (public or unlisted) as PoCs.<ul>
+<li>The PoC should ALWAYS be a file directly attached to the report.</li>
+</ul>
+</li>
+<li>Example servers should be written only in Python (other languages will lead to
+your report being rejected). Please name your server <code>server.py</code> so that it
+can be run without arguments (<code>python3 server.py</code>) and serves <code>poc.html</code> at
+<code>http://localhost:8000/poc.html</code> (with <code>/gen/</code> resolving to the build&#39;s
+<code>gen</code> directory if MojoJS bindings are used).</li>
+</ul>
+<h3 id="patches-to-simulate-a-compromised-renderer">Patches to simulate a compromised renderer</h3>
+<ul>
+<li>Instead of providing a patch, use MojoJS to simulate a compromised renderer.<ul>
+<li>Otherwise, explain why MojoJS is not sufficient.</li>
+</ul>
+</li>
+<li>Upload a git generated patch with a clear base commit.</li>
+<li>Use process guards (e.g. test the commandline for <code>--type=&quot;renderer&quot;</code>) if
+code can run in multiple processes.</li>
+<li>Use Sleep() in privileged processes to simulate a race.</li>
+<li>Do not add extraneous logging like <code>LOG(INFO) &lt;&lt; &quot;EXPLOIT SUCCEEDED&quot;</code>.</li>
+</ul>
+<h3 id="steps-to-reproduce">Steps to Reproduce</h3>
+<ul>
+<li>Please include clear, concise, numbered steps to reproduce the bug you are
+reporting.</li>
+<li>Provide the full Chrome or d8 command line and any build flags to reproduce.<ul>
+<li>avoid <code>--enable-experimental-web-platform-features</code> and
+<code>--enable-unsafe-webgpu</code> and instead provide specific feature flags.</li>
+</ul>
+</li>
+<li>Do not run Chrome in a harness or via CDP.</li>
+</ul>
+<h3 id="report-attachments">Report Attachments</h3>
+<ul>
+<li>Do <em>not</em> upload attachments as a single compressed file, such as .zip,
+.gzip, or .tar files.<ul>
+<li>Please upload all necessary attachments (PoCs, patch, fix patches, video
+demonstrations, exploits) as individual files on the bug report.</li>
+</ul>
+</li>
+<li>ASAN stack traces should be symbolized, and include all <code>additional information</code> fields, and the sanitizer should be built using Chrome&#39;s standard
+mitigation and hardening flags.</li>
+<li>Patch.diff files that are not suggested fixes should explain - as part of the
+steps to repro - the reason for the patch, such as to simulate a compromised
+renderer or allow for stable reproduction, such as running the PoC in a loop
+or winning a race condition.</li>
+<li>Do not provide links (public or unlisted) to demonstration videos.<ul>
+<li>If possible, please upload your demonstration video directly to the report.</li>
+<li>Please keep the video as concise as possible.<ul>
+<li>We do not need to see you loading Chrome or displaying the version page
+multiple times in a video.</li>
+</ul>
+</li>
+<li>DO feel free to include music, sound effects, or animal pics in your
+videos. :)</li>
+</ul>
+</li>
+</ul>
+<h3 id="test-harnesses">Test Harnesses</h3>
+<ul>
+<li>Do not provide a custom test harness.</li>
+<li>Do not modify browser or unittests.</li>
+<li>Do not run Chrome with a harness, debugging client or shell script.</li>
+<li>Chrome provides some test binaries you can use directly:<ul>
+<li><code>chrome</code></li>
+<li><code>d8</code> (but do not supply experiment features)</li>
+<li><code>pdfium_test</code></li>
+</ul>
+</li>
+</ul>
+<h3 id="bug-reporting">Bug Reporting</h3>
+<ul>
+<li>Please ensure your report is concise and clearly articulates the bug,
+explaining and demonstrating (through PoC, exploit, and/or video), such as:<ul>
+<li>How the issue is reachable and exploitable by web content or a compromised
+renderer.</li>
+<li>The security consequences / user harm resulting from exploitation of the
+bug.</li>
+</ul>
+</li>
+<li>Avoid reporting theoretical bugs: reports that simply state a potential bug
+from static analysis without demonstration of the security issue.<ul>
+<li>These reports will be considered as unactionable and will be closed as
+WontFix (Not reproducible).</li>
+</ul>
+</li>
+<li>At a minimum, please include the version number and release channel
+(Stable/Beta/Dev) on which you discovered and reproduced the issue you are
+reporting.<ul>
+<li>For a full reward,  please consider performing a full bisection, detailing
+the commit that introduced the issue and / or all the active release
+channels impacted by the bug.</li>
+</ul>
+</li>
+<li>Focus your report: the robots which perform our initial triage work best when
+provided with a concise report that clearly describes a security bug.</li>
+<li>Empty initial comments will lead to your report being closed and may lead to
+your account being suspended. Do not create placeholder issues.</li>
+</ul>
+<h3 id="demonstrating-controlled-read-or-write">Demonstrating controlled read or write</h3>
+<p>Mojom interfaces to demonstrate controlled reads or controlled writes in
+privileged processes or cross-site victim renderers are available in
+<a href="https://github.com/chromium/chromium/blob/HEAD/components/vrp_flags/vrp_flags.mojom">vrp_flags.mojom</a>.</p>
+<p>To prove a controlled read or write you must attach a small json file
+<code>vrp-flag.json</code> to your report:</p>
+<pre>{
+  &quot;flag&quot;: &quot;read&quot;,
+  &quot;params&quot;: {
+    &quot;process&quot;: &quot;browser&quot;,
+    &quot;poc&quot;: &quot;poc.html&quot;,
+    &quot;chrome_version&quot;: &quot;123.6789.0.1&quot;,
+    &quot;os&quot;: &quot;win&quot;,
+    &quot;arch&quot;: &quot;x64&quot;,
+    &quot;command_line&quot;: [&quot;--enable-features=FeatureName&quot;, ...],
+  }
+}</pre>
+<ul>
+<li>attach a minimized <code>poc-asan.html</code> that triggers the bug under ASAN</li>
+<li>attach an additional <code>poc.html</code> to demonstrate controlled read or write</li>
+<li>provide additional command line arguments needed to run the poc</li>
+<li>provide the full version of the released version of Chrome the poc targets</li>
+<li>provide the operating system the poc targets</li>
+<li>provide the process the poc targets (<code>browser</code>, <code>network</code>, <code>gpu</code>, or
+<code>renderer</code>)</li>
+</ul>
+<p><code>poc.html</code> will be loaded from a local server served on <code>localhost:8000</code>, with
+mojojs files available under <code>/gen/</code>. For cross-renderer exploits, <code>poc.html</code>
+will also be loaded in the victim process with the origin
+<code>victim.test:&lt;port_number&gt;</code>, where the attacker can request an arbitrary
+number of port numbers. If your poc reliably hits the VRP flag, your report
+will be eligible for the controlled read or controlled write reward.</p>
+<p>If the controlled read or write is not reproducible or not reliable, but the
+minimized poc does trigger an ASAN report, your issue will receive the standard
+reward.</p>
+<p>The controlled read or controlled write poc must be included in your initial
+report - we will not consider submissions added at a later time.</p>
+<p>Your poc must target a released version of Chrome Stable, Beta or Dev. We will
+not accept submissions that target Canary or local builds.</p>
+<p>At this time we do not accept controlled read/write submissions that patch the
+renderer or that require multiple files or servers to demonstrate an issue.</p>
+<p>Supported operating systems and architectures (with default hardware mitigations
+enabled):</p>
+<ul>
+<li><code>win</code> - Windows 11 on <code>x64</code> or <code>ARM64</code></li>
+<li><code>mac</code> - The latest release of MacOS on <code>ARM64</code></li>
+<li><code>linux</code> - The latest release of Debian stable w/wayland on <code>x64</code> or <code>ARM64</code></li>
+</ul>
+<p>Non-standard, debugging or unsafe command line flags and features are not
+accepted.</p>
+<h3 id="reporting-full-chains">Reporting full-chains</h3>
+<p>Please report each individual bug in the chain as distinct bugs including the
+information we need to reproduce each bug in isolation. Once you have done so,
+create an additional vulnerability report that describes how the components
+chain together and refers to each bug for its details. Attach a video or logs
+showing the chain, and the command line, Chrome version, Operating System and
+hardware that you&#39;ve used to demonstrate the full-chain exploit. Finally, add
+the
+<a href="https://issues.chromium.org/hotlists/8186895">Security-Request-Exploit-Assessment</a>
+hotlist to the issue (you can do this after it has been filed).</p>
+<h3 id="contributing-fuzzers">Contributing Fuzzers</h3>
+<p>We welcome contributions of blackbox fuzzers with a proven track record, and
+will run them on our clusterfuzz infrastructure so that reports are created
+automatically. To submit a fuzzer please first submit three valid security
+vulnerabilities using our normal processes. Once three vulnerabilities have
+been confirmed, and did not dupe against our internal fuzzers or AI tools,
+you are welcome to submit your fuzzer. Reach out to <a href="mailto:fuzzing@chromium.org">fuzzing@chromium.org</a>
+with details of your fuzzer and links to the previously submitted
+vulnerabilities.</p>
+<p>All issues reported by hosted fuzzers are eligible for baseline rewards
+and a fuzzer bonus, as outlined in our <a href="https://bughunters.google.com/about/rules/chrome-friends/chrome-vulnerability-reward-program-rules#fuzzer-bonus">VRP Rules page</a>.</p>
+<h2 id="frequently-asked-questions-faq">Frequently Asked Questions (FAQ)</h2>
+<h3 id="scope--reward-eligibility">Scope / Reward Eligibility</h3>
+<h4 id="what-features-are-definitively-out-of-scope">What features are definitively out of scope?</h4>
+<p>This list is not exhaustive but should help reporters focus on issues in Chrome:</p>
+<ul>
+<li><em>V8 features marked as Experimental</em>. Security bugs that are specific to V8
+  Experimental features are not eligible for Chrome VRP rewards. The
+  experimental status of a V8 feature will be denoted in the flag definition
+  in source code, in the flag description in the help menu, or via a printed
+  message at runtime.</li>
+<li><em>Swiftshader</em> is deprecated and only supported for limited test and debug
+  environments.</li>
+<li><em>WebNN</em> is not enabled and undergoing security hardening. It is not eligible
+  for the VRP at this time.</li>
+<li><em>Unsafe Flags</em>. Any flags which show a warning infobar that they present a
+  risk to the user are not in scope. These flags are intended for testing and
+  debugging only.</li>
+<li><em>--single-process</em> mode is purely for test and debugging and can lead to
+  races and ownership issues that do not manifest in multi-process mode.</li>
+</ul>
+<h4 id="my-report-was-closed-by-a-robot">My report was closed by a robot?</h4>
+<p>Incoming security reports are automatically checked against our threat model,
+FAQs and reporting standards. Reports may be closed as invalid for several
+reasons and the robot is designed to limit disclosure of its reasoning when
+closing issues.</p>
+<p>The following can lead our robots to reject reports:</p>
+<ul>
+<li>Describing both a security problem and a non-problem (e.g. reporting both a
+UAF and a safe CHECK crash):<ul>
+<li>Remove discussion of the safe crash and focus on the UAF, then resubmit.</li>
+</ul>
+</li>
+<li>Long reports with theoretical impacts:<ul>
+<li>Remove unproven discussion and resubmit a brief, concise report.</li>
+</ul>
+</li>
+<li>Reports of memory safety issues lacking a full symbolized ASAN stack:<ul>
+<li>Attach a symbolized ASAN stack showing the issue affects Chrome and
+resubmit.</li>
+<li>Prove the issue using the <code>--vrp-flags</code> mode and resubmit.</li>
+</ul>
+</li>
+<li>Reports that use unittests or browser_tests to demonstrate an issue:<ul>
+<li>Prove that the issue affects Chrome by using a poc.html or poc.js.</li>
+</ul>
+</li>
+</ul>
+<p>We generally do not respond to closed security issues but you are encouraged
+to resubmit your report after making it more concise, clearly describing the
+security problem, and adding necessary pocs and traces as attachments.</p>
+<h4 id="how-do-i-know-if-my-bug-report-is-possibly-eligible-for-a-vrp-reward">How do I know if my bug report is possibly eligible for a VRP reward?</h4>
+<ul>
+<li>All validated, <a href="https://g.co/chrome/vrp/#qualifying-vulnerabilities">qualifying vulnerability
+reports</a> are
+automatically considered for a reward once they are accepted. At which point you
+will see the reward-topanel hotlist signifier added to your bug report. This
+indicates that it will be reviewed at a Chrome VRP panel meeting for a
+reward decision.</li>
+<li>The bug will be updated again once the panel has made a reward decision.</li>
+</ul>
+<h4 id="i-want-to-report-a-bug-through-a-broker--not-directly-to-chrome">I want to report a bug through a broker / not directly to Chrome.</h4>
+<ul>
+<li>We believe it is against the spirit of the program to privately disclose
+security vulnerabilities to third parties for purposes other than fixing the
+bug. Consequently, such reports will not qualify for a reward.</li>
+</ul>
+<h4 id="what-if-someone-else-reported-the-same-bug">What if someone else reported the same bug?</h4>
+<ul>
+<li>Only the first actionable report of a security bug that we were previously
+unaware of is eligible for a potential VRP reward. In the event of a duplicate
+submission, the earliest actionable report in the tracker is considered the
+first report.</li>
+<li>If the issue is discovered by one of our internal tools within seven days of
+your report, it is considered a known issue and is not eligible for a reward.</li>
+</ul>
+<h4 id="what-does-actionable-report-mean">What does actionable report mean?</h4>
+<ul>
+<li>A security bug report is only considered actionable once it contains
+appropriate information that allows for validation and triage, such as a
+minimized test case / PoC, steps to reproduce, a symbolized stack trace,
+and/or other demonstrable evidence of the security bug being reported.</li>
+<li>A report lacking this actionable information and does not allow us to
+reproduce the issue to validate and investigate the bug is not considered to
+be a complete, actionable submission.</li>
+</ul>
+<h4 id="are-bugs-in-unlaunched-features--behind-command-line-flags-vrp-eligible">Are bugs in unlaunched features / behind command line flags VRP-eligible?</h4>
+<ul>
+<li>Yes, we are interested in bugs in any code that has shipped to even a fraction
+of our users.</li>
+<li><em>The only exception at this time are security bugs in V8 behind
+--experimental</em>; this flag is for early and experimental V8 development
+efforts and this configuration should not be used in production. <em>Security
+bugs specific to this configuration are not eligible for Chrome VRP rewards.</em></li>
+<li>Please ensure you include what command line flags are required to trigger the
+bug in your report and remove any unnecessary flags.</li>
+<li>The report will be triaged with the appropriate security
+severity and as Security_Impact-None. This categorization of
+Security_Impact-None does not impact the potential reward amount.</li>
+<li>Please note that these security bugs do not have the same SLO to fix as bugs
+impacting Stable, Beta, or Dev. The only expectation is that the bug is fixed
+before the feature is exposed to users, such as part of an origin trial or
+field experiment.</li>
+</ul>
+<h4 id="what-about-bugs-in-channels-other-than-stable">What about bugs in channels other than Stable?</h4>
+<ul>
+<li>We are interested in security bugs in Stable, Beta, and Dev channels because
+it&#39;s best for everyone to find and fix security bugs before they impact Stable
+channel users.</li>
+<li>We do, however, discourage hunting in Canary or Trunk builds. These do not go
+through release testing and exhibit short-lived regression that are typically
+identified and fixed quickly. Reports of bugs in new code in trunk may collide
+with on-going work of the engineers as part of &quot;trunk-churn&quot;.</li>
+<li>Reports for bugs in newly landed code on Trunk / Head landed within seven days
+of the report are not eligible for VRP rewards.</li>
+</ul>
+<h4 id="are-bugs-in-third-party-components-in-scope-and-eligible-for-vrp-rewards">Are bugs in third-party components in scope and eligible for VRP rewards?</h4>
+<ul>
+<li>Yes, we are interested in reports for bugs in our third-party components, such
+as libxml, sqlite, and image and compression libraries. The security impact
+must manifest in and result in security consequences in shipped configurations
+of Chrome.</li>
+<li>Reports should demonstrate that the vulnerable code is reachable in Chrome.</li>
+<li>We are interested in rewarding any information that enables us to better
+protect our users. In the event of bugs in an external component (such as an
+upstream dependency), we may also ask that you file a bug directly with the
+vendor or maintainer for that component, so that the product or project owners
+can set about fixing the bug immediately.</li>
+<li>This also ensures that you have direct access to the status of the report, can
+directly communicate with that vendor or project owner, and receive credit or
+acknowledgement (if they have such a mechanism to do so).</li>
+</ul>
+<h4 id="can-i-submit-my-reports-and-provide-a-working-exploit-or-proof-of-rw-later">Can I submit my report(s) and provide a working exploit or proof of r/w later?</h4>
+<ul>
+<li>Most definitely! We realize that developing an exploit is a lengthy process
+and we very much encourage this approach, as it allows us to work on fixing
+the bugs as soon as possible. It also reduces the chance that someone else
+reports the same issue while you are working on the exploit.</li>
+<li>The exploit must work against a released Chrome build on the latest operating
+system versions and architectures, and prove code execution by executing a
+command shell with the credentials of the user running Chrome.</li>
+<li>r/w and arbitrary read must work using Chrome using <code>--vrp-flags</code> (see above).</li>
+<li>If you have a proof to add to a bug after it has been rewarded, add the hotlist
+<a href="https://issues.chromium.org/hotlists/8186895">Security-Request-Exploit-Assessment</a>
+(hotlist id:8186895) along with a poc and comment that demonstrates the proof.
+We will review this queue roughly weekly.</li>
+</ul>
+<h4 id="is-there-a-time-limit-for-submitting-an-exploit">Is there a time limit for submitting an exploit?</h4>
+<ul>
+<li>Although we don&#39;t have a set time limit, we would expect that the exploit
+would follow within four weeks of the initial report.</li>
+<li>The number of exploit bonuses is capped and priority for exploit bonuses
+will be taken from the time an exploit is added to an issue, and the hotlist
+<a href="https://issues.chromium.org/hotlists/8186895">Security-Request-Exploit-Assessment</a>
+is added.</li>
+</ul>
+<h4 id="will-you-reward-for-types-of-bugs-that-are-not-specifically-listed">Will you reward for types of bugs that are not specifically listed?</h4>
+<ul>
+<li>Yes. We are interested in rewarding any information that enables us to better
+protect Chrome users. Reward amounts are based on the potential security harm
+of the bug being reported and the quality of the report.</li>
+</ul>
+<h3 id="report-status--bug-lifecycle">Report Status / Bug Lifecycle</h3>
+<h4 id="what-happens-after-i-report-a-security-bug-to-you">What happens after I report a security bug to you?</h4>
+<ul>
+<li>Please see <a href="life-of-a-security-issue">Life of a Security Issue</a>.</li>
+</ul>
+<h4 id="my-bug-was-triaged-incorrectly">My bug was triaged incorrectly?</h4>
+<ul>
+<li>We are human. If you disagree with the severity assessment of an issue please
+comment on the issue and add it to the
+<a href="https://issues.chromium.org/hotlists/8059196">Security-Severity-Reassessment-Request</a>
+hotlist (id:8059196) which will enter the issue into a queue that is reviewed
+on a weekly basis by the security team. Access to the hotlist is restricted to
+people on our <a href="#updates-on-the-vrp">VRP Updates List</a>. If you do not have
+permission to add the hotlist please ask on the bug and a Chromium team member
+can add it for you.</li>
+</ul>
+<h4 id="my-bug-was-fixed-and-the-team-hasnt-marked-it-fixed">My bug was Fixed and the team hasn&#39;t marked it Fixed?</h4>
+<ul>
+<li>Identify when the issue was fixed. You can use <code>git bisect</code> or Chromium&#39;s
+<code>bisect-builds.py</code> to help locate when the issue went away. Add this evidence
+to the bug, ideally identifying the CL which fixed the issue.</li>
+<li>Give the team a week to close the issue themselves.</li>
+<li>If, after a week, the issue is still open, add it to the
+<a href="https://issues.chromium.org/hotlists/8059017">Security-Fixed-Issue-Request</a>
+hotlist (id:8059017) where it will be addressed by the security team on a
+weekly basis.</li>
+</ul>
+<h4 id="will-i-receive-a-cve-for-my-bug">Will I receive a CVE for my bug?</h4>
+<ul>
+<li>If the issue you report was an exploitable security bug impacting Stable or
+older version of Chrome, and it was the first actionable report of that
+issue, your bug will be issued a CVE at the time the fix ships in a Stable
+channel update of Chrome.</li>
+<li>The CVE number will be updated directly on the report itself and listed in
+the Chrome Browser release notes for that Stable channel update.</li>
+</ul>
+<h4 id="my-bug-got-a-cve-but-i-didnt-get-a-reward">My bug got a CVE but I didn&#39;t get a reward?</h4>
+<ul>
+<li>Chrome sometimes issues a CVE then later reexamines a report and determines
+that it does not have security impact. Chrome does not routinely revoke
+CVEs when this happens, but does update the bug status to reflect our new
+assessment.</li>
+</ul>
+<h3 id="disclosure--report-visibility">Disclosure / Report Visibility</h3>
+<h4 id="what-if-i-disclose-the-bug-publicly-before-you-have-fixed-or-disclosed-it">What if I disclose the bug publicly before you have fixed or disclosed it?</h4>
+<ul>
+<li>Please read <a href="https://about.google/appsecurity/#:~:text=Google's%20vulnerability%20disclosure%20policy,a%2090%2Dday%20disclosure%20deadline">our stance on vulnerability
+disclosure</a></li>
+<li>Essentially, our pledge to you is to respond promptly and fix bugs in a
+sensible timeframe, and in exchange, we ask for a reasonable notice of
+potential disclosure.</li>
+<li>Disclosures that go against this principle will usually not qualify for a VRP
+reward, but we will evaluate them on a case-by-case basis.</li>
+</ul>
+<h4 id="when-will-the-bug-i-reported-be-publicly-disclosed">When will the bug I reported be publicly disclosed?</h4>
+<ul>
+<li>Most security bugs are automatically opened for public access 30 days after
+the bug is closed as Fixed, meaning the fix commit is landed on Chromium main.</li>
+<li>Our automation removes the view restrictions, opening the report for public
+visibility at that time.</li>
+</ul>
+<h4 id="can-you-keep-my-identity-confidential-from-the-public">Can you keep my identity confidential from the public?</h4>
+<ul>
+<li>Your email address is obscured by default (by elision) in the Chromium bug
+tracker and is not revealed once the bug is publicly disclosed.</li>
+<li>If you do not want to receive public acknowledgement for your report, please
+let us know in the report or before the issue is listed in the release notes.<ul>
+<li>We will credit the finding to &quot;anonymous&quot; researcher or we are happy to
+credit it to whatever pseudonym or tag you provide to us.</li>
+</ul>
+</li>
+<li>If you receive a VRP reward for your report and accept it, Google or Bugcrowd
+(depending on who you select to process your VRP reward) will need to
+privately collect some identifying information to process your reward
+payment.</li>
+</ul>
+<h4 id="can-you-keep-my-report-under-security-embargo">Can you keep my report under Security Embargo?</h4>
+<ul>
+<li>Security Embargo prevents issues from being disclosed beyond the security team
+and engineers working to resolve the bug. Once the issue is fixed, the
+(Security Notify) community of embedders and developers of other
+Chromium-based products are reliant on the access to bug reports. Because
+Security Embargo restricts this access indefinitely, it is used only on a
+specific case-by-case basis, such as when the bug should never be publicly
+disclosed.</li>
+</ul>
+<h3 id="rewards--reward-decisions">Rewards / Reward Decisions</h3>
+<h4 id="my-bug-was-rewarded-under-older-amounts-will-you-pay-the-difference">My bug was rewarded under older amounts, will you pay the difference?</h4>
+<ul>
+<li>We often increase reward amounts and introduce new bonus opportunities. We
+reward bug reports based only on the rules that were in effect at the time of
+bug submission and VRP Panel assessment.</li>
+</ul>
+<h4 id="the-exploit-market-pays-more-for-bugs">The exploit market pays more for bugs!</h4>
+<ul>
+<li>Yes, we are aware that the exploit brokers, underground markets, three cats in
+a trenchcoat on your local street corner may pay more for bugs. We understand
+that many pockets of society may pay you more money to purchase information
+about the vulnerabilities you may find or exploits you develop. These people
+buy vulnerabilities and exploits for offensive purposes to target people
+using Chrome across the internet. We believe the reward you get under those
+circumstances comes with strings attached -- including buying your silence
+and accepting that any bug you sell may be used to target other people without
+their knowledge, such as activists, dissidents, and vulnerable populations.</li>
+<li>We understand our reward amounts may be less than these alternatives, but we
+also believe we provide additional benefits when reporting directly to us,
+such as public acknowledgement of your findings and skills, the opportunity to
+engage directly with the security team and engineers working to resolve your
+bug, a quick resolution and seeing a fix you contributed to go out into the
+world, the opportunity to publicly discuss/blog/present/share your amazing
+work, and <em>the knowledge that you are helping keep Chrome secure for billions
+of people across the world</em>!</li>
+<li>Also, many of our researchers receive gifts of swag and are invited to events.</li>
+<li>You&#39;ll additionally have the peace of mind to know your bug findings were
+never used by shady people for nefarious purposes.</li>
+</ul>
+<h4 id="i-provided-a-new-poc-or-new-information---will-you-increase-the-vrp-reward">I provided a new POC or new information-- will you increase the VRP reward?</h4>
+<ul>
+<li>Not generally, unless there are expectional circumstances. Criteria for Chrome
+VRP reward decisions is inclusive of information included in the initial
+report to the time the bug is fully resolved. Information that is provided
+after the bug is resolved and assessed by the VRP does not benefit the
+effective and efficient investigation and fix of the bug and should not be
+expected to impact VRP reward assessment or reassessment.</li>
+<li>We want to incentivize the earliest reporting of security issues, however,
+security bug reports should only be submitted once they are fully inclusive
+of all necessary aspects of a security bug report to allow for validation
+triage, and resolution. If you can demonstrate an issue is not mitigated or
+can be reliably reproduced and triggered remotely, that should be
+demonstrated as part of the initial report or within the period of
+investigation and fix.</li>
+<li>We do, however, welcome reports of a functional exploit after the report is
+submitted and even resolved for a potential higher VRP reward.</li>
+</ul>
+<h4 id="when-will-i-receive-my-reward">When will I receive my reward?</h4>
+<ul>
+<li>Once the bug has been assessed by the VRP Panel, the bug report is updated
+with a reward decision and information.</li>
+<li>There are two options for payment of a VRP Reward -- direct through Google
+or through Bugcrowd.<ul>
+<li>Through Google:<ul>
+<li>If this is your first VRP reward for a Google program, a member of the
+finance p2p-vrp team will reach out to enroll you in the Google payment
+system.</li>
+<li>VRP payments are handled by the p2p-vrp finance team. Once you have been
+ enrolled, you will receive you payment within 1-2 weeks of a reward
+decision.</li>
+<li>Please reach out to <a href="mailto:p2p-vrp@google.com">p2p-vrp@google.com</a> with questions about the payment
+enrollment process or assistance with any payments issues.</li>
+</ul>
+</li>
+<li>Through Bugcrowd (preferred):<ul>
+<li>You must already have or create a new Google
+<a href="https://bughunters.google.com/profile">Bughunters</a> profile.
+(Please note, you can set your Bughunters profile to be private if you
+prefer to not have a public profile).</li>
+<li>Associate your Bughunters profile with the email address you use for
+reporting Chrome security issues.</li>
+<li>Have a Bugcrowd account or <a href="https://bugcrowd.com/user/sign_up">register</a>
+with Bugcrowd.</li>
+<li>In your <a href="https://bughunters.google.com/profile">Bughunters profile</a>
+change your <code>Payment Options</code> from <code>Legacy</code> to <code>Bugcrowd</code> and enter the
+email address for your Bugcrowd account (and hit <code>Save</code>)!</li>
+<li>Future reward payments will be sent to Bugcrowd for processing and you
+will receive an email directly from Bugcrowd to accept those rewards.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>If at any point you want to change the method by which you receive VRP reward
+payments, this can be done through your Google Bughunters profile &gt; <code>Payments Options</code>:<ul>
+<li>Select <code>Legacy</code> to receive your payments through Google p2p payments
+ processing.</li>
+<li>Select <code>Bugcrowd</code> to select payments through Bugcrowd. Remember you must
+register with Bugcrowd first and enter your Bugcrowd account email in your
+Bughunters profile.</li>
+</ul>
+</li>
+</ul>
+<h4 id="i-dont-agree-with-the-reward-amount-can-i-get-the-reward-reassessed">I don&#39;t agree with the reward amount. Can I get the reward reassessed?</h4>
+<ul>
+<li>We try our best to be fair and consistent, but sometimes we miss something in
+our assessment. If you feel that is the case please add a comment explaining
+your position to the issue and add the
+<a href="https://issues.chromium.org/hotlists/8186354">Security-VRP-Reassessment-Request</a>
+hotlist (id:8186354).</li>
+</ul>
+<h3 id="updates-on-the-vrp">Updates On The VRP</h3>
+<a href="join-update-list">
+#### I want to get updates on the Chrome VRP and add things to hotlists?<p>Request to join our <a href="https://groups.google.com/a/chromium.org/g/vrp-reporters">low volume list</a>.</p>
+<h3 id="other">Other</h3>
+<p>I have a security-related question that is not listed here.</p>
+<ul>
+<li>This is a statement not a question, but we&#39;re happy to help. Take a look at
+the <a href="faq">Chrome Security FAQ</a> to see if your question is answered there.</li>
+<li>Also, if you have not already, please check the <a href="https://g.co/chrome/vrp">Chrome VRP Rewards and
+Policies page</a>.</li>
+<li>If you still need assistance, please reach out to <a href="mailto:security-vrp@chromium.org">security-vrp@chromium.org</a>.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/vrp-faq.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/vrp-faq.md</a>
+  </p>
+</div>

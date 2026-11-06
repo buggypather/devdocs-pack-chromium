@@ -1,0 +1,49 @@
+<h1>The browser process should not handle messages from web content</h1>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/good-bad-ipc.png" alt="alt text" title="Safe flow of IPC messages from renderer to
+browser, via reviewed APIs; together with two example unsafe flows via
+postMessage and via unreviewed APIs"></p>
+<p>(drawing source
+<a href="https://docs.google.com/drawings/d/1SmqvOvLY_DnDxeJHKQRB3rACO0aVSHpyfTycV2v1P1w/edit?usp=sharing">here</a>)</p>
+<p>Sometimes features are proposed in which the Chrome user interface (in the
+browser process) handles messages directly from web content (JavaScript, HTML
+etc.). For example, this could be done using the <code>postMessage</code> APIs which have
+been put in place for Android WebView apps. This is not allowed, because:</p>
+<ul>
+<li>Overall system security relies on simple and predictable security properties.
+Adding extra message channels causes complexity, non-discoverability and
+non-predictability.</li>
+<li>Chrome&#39;s security strategy relies on isolating web content using sandboxed
+renderer processes and site isolation. Any communication outside of that
+renderer process presents a risk of a sandbox escape. All such communication
+has to be via Mojo such that the <code>mojom</code> interface definition files go through
+our <a href="mojo">IPC security review process</a> (and will benefit from other future
+Mojo security improvements).</li>
+<li>Websites are untrustworthy. TLS can’t guarantee the provenance of a website —
+even pinning has limits — and so you must assume any messages from websites
+are malicious. Processing such messages in the browser process in C++ is
+likely a violation of the <a href="rule-of-2">Rule of Two</a> and is extremely
+dangerous.</li>
+<li>Even if you can comply with the Rule of Two (for example by using a safe
+language) it&#39;s simply difficult to produce robust APIs that are safe against
+malicious data: the open web platform <a href="https://www.chromium.org/blink/launching-features">API review
+process</a> is designed to
+flush out any concerns. Any APIs or functionality accessible to web content
+therefore needs to go via that process to give the best chance of spotting
+danger.</li>
+<li>There are non-security concerns: It does not comply with the spirit of an open
+web platform which should be equally available on all user agents.</li>
+</ul>
+<p>In order to support WebView and CCT, APIs exist in Chrome to
+establish web message channels between the embedding application and web page.
+These exist only to support these &quot;embedding the web&quot; scenarios, which are often
+used to build site- or purpose-specific browsers. General browser features
+should not use them because of the reasons stated above.</p>
+<p>Other mechanisms of bypassing normal processes might include exposing unreviewed
+APIs to a component extension, and making its APIs available to web content.
+These are similarly not allowed.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/handling-messages-from-web-content.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/handling-messages-from-web-content.md</a>
+  </p>
+</div>

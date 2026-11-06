@@ -1,0 +1,59 @@
+<h1>Multi-Screen Testing in Chromium</h1>
+<p>Chromium supports testing multi-screen environments under <code>interactive_ui_tests</code>
+on most desktop platforms through the <code>VirtualDisplayUtil</code> (<a href="https://chromium.googlesource.com/chromium/src/+/main/ui/display/test/virtual_display_util.h"><code>ui/display/test/virtual_display_util.h</code></a>) interface.
+This interface instantiates virtual displays at the operating system level to
+simulate a multi-display environment being presented to Chromium. For more
+information on the background and design, see <a href="https://docs.google.com/document/d/1rtxO2FEg0Zl_-oXHzIBsJo6py7wkySUpYruteNMlPys/edit?resourcekey=0-yLkX6DGPwNFn1ARMpM-zLQ#heading=h.in0m2co51p2p">&quot;Virtual Displays For Automated Tests&quot;</a>.</p>
+<h3 id="how-to-use">How to use</h3>
+<p>Simply invoke <code>display::test::VirtualDisplayUtil::TryCreate</code> to create an
+instance of <code>VirtualDisplayUtil</code>. The function will return <code>nullptr</code> on
+platforms that are unsupported, or not implemented. Tests should generally skip
+(<code>GTEST_SKIP()</code>) when this function returns <code>nullptr</code>.</p>
+<h3 id="supported-platforms">Supported Platforms</h3>
+<p>Mac, Linux (X11), and Windows are supported.</p>
+<p>ChromeOS mutli-screen testing is supported via
+<code>display::test::DisplayManagerTestApi</code> and does not yet have a
+<code>VirtualDisplayUtil</code> implementation.</p>
+<h3 id="special-considerations">Special Considerations</h3>
+<h4 id="macos">MacOS</h4>
+<p>Requires macOS version 11.0+. The implementation relies
+on undocumented CoreGraphics APIs and risks breakage at any time. There is an open <a href="https://feedbackassistant.apple.com/feedback/12349099">request</a> for official API support.</p>
+<h4 id="windows">Windows</h4>
+<p>On Windows, <strong>administrative access</strong> is required for the utility to function.
+You must run the chrome/test binary with elevated privileges.</p>
+<p>Windows hosts must have a special driver installed for the utility to work.
+The driver and controller source code is located at
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/win_virtual_display"><code>//third_party/win_virtual_display</code></a>.
+The pre-built driver is available in CIPD at the path <a href="https://chrome-infra-packages.appspot.com/p/chromium/third_party/win_virtual_display/windows-amd64"><code>chromium/third_party/win_virtual_display/windows-amd64</code></a>. Developers may download the
+CIPD package and manually install the driver for local development:</p>
+<ol>
+<li>On the <a href="https://chrome-infra-packages.appspot.com/p/chromium/third_party/win_virtual_display/windows-amd64"><code>CIPD page</code></a>: Pick the latest instance.</li>
+<li>Click Download and extract the zip file somewhere (i.e. C:\virtual-display-driver)</li>
+<li>Install the certificates and driver. Open PowerShell as Administrator and
+run the following 3 commands:</li>
+</ol>
+<pre data-language="ps">Import-Certificate -FilePath C:\virtual-display-driver\ChromiumVirtualDisplayDriver.cer -CertStoreLocation Cert:\LocalMachine\AuthRoot
+Import-Certificate -FilePath C:\virtual-display-driver\ChromiumVirtualDisplayDriver.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
+pnputil.exe /add-driver C:\virtual-display-driver\ChromiumVirtualDisplayDriver.inf /install</pre>
+<h5 id="section"></h5>
+<h4 id="linux-x11">Linux (X11)</h4>
+<p>Linux requires an X11 environment that supports virtual outputs in XrandR.
+It is highly recommended to use <a href="https://chromium.googlesource.com/chromium/src/+/main/testing/xvfb.py"><code>//testing/xvfb.py</code></a> to set
+up a virtual X server that supports the utility. For example, the following
+command will run tests under a virtual X server environment that works with the
+utility:</p>
+<pre data-language="bash">python3 testing/xvfb.py --use-xorg $(pwd)/out/current_link/interactive_ui_tests --gtest_filter=*VirtualDisplayUtil*</pre>
+<p>Running outside of <code>xvfb.py</code> directly on the host X server should work, but is
+not explicitly documented here.
+The host must have <code>xserver-xorg-core</code>, <code>xserver-xorg-video-dummy</code> and <code>x11-xserver-utils</code> packages installed. See <a href="https://chromium.googlesource.com/chromium/src/+/main/testing/xvfb.py"><code>//testing/xvfb.py</code></a> for more details on the
+required Xorg/XRandR setup.</p>
+<h4 id="headless-chrome">Headless Chrome</h4>
+<p>Chrome Headless Mode supports headless screen configuration using <code>--screen-info</code> command line switch on Linux, Windows and Mac since m138. The following example starts Chrome in headless mode with a virtual screen that has two displays: a primary one with resolution 1600x1200 pixels, and a secondary one with the same resolution but with portrait orientation and located to the right of the primary display.</p>
+<pre data-language="bash">./chrome --headless --screen-info={1600x1200}{1200x1600}</pre>
+<p>Please refer to <a href="https://chromium.googlesource.com/chromium/src/+/main/components/headless/screen_info/README.md">components/headless/screen_info/README.md</a> document for more information about <code>--screen-info</code> command line switch.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/display/multiscreen_testing.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/display/multiscreen_testing.md</a>
+  </p>
+</div>

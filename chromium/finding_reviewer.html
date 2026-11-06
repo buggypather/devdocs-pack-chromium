@@ -1,0 +1,41 @@
+<h1>Finding somebody who knows how a piece of code works</h1>
+<p>It can be more efficient to ask somebody how something works than to take weeks
+to figure it out yourself. Likewise, when making changes, you will need to reach
+out to someone for review of your code or your designs. So how do you find the
+best folks to reach out to? Here are some ideas to get you started.</p>
+<ol>
+<li><strong>Ask your teammates</strong> - those who have been on the project longer than you
+will have a better idea or may have contacts in other areas.</li>
+<li><strong>Look at the <code>OWNERS</code> files</strong> - If you can identify a source file involved
+in what you want to do, find the lowest level
+<a href="code_reviews#owners-files"><code>OWNERS</code> file</a> above it, and email those
+people. The code review tool can automatedly find relevant owners for your
+changes, largely based on <code>OWNERS</code> files.</li>
+<li><strong>Look at the <code>DIR_METADATA</code> file</strong> - similar to <code>OWNERS</code>,
+<a href="https://chromium.googlesource.com/infra/infra/+/HEAD/go/src/infra/tools/dirmd/README.md"><code>DIR_METADATA</code> files</a>
+contain pointers to relevant experts. Look for the <code>team_email</code> field.</li>
+<li><strong>Tools</strong> - <code>git blame</code> (also available on
+<a href="https://cs.chromium.org">Chromium code search</a>) and
+<a href="https://chrome.google.com/webstore/detail/chromite-butler/bhcnanendmgjjeghamaccjnochlnhcgj">Chromite Butler</a>
+can help you find who touched the code last or most extensively. Sometimes
+not just the <em>author</em> but <em>reviewers</em> of a past change will be relevant.</li>
+<li><strong>Use the Slack channel</strong>
+(<a href="https://www.chromium.org/developers/slack/">link</a>) - while not everybody is
+listening all the time, you may get a pointer to the right folks to talk to.</li>
+<li><strong>Use the <a href="mailto:chromium-dev@chromium.org">chromium-dev@chromium.org</a> email alias</strong> to ask questions. This is a
+fairly large email list, so use your judgment about what to post, and it may
+take awhile to get a reply. If you do this, it helps to ask one crisp
+question at the top of your mail and then explain in detail instead of
+rambling and asking many questions.</li>
+</ol>
+<p>Sometimes, there isn&#39;t one person who knows what you want to find out, but you
+can find people who know parts of the system. For instance, no one person knows
+everything about how Chromium starts up or shuts down and can tell you what you
+did wrong in a shutdown scenario, but you can find people who know some parts of
+the shutdown to guide you.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/finding_reviewer.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/finding_reviewer.md</a>
+  </p>
+</div>

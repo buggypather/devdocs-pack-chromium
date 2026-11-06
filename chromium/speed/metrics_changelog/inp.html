@@ -1,0 +1,108 @@
+<h1>Interaction to Next Paint Changelog</h1>
+<p>This is a list of changes to <a href="https://web.dev/inp">Interaction to Next Paint</a>.</p>
+<ul>
+<li><p>Chrome 150</p>
+<ul>
+<li>Metric bug fix: Nested clicks (such as <code>&lt;label&gt;</code> clicks forwarding to form controls) assigned <code>interactionId = 0</code> to align with web standards (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7870025">7870025</a>).</li>
+</ul>
+</li>
+<li><p>Chrome 148</p>
+<ul>
+<li>Metric bug fix: <a href="2026_03_inp">Report only web-exposed event targets in Event Timing</a></li>
+</ul>
+</li>
+<li><p>Chrome 147</p>
+<ul>
+<li>Metric definition improvement: <a href="2026_02_inp">Early interaction ID assignment and context menu fallback</a></li>
+</ul>
+</li>
+<li><p>Chrome 144</p>
+<ul>
+<li>Launch feature: <a href="2025_10_inp">Launch performance.interactionCount API to stable</a></li>
+</ul>
+</li>
+<li><p>Chrome 135</p>
+<ul>
+<li>Metric definition improvement: Updated <code>interactionId</code> type to <code>unsigned long long</code> (<code>uint64_t</code>) per W3C specification (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/6300797">6300797</a>).</li>
+</ul>
+</li>
+<li><p>Chrome 134</p>
+<ul>
+<li>Implementation optimizations: <a href="2025_01_inp">Defer non-urgent renderer tasks after input by default</a></li>
+</ul>
+</li>
+<li><p>Chrome 133</p>
+<ul>
+<li>Launch feature: <a href="2025_02_inp">Enable EventTimingSelectionAutoScrollNoInteractionId by default</a></li>
+</ul>
+</li>
+<li><p>Chrome 130</p>
+<ul>
+<li>Launch feature: <a href="2024_10_inp">Enable EventTimingTapStopScrollNoInteractionId by default</a></li>
+<li>Launch feature: <a href="2024_10_inp">Enable EventTimingHandleKeyboardEventSimulatedClick by default</a></li>
+<li>Launch feature: <a href="2024_10_inp">Enable ReportEventTimingAtVisibilityChange by default</a></li>
+</ul>
+</li>
+<li><p>Chrome 129</p>
+<ul>
+<li>Launch feature: <a href="2024_09_inp">Enable ContinueEventTimingRecordingWhenBufferIsFull by default</a></li>
+</ul>
+</li>
+<li><p>Chrome 128</p>
+<ul>
+<li>Metric bug fix: <a href="2024_08_inp">Enable EventTimingHandleOrphanPointerup by default</a></li>
+</ul>
+</li>
+<li><p>Chrome 127</p>
+<ul>
+<li>Launch feature: <a href="2024_07_inp">Enable EventTimingKeypressAndCompositionInteractionId by default</a></li>
+<li>Launch feature: <a href="2024_07_inp">Enable EventTimingFallbackToModalDialogStart by default</a></li>
+</ul>
+</li>
+<li><p>Chrome 126</p>
+<ul>
+<li>Launch feature: <a href="2024_06_inp_lcp_fcp">Enable NewPresentationFeedbackTimeStamps on Mac to improve the accuracy of the frame display time</a></li>
+</ul>
+</li>
+<li><p>Chrome 122</p>
+<ul>
+<li>Launch feature: <a href="2024_02_inp">Enable EventTimingMatchPresentationIndex by default</a></li>
+</ul>
+</li>
+<li><p>Chrome 121</p>
+<ul>
+<li>Metric bug fix: <a href="2024_01_inp">Event Timing flush pointerdown &amp; keydown on contextmenu</a></li>
+</ul>
+</li>
+<li><p>Chrome 116</p>
+<ul>
+<li>Metric bug fix: <a href="2023_08_inp">Event Timing - Fallback artificial events ending time to processingEnd</a></li>
+</ul>
+</li>
+<li><p>Chrome 112</p>
+<ul>
+<li>Metric bug fix: <a href="2023_04_inp">Event Timing Pointer Map Flush Timer Bug Fixes</a></li>
+</ul>
+</li>
+<li><p>Chrome 111</p>
+<ul>
+<li>Metric bug fix: <a href="2023_03_inp">Event Timing API no longer reports very long durations when interaction leads to &quot;open in new tab&quot;</a></li>
+</ul>
+</li>
+<li><p>Chrome 109</p>
+<ul>
+<li>Implementation optimizations: <a href="2023_01_inp">A change in Chrome to prioritize compositing after input events caused a significant improvement to INP</a></li>
+</ul>
+</li>
+<li><p>Chrome 96</p>
+<ul>
+<li>Experimental metric exposed via API: <a href="https://web.dev/inp/">Event Timing InteractionID</a> available via <a href="https://www.w3.org/TR/event-timing/">PerformanceObserver API</a></li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/inp.md</a>
+  </p>
+</div>

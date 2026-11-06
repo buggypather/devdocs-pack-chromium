@@ -1,0 +1,580 @@
+<h1>An Overview of All Things Stability/Crash in Chrome</h1>
+<p><em>current as of May 2026</em></p>
+<p>Chromium and Chrome care about stability. It&#39;s one of
+<a href="https://blog.chromium.org/2018/09/how-we-designed-chrome-10-years-ago.html">four core design principles</a>
+(along with speed, simplicity, and security) for building a great browser. The
+web browser should work reliably.</p>
+<p>Chrome measures stability in many ways, knowing that no single measurement is
+both reliable and comprehensive.</p>
+<p>This document provides an overview of the different ways Chrome monitors
+stability and attempts to improve it.</p>
+<h2 id="found-crash">Found a crash - report it!</h2>
+<p>One way stability problems are identified and fixed is through bug reports. Bug
+reports, especially those with steps on how to reproduce the crash, are
+invaluable. If you have steps that can reliably cause a crash, or even
+occasionally cause a crash, please <a href="https://new.crbug.com/">report it</a>.</p>
+<h2 id="types-of-crashes">What&#39;s a crash? Types of crashes</h2>
+<p>Chromium and Chrome try to ensure
+<a href="https://www.chromium.org/developers/design-documents/multi-process-architecture/">all processes involved in web browsing</a>
+are stable. Stability comes in many forms. The following are types of crashes
+and what the user experiences.</p>
+<ul>
+<li><p><strong>Browser process crash</strong>. The browser app disappears. The operating system
+may display a message about the app crashing. Often, tabs are automatically
+restored when the app is restarted, though any data previously entered into web
+pages is lost.</p>
+</li>
+<li><p><strong>Renderer process crash</strong>. A renderer process typically displays a web
+page [<a href="#renderer-with-webui">1</a>]. When it crashes, the user sees &quot;Aw, Snap!
+Something went wrong when displaying this web page&quot; (a.k.a., a &quot;sad tab&quot;).
+Reloading the web page typically will make the page reappear, though any
+previously entered data is lost.</p>
+</li>
+<li><p><strong>Extension renderer process crash</strong>. Each Chrome extension runs in an
+extension renderer process. When most extensions crash, a user will see a popup
+indicating that a crash occurred and asking the user to click to reload the
+extension. Extensions that are policy-installed or
+<a href="https://chromium.googlesource.com/chromium/src/+/main/extensions/docs/component_extensions.md">component extensions</a>
+will
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/background/background_contents_service.cc;l=380-420;drc=7fa0c25da15ae39bbd2fd720832ec4df4fee705a">automatically restart</a>.
+In these cases, there is no user-visible indication that the extension has
+crashed. Also, if the user had windows open for the extension (e.g., to
+configure it), those windows will show &quot;sad tabs&quot; and any unsaved data entered
+into those windows would be lost.</p>
+</li>
+<li><p><strong>GPU process crash</strong>. The GPU process works with the GPU chip on the device
+(if any) to help Chromium and Chrome display and scroll web pages quickly. If it
+crashes, all windows go black momentarily while a new process is brought up.
+(The GPU process is restarted automatically.) Generally no data is lost during
+this operation; however, sometimes state and data can be lost. For example,
+Canvas 2D animations will be reset (start from the beginning).</p>
+</li>
+<li><p><strong>Utility process crash</strong>. A utility process is a general name for a helper
+process other than those above. The most commonly used utility process is the
+network service process. It&#39;s designed to silently restart in the case of a
+crash without users being aware of it.</p>
+</li>
+<li><p><strong>Browser process stalled or unresponsive [<a href="#stalled-terminology">2</a>]</strong>,
+a.k.a. &quot;Application Not Responding&quot; (ANR). Colloquially, the app is said to have
+&quot;frozen.&quot; A user with a stalled or unresponsive browser process will not be able
+to, for example, click links to switch tabs. Whether to refer to this situation
+as a crash is debatable. A stalled or unresponsive browser process is like a
+browser process crash in that it makes the browser unusable, where the remedy is
+to restart the browser. Sometimes the operating system will offer to do this for
+the user, or do it directly without asking the user. Alternatively, in some
+cases, if the user waits then the browser process may become responsive.</p>
+</li>
+<li><p><strong>Renderer process stalled or unresponsive [<a href="#stalled-terminology">2</a>]</strong>.
+Again, whether to call a stalled or unresponsive renderer process a crash is
+debatable. Typically, the fixes are to reload the web pages
+[<a href="#renderer-with-webui">1</a>] or to wait and hope the renderer process becomes
+responsive. A user with a stalled or unresponsive renderer process will not be
+able to, for example, enter information in the web page or click most links on
+the web page.</p>
+</li>
+<li><p><strong>GPU process stalled or unresponsive [<a href="#stalled-terminology">2</a>]</strong>. TODO:
+describe what the user sees in this case.</p>
+</li>
+<li><p><strong>Operating-system force-closing Chrome</strong>: An operating system may, at times,
+close Chrome or offer to close Chrome. This is discussed above in the context of
+a stalled or unresponsive browser process. The operating system may close Chrome
+for other reasons such as using too much memory or doing too much work while in
+the background (not being actively used by the user). As with a stalled or
+unresponsive browser process, whether to call these a &quot;crash&quot; and whether they
+should be said to be Chrome&#39;s fault is debatable.</p>
+</li>
+</ul>
+<h2 id="counting-crashes">How Chrome counts crashes</h2>
+<p>In addition to user-reported crashes in bug reports, Chrome has several
+mechanisms for detecting and counting crashes.</p>
+<p><strong>Crashpad</strong>.
+<a href="https://chromium.googlesource.com/crashpad/crashpad/+/main/README.md">Crashpad</a>
+is a crash-reporting system that integrates with Chrome on all operating systems
+on which Chrome runs. It watches for crashes and crash-like events (more details
+below). It watches all processes used by Chrome: the main browser app process as
+well as others. For users who have the metrics/crash reporting toggle enabled,
+when Crashpad sees a crash in any process, it attempts to collect some
+information about the crash and (subject to throttling) upload the information
+to Google servers. This information is put into the &quot;crash database&quot;.</p>
+<p><strong>UMA</strong>. UMA is the metrics-reporting system for Chrome. For users who have the
+metrics/crash reporting toggle enabled, UMA regularly uploads its information to
+Google servers. With respect to crashes, UMA records two key types of events:</p>
+<ul>
+<li><p>The UMA system monitors all processes used by Chrome, including the main
+browser app process. Each process is tracked to see if it stopped running in an
+expected or unexpected way. When a process stops unexpectedly, it&#39;s colloquially
+referred to as a crash. Strictly speaking, the situation may not be a crash. For
+example, it could be a power outage for a desktop computer or the battery
+running out of power for a mobile device. A UMA &quot;crash&quot; is best referred to as
+an <strong>unclean shutdown</strong>. One critical feature of unclean shutdowns (as detected
+in UMA) is that they may be crashes that were not caught by Crashpad. For
+example, Crashpad may not have been able to spot the crash and upload relevant
+information.</p>
+</li>
+<li><p>The UMA system also keeps metrics about how Crashpad works. For example, it
+records key information about what kinds of crashes Crashpad has detected and
+how many crashes were successfully uploaded to Google servers.</p>
+</li>
+</ul>
+<p><strong>Operating system statistics</strong>. Operating systems can collect information about
+apps running on the operating system, how often they crash, and for what reason.
+An operating system can also measure ANRs. For example, the Google Play store
+can collect such information for users of Chrome on Android (when the relevant
+Android-level metrics reporting setting is enabled) and display information to
+Chrome developers in the Google Play Console. Likewise, Apple&#39;s App Store can
+collect such information for users of Chrome on iOS and display information in
+Chrome&#39;s App Store Connect area. In general, these operating-system monitoring
+services are neither better nor worse than the systems above. The
+operating-system services may record crashes (and crash-like events) not
+recorded elsewhere and may miss crashes that are detected by other systems.</p>
+<p><strong>User feedback</strong>. Users can also
+<a href="https://support.google.com/chrome/answer/95315">send feedback about Chrome to Google</a>.
+Google reviews this feedback to identify which feedback relates to stability and
+uses that feedback to monitor stability.</p>
+<p>Other sources of data about crashes are also available. The ones mentioned above
+are the most commonly used sources.</p>
+<p>Most of these are described in more detail below.</p>
+<h2 id="crashpad">Reporting crashes via &quot;Crashpad&quot; (to crash database)</h2>
+<p>Chrome uses Crashpad to record crashes and upload them to the crash database, if
+the user has the metrics/crash reporting toggle enabled. As described earlier,
+when the Chrome app starts, Crashpad installs an &quot;exception/signal handler&quot;.
+This handler watches for the app to crash. If possible, it takes a snapshot of
+what the app was doing when it crashed. Later, the snapshot will be uploaded to
+Google&#39;s servers. This snapshot is commonly referred to as a &quot;crash dump&quot;. The
+data on Google&#39;s servers is referred to as the &quot;crash database&quot;.</p>
+<p>Note: On iOS, there is
+<a href="#operating-system-level-counting-ios">an additional method by which crashes can be uploaded to the crash database</a>.
+This section about Crashpad describes only the types of crashes that Crashpad
+captures and uploads to the crash database.</p>
+<p>Crashpad can capture many types of crashes such as invalid memory access and
+invalid instructions.</p>
+<p>Crashpad can also capture crashes caused by the device running out of virtual
+memory. It will not capture crashes caused by the device running out of physical
+memory.</p>
+<p>For both browser process and helper process crashes, some types of crashes may
+not be caught by Crashpad. For example, Crashpad cannot capture the
+operating-system force-closing Chrome.</p>
+<p>Crashpad can also upload snapshots (&quot;crash dumps&quot;) to Google without a crash
+occurring. Specifically, a developer can add code to indicate that Chrome should
+take a crash dump and upload it to Google. It&#39;s literally called &quot;dump without
+crashing.&quot;</p>
+<p>In addition, Chrome monitors and records occurrences when a renderer and GPU
+process becomes stalled or unresponsive. Chrome can sometimes record situations
+when the browser process stalls or becomes unresponsive, though it does not do
+it reliably. Specifically, there is
+<a href="https://chromium.googlesource.com/chromium/src/base/+/HEAD/threading/README.md">a part of Chrome that watches to see if another part of Chrome becomes stalled or unresponsive</a>.
+Chrome cannot detect all occurrences of this--if Chrome is too stalled then the
+watcher cannot run--but for occurrences it detects, Chrome tells Crashpad to
+package the information into a crash dump using &quot;dump without crashing&quot; for
+upload to the crash database.</p>
+<p>Even the real crash reports (as opposed to ones stemming from
+stalls/unresponsiveness or from dumps-without-crashing) are not representative
+of all crashes. For example, a crash that occurs before the signal handler is
+installed will not be seen and uploaded. As another example, there are ways that
+Chrome can crash that will leave the app in such a bad state that the signal
+handler cannot run successfully to create a crash report.</p>
+<p>Crash reports captured and uploaded by Crashpad are detailed! For example, they
+typically include the exact line on which the crash occurred and why that line
+crashed (e.g., invalid memory access, invalid command). They are also annotated
+to distinguish the type of crash report, distinguishing between, say, a regular
+crash, a stall/unresponsiveness report, a dump-without-crashing, and
+out-of-memory crash, and so on.</p>
+<p>While the controls for uploading crash reports and upload UMA data are similar,
+there are a number of ways in which the systems differ:</p>
+<ul>
+<li><p>Alike in that both crash reporting and UMA data are controlled by the same
+toggle</p>
+</li>
+<li><p>Alike in that both sample their data at the same rate (based on the operating
+system and channel)</p>
+</li>
+<li><p>Differ in that crash reporting samples crash report events at the rate in
+question whereas UMA samples all data from a user (so all data from a user is
+reported or not; it&#39;s not as a per-event basis)</p>
+</li>
+<li><p>Differ in that crash reporting throttles uploads so an individual user cannot
+report too many crashes too often (based on operating system and channel); UMA
+does not throttle</p>
+</li>
+<li><p>Differ in that crash uploads get
+<a href="http://go/crash-report-throttling-server">throttled on the server</a>, if there
+are too many for a particular operating system, or &lt;operating system, version&gt;
+tuple (this happens rarely though)</p>
+</li>
+</ul>
+<p>Querying the crash database to focus on particular types of crashes can be
+difficult. Here is <a href="http://shortn/_yEgrsq543q">an example query</a> (Google
+employees only) for how to query the crash database to look at browser process
+crashes, excluding other process crashes and excluding stall/unresponsiveness
+reports.</p>
+<h3 id="crashpad-desktop">Desktop Nuances</h3>
+<p>Crash report uploads on Windows, macOS, Linux, and ChromeOS are throttled. In
+other words, the same user cannot upload many crash reports in a short time.
+There&#39;s a quota. As such, the crash database may underestimate the frequency of
+certain types of crashes (ones that tend to appear in a row / in a cluster).
+This quota is not applied on Android or iOS.</p>
+<h3 id="crashpad-chromeos">ChromeOS Nuances</h3>
+<p>The ChromeOS operating system kernel can watch the Chrome process and recognize
+when it crashes. If it sees Chrome crash in a way that was not handled by
+Crashpad, it produces a crash report indicating this. As such, it can be said
+that the crash database has a more complete reflection of Chrome&#39;s stability on
+ChromeOS than on other platforms. That said, the crash reports produced in these
+cases (when Crashpad didn&#39;t handle the crash) have very few details.</p>
+<h3 id="crashpad-ios">iOS Nuances</h3>
+<p>Due to iOS operating system restrictions, Crashpad on iOS cannot capture certain
+types of crashes that it can capture on other operating systems. For example, on
+Android, when the signal handler detects a crash, it launches another process to
+examine the crashing Chrome app. This makes it more likely to successfully
+create a crash report on Android and upload it. On iOS, due to iOS operating
+system restrictions, the crash handling must be done within the Chrome app
+process. This makes it more difficult to reliably capture and upload a crash
+report.</p>
+<p>Crash information on iOS is written to an intermediate file, then converted to
+the final file format (&quot;minidump&quot;) and uploaded when possible. This means the
+uploads are delayed compared with other operating systems where the crash report
+is immediately uploaded (if possible) in a separate process.</p>
+<p>See
+<a href="https://chromium.googlesource.com/crashpad/crashpad/+/HEAD/doc/ios_overview_design.md">the Crashpad documentation for iOS for more details</a>
+on all of the above and more.</p>
+<h2 id="uma-crashes">Counting unclean shutdowns (&quot;crashes&quot;) in UMA</h2>
+<p>Note: UMA metrics often refer to stability problems as &quot;crashes&quot; but they are
+more accurately called &quot;unclean shutdowns&quot;.</p>
+<p>Unclean shutdowns in UMA are a measure of how often Chrome or one of its helper
+processes did not shut down / turn off cleanly. The UMA information about
+unclean shutdowns (by process) are all stored in a single UMA histogram:
+<code>Stability.Counts2</code>. UMA information is eligible to be uploaded only if the
+metrics/crash reporting toggle is enabled.</p>
+<p>An unclean shutdown of the browser app is detected using a beacon. As Chrome is
+shutting down (or, on mobile, in some conditions, being backgrounded), a beacon
+is written indicating that Chrome has shut down cleanly. When Chrome is started,
+the beacon is read. If the beacon does not indicate that the last shutdown was
+clean, then the last shutdown must have been unclean, such as a crash. Sometime
+during startup (or, on mobile, in some conditions, foregrounding), the beacon is
+reset, indicating that Chrome is listening for unclean shutdowns again. This
+method can reliably capture most types of crashes, including many that do not
+get reported to the crash database. For example, unclean shutdowns for the
+browser app process include both crashes as well as times when the operating
+system or user &quot;force quit&quot; (a.k.a. &quot;kills&quot;) the Chrome browser app process,
+which is another way to make Chrome shutdown uncleanly. An operating system may
+force quit the Chrome browser app if it&#39;s using too much memory. Also, an
+operating system may force quit the Chrome browser app process if it&#39;s not
+responding (&quot;Application Not Responding&quot; a.k.a. ANR). In this way, unclean
+shutdowns for the browser process may include times when the browser process
+stalled or became unresponsive.</p>
+<p>Helper processes are also monitored for unclean shutdowns. These include regular
+crashes (due to a bug in Chrome), OOM crashes (when memory limits are exhausted,
+due to the behavior of the page, Chrome, or other processes running on the
+system), and external causes (such as the user terminating the process via Task
+Manager). In short, generally an unclean shutdown is counted whenever a process
+wasn&#39;t shut down intentionally by the browser process [<a href="#failed-launch">3</a>], and
+also sometimes is counted when the helper process was shut down intentionally as
+well. For example, if a renderer process is closed by the browser process to
+free up memory, that&#39;s considered an unclean shutdown of the renderer process in
+UMA. Incidentally, UMA has additional information in particular about
+<a href="#uma-helper-process-crashes">helper process <em>crashes</em></a>; see below.</p>
+<p>While measurements of unclean shutdowns will include many problems with Chrome,
+there are a variety of other causes for unclean shutdowns that do not involve
+Chrome functioning poorly. For example, if the operating system as a whole
+crashes, that will cause Chrome to not shut down cleanly. Likewise, if the
+device loses power (power outage or battery fully discharged), Chrome will also
+recognize an unclean Chrome browser process shutdown. Unclean shutdowns caused
+by these forces are outside of Chrome&#39;s control.</p>
+<p>Thus, unclean shutdowns are best used to detect directional changes in stability
+between Chrome versions or over time. The absolute value is not particularly
+meaningful. For example, the absolute count of unclean browser app shutdowns
+depends heavily on how reliably the unclean shutdown beacon is and how much of
+the browser process lifetime is monitored for unclean shutdowns. If/when these
+change, the absolute count can change substantially. Moreover, even relative
+values need to be interpreted with care: a 20% increase in unclean browser app
+shutdowns does not indicate a 20% increase in Chrome stability problems, as a
+sizable fraction of unclean shutdowns are not due to Chrome.</p>
+<p>When UMA uploads information indicating that an unclean shutdown occurred, it
+does not provide additional information. It&#39;s best to think about this way of
+counting crashes as merely providing a number: the number of unclean shutdowns.
+The UMA information does not provide more detailed indications about which code
+crashes and why.</p>
+<h3 id="uma-crashes-android">Android Nuances</h3>
+<p>In Chrome on Android, Chrome considers an unclean shutdown of the browser
+process to have occurred only if it happens when Chrome is in the foreground.
+It&#39;s expected that Android will force Chrome to close while Chrome is in the
+background. These forced closures should not be and are not considered
+unexpected shutdowns. This behavior is implemented by changing how the unclean
+shutdown beacon works: it watches for unclean shutdowns between the time Chrome
+comes to the foreground and Chrome goes to the background, not between startup
+and shutdown.</p>
+<h3 id="uma-crashes-ios">iOS Nuances</h3>
+<p>Chrome on iOS monitors for unclean shutdowns under more conditions than Chrome
+on Android does, but does not monitor continuously. Chrome monitors for unclean
+shutdown of the browser process when Chrome is in the foreground. Chrome also
+monitors for unclean shutdowns when Chrome is launched in the background to do
+background work. It ceases to monitor for unclean shutdowns when the background
+work completes. Generally, it&#39;s expected that iOS will force Chrome to close
+while Chrome is in the background. If these forced closures happen during a time
+when Chrome does not mind being closed, these forced closures are not considered
+unexpected shutdowns.</p>
+<p>Separately, due to iOS restrictions,
+<a href="https://chromium.googlesource.com/website/+/HEAD/site/developers/design-documents/layered-components-design/index.md">Chrome&#39;s architecture on iOS differs greatly from its architecture on other operating systems</a>.
+Thus, many situations that occur on other operating systems do not occur on iOS.
+The only stability metrics measured in UMA are browser process unclean shutdowns
+and renderer process unclean shutdowns. (There is conceptually a renderer
+process to display web content on iOS; the process is run by the operating
+system, not by Chrome. Chrome records a renderer process unclean shutdown when
+it is notified that the iOS-launched renderer process is no longer running.)</p>
+<h3 id="uma-extra-information">UMA Context</h3>
+<p>UMA data, including UMA data about unclean shutdowns, comes with additional
+information about Chrome such as the type of device it&#39;s running on, the current
+Chrome version, and so on. Generally this information should be correct.
+However, there are some known situations where it may not be:</p>
+<ul>
+<li><p>If the Chrome browser crashes, Chrome will attempt to indicate that in a UMA
+record that contains the Chrome version at the time of the crash. There is code
+to this effect. However, this code has been buggy in the past and some edge
+cases might remain.</p>
+</li>
+<li><p>On Android, Chrome attempts to indicate the manner in which it is running,
+e.g., as a standalone browser or as a Chrome Custom Tab or something else. This
+information is not reliably associated with the crash information in UMA; the
+attached information may not be correct.</p>
+</li>
+</ul>
+<h2 id="uma-stalls">Counting becomes stalls / unresponsiveness in UMA</h2>
+<p>Chrome has
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/base/threading/README.md">a system for detecting stalls or unresponsiveness</a>
+in every process, including the browser process. This system functions on
+Windows, Mac, Linux, and ChromeOS. When such a situation is detected, it&#39;s
+reported to UMA in a histogram in the family <code>HangWatcher.IsThreadHung.*</code>.</p>
+<h2 id="uma-crashpad-histograms">Counting Crashpad-measured crashes in UMA</h2>
+<p>There are UMA histograms that reflect how Crashpad behaves. They all start with
+<code>Crashpad.</code>. For example, the UMA histogram
+<code>Crashpad.CrashUpload.AttemptSuccessful</code> contains the number of crash dumps that
+were uploaded successfully.</p>
+<p>These UMA histograms are not typically used to count crashes or measure
+stability in general. The histograms are typically used to troubleshoot or debug
+Crashpad itself.</p>
+<h2 id="uma-other-stability-metrics">Other stability metrics in UMA</h2>
+<h3 id="uma-process-exit-codes">Process exit codes</h3>
+<p>When a process exits--either via a crash or &quot;cleanly&quot; (without a crash)--it has
+an &quot;exit code&quot; indicating its status. These exit codes are reported to UMA. The
+following UMA histograms are relevant. For technical reasons, not all are
+recorded on all operating systems.</p>
+<ul>
+<li><p><code>Stability.BrowserExitCodes</code> - for the browser process</p>
+</li>
+<li><p><code>CrashExitCodes.Renderer</code> - for renderer processes</p>
+<ul>
+<li>Also, for renderer processes, the set of UMA histograms that start with
+  <code>Stability.RendererAbnormalTermination2</code> report a summarized (grouped)
+  version of renderer process exit codes.</li>
+</ul>
+</li>
+<li><p><code>CrashExitCodes.Extension</code> - for extension renderer processes</p>
+</li>
+<li><p><code>GPU.GPUProcessExitCode</code> - for GPU processes</p>
+</li>
+<li><p><code>ChildProcess.Crashed.UtilityProcessExitCode</code> - for utility (a.k.a. helper)
+processes</p>
+</li>
+</ul>
+<p>These exit codes can indicate, for example, if the process ran out of memory,
+was stalled or unresponsive and thus forced to close, or tried to access memory
+it wasn&#39;t allowed to access. For non-browser process crashes, these crashes
+should also have been caught by Crashpad and uploaded to the crash database. For
+browser-process crashes, many of these exit codes cannot be caught by Crashpad
+and thus would not appear in the crash database.</p>
+<p>These are all considered unclean shutdowns, as counted in the UMA histogram
+<code>Stability.Counts2</code>.</p>
+<h3 id="uma-out-of-memory">Out-of-memory</h3>
+<p><a href="#uma-process-exit-codes">Process exit codes above</a> reflect out-of-memory
+crashes. (On some operating systems, there&#39;s an exit code for Chrome that
+indicates out-of-memory.) On some operating systems, there are additional UMA
+metrics that indicate an out-of-memory crash occurred:</p>
+<ul>
+<li><p><code>Memory.OOMKills.Count</code> - for ChromeOS</p>
+</li>
+<li><p><code>Memory.OOMKills.Daily</code> - for ChromeOS</p>
+</li>
+<li><p><code>Stability.Android.ProcessedCrashCounts</code> - for Android</p>
+</li>
+</ul>
+<h3 id="uma-helper-process-crashes">Helper process crashes</h3>
+<p>When a non-browser process crashes, it should be able to be caught by Crashpad
+and uploaded to the crash database.</p>
+<p>Chrome also catches a non-browser-process crash, processes the event, and
+records some statistics about it in UMA data. On Android, this information is
+placed in the UMA histogram <code>Stability.Android.ProcessedCrashCounts</code>.</p>
+<h4 id="uma-utility-process-crashes-by-type">Utility process crashes by types</h4>
+<p>The histogram <code>ChildProcess.Crashed.UtilityProcessHash</code> counts crashes (either
+true crashes or unclean shutdowns of the process) by utility process type. To
+put these crash counts into context, compare them again the number of times
+each utility process type was launched as measured by
+<code>ChildProcess.Launched.UtilityProcessHash</code>.</p>
+<h2 id="operating-system-level-counting">Counting crashes at the Operating-System-Level</h2>
+<p>Operating systems monitor only app-level stability, i.e., whether the Chrome
+browser app crashed or became stalled or unresponsive (&quot;Application Not
+Responding&quot;). Operating systems do not record the inner workings of Chrome such
+as renderer process or GPU process stability. Whether information is collected
+by the operating system&#39;s maker is usually configurable by a setting within the
+operating system.</p>
+<p>Also worth mentioning: operating systems are not aware of Chrome experiments.
+The crashes and metrics they collect do not include information about the
+experiments a user was in.</p>
+<p>The organization providing the operating system decides what information, if
+any, to share with Chrome developers about Chrome&#39;s behavior. Such information
+is typically shared, if at all, in an aggregated form through a developer
+portal, such as Android&#39;s Play Store or iOS&#39;s App Store.</p>
+<h3 id="operating-system-level-counting-ios">iOS Nuances</h3>
+<p>For users whose devices are configured to share analytics with Apple and further
+configured to allow Apple to share analytics with app developers, Chrome can
+request and receive the information that the operating system observed about
+Chrome&#39;s stability on this device. The information includes, for example, the
+number of foreground exits. Foreground exits can be a crash such as &quot;Invalid
+memory access&quot; or can be a time when iOS decided to force Chrome to stop running
+(such as &quot;App used too much memory&quot;). The information also includes the number
+of occurrences of browser process stalls/unresponsiveness, periods where the
+browser was not responding to input.</p>
+<p>This information is provided to Chrome using
+<a href="https://developer.apple.com/documentation/MetricKit">iOS&#39;s MetricKit framework</a>.
+For users who have Chrome&#39;s metrics/crash reporting toggle enabled, Chrome can
+send this information to Google in two forms:</p>
+<ul>
+<li><p>Chrome will upload information to the crash database about times when Chrome
+closed unexpectedly.</p>
+<ul>
+<li><p>It includes crashes: iOS can watch for times when Chrome crashes. It will
+  notice crashes even in situations when Chrome cannot capture and record the
+  crash itself. This should make the data on Chrome browser app crashes more
+  comprehensive. iOS will tell Chrome, on a later restart, that Chrome crashed
+  on a previous run. MetricKit provides to Chrome some basic information about
+  the crash. Chrome will upload a crash report with this MetricKit-provided
+  data to the crash database.</p>
+</li>
+<li><p>It also includes other unexpected shutdowns. iOS may decide to kill the
+  app if, for example, Chrome is not responding. MetricKit will also provide a
+  report to Chrome in these cases that will be uploaded to the crash database.
+  These cases in which iOS decides to force the app to quit are typically not
+  captured by Crashpad.</p>
+</li>
+</ul>
+</li>
+<li><p>Chrome will upload statistics provided by MetricKit using Chrome&#39;s UMA metrics
+reporting system. These statistics are stored in UMA histograms with names that
+start with <code>IOS.MetricKit.</code>.</p>
+</li>
+</ul>
+<p>At the time of writing, some aspects of MetricKit&#39;s operation are unknown. For
+example, it&#39;s unclear how quickly iOS will provide MetricKit data to Chrome.
+It&#39;s also unclear whether the information MetricKit provides is complete or
+selective; i.e., will MetricKit decide not to tell Chrome about some crashes
+that it has observed.</p>
+<h2 id="actions">What Chrome does with crash information</h2>
+<p>Chrome developers use all these methods for detecting and measuring crashes to
+improve Chrome&#39;s stability.</p>
+<p>Often, the crashes recorded by Crashpad and thus put into the crash database are
+the most useful. They have the most detail: a crash usually points directly to
+the line of code that crashed. Thus, they are the most actionable.</p>
+<p>Different people handle crash information differently.</p>
+<h3 id="code-owners">Code owners</h3>
+<p>Code owners are likely to use the crash database. If a crash appears that looks
+like it&#39;s coming from their code, they will investigate and improve the code /
+fix the bug.</p>
+<h3 id="experimenters">Experimenters</h3>
+<p>Experimenters are likely to use both UMA data and the crash database. Both UMA
+data and the crash database data can be sliced by the experiment group. If
+either shows a regression in stability, the cause will be investigated and
+hopefully fixed before rolling out the change to more people. Experimenters
+check both these ways of measuring stability because, as described above, some
+types of crashes or instability are measured only by one and not the other.</p>
+<h3 id="stability-rotation">Stability rotation</h3>
+<p>Generally, there are people who keep an eye on Chrome&#39;s stability. They use all
+the sources above. Often they&#39;re looking at graphs over time. (Did things get
+worse? If so, what?) They also help triage stability problems, making sure, for
+example, the crash dump or bug report gets routed to the right code owner to
+look into and fix.</p>
+<h3 id="release-managers">Release managers</h3>
+<p>Release managers are the people who push a new Chrome version (a &quot;release&quot;) to
+users. Release managers use crash rates as an input to make decisions about when
+a new Chrome version is ready to be distributed widely. They typically look at
+the relative change in stability from the old version to the new version on a
+given operating system, e.g., an increase or decrease of 10% in the number of
+crashes.</p>
+<h2 id="warnings">Warnings</h2>
+<h3 id="normalize-crash-counts">Normalize crash counts</h3>
+<p>Chrome usage can change over time such as over weekends or holidays. Raw crash
+counts are generally not useful. They&#39;re only useful to compare one number with
+another number, assuming those numbers were collected at the same time on the
+same operating system. To make crash counts more meaningful, it&#39;s a good idea to
+normalize them to take into account how much Chrome was used during the time the
+data was collected. For Google employees, many tools will present normalized
+numbers in addition to or instead of unnormalized ones. This document
+intentionally does not describe different approaches to normalization as that
+information is confidential.</p>
+<h3 id="no-cross-operating-system-comparisons">Do not compare across operating systems</h3>
+<section class="zippy" markdown="1"><p>Warning: Comparing crash rates across operating systems is not a fair
+comparison. Expand for details.</p>
+<p>Crashpad reporting, UMA reporting, and operating system statistics about crashes
+can have different reliability levels on different operating systems.</p>
+<p>For example, Crashpad might catch and upload some types of crashes on Android
+that it cannot capture or upload on iOS.</p>
+<p>Likewise, UMA &quot;crash&quot; rates (actually unclean shutdowns) may reflect more about
+the likelihood of the device running out of power than Chrome or some part of
+Chrome crashing. Also, UMA unclean shutdown rates may also reflect how the
+unclean shutdown detection system is implemented, which can vary by operating
+system. For both of these, see <a href="#uma-crashes">details above</a>. Obviously, these
+rates will differ substantially across operating systems.</p>
+<p>In addition, the percent of users who have the metrics/crash reporting toggle
+enabled varies by operating system. As such, comparing raw numbers of crashes is
+inappropriate.</p>
+<p>Furthermore, different operating systems have different prevalence of
+<a href="#bots">automation / bots, as discussed below</a>.</p>
+<p>Finally, heterogeneity of devices also makes it difficult to compare fairly
+across operating systems. For example, Chrome on iOS needs to run only on iPhone
+and iPad devices. These devices have a limited set of specifications and the
+quality of their components is controlled by Apple. Meanwhile, Chrome on Android
+runs on a variety of devices with an enormous diversity of manufacturers.
+Components can range from extremely low-end (slow components, small memory,
+unreliable) to high-end.</p>
+</section><h3 id="no-cross-data-source-comparisons">Do not compare across data sources</h3>
+<p>Generally different data sources measure different things. Attempts in the past
+to compare them have not usually provided much insight.</p>
+<h3 id="bots">Automation</h3>
+<p>Crash reports may include interactions with Chrome due to automation. A &quot;bot&quot;
+may drive Chrome by faking taps, typing, and so on. These crash reports may not
+reflect any real user experiencing a crash.</p>
+<p>It&#39;s also likely that crashes that result from automation may be relatively more
+common on one operating system than another.</p>
+<h3 id="malware">Malware and antivirus</h3>
+<p>Other programs running on the device, especially if they&#39;re running with
+elevated privileges, can cause Chrome to crash. Sometimes these crashes will
+appear in the various data sources as if they were problems with Chrome.</p>
+<h3 id="wifi-vs-wireless">Bias due to connectivity</h3>
+<section class="zippy" markdown="1"><p>Stability information may be unrepresentative due to operating-system- or
+Chrome-level constraints on when data can be uploaded. Expand for details.</p>
+<p>For example, Chrome on Android will by default only upload a crash dump when
+the network connection is unmetered.</p>
+<p>As another example, the UMA data reporting system uploads data less often when
+the user is on a wireless network rather than a wifi network.</p>
+</section><h2 id="footnotes">Footnotes</h2>
+<h3 id="renderer-with-webui">1. Renderer with WebUI</h3>
+<p>A renderer can also be used to display the Chrome interface, such as the
+chrome://settings page. This happens via a framework called
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_explainer.md">WebUI</a>.
+Renderer process crashes (and hangs) are recorded the same way regardless of
+context (displaying a web page or displaying the Chrome interface). In many
+systems, it is difficult or impossible to distinguish between these two cases.</p>
+<h3 id="stalled-terminology">2. Stalled terminology</h3>
+<p>Formerly, a stalled or unresponsive process was called &quot;a hang&quot; or &quot;a hung
+process.&quot; Use of these older terms remains widespread in Chromium code.</p>
+<h3 id="failed-launch">3. Failed launch</h3>
+<p>The one exception to this rule is when a helper process fails to launch. Suppose
+the browser process tells a helper process to launch. However, imagine that the
+helper process doesn&#39;t start up successfully and begin communicating back with
+the browser process. Intuitively, one might consider this situation an unclean
+shutdown of the helper process. However, this situation is not considered an
+unclean shutdown or crash; it&#39;s instead logged in <code>Stability.Counts2</code> only as a
+failure to launch.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/stability.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/stability.md</a>
+  </p>
+</div>

@@ -1,0 +1,61 @@
+<h1>X11 Threat Model</h1>
+<p>This document describes how X11-related security reports are triaged on Linux.</p>
+<h2 id="summary">Summary</h2>
+<p>X11 does not isolate clients connected to the same display. A process with an
+X11 connection is therefore treated as unsandboxed. Issues that require control
+of such a process, and whose impact is achieved through the X server, are not
+security bugs.</p>
+<p>As this hole cannot be remediated, Linux users should migrate to using Wayland.</p>
+<h2 id="what-any-x11-client-can-do">What any X11 client can do</h2>
+<ul>
+<li><strong>Inject input</strong> via XTest, e.g. type commands into a terminal to execute
+arbitrary code as the user.</li>
+<li><strong>Read input</strong> via XInput2 raw events, including passwords typed into other
+applications.</li>
+<li><strong>Capture the screen</strong> via <code>GetImage</code> on the root window.</li>
+<li><strong>Spoof UI</strong> by placing override-redirect windows over other windows.</li>
+<li><strong>Modify shared desktop state</strong>, such as root window properties and
+XSETTINGS, for every client on the display.</li>
+</ul>
+<h2 id="processes-with-x11-connections">Processes with X11 connections</h2>
+<p>On X11, both the browser process and the GPU process hold an X11 connection.
+The GPU process opens its connection before the sandbox is engaged (see
+<code>OzonePlatformX11::InitializeGPU()</code>), so on X11 it is
+<a href="process-sandboxes-by-platform">considered unsandboxed</a>.</p>
+<p>Fully resolving this would require brokering the GPU process&#39;s X11 traffic
+through the browser process. This is not possible in general: GPU drivers use
+vendor-specific X11 extensions (e.g. for GLX and buffer presentation) whose
+protocols are opaque and cannot be brokered. The only alternative would be to
+load GPU drivers in the browser process, which defeats part of the purpose of
+the GPU process: isolating the browser from the drivers.</p>
+<h2 id="triage-guidance">Triage guidance</h2>
+<p>Not security bugs:</p>
+<ul>
+<li>An X11 client, such as a compromised GPU process, causing the browser
+process to load code or parse attacker-controlled data via X server state
+(e.g. XSETTINGS values like <code>gtk-modules</code> or theme names, X resources,
+window properties, selections).</li>
+<li>A compromised GPU process using its X11 connection to capture the screen,
+read or inject input, or draw over browser UI.</li>
+</ul>
+<p>Crashes caused by malformed X server state may still be fixed as ordinary bugs.</p>
+<p>Still security bugs, triaged per the
+<a href="severity-guidelines">severity guidelines</a>:</p>
+<ul>
+<li>A process without an X11 connection, such as a renderer, obtaining one or
+causing another process to issue arbitrary X11 requests on its behalf.</li>
+<li>Web content causing any of the above effects without a prior compromise.</li>
+</ul>
+<p>This document applies only to X11. Wayland compositors isolate clients, so
+Wayland issues are evaluated normally.</p>
+<h2 id="guidance-for-developers">Guidance for developers</h2>
+<p>Do not add mitigations against hostile X11 clients, such as sanitizing
+XSETTINGS values, as security fixes. They cannot be complete, and they can
+break desktop integration. For example, pinning <code>gtk-modules</code> crashed Chrome
+at startup on KDE Plasma (<a href="https://crbug.com/551107198">crbug.com/551107198</a>).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/x11-threat-model.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/x11-threat-model.md</a>
+  </p>
+</div>

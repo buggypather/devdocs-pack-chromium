@@ -1,0 +1,443 @@
+<h1>Tips for debugging on Linux</h1>
+<p>This page is for Chromium-specific debugging tips; learning how to run gdb is
+out of scope.</p>
+<h2 id="symbolized-stack-trace">Symbolized stack trace</h2>
+<p>The sandbox can interfere with the internal symbolizer. Use <code>--no-sandbox</code> (but
+keep this temporary) or an external symbolizer (see
+<code>tools/valgrind/asan/asan_symbolize.py</code>).</p>
+<p>Generally, do not use <code>--no-sandbox</code> on waterfall bots, sandbox testing is
+needed. Talk to <a href="mailto:security@chromium.org">security@chromium.org</a>.</p>
+<h2 id="gdb">GDB</h2>
+<p>*** promo
+GDB-7.7 is required in order to debug Chrome on Linux.</p>
+<hr>
+<p>Any prior version will fail to resolve symbols or segfault.</p>
+<h3 id="setup">Setup</h3>
+<h4 id="build-setup">Build setup</h4>
+<p>In your build set the GN build variable <code>symbol_level = 2</code> for interactive
+debugging. (<code>symbol_level = 1</code> only provides backtrace information). And while
+release-mode debugging is possible, things will be much easier in a debug build.
+Set your build args with <code>gn args out/&lt;your_dir&gt;</code> (substituting your build
+directory), and set:</p>
+<pre>is_debug = true
+symbol_level = 2</pre>
+<h4 id="gdb-setup">GDB setup</h4>
+<p>The Chrome build requires some GDB configuration for it to be able to find
+source files. See <a href="../gdbinit">gdbinit</a> to configure GDB. There is a similar
+process for <a href="../lldbinit">LLDB</a>.</p>
+<h3 id="basic-browser-process-debugging">Basic browser process debugging</h3>
+<pre>gdb -tui -ex=r --args out/Debug/chrome --disable-seccomp-sandbox \
+    http://google.com</pre>
+<h3 id="allowing-attaching-to-foreign-processes">Allowing attaching to foreign processes</h3>
+<p>On distributions that use the
+<a href="https://www.kernel.org/doc/Documentation/security/Yama.txt">Yama LSM</a> (that
+includes Ubuntu and Chrome OS), process A can attach to process B only if A is
+an ancestor of B.</p>
+<p>You will probably want to disable this feature by using</p>
+<pre>echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope</pre>
+<p>If you don&#39;t you&#39;ll get an error message such as &quot;Could not attach to process&quot;.</p>
+<p>Note that you&#39;ll also probably want to use <code>--no-sandbox</code>, as explained below.</p>
+<h3 id="multiprocess-tricks">Multiprocess Tricks</h3>
+<h4 id="getting-renderer-subprocesses-into-gdb">Getting renderer subprocesses into gdb</h4>
+<p>Since Chromium itself spawns the renderers, it can be tricky to grab a
+particular with gdb. This command does the trick:</p>
+<pre>chrome --no-sandbox --renderer-cmd-prefix='xterm -title renderer -e gdb --args'</pre>
+<p>The <code>--no-sandbox</code> flag is needed because otherwise the seccomp sandbox will
+kill the renderer process on startup, or the setuid sandbox will prevent xterm&#39;s
+execution.  The &quot;xterm&quot; is necessary or gdb will run in the current terminal,
+which can get particularly confusing since it&#39;s running in the background, and
+if you&#39;re also running the main process in gdb, won&#39;t work at all (the two
+instances will fight over the terminal). To auto-start the renderers in the
+debugger, send the &quot;run&quot; command to the debugger:</p>
+<pre>chrome --no-sandbox --renderer-cmd-prefix='xterm -title renderer -e gdb \
+    -ex run --args'</pre>
+<p>If you&#39;re using Emacs and <code>M-x gdb</code>, you can do</p>
+<pre>chrome &quot;--renderer-cmd-prefix=gdb --args&quot;</pre>
+<p>*** note
+Note: using the <code>--renderer-cmd-prefix</code> option bypasses the zygote launcher, so
+the renderers won&#39;t be sandboxed. It is generally not an issue, except when you
+are trying to debug interactions with the sandbox. If that&#39;s what you are doing,
+you will need to attach your debugger to a running renderer process (see below).</p>
+<hr>
+<p>You may also want to pass <code>--disable-hang-monitor</code> to suppress the hang monitor,
+which is rather annoying.</p>
+<p>You can also use <code>--renderer-startup-dialog</code> and attach to the process in order
+to debug the renderer code. Go to
+<a href="https://www.chromium.org/blink/getting-started-with-blink-debugging">https://www.chromium.org/blink/getting-started-with-blink-debugging</a> for more
+information on how this can be done.</p>
+<p>For utilities you can use <code>--utility-startup-dialog</code> to have all utilities
+prompt, or <code>--utility-startup-dialog=data_decoder.mojom.DataDecoderService</code>
+to debug only a particular service type.</p>
+<h4 id="choosing-which-renderers-to-debug">Choosing which renderers to debug</h4>
+<p>If you are starting multiple renderers then the above means that multiple gdb&#39;s
+start and fight over the console. Instead, you can set the prefix to point to
+this shell script:</p>
+<pre data-language="sh">#!/bin/sh
+
+echo &quot;**** Child $$ starting: y to debug&quot;
+read input
+if [ &quot;$input&quot; = &quot;y&quot; ] ; then
+  gdb --args $*
+else
+  $*
+fi</pre>
+<h4 id="choosing-renderer-to-debug-by-url">Choosing renderer to debug by URL</h4>
+<p>In most cases you&#39;ll want to debug the renderer which is loading a particular
+site. If you want a script which will automatically debug the renderer which has
+visited a given target URL and continue all other renderers, you can use the
+following:</p>
+<pre data-language="sh">./third_party/blink/tools/debug_renderer out/Default/content_shell https://example.domain/path</pre>
+<p>The script also supports specifying a different URL than the navigation URL.
+This is useful when the renderer you want to debug is not the top frame but one
+of the subframes on the page. For example, you could debug a particular subframe
+on a page with:</p>
+<pre data-language="sh">./third_party/blink/tools/debug_renderer -d https://subframe.url/path out/Default/content_shell https://example.domain/path</pre>
+<p>However, if you need more fine-grained control over which renderers to debug
+you can run chrome or content_shell directly with the
+<code>--wait-for-debugger-on-navigation</code> flag which will pause each renderer at the
+point of navigation (when the URL is known).</p>
+<p>This will result in a series of lines such as the following in the output:</p>
+<pre>...:content_switches_internal.cc(119)] Renderer url=&quot;https://example.domain/path&quot; (PID) paused waiting for debugger to attach. Send SIGUSR1 to unpause.</pre>
+<p>You can signal the renderers you aren&#39;t interested in to continue running with:</p>
+<pre data-language="sh">kill -s SIGUSR1 &lt;pid&gt;</pre>
+<p>And debug the renderer you are interested in debugging with:</p>
+<pre data-language="sh">gdb -p &lt;pid&gt;</pre>
+<h4 id="debugging-run_web_testspy-renderers">Debugging run_web_tests.py renderers</h4>
+<p>The <code>debug_renderer</code> script can also be used to debug the renderer running
+a web test. To do so, simply call <code>run_{web,wpt}_tests.py</code> from <code>debug_renderer</code>
+with all of the standard arguments for <code>run_{web,wpt}_tests.py</code>. For example:</p>
+<pre data-language="sh">./third_party/blink/tools/debug_renderer ./third_party/blink/tools/run_web_tests.py [run_web_test args]</pre>
+<h4 id="selective-breakpoints">Selective breakpoints</h4>
+<p>When debugging both the browser and renderer process, you might want to have
+separate set of breakpoints to hit. You can use gdb&#39;s command files to
+accomplish this by putting breakpoints in separate files and instructing gdb to
+load them.</p>
+<pre>gdb -x ~/debug/browser --args chrome --no-sandbox --disable-hang-monitor \
+    --renderer-cmd-prefix='xterm -title renderer -e gdb -x ~/debug/renderer \
+    --args '</pre>
+<p>Also, instead of running gdb, you can use the script above, which let&#39;s you
+select which renderer process to debug. Note: you might need to use the full
+path to the script and avoid <code>$HOME</code> or <code>~/.</code></p>
+<h4 id="connecting-to-a-running-renderer">Connecting to a running renderer</h4>
+<p>Usually <code>ps aux | grep chrome</code> will not give very helpful output. Try
+<code>pstree -p | grep chrome</code> to get something like</p>
+<pre>        |                      |-bash(21969)---chrome(672)-+-chrome(694)
+        |                      |                           |-chrome(695)---chrome(696)-+-{chrome}(697)
+        |                      |                           |                           \-{chrome}(709)
+        |                      |                           |-{chrome}(675)
+        |                      |                           |-{chrome}(678)
+        |                      |                           |-{chrome}(679)
+        |                      |                           |-{chrome}(680)
+        |                      |                           |-{chrome}(681)
+        |                      |                           |-{chrome}(682)
+        |                      |                           |-{chrome}(684)
+        |                      |                           |-{chrome}(685)
+        |                      |                           |-{chrome}(705)
+        |                      |                           \-{chrome}(717)</pre>
+<p>Most of those are threads. In this case the browser process would be 672 and the
+(sole) renderer process is 696. You can use <code>gdb -p 696</code> to attach.
+Alternatively, you might find out the process ID from Chrome&#39;s built-in Task
+Manager (under the Tools menu). Right-click on the Task Manager, and enable
+&quot;Process ID&quot; in the list of columns.</p>
+<p>Note: by default, sandboxed processes can&#39;t be attached by a debugger. To be
+able to do so, you will need to pass the <code>--allow-sandbox-debugging</code> option.</p>
+<p>If the problem only occurs with the seccomp sandbox enabled (and the previous
+tricks don&#39;t help), you could try enabling core-dumps (see the <strong>Core files</strong>
+section).  That would allow you to get a backtrace and see some local variables,
+though you won&#39;t be able to step through the running program.</p>
+<p>Note: If you&#39;re interested in debugging LinuxSandboxIPC process, you can attach
+to 694 in the above diagram. The LinuxSandboxIPC process has the same command
+line flag as the browser process so that it&#39;s easy to identify it if you run
+<code>pstree -pa</code>.</p>
+<h4 id="getting-gpu-subprocesses-into-gdb">Getting GPU subprocesses into gdb</h4>
+<p>Use <code>--gpu-launcher</code> flag instead of <code>--renderer-cmd-prefix</code> in the instructions
+for renderer above.</p>
+<h4 id="getting-browser_tests-launched-browsers-into-gdb">Getting <code>browser_tests</code> launched browsers into gdb</h4>
+<p>Use environment variable <code>BROWSER_WRAPPER</code> instead of <code>--renderer-cmd-prefix</code>
+switch in the instructions above.</p>
+<p>Example:</p>
+<pre data-language="shell">BROWSER_WRAPPER='xterm -title renderer -e gdb --eval-command=run \
+    --eval-command=quit --args' out/Debug/browser_tests --gtest_filter=Print</pre>
+<h4 id="plugin-processes">Plugin Processes</h4>
+<p>Same strategies as renderers above, but the flag is called <code>--plugin-launcher</code>:</p>
+<pre>chrome --plugin-launcher='xterm -e gdb --args'</pre>
+<p>*** note
+Note: For now, this does not currently apply to PPAPI plugins because they
+currently run in the renderer process.</p>
+<hr>
+<h4 id="single-process-mode">Single-Process mode</h4>
+<p>Depending on whether it&#39;s relevant to the problem, it&#39;s often easier to just run
+in &quot;single process&quot; mode where the renderer threads are in-process. Then you can
+just run gdb on the main process.</p>
+<pre>gdb --args chrome --single-process</pre>
+<p>Currently, the <code>--disable-gpu</code> flag is also required, as there are known crashes
+that occur under TextureImageTransportSurface without it. The crash described in
+<a href="https://crbug.com/361689">https://crbug.com/361689</a> can also sometimes occur, but that crash can be
+continued from without harm.</p>
+<p>Note that for technical reasons plugins cannot be in-process, so
+<code>--single-process</code> only puts the renderers in the browser process. The flag is
+still useful for debugging plugins (since it&#39;s only two processes instead of
+three) but you&#39;ll still need to use <code>--plugin-launcher</code> or another approach.</p>
+<h3 id="printing-chromium-types">Printing Chromium types</h3>
+<p>gdb 7 lets us use Python to write pretty-printers for Chromium types. See
+<a href="../gdbinit">gdbinit</a>
+to enable pretty-printing of Chromium types.  This will import Blink
+pretty-printers as well.</p>
+<p>Pretty printers for std types shouldn&#39;t be necessary in gdb 7, but they&#39;re
+provided here in case you&#39;re using an older gdb. Put the following into
+<code>~/.gdbinit</code>:</p>
+<pre># Print a C++ string.
+define ps
+  print $arg0.c_str()
+end
+
+# Print a C++ wstring or wchar_t*.
+define pws
+  printf &quot;\&quot;&quot;
+  set $c = (wchar_t*)$arg0
+  while ( *$c )
+    if ( *$c &gt; 0x7f )
+      printf &quot;[%x]&quot;, *$c
+    else
+      printf &quot;%c&quot;, *$c
+    end
+    set $c++
+  end
+  printf &quot;\&quot;\n&quot;
+end</pre>
+<p><a href="http://www.yolinux.com/TUTORIALS/src/dbinit_stl_views-1.01.txt">More STL GDB macros</a></p>
+<h3 id="jsdbg----visualize-data-structures-in-the-browser">JsDbg -- visualize data structures in the browser</h3>
+<p>JsDbg is a debugger plugin to display various Chrome data structures in a
+browser window, such as the accessibility tree, layout object tree, DOM tree,
+and others.
+<a href="https://github.com/MicrosoftEdge/JsDbg">Installation instructions are here</a>,
+and see <a href="https://github.com/MicrosoftEdge/JsDbg/blob/master/docs/FEATURES.md">here</a>
+for screenshots and an introduction.</p>
+<p>For Googlers, please see <a href="https://goto.google.com/jsdbg">go/jsdbg</a> for
+installation instructions.</p>
+<h3 id="time-travel-debugging-with-rr">Time travel debugging with rr</h3>
+<p>You can use <a href="https://rr-project.org">rr</a> for time travel debugging, so you
+can also step or execute backwards. This works by first recording a trace
+and then debugging based on that.</p>
+<p>For Googlers, if you have a remote cloud machine, please follow this
+<a href="https://engdoc.corp.google.com/eng/doc/devguide/debugging/rr.md#setting-up-rr">instruction</a>
+to set up the machine in order to use the rr tool.</p>
+<p>You need an up-to-date version of rr, since rr is frequently updated to support
+new parts of the Linux system call API surface that Chromium uses. If you have
+any issues with the latest release version, try compiling rr
+<a href="https://github.com/rr-debugger/rr/wiki/Building-And-Installing">from source</a>.</p>
+<p>Once installed, you can use it like this:</p>
+<pre>rr record out/Debug/content_shell --single-process
+rr replay
+(rr) c
+(rr) break blink::NGBlockNode::Layout
+(rr) rc # reverse-continue to the last Layout call
+(rr) jsdbg # run JsDbg as described above to find the interesting object
+(rr) watch -l box_-&gt;frame_rect_.size_.width_.value_
+(rr) rc # reverse-continue to the last time the width was changed
+(rr) rn # reverse-next to the previous line
+(rr) reverse-fin # run to where this function was called from</pre>
+<p>You can debug multi-process chrome using <code>rr -f [PID]</code>
+for processes <code>fork()</code>ed from a <a href="zygote">zygote process</a> without exec,
+which includes renderer processes,
+or <code>rr -p [PID]</code> for other processes.
+To find the process id you can either run <code>rr ps</code> after recording, or for
+renderer processes use <code>--vmodule=render_frame_impl=1</code> which will log a
+message on navigations. Example:</p>
+<pre>$ rr record out/Debug/content_shell --disable-hang-monitor --vmodule=render_frame_impl=1 https://www.google.com/
+rr: Saving execution to trace directory `...'.
+...
+[128515:128515:0320/164124.768687:VERBOSE1:render_frame_impl.cc(4244)] Committed provisional load: https://www.google.com/</pre>
+<p>From the log message we can see that the site was loaded into process 128515
+and can set a breakpoint for when that process is forked.</p>
+<pre>rr replay -f 128515</pre>
+<p>If you want to call debugging functions from gdb that use <code>LOG()</code>,
+then those functions need to disable the printing of timestamps using
+<a href="https://source.chromium.org/search?q=SetLogItems&amp;sq=&amp;ss=chromium%2Fchromium%2Fsrc"><code>SetLogItems</code></a>.
+See <code>LayoutObject::ShowLayoutObject()</code> for an example of this, and
+<a href="https://github.com/rr-debugger/rr/issues/2829">issue 2829</a> for why it is needed.</p>
+<p>If rr doesn&#39;t work correctly, the rr developers are generally quite responsive
+to <a href="https://github.com/rr-debugger/rr/issues">bug reports</a>,
+especially ones that have enough information so that
+they don&#39;t have to build Chromium.</p>
+<p>See Also:</p>
+<ul>
+<li><a href="https://developer.chrome.com/blog/chromium-chronicle-13/">The Chromium Chronicle #13: Time-Travel Debugging with RR</a></li>
+<li><a href="https://twitter.com/davidbaron/status/1473761042278887433">@davidbaron demo using rr</a></li>
+<li><a href="https://twitter.com/davidbaron/status/1475836824409022469">@davidbaron demo using pernosco</a>
+(Googlers: see <a href="https://goto.google.com/pernosco">go/pernosco</a>)</li>
+</ul>
+<h3 id="graphical-debugging-aid-for-chromium-views">Graphical Debugging Aid for Chromium Views</h3>
+<p>The following link describes a tool that can be used on Linux, Windows and Mac under GDB.</p>
+<p><a href="../graphical_debugging_aid_chromium_views">graphical_debugging_aid_chromium_views</a></p>
+<h3 id="faster-startup">Faster startup</h3>
+<p>Use the <code>gdb-add-index</code> script (e.g.
+<code>build/gdb-add-index out/Debug/browser_tests</code>)</p>
+<p>Only makes sense if you run the binary multiple times or maybe if you use the
+component build since most <code>.so</code> files won&#39;t require reindexing on a rebuild.</p>
+<p>See
+<a href="https://groups.google.com/a/chromium.org/forum/#!searchin/chromium-dev/gdb-add-index/chromium-dev/ELRuj1BDCL4/5Ki4LGx41CcJ">https://groups.google.com/a/chromium.org/forum/#!searchin/chromium-dev/gdb-add-index/chromium-dev/ELRuj1BDCL4/5Ki4LGx41CcJ</a>
+for more info.</p>
+<p>You can improve GDB load time significantly at the cost of link time by not
+splitting symbols from the object files. In GN, set <code>use_debug_fission=false</code> in
+your &quot;gn args&quot;.</p>
+<h2 id="core-files">Core files</h2>
+<p><code>ulimit -c unlimited</code> should cause all Chrome processes (run from that shell) to
+dump cores, with the possible exception of some sandboxed processes.</p>
+<p>Some sandboxed subprocesses might not dump cores unless you pass the
+<code>--allow-sandbox-debugging</code> flag.</p>
+<p>If the problem is a freeze rather than a crash, you may be able to trigger a
+core-dump by sending SIGABRT to the relevant process:</p>
+<pre>kill -6 [process id]</pre>
+<h2 id="breakpad-minidump-files">Breakpad minidump files</h2>
+<p>See <a href="minidump_to_core">minidump_to_core.md</a></p>
+<h2 id="running-tests">Running Tests</h2>
+<p>Many of our tests bring up windows on screen. This can be annoying (they steal
+your focus) and hard to debug (they receive extra events as you mouse over them).
+Instead, use <code>Xvfb</code> or <code>Xephyr</code> to run a nested X session to debug them, as
+outlined on <a href="../testing/web_tests_linux">testing/web_tests_linux.md</a>.</p>
+<h3 id="browser-tests">Browser tests</h3>
+<p>By default the <code>browser_tests</code> forks a new browser for each test. To debug the
+browser side of a single test, use a command like</p>
+<pre>gdb --args out/Debug/browser_tests --single-process-tests --gtest_filter=MyTestName</pre>
+<p><strong>note the use of <code>single-process-tests</code></strong> -- this makes the test harness and
+browser process share the outermost process.</p>
+<p>The switch <code>--gtest_break_on_failure</code> can also be useful to automatically stop
+debugger upon <code>ASSERT</code> or <code>EXPECT</code> failures.</p>
+<p>To debug a renderer process in this case, use the tips above about renderers.</p>
+<h3 id="web-tests">Web tests</h3>
+<p>See <a href="../testing/web_tests_linux">testing/web_tests_linux.md</a> for some tips. In particular,
+note that it&#39;s possible to debug a web test via <code>ssh</code>ing to a Linux box; you
+don&#39;t need anything on screen if you use <code>Xvfb</code>.</p>
+<h3 id="ui-tests">UI tests</h3>
+<p>UI tests are run in forked browsers. Unlike browser tests, you cannot do any
+single process tricks here to debug the browser. See below about
+<code>BROWSER_WRAPPER</code>.</p>
+<p>To pass flags to the browser, use a command line like
+<code>--extra-chrome-flags=&quot;--foo --bar&quot;</code>.</p>
+<h3 id="timeouts">Timeouts</h3>
+<p>UI tests have a confusing array of timeouts in place. (Pawel is working on
+reducing the number of timeouts.) To disable them while you debug, set the
+timeout flags to a large value:</p>
+<ul>
+<li><code>--test-timeout=100000000</code></li>
+<li><code>--ui-test-action-timeout=100000000</code></li>
+<li><code>--ui-test-terminate-timeout=100000000</code></li>
+</ul>
+<h3 id="to-replicate-window-manager-setup-on-the-bots">To replicate Window Manager setup on the bots</h3>
+<p>Chromium try bots and main waterfall&#39;s bots run tests under Xvfb&amp;openbox
+combination. Xvfb is an X11 server that redirects the graphical output to the
+memory, and openbox is a simple window manager that is running on top of Xvfb.
+The behavior of openbox is markedly different when it comes to focus management
+and other window tasks, so test that runs fine locally may fail or be flaky on
+try bots. To run the tests on a local machine as on a bot, follow these steps:</p>
+<p>Make sure you have openbox:</p>
+<pre>apt-get install openbox</pre>
+<p>Start Xvfb and openbox on a particular display:</p>
+<pre>Xvfb :6.0 -screen 0 1280x1024x24 &amp; DISPLAY=:6.0 openbox &amp;</pre>
+<p>Run your tests with graphics output redirected to that display:</p>
+<pre>DISPLAY=:6.0 out/Debug/browser_tests --gtest_filter=&quot;MyBrowserTest.MyActivateWindowTest&quot;</pre>
+<p>You can look at a snapshot of the output by:</p>
+<pre>xwd -display :6.0 -root | xwud</pre>
+<p>Alternatively, you can use testing/xvfb.py to set up your environment for you:</p>
+<pre>testing/xvfb.py out/Debug/browser_tests \
+    --gtest_filter=&quot;MyBrowserTest.MyActivateWindowTest&quot;</pre>
+<h3 id="browser_wrapper">BROWSER_WRAPPER</h3>
+<p>You can also get the browser under a debugger by setting the <code>BROWSER_WRAPPER</code>
+environment variable.  (You can use this for <code>browser_tests</code> too, but see above
+for discussion of a simpler way.)</p>
+<pre>BROWSER_WRAPPER='xterm -e gdb --args' out/Debug/browser_tests</pre>
+<h3 id="replicating-try-bot-slowness">Replicating try bot Slowness</h3>
+<p>Try bots are pretty stressed, and can sometimes expose timing issues you can&#39;t
+normally reproduce locally.</p>
+<p>You can simulate this by shutting down all but one of the CPUs
+(<a href="http://www.cyberciti.biz/faq/debian-rhel-centos-redhat-suse-hotplug-cpu/">http://www.cyberciti.biz/faq/debian-rhel-centos-redhat-suse-hotplug-cpu/</a>) and
+running a CPU loading tool (e.g., <a href="http://www.devin.com/lookbusy/">http://www.devin.com/lookbusy/</a>). Now run your
+test. It will run slowly, but any flakiness found by the try bot should replicate
+locally now - and often nearly 100% of the time.</p>
+<h2 id="logging">Logging</h2>
+<h3 id="seeing-all-logfoo-messages">Seeing all LOG(foo) messages</h3>
+<p>Default log level hides <code>LOG(INFO)</code>. Run with <code>--log-level=0</code> and
+<code>--enable-logging=stderr</code> flags.</p>
+<p>Newer versions of Chromium with VLOG may need --v=1 too. For more VLOG tips, see
+<a href="https://groups.google.com/a/chromium.org/group/chromium-dev/browse_thread/thread/dcd0cd7752b35de6?pli=1">the chromium-dev thread</a>.</p>
+<h2 id="profiling">Profiling</h2>
+<p>See
+<a href="https://sites.google.com/a/chromium.org/dev/developers/profiling-chromium-and-webkit">https://sites.google.com/a/chromium.org/dev/developers/profiling-chromium-and-webkit</a>
+and <a href="profiling">Linux Profiling</a>.</p>
+<h2 id="i18n">i18n</h2>
+<p>We obey your system locale. Try something like:</p>
+<pre>LANG=ja_JP.UTF-8 out/Debug/chrome</pre>
+<p>If this doesn&#39;t work, make sure that the <code>LANGUAGE</code>, <code>LC_ALL</code> and <code>LC_MESSAGE</code>
+environment variables aren&#39;t set -- they have higher priority than LANG in the
+order listed. Alternatively, just do this:</p>
+<pre>LANGUAGE=fr out/Debug/chrome</pre>
+<p>Note that because we use GTK, some locale data comes from the system -- for
+example, file save boxes and whether the current language is considered RTL.
+Without all the language data available, Chrome will use a mixture of your
+system language and the language you run Chrome in.</p>
+<p>Here&#39;s how to install the Arabic (ar) and Hebrew (he) language packs:</p>
+<pre>sudo apt-get install language-pack-ar language-pack-he \
+    language-pack-gnome-ar language-pack-gnome-he</pre>
+<p>Note that the <code>--lang</code> flag does <strong>not</strong> work properly for this.</p>
+<p>On non-Debian systems, you need the <code>gtk30.mo</code> files. (Please update these docs
+with the appropriate instructions if you know what they are.)</p>
+<h2 id="breakpad">Breakpad</h2>
+<p>See the last section of <a href="crash_dumping">Linux Crash Dumping</a>.</p>
+<h2 id="drag-and-drop">Drag and Drop</h2>
+<p>If you break in a debugger during a drag, Chrome will have grabbed your mouse
+and keyboard so you won&#39;t be able to interact with the debugger!  To work around
+this, run via <code>Xephyr</code>. Instructions for how to use <code>Xephyr</code> are on the
+<a href="../testing/web_tests_linux">Running web tests on Linux</a> page.</p>
+<h2 id="tracking-down-bugs">Tracking Down Bugs</h2>
+<h3 id="isolating-regressions">Isolating Regressions</h3>
+<p>Old builds are archived here:
+<a href="https://build.chromium.org/buildbot/snapshots/chromium-rel-linux/">https://build.chromium.org/buildbot/snapshots/chromium-rel-linux/</a>
+(TODO: does not exist).</p>
+<p><code>tools/bisect-builds.py</code> in the tree automates bisecting through the archived
+builds. Despite a computer science education, I am still amazed how quickly
+binary search will find its target.</p>
+<h3 id="screen-recording-for-bug-reports">Screen recording for bug reports</h3>
+<pre>sudo apt-get install gtk-recordmydesktop</pre>
+<h2 id="version-specific-issues">Version-specific issues</h2>
+<h3 id="google-chrome">Google Chrome</h3>
+<p>Google Chrome binaries don&#39;t include symbols. Googlers can read where to get
+symbols from
+<a href="http://wiki/Main/ChromeOfficialBuildLinux#The_Build_Archive">the Google-internal wiki</a>.</p>
+<h3 id="ubuntu-chromium">Ubuntu Chromium</h3>
+<p>Since we don&#39;t build the Ubuntu packages (Ubuntu does) we can&#39;t get useful
+backtraces from them. Direct users to <a href="https://wiki.ubuntu.com/Chromium/Debugging">https://wiki.ubuntu.com/Chromium/Debugging</a></p>
+<h3 id="fedoras-chromium">Fedora&#39;s Chromium</h3>
+<p>Like Ubuntu, but direct users to
+<a href="https://fedoraproject.org/wiki/TomCallaway/Chromium_Debug">https://fedoraproject.org/wiki/TomCallaway/Chromium_Debug</a></p>
+<h3 id="xlib">Xlib</h3>
+<p>If you&#39;re trying to track down X errors like:</p>
+<pre>The program 'chrome' received an X Window System error.
+This probably reflects a bug in the program.
+The error was 'BadDrawable (invalid Pixmap or Window parameter)'.</pre>
+<p>Some strategies are:</p>
+<ul>
+<li>pass <code>--sync</code> on the command line to make all X calls synchronous</li>
+<li>run chrome via <a href="http://xtrace.alioth.debian.org/">xtrace</a></li>
+<li>turn on IPC debugging (see above section)</li>
+</ul>
+<h3 id="window-managers">Window Managers</h3>
+<p>To test on various window managers, you can use a nested X server like <code>Xephyr</code>.
+Instructions for how to use <code>Xephyr</code> are on the
+<a href="../testing/web_tests_linux">Running web tests on Linux</a> page.</p>
+<p>If you need to test something with hardware accelerated compositing
+(e.g., compiz), you can use <code>Xgl</code> (<code>sudo apt-get install xserver-xgl</code>). E.g.:</p>
+<pre>Xgl :1 -ac -accel glx:pbuffer -accel xv:pbuffer -screen 1024x768</pre>
+<h2 id="mozilla-tips">Mozilla Tips</h2>
+<p><a href="https://developer.mozilla.org/en/Debugging_Mozilla_on_Linux_FAQ">https://developer.mozilla.org/en/Debugging_Mozilla_on_Linux_FAQ</a></p>
+<h2 id="google-chrome-symbol-files">Google Chrome Symbol Files</h2>
+<p>Symbols for Google Chrome&#39;s official builds are available from
+<code>https://edgedl.me.gvt1.com/chrome/linux/symbols/google-chrome-debug-info-linux64-${VERSION}.zip</code>
+where ${VERSION} is any version of Google Chrome that has recently been served
+to Stable, Beta, or Unstable (Dev) channels on Linux.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/debugging.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/debugging.md</a>
+  </p>
+</div>

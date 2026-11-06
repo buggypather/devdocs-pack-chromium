@@ -1,0 +1,20 @@
+<h1>Interaction to Next Paint Changes in Chrome 144</h1>
+<h2 id="launch-performanceinteractioncount-api-to-stable">Launch performance.interactionCount API to stable</h2>
+<p>In Chrome 144, the <code>performance.interactionCount</code> property is enabled by default, officially promoting the API to stable.</p>
+<p>Web developers measuring Interaction to Next Paint (INP) in JavaScript often need to know the total count of user interactions on a page (for example, to compute the high-percentile INP threshold or analyze user engagement). Previously, analytics and Real User Monitoring (RUM) scripts had to manually observe and tally every interaction via <code>PerformanceObserver</code> using <code>durationThreshold: 0</code>, which introduced overhead and required client-side deduplication.</p>
+<p>With <code>performance.interactionCount</code>, developers can now query the total number of distinct user interactions on the current page directly from JavaScript:</p>
+<pre data-language="javascript">const totalInteractions = performance.interactionCount;</pre>
+<p>The feature launch CL can be seen in <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7096122">crrev.com/c/7096122</a>.</p>
+<h3 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h3>
+<ul>
+<li><strong>No change to INP scores</strong>: This is an API addition and does not alter the underlying INP algorithm or field scores in CrUX / UKM.</li>
+<li><strong>Simplified RUM monitoring</strong>: Analytics libraries (such as <code>web-vitals.js</code>) can read interaction counts directly with zero runtime overhead, removing the need for broad <code>PerformanceObserver</code> listeners purely for counting interactions.</li>
+</ul>
+<h3 id="when-were-users-affected">When were users affected?</h3>
+<p>Chrome 144 reached stable users in October 2025.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2025_10_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2025_10_inp.md</a>
+  </p>
+</div>

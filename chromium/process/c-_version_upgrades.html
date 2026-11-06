@@ -1,0 +1,156 @@
+<h1>C++ Version Upgrades</h1>
+<p>This describes both &quot;why&quot; and &quot;how&quot; around updating Chrome&#39;s C++ version (e.g.
+&quot;C++17&quot;) to something newer.</p>
+<h2 id="goals">Goals</h2>
+<ul>
+<li><p>Minimize toolchain support concerns in Chromium.</p>
+<p> <em>Example:</em> A new feature is known to have edge-case bugs, which developers
+   must be told to avoid.</p>
+</li>
+<li><p>Minimize toolchain support concerns in subprojects.</p>
+<p> <em>Example:</em> Code in //base would benefit from some new feature, but is also
+   built (in Cronet) by a toolchain that doesn&#39;t support that feature.</p>
+</li>
+<li><p>Avoid library incompatibilities.</p>
+<p> <em>Example:</em> A new version of protobuf requires a new C++ version, which
+   Chromium doesn&#39;t yet use.</p>
+</li>
+<li><p>Benefit from language/library improvements, subject to cost/benefit tests.</p>
+<p> <em>Example:</em> Features like C++11&#39;s <code>std::move</code> or C++20&#39;s Concepts affect
+   large amounts of code and can be requirements for other features.</p>
+</li>
+<li><p>Maintain Chromium&#39;s history of being a modern, well-maintained project where
+engineers feel they have access to the tools they need.</p>
+<p> <em>Example:</em> Abseil supports C++ versions for
+   <a href="https://opensource.google/documentation/policies/cplusplus-support#support_criteria_4">approximately 10 years</a>,
+   but being limited to ten-year-old standards is too limiting in Chromium.</p>
+</li>
+</ul>
+<h2 id="non-goals">Non-Goals</h2>
+<ul>
+<li>Use new C++ features as quickly as possible.<ul>
+<li><em>Example:</em> C++23 &quot;deducing this&quot; could be used to simplify some
+<a href="https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern">CRTP</a>
+instances in Chromium, but on its own likely doesn&#39;t provide sufficient
+maintenance benefit to prioritize a rapid version update.</li>
+</ul>
+</li>
+<li>Precisely match Google&#39;s internal C++ version and timelines.<ul>
+<li><em>Example:</em> Google went directly from C++11 to C++17, while Chromium spent
+some time on C++14.</li>
+</ul>
+</li>
+</ul>
+<h2 id="current-strategy">Current Strategy</h2>
+<p>Chrome <a href="mailto:chrome-atls-discuss@google.com">ATLs</a> are responsible for
+ensuring &quot;important but not urgent&quot; changes like this are prioritized and
+staffed appropriately. Their goal will be to upgrade Chrome&#39;s C++ version about
+3 years after the date of the standard (e.g. for &quot;C++35&quot; we&#39;d aim for ~2038).</p>
+<p>This amount of lag time is approximately what happened for C++11-20 and is
+usually a good balance of tradeoffs. Earlier is possible for compelling
+features, but reducing the delay under two years is usually intractable for
+toolchain reasons. A bit later might be OK, but since a version update requires
+several months, it&#39;s best not to wait until there&#39;s an urgent need.</p>
+<h2 id="playbook">Playbook</h2>
+<p>Version updates generally require one engineer, and take between a few weeks and
+a few months of full-time work (depending on what&#39;s changed in the standard),
+along with several months of coordination, rollout, and testing that doesn&#39;t
+require significant engineering time.</p>
+<ol>
+<li>Reach out to ATLs to validate proposed timeframes and check for any new
+external dependencies not listed here.</li>
+<li>Reach out to other affected projects to alert them and verify they&#39;re
+prepared to upgrade. The two main projects to coordinate with are:<ol>
+<li>The <a href="https://goto.google.com/libchrome">libchrome</a> team in CrOS, since
+once Chromium begins using new-version features, it will force libchrome
+to be built with the new version or else break rolls. In the C++20
+timeframe, <a href="mailto:lokerik@google.com">lokerik@</a> was a good initial
+contact.</li>
+<li>The <a href="https://goto.google.com/cronet">Cronet</a> team on the Android side,
+since they build some Chrome code using a different toolchain and library
+version. There is a
+<a href="https://ci.chromium.org/ui/p/chromium/builders/ci/android-cronet-mainline-clang-arm64-rel">Chromium waterfall bot</a>
+validating this configuration, so breakage should be visible. In the C++20
+timeframe, <a href="mailto:sporeba@google.com">sporeba@</a> was a good initial
+contact.</li>
+</ol>
+</li>
+<li>Locally edit
+<a href="https://chromium.googlesource.com/chromium/src/+/main/build/config/compiler/BUILD.gn">//build/config/compiler/BUILD.gn</a>;
+update flags that reference the current C++ version to refer to the next
+version.</li>
+<li>Build locally, fixing compile failures.<ul>
+<li>Fixes in Chromium must compile in both the current and new C++ version.</li>
+<li>Likely, there will also be failures in various subprojects; these must be
+fixed by landing changes upstream and rolling in new versions. There is no
+single way to do this since subprojects are hosted in a variety of places
+and pulled in via multiple different methods, but generally it requires
+testing the fix by locally modifying the in-Chromium copy, then doing a
+standalone checkout of the subproject elsewhere using the upstream
+contribution instructions in order to actually send the patch.</li>
+<li>For Google-owned subprojects, even when there is a GitHub repo that claims
+to accept external contributions, it is usually a mirror of something
+internal, and it is faster and more likely successful to contribute changes
+to that internal source of truth and then have them mirrored to GitHub.</li>
+</ul>
+</li>
+<li>Once a full local build succeeds, repeat the process on other platforms. This
+is easiest from a Linux host since Linux can cross-build most other
+platforms.<ul>
+<li>Note that ChromeOS builds using a different compiler version than the rest
+of Chrome, rolled on a much less aggressive schedule, and thus may have
+bugs or support gaps that don&#39;t exist for other platforms. If there are
+problems, reach out to the
+<a href="https://goto.google.com/crostc">CrOS toolchain team</a>; in the C++20
+timeframe, <a href="mailto:gbiv@google.com">gbiv@</a> was a good initial contact.</li>
+</ul>
+</li>
+<li>Once things compile, do try runs and investigate any failures. While it may
+seem like simply changing the C++ version should not cause runtime failures,
+it&#39;s possible, and said failures are often subtle. For example, during the
+C++20 update, fixes to make more types aggregates also changed the semantics
+of one type such that it became eligible for moves in more situations,
+exposing a latent use-after-move bug that had previously &quot;worked&quot; because the
+attempted <code>std::move</code> had still resulted in a copy.</li>
+<li>Add PRESUBMITs to prevent usage of all new language/library features, so none
+is added during the rollout period below. (Partial lists of new features are
+available from the individual language version pages linked atop
+<a href="https://en.cppreference.com/w/cpp">https://en.cppreference.com/w/cpp</a>.)</li>
+<li>Reach out to
+<a href="https://goto.google.com/chrome-release-management">Chrome release managers</a>
+to alert them of plans to begin rolling out a new version, in case it leads
+to bugs.</li>
+<li>Reach out to the
+<a href="https://goto.google.com/chrome-brapp-engprod">Chrome infrastructure team</a>
+about potential compile time and binary size impact; in the C++20 timeframe,
+<a href="mailto:estaab@chromium.org">estaab@</a> was a good initial contact. Roll out
+the new version one platform at a time under their supervision, to ensure it
+behaves as expected. (This will require temporarily adding more conditional
+logic to the .gn files.) You can crudely estimate build time impact in
+advance by timing local builds.</li>
+<li>Determine a launch date and validate with stakeholders. Send a message to
+<a href="http://groups.google.com/a/chromium.org/g/chromium-dev">chromium-dev@</a>
+announcing the date and giving brief instructions on how to share concerns.</li>
+<li>Make a list of all new language and library features and bucket as &quot;allowed&quot;
+(clearly safe for Chromium use), &quot;TBD&quot; (needs more investigation/discussion),
+and &quot;banned&quot; (clearly inappropriate for Chromium). Send this proposal to
+<a href="http://groups.google.com/a/chromium.org/g/cxx">cxx@</a> and discuss until there
+is consensus on how to proceed. Write a CL that updates
+<a href="https://chromium.googlesource.com/chromium/src/+/main/styleguide/c++/c++-features.md">//styleguide/c++/c++-features.md</a>
+and the PRESUBMIT checks to match the proposal (and mark the new version
+&quot;initially allowed&quot;), get it reviewed, but do not submit it.</li>
+<li>Write a smoketest CL that uses some new feature in somewhere low-level enough
+to affect all of Chromium and any subprojects (e.g. something core in
+//base). Land it and ensure it can successfully roll into all dependencies.</li>
+<li>On launch day, land the styleguide/presubmit update CL, then announce
+availability of the new version to chromium-dev@.</li>
+<li>In the months following the release, work with cxx@ to follow up on TBD
+features, proposing allowing/banning them as support improves and/or we do
+further necessary research.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/process/c++_version_upgrades.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/process/c++_version_upgrades.md</a>
+  </p>
+</div>

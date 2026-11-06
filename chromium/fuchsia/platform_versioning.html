@@ -1,0 +1,23 @@
+<h1>Fuchsia platform versioning</h1>
+<p>When building for Fuchsia, the binaries are built against a target API level,
+which is set via <code>fuchsia_target_api_level</code> in the <a href="https://github.com/chromium/chromium/blob/HEAD/.gn"><code>.gn</code> file</a>. This
+information becomes embedded in the compiled component as a target ABI
+revision, which indicates the semantics the component expects from the
+platform.</p>
+<p>Updates to the <code>fuchsia_target_api_level</code> are currently done manually. As a
+general rule, we want to be using the latest API level supported by the Fuchsia
+SDK checked out. An older API level might be needed if one of the following are
+true:</p>
+<ol>
+<li>There are unresolved compatibility issues.</li>
+<li>The binaries are intended to ship on an older release of Fuchsia.</li>
+</ol>
+<p>For instance, if M97 is shipped on a Fuchsia release that only supports API
+level up to 5, the target API level cannot be updated in Chromium until M97
+branch is cut.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/platform_versioning.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/platform_versioning.md</a>
+  </p>
+</div>

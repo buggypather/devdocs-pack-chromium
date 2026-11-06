@@ -1,0 +1,134 @@
+<h1>Debugging with Crash Keys</h1>
+<p>Chrome is client-side software, which means that sometimes there are bugs that
+can occur only on users&#39; machines (&quot;in production&quot;) that cannot be reproduced by
+test or software engineering. When this happens, it&#39;s often helpful to gather bug-
+specific data from production to help pinpoint the cause of the crash. The crash
+key logging system is a generic method to help do that.</p>
+<h2 id="high-level-overview">High-Level Overview</h2>
+<p>The core of the crash key logging system is in <a href="https://cs.chromium.org/chromium/src/components/crash/core/common/crash_key.h">//components/crash/core/common/crash_key.h</a>,
+which declares a <code>crash_reporter::CrashKeyString</code> class. Every crash key has
+an associated value maximum length and a string name to identify it. The maximum
+length is specified as a template parameter in order to allocate that amount of
+space for the value up-front. When a process is crashing, memory corruption can
+make it unsafe to call into the system allocator, so pre-allocating space for
+the value defends against that.</p>
+<p>When a crash key is set, the specified value is copied to its internal storage.
+And if the process subsequently crashes, the name-value tuple is uploaded as
+POST form-multipart data when the crash report minidump is uploaded to the
+Google crash reporting system. (The data therefore are only accessible to those
+with access to crash reports internally at Google). On all platforms that
+support crash keys except CastOS, Chromium uses
+<a href="https://crashpad.chromium.org">Crashpad</a> and the crash keys are also stored in
+the minidump file itself. On CastOS, which still uses Breakpad, the keys are
+only available at upload. (On Fuchsia, crash keys are stubbed out as no-ops.)</p>
+<p>The crash key system is used to report some common pieces of data, not just
+things that happen in exceptional cases: the URL of the webpage, command line
+switches, active extension IDs, GPU vendor information, experiment/variations
+information, etc.</p>
+<h2 id="redaction">Redaction</h2>
+<p>Beware that certain on certain platforms (e.g. Android WebView) we
+<a href="https://cs.chromium.org/chromium/src/third_party/crashpad/crashpad/snapshot/sanitized/memory_snapshot_sanitized.h">sanitize the stack in the dump</a>
+and only crash keys on an
+<a href="https://cs.chromium.org/chromium/src/android_webview/common/crash_reporter/crash_keys.cc">allowlist</a>
+will be captured.</p>
+<h2 id="getting-started-with-a-single-key-value-pair">Getting Started with a Single Key-Value Pair</h2>
+<p>Imagine you are investigating a crash, and you want to know the value of some
+variable when the crash occurs; the crash key logging system enables you to do
+just that.</p>
+<h4 id="1-declare-the-crash-key">1. Declare the Crash Key</h4>
+<p>A crash key must be allocated using static storage duration, so that there is
+space for the value to be set. This can be done as a static variable in the
+global or function scope, or in an anonymous namespace:</p>
+<pre>static crash_reporter::CrashKeyString&lt;32&gt; crash_key_one(&quot;one&quot;);
+
+namespace {
+crash_reporter::CrashKeyString&lt;64&gt; crash_key_two(&quot;two&quot;);
+}
+
+void DoSomething(const std::string&amp; arg) {
+  static crash_reporter::CrashKeyString&lt;8&gt; three(&quot;three&quot;);
+  crash_key_two.Set(arg);
+  three.Set(&quot;true&quot;);
+}</pre>
+<p>The template argument specifies the maximum length a value can be, and it
+should include space for a trailing NUL byte. Values must be C-strings and
+cannot have embedded NULs. The constructor argument is the name of the
+crash key, and it is what you will use to identify your data in uploaded
+crash reports.</p>
+<p>Note that crash key names are global and must not conflict with the
+name of any other crash key in Chrome.</p>
+<p>If you need to declare an array of crash keys (e.g., for recording N values
+of an array), you can use a constructor tag to avoid warnings about <code>explicit</code>:</p>
+<pre>static ArrayItemKey = crash_reporter::CrashKeyString&lt;32&gt;;
+static ArrayItemKey crash_keys[] = {
+  {&quot;array-item-1&quot;, ArrayItemKey::Tag::kArray},
+  {&quot;array-item-2&quot;, ArrayItemKey::Tag::kArray},
+  {&quot;array-item-3&quot;, ArrayItemKey::Tag::kArray},
+  {&quot;array-item-4&quot;, ArrayItemKey::Tag::kArray},
+};</pre>
+<p>The crash key system will require your target to have a dependency on
+<code>//components/crash/core/common:crash_key</code>. If you encounter link errors for
+unresolved symbols to <code>crashpad::Annotation::SetSize(unsigned int)</code>, adding
+the dependency will resolve them.</p>
+<h4 id="2-set-the-crash-key">2. Set the Crash Key</h4>
+<p>After a key has been allocated, its <code>Set(std::string_view)</code> and
+<code>Clear()</code> methods can be used to record and clear a value. In addition,
+crash_key.h provides a <code>ScopedCrashKeyString</code> class to set the value for the
+duration of a scope and clear it upon exiting.</p>
+<h4 id="3-seeing-the-data">3. Seeing the Data</h4>
+<p>Using <a href="http://go/crash">http://go/crash</a> (internal only), find the crash report signature related
+to your bug, and click on the &quot;N of M&quot; reports link to drill down to
+report-specific information. From there, select a report and go to the
+&quot;Product Data&quot; section to view all the crash key-value pairs.</p>
+<h2 id="dealing-with-deps">Dealing with DEPS</h2>
+<p>Not all targets in the Chromium source tree are permitted to depend on the
+<code>//components/crash/core/common:crash_key</code> target due to DEPS file
+<code>include_rules</code>.</p>
+<p>If the crash key being added is only a temporary debugging aid to track down a
+crash, consider adding the dependency temporarily and removing it when done.
+A specific include rule can be added for crash_key.h:</p>
+<pre># DEPS
+include_rules = [
+  '+components/crash/core/common/crash_key.h',
+]</pre>
+<p>Then simply remove it (and the BUILD.gn dependency) once the crash is resolved
+and the crash key deleted.</p>
+<p>If this crash key is more permanent, then there is an alternate API in //base
+that can be used. This API is used by the //content module to set its permanent
+crash key information. Note however that the base-level API is more limited in
+terms of features and flexibility. See the header documentation in
+<a href="https://cs.chromium.org/chromium/src/base/debug/crash_logging.h">//base/debug/crash_logging.h</a>
+for usage examples.</p>
+<h2 id="advanced-topics-stack-traces">Advanced Topics: Stack Traces</h2>
+<p>Now imagine a scenario where you have a use-after-free. The crash reports coming
+in do not indicate where the object being used was initially freed, however,
+just where it is later being dereferenced. To make debugging easier, it would be
+nice to have the stack trace of the destructor, and the crash key system works
+for that, too.</p>
+<h4 id="1-declare-the-crash-key-1">1. Declare the Crash Key</h4>
+<p>Declaring the crash key is no different than written above, though special
+attention should be paid to the maximum size argument, which will affect the
+number of stack frames that are recorded. Typically a value of <em>1024</em> is
+recommended.</p>
+<h4 id="2-set-the-crash-key-1">2. Set the Crash Key</h4>
+<p>To set a stack trace to a crash key, use the <code>SetCrashKeyStringToStackTrace()</code>
+function in crash_logging.h:</p>
+<pre>Usemeafterfree::~Usemeafterfree() {
+  static crash_reporter::CrashKeyString&lt;1024&gt; trace_key(
+      &quot;useme-after-free-uaf-dtor-trace&quot;);
+  crash_reporter::SetCrashKeyStringToStackTrace(&amp;trace_key,
+                                                base::debug::StackTrace());
+}</pre>
+<h4 id="3-seeing-the-data-1">3. Seeing the Data</h4>
+<p>Unlike with the previous example, a stack trace will just be a string of
+hexadecimal addresses. To turn the addresses back into symbols use,
+<a href="http://go/crsym">http://go/crsym</a> (internal instance of <a href="https://github.com/chromium/crsym/">https://github.com/chromium/crsym/</a>).
+Using the <strong>Crash Key</strong> input type, give it a crash report ID and the name of
+your crash key. Crsym will then fetch the symbol data from the internal crash
+processing backends and return a formatted, symbolized stack trace.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/debugging_with_crash_keys.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/debugging_with_crash_keys.md</a>
+  </p>
+</div>

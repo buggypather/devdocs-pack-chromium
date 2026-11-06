@@ -1,0 +1,319 @@
+<h1>The Rule Of 2</h1>
+<p>When you write code to parse, evaluate, or otherwise handle untrustworthy inputs
+from the Internet — which is almost everything we do in a web browser! — we like
+to follow a simple rule to make sure it&#39;s safe enough to do so. The Rule Of 2
+is: Pick no more than 2 of</p>
+<ul>
+<li>untrustworthy inputs;</li>
+<li>unsafe implementation language; and</li>
+<li>high privilege.</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/rule-of-2-drawing.png" alt="alt text" title="Venn diagram showing you should always use
+a safe language, a sandbox, or not be processing untrustworthy inputs in the first
+place."></p>
+<p>(drawing source
+<a href="https://docs.google.com/drawings/d/12WoPI7-E5NAINHUZqEPGn38aZBYBxq20BgVBjZIvgCQ/edit?usp=sharing">here</a>)</p>
+<h2 id="why">Why?</h2>
+<p>When code that handles untrustworthy inputs at high privilege has bugs, the
+resulting vulnerabilities are typically of Critical or High severity. (See our
+<a href="severity-guidelines">Severity Guidelines</a>.) We&#39;d love to reduce the severity
+of such bugs by reducing the amount of damage they can do (lowering their
+privilege), avoiding the various types of memory corruption bugs (using a safe
+language), or reducing the likelihood that the input is malicious (asserting the
+trustworthiness of the source).</p>
+<p>For the purposes of this document, our main concern is reducing (and hopefully,
+ultimately eliminating) bugs that arise due to <em>memory unsafety</em>. <a href="https://github.com/Microsoft/MSRC-Security-Research/blob/master/presentations/2019_02_BlueHatIL/2019_01%20-%20BlueHatIL%20-%20Trends%2C%20challenge%2C%20and%20shifts%20in%20software%20vulnerability%20mitigation.pdf">A recent
+study by Matt Miller from Microsoft
+Security</a>
+states that &quot;~70% of the vulnerabilities addressed through a security update
+each year continue to be memory safety issues&quot;. A trip through Chromium&#39;s bug
+tracker will show many, many vulnerabilities whose root cause is memory
+unsafety. (As of March 2019, only about 5 of 130 <a href="https://bugs.chromium.org/p/chromium/issues/list?can=1&amp;q=Type%3DBug-Security+Security_Severity%3DCritical+-status%3AWontFix+-status%3ADuplicate&amp;sort=&amp;groupby=&amp;colspec=ID+Pri+M+Stars+ReleaseBlock+Component+Status+Owner+Summary+OS+Modified&amp;x=m&amp;y=releaseblock&amp;mode=&amp;cells=ids&amp;num=">public Critical-severity
+bugs</a>
+are not obviously due to memory corruption.)</p>
+<p>Security engineers in general, very much including Chrome Security Team, would
+like to advance the state of engineering to where memory safety issues are much
+more rare. Then, we could focus more attention on the application-semantic
+vulnerabilities. 😊 That would be a big improvement.</p>
+<h2 id="what">What?</h2>
+<p>Some definitions are in order.</p>
+<h3 id="untrustworthy-inputs">Untrustworthy Inputs</h3>
+<p><em>Untrustworthy inputs</em> are inputs that</p>
+<ul>
+<li>have non-trivial grammars; and/or</li>
+<li>come from untrustworthy sources.</li>
+</ul>
+<p>If there were an input type so simple that it were straightforward to write a
+memory-safe handler for it, we wouldn&#39;t need to worry much about where it came
+from <strong>for the purposes of memory safety</strong>, because we&#39;d be sure we could handle
+it. We would still need to treat the input as untrustworthy after
+parsing, of course.</p>
+<p>Unfortunately, it is very rare to find a grammar trivial enough that we can
+trust ourselves to parse it successfully or fail safely. (But see
+<a href="#normalization">Normalization</a> for a potential example.) Therefore, we do need
+to concern ourselves with the provenance of such inputs.</p>
+<p>Any arbitrary peer on the Internet is an untrustworthy source, unless we get
+some evidence of its trustworthiness (which includes at least <a href="#verifying-the-trustworthiness-of-a-source">a strong
+assertion of the source&#39;s
+identity</a>). When we can know with
+certainty that an input is coming from the same source as the application itself
+(e.g. Google in the case of Chrome, or Mozilla in the case of Firefox), and that
+the transport is integrity-protected (such as with HTTPS), then it can be
+acceptable to parse even complex inputs from that source. It&#39;s still ideal,
+where feasible, to reduce our degree of trust in the source — such as by parsing
+the input in a sandbox.</p>
+<h3 id="unsafe-implementation-languages">Unsafe Implementation Languages</h3>
+<p><em>Unsafe implementation languages</em> are languages that lack <a href="https://en.wikipedia.org/wiki/Memory_safety">memory
+safety</a>, including at least C, C++,
+and assembly language. Memory-safe languages include Go, Rust, Python, Java,
+JavaScript, Kotlin, and Swift. (Note that the safe subsets of these languages
+are safe by design, but of course implementation quality is a different story.)</p>
+<h4 id="unsafe-code-in-safe-languages">Unsafe Code in Safe Languages</h4>
+<p>Some memory-safe languages provide a backdoor to unsafety, such as the <code>unsafe</code>
+keyword in Rust. This functions as a separate unsafe language subset inside the
+memory-safe one.</p>
+<p>The presence of unsafe code does not negate the memory-safety properties of the
+memory-safe language around it as a whole, but <em>how</em> unsafe code is used is
+critical. Poor use of an unsafe language subset is not meaningfully different
+from any other unsafe implementation language.</p>
+<p>In order for a library with unsafe code to be safe for the purposes of the Rule
+of 2, all unsafe usage must be able to be reviewed and verified by humans with
+simple local reasoning. To achieve this, we expect all unsafe usage to be:</p>
+<ul>
+<li>Small: The minimal possible amount of code to perform the required task</li>
+<li>Encapsulated: All access to the unsafe code is through a safe API</li>
+<li>Documented: All preconditions of an unsafe block (e.g. a call to an unsafe
+function) are spelled out in comments, along with explanations of how they are
+satisfied.</li>
+</ul>
+<p>Because unsafe code reaches outside the normal expectations of a memory-safe
+language, it must follow strict rules to avoid undefined behaviour and
+memory-safety violations, and these are not always easy to verify. A careful
+review by one or more experts in the unsafe language subset is required.</p>
+<p>It should be safe to use any code in a memory-safe language in a high-privilege
+context. As such, the requirements on a memory-safe language implementation are
+higher: All code in a memory-safe language must be capable of satisfying the
+Rule of 2 in a high-privilege context (including any unsafe code) in order to be
+used or admitted anywhere in the project.</p>
+<h3 id="high-privilege">High Privilege</h3>
+<p><em>High privilege</em> is a relative term. The very highest-privilege programs are the
+computer&#39;s firmware, the bootloader, the kernel, any hypervisor or virtual
+machine monitor, and so on. Below that are processes that run as an OS-level
+account representing a person; this includes the Chrome Browser process and Gpu
+process. We consider such processes to have high privilege. (After all, they
+can do anything the person can do, with any and all of the person&#39;s valuable
+data and accounts.)</p>
+<p>Processes with slightly reduced privilege will (hopefully soon) include the
+network process. These are still pretty high-privilege processes. We are always
+looking for ways to reduce their privilege without breaking them.</p>
+<p>Low-privilege processes include sandboxed utility processes and renderer
+processes with <a href="https://www.chromium.org/Home/chromium-security/site-isolation">Site Isolation</a> (very good) or
+<a href="https://chromeenterprise.google/policies/?policy=IsolateOrigins">origin isolation</a>
+(even better).</p>
+<h3 id="processing-parsing-and-deserializing">Processing, Parsing, And Deserializing</h3>
+<p>Turning a stream of bytes into a structured object is hard to do correctly and
+safely. For example, turning a stream of bytes into a sequence of Unicode code
+points, and from there into an HTML DOM tree with all its elements, attributes,
+and metadata, is very error-prone. The same is true of QUIC packets, video
+frames, and so on.</p>
+<p>Whenever the code branches on the byte values it&#39;s processing, the risk
+increases that an attacker can influence control flow and exploit bugs in the
+implementation.</p>
+<p>Although we are all human and mistakes are always possible, a function that does
+not branch on input values has a better chance of being free of vulnerabilities.
+(Consider an arithmetic function, such as SHA-256, for example.)</p>
+<h2 id="solutions-to-this-puzzle">Solutions To This Puzzle</h2>
+<p>Chrome Security Team will generally not approve landing a CL or new feature
+that involves all 3 of untrustworthy inputs, unsafe language, and high
+privilege. To solve this problem, you need to get rid of at least 1 of those 3
+things. Here are some ways to do that.</p>
+<h3 id="safe-languages">Safe Languages</h3>
+<p>Where possible, it&#39;s great to use a memory-safe language. The following
+memory-safe languages are approved for use in Chromium:</p>
+<ul>
+<li>Java (on Android only)</li>
+<li>Swift (on iOS only)</li>
+<li><a href="../rust">Rust</a> (for <a href="../adding_to_third_party#Rust">third-party use</a>))</li>
+<li>JavaScript or WebAssembly (although we don&#39;t currently use them in
+high-privilege processes like the browser/gpu process)</li>
+</ul>
+<p>One can imagine Kotlin on Android, too, although it is not currently
+used in Chromium.</p>
+<p>For an example of image processing, we have the pure-Java class
+<a href="https://cs.chromium.org/chromium/src/third_party/gif_player/src/jp/tomorrowkey/android/gifplayer/BaseGifImage.java?rcl=27febd503d1bab047d73df26db83184fff8d6620&amp;l=27">BaseGifImage</a>.
+On Android, where we can use Java and also face a particularly high cost for
+creating new processes (necessary for sandboxing), using Java to decode tricky
+formats can be a great approach. Before switching to a Rust-based parser, we
+used a Java <a href="https://cs.chromium.org/chromium/src/services/data_decoder/public/cpp/android/java/src/org/chromium/services/data_decoder/JsonSanitizer.java">JsonSanitizer</a>,
+to &#39;vet&#39; incoming JSON in a memory-safe way before passing the input to the C++
+JSON implementation.</p>
+<p>On Android, many system APIs that are exposed via Java are not actually
+implemented in a safe language, and are instead just facades around an unsafe
+implementation. A canonical example of this is the
+<a href="https://developer.android.com/reference/android/graphics/BitmapFactory">BitmapFactory</a>
+class, which is a Java wrapper <a href="https://cs.android.com/android/platform/superproject/+/master:frameworks/base/libs/hwui/jni/BitmapFactory.cpp;l=586;drc=864d304156d1ef8985ee39c3c1858349b133b365">around C++
+Skia</a>.
+These APIs are therefore not considered memory-safe under the rule.</p>
+<p>The <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/qr_code_generator/;l=1;drc=b185db5d502d4995627e09d62c6934590031a5f2">QR code generator</a>
+is an example of a cross-platform memory-safe Rust library in use in Chromium.</p>
+<h3 id="privilege-reduction">Privilege Reduction</h3>
+<p>Also known as <a href="https://cs.chromium.org/chromium/src/sandbox/"><em>sandboxing</em></a>,
+privilege reduction means running the code in a process that has had some or
+many of its privileges revoked.</p>
+<p>When appropriate, try to handle the inputs in a renderer process that is Site
+Isolated to the same site as the inputs come from. Take care to validate the
+parsed (processed) inputs in the browser, since only the browser can trust
+itself to validate and act on the meaning of an object.</p>
+<p>Equivalently, you can launch a sandboxed utility process to handle the data, and
+return a well-formed response back to the caller in an IPC message. See <a href="https://cs.chromium.org/chromium/src/chrome/common/safe_browsing/zip_analyzer.h">Safe
+Browsing&#39;s ZIP
+analyzer</a>
+for an example. The <a href="https://source.chromium.org/chromium/chromium/src/+/main:services/data_decoder/public/cpp/data_decoder.h">Data Decoder Service</a>
+facilitates this safe decoding process for several common data formats.</p>
+<h3 id="verifying-the-trustworthiness-of-a-source">Verifying The Trustworthiness Of A Source</h3>
+<p>If you can be sure that the input comes from a trustworthy source, it can be OK
+to parse/evaluate it at high privilege in an unsafe language. A &quot;trustworthy
+source&quot; means that Chromium can cryptographically prove that the data comes
+from a business entity that you can or do trust (e.g.
+for Chrome, an <a href="https://abc.xyz">Alphabet</a> company).</p>
+<p>Such cryptographic proof can potentially be obtained by:</p>
+<ul>
+<li>Component Updater;</li>
+<li>The variations framework.</li>
+<li>Pinned TLS (see below).</li>
+</ul>
+<p>Pinned TLS needs to meet all these criteria to be effective:</p>
+<ul>
+<li>communication happens via validly-authenticated TLS, HTTPS, or QUIC;</li>
+<li>the peer&#39;s keys are <a href="https://cs.chromium.org/chromium/src/net/http/transport_security_state_static.json?sq=package:chromium&amp;g=0">pinned in Chrome</a>; and</li>
+<li>pinning is active on all platforms where the feature will launch.
+(Currently pinning is not enabled in iOS or Android WebView).</li>
+</ul>
+<p>It is generally preferred to use Component Updater if possible because pinning
+may be disabled by locally installed root certificates.</p>
+<p>One common pattern is to deliver a cryptographic hash of some content via such
+a trustworthy channel, but deliver the content itself via an untrustworthy
+channel. So long as the hash is properly verified, that&#39;s fine.</p>
+<h3 id="normalization">Normalization</h3>
+<p>You can &#39;defang&#39; a potentially-malicious input by transforming it into a
+<em>normal</em> or <em>minimal</em> form, usually by first transforming it into a format with
+a simpler grammar. We say that all data, file, and wire formats are defined by a
+<em>grammar</em>, even if that grammar is implicit or only partially-specified (as is
+so often the case). A data format with a particularly simple grammar is
+<a href="https://source.chromium.org/chromium/chromium/src/+/3df9ac8e76132c586e888d1ddc7d2217574f17b0:third_party/skia/include/core/SkPixmap.h;l=712"><code>SkPixmap</code></a>.
+(The &#39;grammar&#39; is represented by the private data fields: a region of raw pixel
+data, the size of that region, and simple metadata (<code>SkImageInfo</code>) about how to
+interpret the pixels.)</p>
+<p>It&#39;s rare to find such a simple grammar for input formats, however.</p>
+<p>For example, consider the PNG image format, which is complex and whose <a href="https://www.cvedetails.com/vulnerability-list/vendor_id-7294/Libpng.html">C
+implementation has suffered from memory corruption bugs in the
+past</a>.
+An attacker could craft a malicious PNG to trigger such a bug. But if you
+transform the image into a format that doesn&#39;t have PNG&#39;s complexity (in a
+low-privilege process, of course), the malicious nature of the PNG &#39;should&#39; be
+eliminated and then safe for parsing at a higher privilege level. Even if the
+attacker manages to compromise the low-privilege process with a malicious PNG,
+the high-privilege process will only parse the compromised process&#39; output with
+a simple, plausibly-safe parser. If that parse is successful, the
+higher-privilege process can then optionally further transform it into a
+normalized, minimal form (such as to save space). Otherwise, the parse can fail
+safely, without memory corruption.</p>
+<p>The trick of this technique lies in finding a sufficiently-trivial grammar, and
+committing to its limitations.</p>
+<p>Another good approach is to</p>
+<ol>
+<li>define a new Mojo message type for the information you want;</li>
+<li>extract that information from a complex input object in a sandboxed
+process; and then</li>
+<li>send the result to a higher-privileged process in a Mojo message using the
+new message type.</li>
+</ol>
+<p>That way, the higher-privileged process need only process objects adhering to a
+well-defined, generally low-complexity grammar. This is a big part of why <a href="mojo#Use-structured-types">we
+like for Mojo messages to use structured types</a>.</p>
+<p>For example, it should be safe enough to convert a PNG to an <code>SkBitmap</code> in a
+sandboxed process, and then send the <code>SkBitmap</code> to a higher-privileged process
+via IPC. Although there may be bugs in the IPC message deserialization code
+and/or in Skia&#39;s <code>SkBitmap</code> handling code, we consider this safe enough for a
+few reasons:</p>
+<ul>
+<li>we must accept the risk of bugs in Mojo deserialization; but thankfully</li>
+<li>Mojo deserialization is very amenable to fuzzing; and</li>
+<li>it&#39;s a big improvement to scope bugs to smaller areas, like IPC
+deserialization functions and very simple classes like <code>SkBitmap</code> and
+<code>SkPixmap</code>.</li>
+</ul>
+<p>Ultimately this process results in parsing significantly simpler grammars. (PNG
+→ Mojo + <code>SkBitmap</code> in this case.)</p>
+<blockquote>
+<p>(We have to accept the risk of memory safety bugs in Mojo deserialization
+because C++&#39;s high performance is crucial in such a throughput- and
+latency-sensitive area. If we could change this code to be both in a safer
+language and still have such high performance, that&#39;d be ideal. But that&#39;s
+unlikely to happen soon.)</p>
+</blockquote>
+<h3 id="exception-protobuf">Exception: Protobuf</h3>
+<p>While less preferable to Mojo, we also similarly trust Protobuf for
+deserializing messages at high privilege from potentially untrustworthy senders.
+For example, Protobufs are sometimes embedded in Mojo IPC messages. It is
+always preferable to use a Mojo message where possible, though sometimes
+external constraints require the use of Protobuf.</p>
+<p>Protobuf&#39;s threat model does not include parsing a protobuf from shared
+memory. Always copy the proto buffer bytes from untrustworthy shared
+memory regions before deserializing to a Message.</p>
+<p>If you must pass protobuf bytes over mojo use
+<a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/cpp/base/proto_wrapper.h">mojo_base::ProtoWrapper</a>
+as this provides limited type safety for the top-level protobuf message and
+ensures copies are taken before deserializing.</p>
+<p>Note that this exception only applies to Protobuf as a container format;
+complex data contained within a Protobuf must be handled according to this
+rule as well.</p>
+<h3 id="exception-re2">Exception: RE2</h3>
+<p>As another special case, we trust the
+<a href="https://cs.chromium.org/chromium/src/third_party/re2/README.chromium">RE2</a>
+regular expression library to evaluate untrustworthy patterns over untrustworthy
+input strings, because its grammar is sufficiently limited and hostile input is
+part of the threat model against which it&#39;s been tested for years. It is <strong>not</strong>
+the case, however, that text matched by an RE2 regular expression is necessarily
+&quot;sanitized&quot; or &quot;safe&quot;. That requires additional security judgment.</p>
+<h2 id="safe-types-and-abstractions">Safe Types and Abstractions</h2>
+<p>As discussed above in <a href="#normalization">Normalization</a>, there are some types that
+are considered &quot;safe,&quot; even though they are deserialized from an untrustworthy
+source, at high privilege, and in an unsafe language. These types are
+fundamental for passing data between processes using IPC, tend to have simpler
+grammar or structure, and/or have been audited or fuzzed heavily.</p>
+<ul>
+<li><code>GURL</code> and <code>url::Origin</code></li>
+<li><code>SkBitmap</code> (in <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/skia/include/core/SkColorType.h;l=54-58;drc=8d399817282e3c12ed54eb23ec42a5e418298ec6">N32 format</a> only)</li>
+<li><code>SkPixmap</code> (in <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/skia/include/core/SkColorType.h;l=54-58;drc=8d399817282e3c12ed54eb23ec42a5e418298ec6">N32 format</a> only)</li>
+<li>Protocol buffers (see above; this is not a preferred option and should be
+avoided where possible)</li>
+</ul>
+<p>There are also classes in <code>//base</code> that internally hold simple values that
+represent potentially complex data, such as:</p>
+<ul>
+<li><code>base::FilePath</code></li>
+<li><code>base::Token</code> and <code>base::UnguessableToken</code></li>
+<li><code>base::Time</code> and <code>base::TimeDelta</code></li>
+</ul>
+<p>The deserialization of these is safe, though it is important to remember that
+the value itself is still untrustworthy (e.g. a malicious path trying to escape
+its parent using <code>../</code>).</p>
+<p>The JSON parser in <code>//base/json</code> is implemented in Rust and considered safe for
+use at high privilege with untrusted data.</p>
+<h2 id="existing-code-that-violates-the-rule">Existing Code That Violates The Rule</h2>
+<p>We know there is code in Chromium that violates the Rule of 2. For example, the
+networking process on Windows is written in C++ and handles plenty of
+untrustworthy data, yet it is not (at present) sandboxed by default. There is
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=841001">ongoing work</a> to
+change that.</p>
+<p>Our top priority is avoiding any <em>new</em> violations of the Rule of 2. We also try
+to keep track of existing violations and mitigate them over time: for example,
+some less-safe uses of JSON parsing in the privileged browser process were
+defanged when we swapped out our C++ JSON parser for one written in Rust.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/rule-of-2.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/rule-of-2.md</a>
+  </p>
+</div>

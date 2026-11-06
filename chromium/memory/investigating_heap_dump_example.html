@@ -1,0 +1,234 @@
+<h1>Example Investigation of a Heap Dump</h1>
+<p>This document describes the steps taken to investigate a real memory leak
+discovered by heap profiling in the wild. For investigators less familiar with
+the code base, <code>Navigating the Stack Trace</code> should be enough information to
+determine the relevant component, and to forward the bug to a component OWNER.</p>
+<h2 id="understanding-the-heap-dump-summary">Understanding the heap dump summary</h2>
+<p>The opening comment of <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=834033">Issue
+834033</a> contains a
+heap dump summary. The highlights are:</p>
+<ul>
+<li>315723 calls to malloc without corresponding call to free.</li>
+<li>806MB of memory.</li>
+<li>The common stacktrace for all 315723 allocations.</li>
+</ul>
+<p>Usually, anything that uses over 10MB of memory is a red flag. With the
+exception of large image resources, most code in Chrome should use much less
+than 10MB. Anything that has over 100k allocations is also a red flag.</p>
+<h3 id="navigating-the-stack-trace---detailed-breakdown">Navigating the Stack Trace - Detailed Breakdown</h3>
+<p>Let&#39;s take a look at the stack trace:</p>
+<pre>profiling::(anonymous namespace)::HookAlloc(base::allocator::AllocatorDispatch const*, unsigned long, void*)
+base::allocator::MallocZoneFunctionsToReplaceDefault()::$_1::__invoke(_malloc_zone_t*, unsigned long)
+&lt;???&gt;
+&lt;???&gt;
+base::allocator::UncheckedMallocMac(unsigned long, void**)
+sk_malloc_flags(unsigned long, unsigned int)
+SkMallocPixelRef::MakeAllocate(SkImageInfo const&amp;, unsigned long)
+SkBitmap::tryAllocPixels(SkImageInfo const&amp;, unsigned long)
+IPC::ParamTraits&lt;SkBitmap&gt;::Read(base::Pickle const*, base::PickleIterator*, SkBitmap*)
+ExtensionAction::ParseIconFromCanvasDictionary(base::DictionaryValue const&amp;, gfx::ImageSkia*)
+extensions::ExtensionActionSetIconFunction::RunExtensionAction()
+extensions::ExtensionActionFunction::Run()
+ExtensionFunction::RunWithValidation()
+extensions::ExtensionFunctionDispatcher::DispatchWithCallbackInternal(ExtensionHostMsg_Request_Params const&amp;, content::RenderFrameHost*, int, base::RepeatingCallback&lt;void (ExtensionFunction::ResponseType, base::ListValue const&amp;, std::__1::basic_string&lt;char, std::__1::char_traits&lt;char&gt;, std::__1::allocator&lt;char&gt; &gt; const&amp;, extensions::functions::HistogramValue)&gt; const&amp;)
+extensions::ExtensionFunctionDispatcher::Dispatch(ExtensionHostMsg_Request_Params const&amp;, content::RenderFrameHost*, int)
+bool IPC::MessageT&lt;ExtensionHostMsg_Request_Meta, std::__1::tuple&lt;ExtensionHostMsg_Request_Params&gt;, void&gt;::Dispatch&lt;extensions::ExtensionWebContentsObserver, extensions::ExtensionWebContentsObserver, content::RenderFrameHost, void (extensions::ExtensionWebContentsObserver::*)(content::RenderFrameHost*, ExtensionHostMsg_Request_Params const&amp;)&gt;(IPC::Message const*, extensions::ExtensionWebContentsObserver*, extensions::ExtensionWebContentsObserver*, content::RenderFrameHost*, void (extensions::ExtensionWebContentsObserver::*)(content::RenderFrameHost*, ExtensionHostMsg_Request_Params const&amp;))
+extensions::ExtensionWebContentsObserver::OnMessageReceived(IPC::Message const&amp;, content::RenderFrameHost*)
+extensions::ChromeExtensionWebContentsObserver::OnMessageReceived(IPC::Message const&amp;, content::RenderFrameHost*)
+content::WebContentsImpl::OnMessageReceived(content::RenderFrameHostImpl*, IPC::Message const&amp;)
+content::RenderFrameHostImpl::OnMessageReceived(IPC::Message const&amp;)
+IPC::ChannelProxy::Context::OnDispatchMessage(IPC::Message const&amp;)
+base::debug::TaskAnnotator::RunTask(char const*, base::PendingTask*)
+base::MessageLoop::RunTask(base::PendingTask*)
+base::MessageLoop::DoWork()
+base::MessagePumpCFRunLoopBase::RunWork()
+base::apple::CallWithEHFrame(void () block_pointer)
+base::MessagePumpCFRunLoopBase::RunWorkSource(void*)
+&lt;???&gt;
+&lt;???&gt;
+&lt;???&gt;
+&lt;???&gt;
+&lt;???&gt;
+&lt;???&gt;
+&lt;???&gt;
+&lt;???&gt;
+&lt;???&gt;
+__71-[BrowserCrApplication nextEventMatchingMask:untilDate:inMode:dequeue:]_block_invoke
+base::apple::CallWithEHFrame(void () block_pointer)
+-[BrowserCrApplication nextEventMatchingMask:untilDate:inMode:dequeue:]
+&lt;???&gt;
+base::MessagePumpNSApplication::DoRun(base::MessagePump::Delegate*)
+base::MessagePumpCFRunLoopBase::Run(base::MessagePump::Delegate*)
+&lt;name omitted&gt;
+ChromeBrowserMainParts::MainMessageLoopRun(int*)
+content::BrowserMainLoop::RunMainMessageLoopParts()
+content::BrowserMainRunnerImpl::Run()
+content::BrowserMain(content::MainFunctionParams)
+content::ContentMainRunnerImpl::Run()
+service_manager::Main(service_manager::MainParams const&amp;)
+content::ContentMain(content::ContentMainParams const&amp;)
+ChromeMain
+main
+&lt;???&gt;</pre>
+<p>The first step is to divide the stack trace into smaller segments to get a
+better understanding of what&#39;s happening at the time of allocations. The best
+way to do this is to segment by name space and/or function prefixes.</p>
+<pre>profiling::(anonymous namespace)::HookAlloc(base::allocator::AllocatorDispatch const*, unsigned long, void*)
+base::allocator::MallocZoneFunctionsToReplaceDefault()::$_1::__invoke(_malloc_zone_t*, unsigned long)
+&lt;???&gt;
+&lt;???&gt;
+base::allocator::UncheckedMallocMac(unsigned long, void**)</pre>
+<p>The top of each stack will always contain some <code>base</code> and/or <code>profiling</code>
+code. This is the code responsible for allocating and recording the memory.</p>
+<pre>sk_malloc_flags(unsigned long, unsigned int)
+SkMallocPixelRef::MakeAllocate(SkImageInfo const&amp;, unsigned long)
+SkBitmap::tryAllocPixels(SkImageInfo const&amp;, unsigned long)</pre>
+<p>Next, we three 3 frames with the prefix <code>sk</code>. Searching for
+<code>sk_malloc_flags</code> on
+<a href="https://cs.chromium.org/search/?q=sk_malloc_flags&amp;sq=package:chromium&amp;type=cs">codesearch</a>
+reveals that the component is <code>third_party/skia</code>. Looking at the
+<a href="https://cs.chromium.org/chromium/src/third_party/skia/README">README</a> reveals
+that Skia is a 2D graphics library.</p>
+<pre>IPC::ParamTraits&lt;SkBitmap&gt;::Read(base::Pickle const*, base::PickleIterator*, SkBitmap*)</pre>
+<p>Next we see a templated function called <code>Read</code> in the namespace <code>IPC</code>.
+<code>IPC</code> stands for inter-process communication. This suggests that the
+function is responsible for reading an IPC Message, perhaps concerning an
+<code>SkBitmap</code>.</p>
+<pre>ExtensionAction::ParseIconFromCanvasDictionary(base::DictionaryValue const&amp;, gfx::ImageSkia*)
+extensions::ExtensionActionSetIconFunction::RunExtensionAction()
+extensions::ExtensionActionFunction::Run()
+ExtensionFunction::RunWithValidation()
+extensions::ExtensionFunctionDispatcher::DispatchWithCallbackInternal(ExtensionHostMsg_Request_Params const&amp;, content::RenderFrameHost*, int, base::RepeatingCallback&lt;void (ExtensionFunction::ResponseType, base::ListValue const&amp;, std::__1::basic_string&lt;char, std::__1::char_traits&lt;char&gt;, std::__1::allocator&lt;char&gt; &gt; const&amp;, extensions::functions::HistogramValue)&gt; const&amp;)
+extensions::ExtensionFunctionDispatcher::Dispatch(ExtensionHostMsg_Request_Params const&amp;, content::RenderFrameHost*, int)
+bool IPC::MessageT&lt;ExtensionHostMsg_Request_Meta, std::__1::tuple&lt;ExtensionHostMsg_Request_Params&gt;, void&gt;::Dispatch&lt;extensions::ExtensionWebContentsObserver, extensions::ExtensionWebContentsObserver, content::RenderFrameHost, void (extensions::ExtensionWebContentsObserver::*)(content::RenderFrameHost*, ExtensionHostMsg_Request_Params const&amp;)&gt;(IPC::Message const*, extensions::ExtensionWebContentsObserver*, extensions::ExtensionWebContentsObserver*, content::RenderFrameHost*, void (extensions::ExtensionWebContentsObserver::*)(content::RenderFrameHost*, ExtensionHostMsg_Request_Params const&amp;))
+extensions::ExtensionWebContentsObserver::OnMessageReceived(IPC::Message const&amp;, content::RenderFrameHost*)
+extensions::ChromeExtensionWebContentsObserver::OnMessageReceived(IPC::Message const&amp;, content::RenderFrameHost*)</pre>
+<p>Next, we see many frames with the <code>extension</code> prefix. Extensions are exactly
+what they sound like - Chrome extensions like AdBlock are used to modify the
+behavior of the browser.</p>
+<pre>content::WebContentsImpl::OnMessageReceived(content::RenderFrameHostImpl*, IPC::Message const&amp;)
+content::RenderFrameHostImpl::OnMessageReceived(IPC::Message const&amp;)</pre>
+<p><code>content</code> is the name of code that glues together web code [like extensions] and
+the rest of Chrome.</p>
+<pre>IPC::ChannelProxy::Context::OnDispatchMessage(IPC::Message const&amp;)</pre>
+<p>More <code>IPC</code> code.</p>
+<pre>base::debug::TaskAnnotator::RunTask(char const*, base::PendingTask*)
+base::MessageLoop::RunTask(base::PendingTask*)
+base::MessageLoop::DoWork()
+base::MessagePumpCFRunLoopBase::RunWork()
+base::apple::CallWithEHFrame(void () block_pointer)
+base::MessagePumpCFRunLoopBase::RunWorkSource(void*)</pre>
+<p>More <code>base</code> code. The bottom of most stack traces should go back to
+<code>MessageLoop</code>, a primitive Chrome construct used to run tasks.</p>
+<h3 id="navigating-the-stack-trace---summary">Navigating the Stack Trace - Summary</h3>
+<ul>
+<li>The top and bottom of the stack should generally be the same and are not very
+interesting.</li>
+<li>The prefixes of frames can be used to get a rough idea of the components
+involved.</li>
+<li>Function names can be used to get a rough idea of what&#39;s going on.</li>
+</ul>
+<p>In this case, extension code is calling <code>ParseIconFromCanvasDictionary</code> - so
+it&#39;s probably trying to parse an icon. This calls into Skia code. Given that
+Skia is a 2D drawing library, and the function is <code>tryAllocPixels</code>, Skia is
+allocating some pixels for the icon. This process is being repeated 315 thousand
+times, and the icon is being leaked every time.</p>
+<h2 id="diving-into-the-code">Diving into the code</h2>
+<p>Now that we have a rough idea of what&#39;s happening, let&#39;s look at the code for
+ParseIconFromCanvasDictionary.</p>
+<pre data-language="cpp">bool ExtensionAction::ParseIconFromCanvasDictionary(
+    const base::DictionaryValue&amp; dict,
+    gfx::ImageSkia* icon) {
+  for (base::DictionaryValue::Iterator iter(dict); !iter.IsAtEnd();
+       iter.Advance()) {
+    std::string binary_string64;
+    IPC::Message pickle;
+    if (iter.value().is_blob()) {
+      pickle = IPC::Message(iter.value().GetBlob().data(),
+                            iter.value().GetBlob().size());
+    } else if (iter.value().GetAsString(&amp;binary_string64)) {
+      std::string binary_string;
+      if (!base::Base64Decode(binary_string64, &amp;binary_string))
+        return false;
+      pickle = IPC::Message(binary_string.c_str(), binary_string.length());
+    } else {
+      continue;
+    }
+    base::PickleIterator pickle_iter(pickle);
+    SkBitmap bitmap;
+    if (!IPC::ReadParam(&amp;pickle, &amp;pickle_iter, &amp;bitmap))
+      return false;
+    CHECK(!bitmap.isNull());
+
+    // Chrome helpfully scales the provided icon(s), but let's not go overboard.
+    const int kActionIconMaxSize = 10 * ActionIconSize();
+    if (bitmap.drawsNothing() || bitmap.width() &gt; kActionIconMaxSize)
+      continue;
+
+    float scale = static_cast&lt;float&gt;(bitmap.width()) / ActionIconSize();
+    icon-&gt;AddRepresentation(gfx::ImageSkiaRep(bitmap, scale));
+  }
+  return true;
+}</pre>
+<p>There&#39;s a lot going on here, but we can use the information we have to focus.
+The leak happens in IPC::ReadParam, so the relevant lines are:</p>
+<pre>SkBitmap bitmap;
+if (!IPC::ReadParam(&amp;pickle, &amp;pickle_iter, &amp;bitmap))
+  return false;</pre>
+<p>The <code>IPC</code> message is being decoded into <code>bitmap</code>.</p>
+<pre> icon-&gt;AddRepresentation(gfx::ImageSkiaRep(bitmap, scale));</pre>
+<p>Looking at subsequent consumers of <code>bitmap</code>, we see that it is being added as a
+representation to <code>icon</code>. <code>icon</code> is an output parameter of this function, so we
+have to look at the calling frame,
+<code>ExtensionActionSetIconFunction::RunExtensionAction</code>.</p>
+<pre>ExtensionFunction::ResponseAction
+ExtensionActionSetIconFunction::RunExtensionAction() {
+...
+    EXTENSION_FUNCTION_VALIDATE(
+        ExtensionAction::ParseIconFromCanvasDictionary(*canvas_set, &amp;icon));
+
+    if (icon.isNull())
+      return RespondNow(Error(&quot;Icon invalid.&quot;));
+
+    extension_action_-&gt;SetIcon(tab_id_, gfx::Image(icon));
+...
+}</pre>
+<p>In this case, I&#39;ve already focused on the code that calls
+<code>ParseIconFromCanvasDictionary</code>. Let&#39;s look at <code>SetIcon</code>.</p>
+<pre>void ExtensionAction::SetIcon(int tab_id, const gfx::Image&amp; image) {
+  SetValue(&amp;icon_, tab_id, image);
+}</pre>
+<pre>template&lt;class T&gt;
+void SetValue(std::map&lt;int, T&gt;* map, int tab_id, const T&amp; val) {
+  (*map)[tab_id] = val;
+}</pre>
+<p>The icon is being added to a map <code>icon_</code>, with <code>tab_id</code> as the key. Ah ha!
+Adding elements to a container [and never removing them] is one of the most
+common sources of memory issues.</p>
+<p>There are two ways for this memory to be released - the container <code>icon_</code> can be
+destroyed, or the element can be removed from the container.</p>
+<p><code>icon_</code> is a member of <code>ExtensionAction</code>, whose documentation reads:</p>
+<pre>// ExtensionAction encapsulates the state of a browser action or page action.
+// Instances can have both global and per-tab state. If a property does not have
+// a per-tab value, the global value is used instead.</pre>
+<p>This suggests that the lifetime of <code>icon_</code> is tied to the lifetime of the
+ExtensionAction, which we can guess is tied to the lifetime of the Extension. As
+long as the extension stays installed and enabled, <code>icon_</code> will not be
+destroyed.</p>
+<p>Next, we use codesearch to look at all code that removes elements from <code>icon_</code>.
+The only place that performs removal is</p>
+<pre>void ExtensionAction::ClearAllValuesForTab(int tab_id) {
+...
+  icon_.erase(tab_id);
+...
+}</pre>
+<p>This is called by <code>ExtensionActionAPI::ClearAllValuesForTab</code>, which is called by
+<code>TabHelper::DidFinishNavigation</code>. The name of this method suggests that each
+time a tab is navigated, the previous tab-specific icon is cleared. However,
+that means that if a tab is closed, then the icon is leaked forever.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/investigating_heap_dump_example.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory/investigating_heap_dump_example.md</a>
+  </p>
+</div>

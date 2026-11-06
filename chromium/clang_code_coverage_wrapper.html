@@ -1,0 +1,89 @@
+<h1>The Clang Code Coverage Wrapper</h1>
+<p>The Clang code coverage wrapper
+(<a href="https://github.com/chromium/chromium/blob/HEAD/build/toolchain/clang_code_coverage_wrapper.py">//build/toolchain/clang_code_coverage_wrapper.py</a>) is a compiler wrapper that
+adds code coverage flags to the invocations of Clang C/C++ compiler, which can
+be used to instrument and generate code coverage data for a subset of the source
+files. The main use case of this wrapper is to generate code coverage reports
+for changed files at a per-CL level during try jobs.</p>
+<p>One might ask: why this compiler wrapper instead of just instrumenting all the
+source files?</p>
+<p>Efficiency is the main consideration because comparing to instrument everything,
+only instrument what-is-needed takes less time to build the test targets,
+produces binaries that are 10 times smaller, run tests twice faster and
+generates coverage reports significantly faster. An experiment was done to
+evaluate the effectiveness of instrument what-is-needed, and in the experiment,
+<code>unit_tests</code> is used as the sample test target and 8 randomly chosen C++ source
+files are used as the samples files to instrument. The results are presented in
+the following table:</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Build time</th>
+<th>Binary size</th>
+<th>Tests run time</th>
+<th>Reports generation time</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>No instrumentation</td>
+<td>43m</td>
+<td>240M</td>
+<td>40s</td>
+<td>0s</td>
+</tr>
+<tr>
+<td>What-is-needed</td>
+<td>43m</td>
+<td>241M</td>
+<td>40s</td>
+<td>0.14s</td>
+</tr>
+<tr>
+<td>Everything</td>
+<td>53m</td>
+<td>2.3G</td>
+<td>80s</td>
+<td>1m10s</td>
+</tr>
+</tbody></table>
+<p>It can be seen from the results that the overhead introduced by instrument
+everything is huge, while it&#39;s negligible for instrument what-is-needed.</p>
+<h2 id="how-to-use-the-coverage-wrapper">How to use the coverage wrapper?</h2>
+<p>To get the coverage wrapper hook into your build, add the following flags to
+your <code>args.gn</code> file, assuming build directory is <code>out/Release</code>.</p>
+<pre>use_clang_coverage = true
+coverage_instrumentation_input_file = &quot;//out/Release/coverage_instrumentation_input.txt&quot;</pre>
+<p>The path to the coverage instrumentation input file should be a source root
+absolute path, and the file consists of multiple lines where each line
+represents a path to a source file, and the specified paths must be relative to
+the root build directory. e.g. <code>../../base/task/post_task.cc</code> for build
+directory <code>out/Release</code>.</p>
+<p>Then, use the <a href="https://github.com/chromium/chromium/blob/HEAD/tools/code_coverage/coverage.py">//tools/code_coverage/coverage.py</a> script to build, run tests and
+generate code coverage reports for the exercised files.</p>
+<h2 id="caveats">Caveats</h2>
+<p>One caveat with this compiler wrapper is that it may introduce unexpected
+behaviors in incremental builds when the file path to the coverage
+instrumentation input file changes between consecutive runs, and the reason is
+that the coverage instrumentation input file is explicitly passed to the
+coverage wrapper as a command-line argument, which makes the path part of the
+Ninja commands used to compile the source files, so change of the path between
+consecutive runs causes Ninja to perform a full rebuild.</p>
+<p>Due to the reasons mentioned above, users of this script are strongly advised to
+always use the same path such as
+<code>${root_build_dir}/coverage_instrumentation_input.txt</code>.</p>
+<h2 id="want-to-learn-more-about-code-coverage-in-chromium">Want to learn more about code coverage in Chromium?</h2>
+<p>For more background information on how code coverage works in Chromium, please
+refer to <a href="testing/code_coverage">code_coverage.md</a></p>
+<h2 id="contacts">Contacts</h2>
+<h3 id="reporting-problems">Reporting problems</h3>
+<p>We&#39;re still evaluating the tools, for any breakage report and feature requests,
+please <a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ETest%3ECodeCoverage">file a bug</a>.</p>
+<h3 id="mailing-list">Mailing list</h3>
+<p>For questions and general discussions, please join <a href="https://groups.google.com/a/chromium.org/forum/#!forum/code-coverage">code-coverage group</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/clang_code_coverage_wrapper.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/clang_code_coverage_wrapper.md</a>
+  </p>
+</div>

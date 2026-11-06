@@ -1,0 +1,337 @@
+<h1>Security Shepherd</h1>
+<h2 id="what-is-security-shepherding">What is Security Shepherding?</h2>
+<p>Security Shepherding is a rotation for security bug triage. The Shepherding
+rotation is made up of people actively working on security in Chrome. At any
+given time there are two shepherds on shift. The shifts are during work hours
+only, so you are not &quot;on call&quot; while shepherding.</p>
+<h2 id="guiding-principles">Guiding Principles</h2>
+<p>Your overarching goal is to get security bugs in Chrome to people or machines
+which can fix them, which means ensuring that valid, actionable reports enter
+the process.</p>
+<p>Remember that you are <strong>triaging</strong> bugs. There are usually many bug reports,
+far too many for you to actually investigate all of them in detail. You are
+deciding how to allocate your own time, and the time of other engineers, in the
+way that produces the best security results for users. You are <strong>not</strong> fully
+investigating every element of every report.</p>
+<p>It makes sense to focus your attention first on:</p>
+<ul>
+<li>Reports from corporate security teams (Google TAG, MSRC, etc) - these are very
+likely to be valid and are usually being exploited in the wild, so triage
+these first of all</li>
+<li>Reports from known reporters who have previously reported valid bugs</li>
+<li>Reports which, if true, would be Critical (S0) or High (S1) Severity
+(arbitrary code execution, memory corruption)</li>
+</ul>
+<h2 id="what-do-i-do">What Do I Do?</h2>
+<p>If you are the shepherd, your <strong>PRIMARY DIRECTIVE</strong> is to tackle all the red
+cells on the <a href="https://goto.google.com/chrome-security-bugs">security bug
+dashboard</a>.  You do that by
+filling in missing fields on the bugs and assigning them to engineers who will
+fix them.</p>
+<p>If you are <code>chrome-security-shepherds-1</code>: you are responsible for all the
+bugs in the <code>Shepherd 1</code> tab. If you are <code>chrome-security-shepherds-2</code>, you are
+responsible for the <code>Shepherd 2</code> tab.</p>
+<p>To actually triage a report, you go through several steps. On a <em>new</em> bug
+report:</p>
+<h3 id="could-it-be-valid">Could It Be Valid?</h3>
+<p>Skim the bug to see if it looks plausible: is this likely to be a real bug,
+in Chrome, with security consequences for Chrome users?</p>
+<ol>
+<li>If it&#39;s not a valid report at all (empty submission, spam, etc), WontFix</li>
+<li>If it&#39;s not likely to be a real bug, WontFix</li>
+<li>If it&#39;s not a bug in Chrome, WontFix and direct the reporter elsewhere</li>
+<li>If it doesn&#39;t have security consequences, convert it to Type=Bug and
+remove the visibility restrictions on it</li>
+</ol>
+<p>Prefer to quickly WontFix bugs with a reason at this stage. Reporters can and
+will open a new issue if they have further information to provide.</p>
+<p>If it could plausibly be a security bug, does it come with the evidence we
+need to reproduce it? Ask this before attempting to reproduce or understand
+the issue:</p>
+<ol>
+<li>If it claims code execution, is there an attached PoC?</li>
+<li>If it claims an ASAN crash, is there an attached symbolized ASAN stack trace?</li>
+<li>If it claims a v8 / d8 crash or sandbox violation, is there an attached
+JS file?</li>
+<li>If it&#39;s a UI spoof, is there a short, attached video?</li>
+</ol>
+<p>If evidence for the issue is not attached to the issue, close it noting what
+is missing. Do not use Needs-Feedback at this stage.</p>
+<p>Do not be shy about asking for <em>clear</em> evidence. The burden of proof at this
+point is primarily on the reporter - they need to convince you that the bug
+exists and could plausibly be exploited. These things aren&#39;t enough evidence:</p>
+<ul>
+<li>A PoC that demonstrates &quot;weird behavior&quot; (JS APIs printing strange values,
+arrays containing unexpected values, scary console log messages)</li>
+<li>A unit test that crashes</li>
+<li>A patch against the browser that causes a crash or similar <strong>except</strong> that
+it&#39;s okay for a browser bug to be proven via a patch to the renderer</li>
+<li>Repro steps - these are sometimes sufficient to reproduce a crash or a spoof,
+but they don&#39;t generally give any info about exploitability</li>
+</ul>
+<p>If the PoC looks sketchy, ask the reporter to fix it or minimize it - don&#39;t
+spend your own time trying to minimize it or read through half a megabyte of
+wasm bytecode to figure out what&#39;s going on. Use WontFix and do not use
+Needs-Feedback.</p>
+<p>At this stage, you should lean towards marking bugs as WontFix if you are in
+doubt. Unfortunately, most incoming bug reports are not valid security bugs, and
+time spent triaging those reports in detail is time not spent triaging bugs
+which <em>are</em> valid. As a rule:</p>
+<ul>
+<li>If the bug is <strong>not probably valid</strong>, WontFix</li>
+<li>If the bug is a duplicate of an existing bug (the bug tracker will surface
+some candidates for you), mark it as a duplicate. Use the <code>Mark as Duplicate</code>
+button at the upper right of the report pane. This will provide a pop-up to
+input the bug number of the canonical report that you are merging this report
+into as a duplicate of. This button does not CC the reporter on the duplicate.
+Do <strong>not</strong> manually CC the reporter into the canonical bug unless the
+canonical bug is already public. If reporters ask to be CCed, tell them to
+email <a href="mailto:product-security@chromium.org">product-security@chromium.org</a>.</li>
+<li>If the bug is probably valid but doesn&#39;t have security consequences,
+change it to type Bug and remove visibility restrictions</li>
+<li>If the bug is probably valid but you&#39;re missing something critical
+(reporter forgot to attach a PoC, forgot to specify build args for a v8 bug,
+etc) or you need the reporter to minimize the PoC, close the issue as
+WontFix and note what is missing.</li>
+<li>If the report points to a commit or bisect within the last seven days, remind
+the reporter that we do not accept security bugs found on HEAD and close the
+issue as WontFix.</li>
+</ul>
+<h3 id="handling-special-case-bugs">Handling special-case bugs</h3>
+<ul>
+<li><strong>If the bug is an in-the-wild report</strong>:<ul>
+<li>Start a thread in the Shepherding chat immediately</li>
+</ul>
+</li>
+<li>Is the bug eligible for <a href="delegated-triage">delegated triage</a>?:<ul>
+<li>If it&#39;s a Graphics bug (including Skia, Dawn, ANGLE), put it in <a href="https://issues.chromium.org/hotlists/8198490">hotlist 8198490</a></li>
+<li>If it&#39;s a BoringSSL bug, put it in <a href="https://issues.chromium.org/components/1590116">component 1590116</a></li>
+<li>If it&#39;s a V8 (Javascript or WebAssembly) bug, put it in <a href="https://issues.chromium.org/hotlists/8308879">hotlist 8308879</a></li>
+<li>If it only affects ChromeOS then move the issue into the ChromeOS security
+triage queue which is <a href="https://b.corp.google.com/components/1335705">component 1335705</a>.
+Since this bug is being moved between trackers you will need to use your
+google.com account to move the bug into that tracker component.</li>
+<li>TODO: add more here :)</li>
+<li>You are now done triaging this bug, congratulations!</li>
+</ul>
+</li>
+<li>If the bug is a privacy bug, rather than a security bug:<ul>
+<li>Add yourself and any other security team members who may need
+ongoing access to CC</li>
+<li>Change the type from <code>Vulnerability</code> to <code>Privacy Issue</code></li>
+<li>Remove security@ from collaborators</li>
+<li>Change the Issue Access Level to <code>Limited Visibility + Googlers</code></li>
+<li>Set the component to something sensible, maybe <a href="https://issues.chromium.org/components/1457231/edit">Chromium &gt;
+Privacy</a> or
+<a href="https://issues.chromium.org/components/1457044/edit">Chromium &gt; UI &gt; Settings &gt;
+Privacy</a>.</li>
+<li>You are now done triaging this bug, congratulations!</li>
+</ul>
+</li>
+<li>If the bug is a test bug which you don&#39;t want or need to act on but want out of your queue:<ul>
+<li>Add it to <a href="https://issues.chromium.org/hotlists/8731053">hotlist 8731053</a></li>
+<li>Do not ever do this for a &quot;real&quot; bug - this hotlist is <em>only</em> for test
+bugs. It does not exempt bugs from SLO monitoring or do anything other
+than hide them from your queue!</li>
+</ul>
+</li>
+</ul>
+<p>Now, before reproducing or deeply understanding the issue, move on to...</p>
+<h3 id="assessing-severity-and-impact">Assessing Severity and Impact</h3>
+<p>Have a look at the <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/severity-guidelines.md">severity
+guidelines</a>,
+which contain lots of examples of bugs of different severities and detailed
+writeups of the various factors. The severity is based on <strong>your judgment</strong> of
+the consequences of exploitation of the bug, not on the reporter&#39;s assessment in
+the bug report.</p>
+<ul>
+<li>If the bug is Low Severity (S3) assign it a plausible component and set
+the Severity to Low (S3). Do not attempt to reproduce. Take no further action.</li>
+</ul>
+<p>If the report requires you to enable a specific feature or pass a specific
+command-line argument, and that feature isn&#39;t default-enabled <strong>for any Chrome
+users</strong>, then add the bug to the <a href="https://issues.chromium.org/hotlists/5433277">Security_Impact-None</a>
+(hotlistid:5433277) hotlist at this stage, which exempts it from the usual
+severity-based fix SLOs. Note that features can be enabled by Finch studies
+or origin trials, so don&#39;t just base your decision on the default state of
+the feature. The <a href="https://uma.googleplex.com/p/chrome/variations/state">Finch state dashboard</a>
+may be helpful.</p>
+<p>If you&#39;re in doubt about severity, ask for help in the Shepherd chat. This step
+benefits a lot from judgment and experience!</p>
+<h3 id="attempt-to-reproduce-medium-high-and-critical-bugs">Attempt to reproduce Medium, High and Critical Bugs</h3>
+<p><a href="clusterfuzz-for-shepherds">ClusterFuzz</a> is far quicker than manual
+reproduction, and will automatically do bisection and set Found In for you, so
+you should use ClusterFuzz if at all possible. If you have to manually reproduce
+a bug instead:</p>
+<ul>
+<li>Assume that test cases may be malicious. You should only reproduce bugs
+on your local machine if you&#39;re completely certain that you understand
+100% of the test case. If not, use a disposable virtual machine. If you&#39;re
+inside Google, a good way to do this is using
+<a href="https://goto.google.com/redshell-for-chrome-shepherds">Redshell</a> - or ask the
+reporter for an obviously-not-malicious test case instead!</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_emulator.md">Instructions for using an Android emulator can be found
+here</a>. If you&#39;re inside Google, we have a
+<a href="https://goto.google.com/android-for-chrome-shepherds">guide for testing using Google infrastructure</a>.</li>
+<li>When you can&#39;t just build from a specific branch locally, see
+<a href="https://dev.chromium.org/getting-involved/dev-channel">https://dev.chromium.org/getting-involved/dev-channel</a>
+or
+<a href="https://commondatastorage.googleapis.com/chromium-browser-asan/index.html">https://commondatastorage.googleapis.com/chromium-browser-asan/index.html</a>
+for the latest release of a specific version.</li>
+<li>The <a href="https://source.chromium.org/chromium/chromium/src/+/main:tools/get_asan_chrome/get_asan_chrome.py">get_asan_chrome.py</a>
+helper script is a handy way to download ASAN Chrome. The --help flag
+provides usage instructions, e.g. to fetch builds for various versions and
+platforms.</li>
+<li>If you run into issues with a reproducible ClusterFuzz test case (like
+missing symbols, or if anything else seems off), try uploading the test case
+again using a different job type with a more mature tool (e.g. ASan on Linux).
+It may give more complete information.</li>
+</ul>
+<h3 id="assessing-found-in-and-os">Assessing Found In and OS</h3>
+<p>At this point, you need the ability to know if a specific OS + version
+combination (up to the oldest <a href="https://chromiumdash.appspot.com/branches">active
+branch</a>) is affected by the bug, so
+you need to either:</p>
+<ul>
+<li>Know what the root cause was and when it was introduced (a revision number) -
+particularly good reports may include this info, or</li>
+<li>Have <a href="clusterfuzz-for-shepherds">ClusterFuzz</a> do this detection for you,
+for PoCs that work on and are safe to run on ClusterFuzz, or</li>
+<li>Manually reproduce it yourself across OS + version combos to check</li>
+</ul>
+<p>In all cases, Found In should contain the <em>oldest</em> milestone number which is
+still <a href="https://chromiumdash.appspot.com/branches">active</a> and has the bug. This
+should be based on your investigation and the evidence in the bug, <strong>not</strong> on
+what versions the reporter reported the bug against - those are often just what
+the reporter happens to be testing on.</p>
+<p>It&#39;s ok if the OS field is a guess. There is no need to manually test every OS +
+version combination, but please do remember to set this field.</p>
+<p>Now, it&#39;s time to assign the bug:</p>
+<h3 id="assign-the-bug">Assign the bug</h3>
+<ul>
+<li>Set Component to the area of Chrome that contains the bug</li>
+<li>Set Assignee to someone likely to fix bugs in that area - consult OWNERS
+or <code>git blame</code> if in doubt</li>
+<li>Set CCs to everyone else in a relevant OWNERs file and everyone recently
+appearing in blame - people cannot see security issues if not CCed!</li>
+<li>Do not assign to a single person with a request to see if it is a bug or not,
+if you need to do this CC a bunch of people as well for visibility.</li>
+<li>Add a comment on the bug explaining that it&#39;s coming from a security shepherd,
+as well as anything else they might need to know about the bug (whether you
+reproed it locally or not, etc)</li>
+<li>Upload any logs or asan traces you&#39;ve generated, and the command line,
+build flags and git revision you used to reproduce the bug.</li>
+</ul>
+<h3 id="shift-handoff">Shift handoff</h3>
+<p>As you work through the queue each day, please manage your time and ensure you
+have addressed all red rows and cells in the sheet to the best of your ability.
+Do your best to ensure there are no red cells at the top of your sheet before
+the end of your shift.</p>
+<p>Please fill out the <a href="https://goto.google.com/chrome-security-shepherd-handoff">Shepherding Handoff
+Log</a> to communicate
+issues from your shift that may be helpful to the oncoming shift.</p>
+<h3 id="ask-for-help">Ask for help</h3>
+<p>Security bug triage is hard. We receive hundreds of bug reports per week on
+average. <strong>If you are ever stuck or in doubt</strong>, please ask for help from the
+<a href="https://goto.google.com/chrome-security-shepherds-chat">Chrome Security Shepherds
+chat</a> or the <a href="https://goto.google.com/chrome-security-chat">Chrome
+Security Chat</a>. During some
+shifts, there are just too many incoming bugs. It’s okay to ask for help, please
+do!</p>
+<p>You may also like the classic <a href="https://docs.google.com/presentation/d/1eISJXxyv7dUCGUKk_rvUI9t9s2xb98QY4d_-dZSa7Wg/edit#slide=id.p">HOWTO: Be a Security Shepherd deck</a></p>
+<h2 id="other-helpful-info">Other Helpful Info</h2>
+<h3 id="links-to-helpful-resources">Links to Helpful Resources</h3>
+<p>Here are some of the important references and resources you need or may need
+during your shepherding shift:</p>
+<ul>
+<li><a href="https://goto.google.com/whos-the-shepherd">Current Shepherds</a></li>
+<li><a href="https://goto.google.com/chrome-security-bugs">Chrome Security Bug Dashboard</a></li>
+<li><a href="severity-guidelines">Security Severity Guidelines</a></li>
+<li><a href="shepherding-ai-reports">Shepherding AI Reports</a></li>
+<li><a href="security-labels">Security Labels</a></li>
+<li>FAQs addressing commonly-raised questions about security and what is / is not
+considered a security bug, to see if there is an existing stance:<ul>
+<li><a href="faq">Chrome Security FAQ</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/refs/heads/main/extensions/docs/security_faq.md">Extensions Security FAQ</a></li>
+<li><a href="service-worker-security-faq">Service Worker Security FAQ</a></li>
+</ul>
+</li>
+<li><a href="https://goto.google.com/redshell-for-chrome-shepherds">Redshell for Security Shepherds</a></li>
+<li><a href="https://goto.google.com/shepherding-changelog">Shepherding Guidelines Changelog</a> for highlighting
+any process or policy changes since your last shift.</li>
+<li><a href="https://goto.google.com/chrome-speculative-bug-triage">Guidance for triage of theoretical or speculative issues</a></li>
+<li><a href="life-of-a-security-issue">Reference for common questions about security bug lifecycle</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/process/merge_request.md#Security-merge-triage">Reference for questions related to security fix merge process</a>
+for answering questions (you do not need to approve merges).</li>
+<li><a href="https://goto.google.com/chrome-security-shepherd-handoff">Shepherding Handoff Log</a></li>
+<li><a href="https://goto.google.com/gpu-for-dummies">GPU for dummies</a></li>
+</ul>
+<h3 id="what-do-all-these-bug-labels-mean">What do all these bug labels mean?</h3>
+<p><a href="security-labels">Security Labels</a>.</p>
+<h3 id="an-owner-is-asking-for-security-input-on-backporting-a-security-fix">An owner is asking for security input on backporting a security fix.</h3>
+<p>What do I do here?</p>
+<p>You are not responsible for handling merges or approving a fix for backmerge.
+If the issue is resolved and there is a landed CL, please ensure the bug is
+closed as Fixed. Please also make sure the bug has a severity and Found In set.
+This will allow the bot (Sheriffbot) to add the appropriately update the Merge
+custom field with the appropriate request-MMM or review-MMM labels, where MMM =
+the milestones for backmerge consideration (based on rules driven by severity
+(and <code>Security_Impact</code>, derived from Found In). See
+<a href="../process/merge_request#Security-merge-triage">security merge triage</a>
+for more information.</p>
+<p>That issue will be visible to the security merge review queue. There are
+designated members of the security team who have the hefty responsibility of
+reviewing security issues for backmerge. Merge approvals will be handled by them
+after at least the fix has had sufficient bake time on Canary.</p>
+<h3 id="when--how-does-x-happen-to-a-security-bug">When / how does X happen to a security bug?</h3>
+<p>(e.g. how and when does a VRP bug get to the Chrome VRP Panel?)
+<a href="life-of-a-security-issue">See Life of a Security Issue</a>.</p>
+<h3 id="i-have-questions-related-to-chrome-vrp-policy-and-scope">I have questions related to Chrome VRP policy and scope.</h3>
+<p><a href="https://g.co/chrome/vrp">Chrome VRP policies and rewards page</a> and <a href="vrp-faq">Chrome VRP
+News and FAQs</a>. You can also reach out directly to the Chrome VRP
+TL or ask questions in the
+<a href="http://go/chrome-security-shepherds-chat">Chrome Security Shepherds chat</a>, all
+VRP Panel members are also members of that chat.</p>
+<h3 id="there-is-pii-or-other-data-in-a-report-we-do-not-want-to-publicly-disclose">There is PII or other data in a report we do not want to publicly disclose.</h3>
+<p>For cases of PII, simply delete the attachment or comment that contains PII
+within the issue tracker. If PII is contained in the text of the original
+description of the report, simply choose the <code>Edit description</code> option and
+remove any PII.</p>
+<p>For cases in which we are just delaying public disclosure (such as when a
+security issue impacts other products or vendors), please add the
+<code>SecurityEmbargo</code> hotlist (hotlistID: 5432549) and set a date in the <code>Next Action</code> field so that disclosure can be re-evaluated at that time.</p>
+<h3 id="protecting-researcher-identities">Protecting researcher identities</h3>
+<p>Many researchers report security issues under a pseudonym and from a specific
+email address pertaining to that pseudonym. Please do not refer to the
+researcher by the email username directly in any comments of the report.
+When reports are publicly disclosed, that becomes visible to all and we have to
+delete those comments to protect that information. To direct a comment at an
+external security researcher, please use “OP”, “reporter”, or &quot;researcher”.</p>
+<h3 id="deleted-reports--issues-marked-as-spam-or-abuse">Deleted Reports / Issues Marked as Spam or Abuse</h3>
+<p>You may come across some reports in the security bug triage queue with a red
+banner, &quot;The issue has been deleted. Reason: ABUSE,&quot; this is generally due to
+the overactive spam filtering in the issue tracker. Just click <code>Undelete</code> in the
+right side of the banner, and triage the report as you normally would.</p>
+<h3 id="shepherding-scheduling">Shepherding Scheduling</h3>
+<ul>
+<li><a href="http://go/whos-the-shepherd">Current Shepherds</a></li>
+<li>A calendar invite will be sent for your upcoming shift. Please accept it to
+acknowledge your upcoming shepherding duty.</li>
+<li>If you <strong>cannot make the shift</strong>:<ul>
+<li>Declining the invite does not alert anyone or trigger any re-assignment.</li>
+<li>If you are OOO or the assigned shift is during a holiday, please do your
+best to <a href="https://goto.google.com/swap">swap shifts</a> with someone! You are
+not expected to shepherd on a holiday but we do want to maximize coverage
+where/when possible.</li>
+<li>Ask around (shepherding chat is a good place!) for a volunteer and then
+update the <a href="http://go/whos-the-shepherd">rotation</a>.</li>
+</ul>
+</li>
+<li>To become a shepherd, please reach out to the Chrome Product Security team.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/shepherd.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/shepherd.md</a>
+  </p>
+</div>

@@ -1,0 +1,153 @@
+<h1>Dumping the compiled code from a chrome binary</h1>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/disassemble_code.md">Rendered</a></p>
+<h2 id="background">Background</h2>
+<p>Sometimes you want to look at the disassembled code of a method,
+e.g. you have a stack trace like</p>
+<pre>0xd3c90a78(libmonochrome.so -vector.h:1047 ) blink::EventDispatcher::Dispatch()
+0xde86db5a
+0xd3c8fcdd(libmonochrome.so -event_dispatcher.cc:59 )blink::EventDispatcher::DispatchEvent(blink::Node&amp;, blink::Event*)</pre>
+<p>Where something from <code>vector.h</code> has been inlined in <code>Dispatch()</code>
+and so you don&#39;t know what line in of <code>Dispatch()</code> is actually crashing.
+Or you want to compare the code before and after a &quot;no-op&quot; change
+that has resulted in a perf regression
+or you want to see what methods have been inlined in the final binary
+(e.g. AFDO can result in more/less inlining,
+depending what was observed when the AFDO data was collected).</p>
+<p>This doc tells you how to dump the assembly for a method
+and how to deal with stack traces involving inlined code.</p>
+<h2 id="differences-for-googlers">Differences for Googlers</h2>
+<p>There are some tasks,
+like disassembling official release builds of chrome
+that have Google-specific instructions.
+You can find them <a href="https://goto.google.com/disassemble-chrome-code">here</a></p>
+<h2 id="building-an-unstripped-binary">Building an unstripped binary</h2>
+<p>Below are the ninja arguments for the <code>rel_ng</code> trybot
+but with extra symbols enabled.
+We can include even more symbols with <code>symbol_level</code> of <code>2</code> instead of <code>1</code>
+but the binary size is much greater.</p>
+<pre>is_official_build = true
+dcheck_always_on = true
+is_component_build = false
+is_debug = false
+blink_symbol_level = 1
+symbol_level = 1
+
+# Restricted options. May not make sense for non-Googlers.
+use_remoteexec = true
+proprietary_codecs = true
+ffmpeg_branding = &quot;Chrome&quot;</pre>
+<p>This should be close to a release-optimized binary
+e.g. it applies Automatic Feedback Directed Optimization.
+You might want to switch to <code>dcheck_always_on=false</code>.</p>
+<p>To build, run</p>
+<pre data-language="shell">ninja -C out/RelNgSym</pre>
+<p>You probably will want to add some more command line options to this,
+depending on your usual build parallelism.</p>
+<h2 id="getting-the-right-objdump">Getting the right objdump</h2>
+<p>You can dump the asm from the binary or <code>.so</code> file using <code>objdump</code>.
+You can dump the symbols using <code>nm</code>.
+Both are from GNU binutils.
+For x86 code, if you are running Linux,
+you probably have it already.</p>
+<p>If you are trying to examine Android code,
+it&#39;s likely ARM or MIPS.
+In that case you can install an alternate binutils package
+or (maybe better) use the one that ships in Android&#39;s SDK.</p>
+<h2 id="finding-the-address-of-the-compiled-code">Finding the address of the compiled code</h2>
+<p>So, let&#39;s say we are looking for <code>blink::StyleInvalidator::Invalidate</code>.
+First we dump out the symbols from the binary.
+This takes a few seconds.</p>
+<pre data-language="shell">nm out/RelNgSym/chrome &gt; /tmp/symbols</pre>
+<p>Now we need to get the start and end address of the function.
+This is a little hacky but we can find the end address
+by finding the next function
+(with symbol level <code>2</code> we get entries
+which give an address and length
+but nm is slower).
+So now run</p>
+<pre data-language="shell">grep -A1 &quot;blink::StyleInvalidator::Invalidate(&quot; /tmp/symbols</pre>
+<p>and you should see the something like</p>
+<pre>000000000769d230 t blink::StyleInvalidator::Invalidate(blink::Element&amp;, blink::StyleInvalidator::SiblingData&amp;)
+000000000769ce10 t blink::StyleInvalidator::Invalidate(blink::Document&amp;, blink::Element*)
+000000000769d950 t blink::StyleInvalidator::SiblingData::MatchCurrentInvalidationSets(blink::Element&amp;, blink::StyleInvalidator&amp;)</pre>
+<p>So we have found 2 overloads for this symbol
+and let&#39;s say we want the latter.
+So the function starts at <code>0x769ce10</code>
+and ends at <code>0x769d950</code>
+(the address of the next symbol).</p>
+<h2 id="dumping-code">Dumping code</h2>
+<p>Using the relevant objdump binary, we can now dump the assembly code with</p>
+<pre>objdump -j .text -D -l -C --start-addr=0x769ce10 --stop-addr=0x769d950 out/RelNgSym/chrome</pre>
+<p>and you get something like</p>
+<pre>out/RelNgSym/chrome:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+000000000769ce10 &lt;blink::StyleInvalidator::Invalidate(blink::Document&amp;, blink::Element*)&gt;:
+_ZN5blink16StyleInvalidator10InvalidateERNS_8DocumentEPNS_7ElementE():
+./../../third_party/blink/renderer/core/css/invalidation/style_invalidator.cc:31
+ 769ce10:	55                   	push   %rbp
+ 769ce11:	48 89 e5             	mov    %rsp,%rbp
+ 769ce14:	41 57                	push   %r15
+ 769ce16:	41 56                	push   %r14
+ 769ce18:	41 55                	push   %r13
+ 769ce1a:	41 54                	push   %r12
+ 769ce1c:	53                   	push   %rbx
+ 769ce1d:	48 81 ec 28 01 00 00 	sub    $0x128,%rsp
+ 769ce24:	49 89 d4             	mov    %rdx,%r12
+ 769ce27:	49 89 f7             	mov    %rsi,%r15
+ 769ce2a:	49 89 fe             	mov    %rdi,%r14
+ 769ce2d:	64 48 8b 04 25 28 00 	mov    %fs:0x28,%rax
+ 769ce34:	00 00
+ 769ce36:	48 89 45 d0          	mov    %rax,-0x30(%rbp)
+InlineBuffer():
+./../../third_party/blink/renderer/platform/wtf/vector.h:864
+ 769ce3a:	4c 8d ad c8 fe ff ff 	lea    -0x138(%rbp),%r13
+VectorBufferBase():
+./../../third_party/blink/renderer/platform/wtf/vector.h:465
+ 769ce41:	4c 89 ad b8 fe ff ff 	mov    %r13,-0x148(%rbp)
+ 769ce48:	48 c7 85 c0 fe ff ff 	movq   $0x10,-0x140(%rbp)
+ 769ce4f:	10 00 00 00
+SiblingData():
+./../../third_party/blink/renderer/core/css/invalidation/style_invalidator.h:87
+ 769ce53:	c7 45 c8 00 00 00 00 	movl   $0x0,-0x38(%rbp)
+GetFlag():
+./../../third_party/blink/renderer/core/dom/node.h:909
+ 769ce5a:	8b 46 10             	mov    0x10(%rsi),%eax
+ 769ce5d:	66 85 c0             	test   %ax,%ax
+_ZN5blink16StyleInvalidator10InvalidateERNS_8DocumentEPNS_7ElementE():
+./../../third_party/blink/renderer/core/css/invalidation/style_invalidator.cc:34
+ 769ce60:	0f 88 28 01 00 00    	js     769cf8e &lt;blink::StyleInvalidator::Invalidate(blink::Document&amp;, blink::Element*)+0x17e&gt;
+./../../third_party/blink/renderer/core/css/invalidation/style_invalidator.cc:41
+ 769ce66:	4d 85 e4             	test   %r12,%r12
+ 769ce69:	0f 84 85 00 00 00    	je     769cef4 &lt;blink::StyleInvalidator::Invalidate(blink::Document&amp;, blink::Element*)+0xe4&gt;
+ 769ce6f:	48 8d 95 b8 fe ff ff 	lea    -0x148(%rbp),%rdx
+./../../third_party/blink/renderer/core/css/invalidation/style_invalidator.cc:42
+ 769ce76:	4c 89 f7             	mov    %r14,%rdi
+ 769ce79:	4c 89 e6             	mov    %r12,%rsi
+ 769ce7c:	e8 af 03 00 00       	callq  769d230 &lt;blink::StyleInvalidator::Invalidate(blink::Element&amp;, blink::StyleInvalidator::SiblingData&amp;)&gt;
+IsEmpty():
+./../../third_party/blink/renderer/platform/wtf/vector.h:1039
+ 769ce81:	83 bd c4 fe ff ff 00 	cmpl   $0x0,-0x13c(%rbp)
+_ZN5blink16StyleInvalidator10InvalidateERNS_8DocumentEPNS_7ElementE():
+./../../third_party/blink/renderer/core/css/invalidation/style_invalidator.cc:43
+ 769ce88:	74 56                	je     769cee0 &lt;blink::StyleInvalidator::Invalidate(blink::Document&amp;, blink::Element*)+0xd0&gt;
+ 769ce8a:	4c 89 e3             	mov    %r12,%rbx
+ 769ce8d:	0f 1f 00             	nopl   (%rax)
+ 769ce90:	48 8b 5b 30          	mov    0x30(%rbx),%rbx
+NextSibling():
+./../../third_party/blink/renderer/core/dom/element_traversal.h:530 (discriminator 2)
+ 769ce94:	48 85 db             	test   %rbx,%rbx
+ 769ce97:	74 47                	je     769cee0 &lt;blink::StyleInvalidator::Invalidate(blink::Document&amp;, blink::Element*)+0xd0&gt;
+
+...</pre>
+<h2 id="further-reading">Further reading</h2>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/minidump_to_core.md#Source-debugging">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/minidump_to_core.md#Source-debugging</a></p>
+<p><a href="https://www.chromium.org/developers/how-tos/debugging-on-windows">https://www.chromium.org/developers/how-tos/debugging-on-windows</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/disassemble_code.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/disassemble_code.md</a>
+  </p>
+</div>

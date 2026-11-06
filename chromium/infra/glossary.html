@@ -1,0 +1,168 @@
+<h1>Glossary</h1>
+<p>This page provides definitions of phrases and terminology used in Chromium&#39;s
+<a href="https://en.wikipedia.org/wiki/Continuous_integration">continuous integration</a>
+infrastructure.</p>
+<h2 id="builds">Builds</h2>
+<ul>
+<li><p><strong>Build</strong>: A Buildbucket job that runs a single CI-specific task. Composed of
+multiple steps rendered in Milo (e.g. a step for &#39;fetching the source&#39;, a step
+for &#39;compile&#39;, etc.). A build is associated with a single Builder.
+As of writing (Q3 2022), all Buildbucket builds are themselves Swarming tasks.</p>
+</li>
+<li><p><strong>Builder</strong>: A named configuration (or grouping) of builds in Buildbucket. All
+builds of a builder share the same config. For the most part, this means they
+run the same recipe and have largely the same set of steps. A builder may also
+be referred to as a <strong>bot</strong>, but that term is ambiguous and should be avoided
+since it can be confused with a <strong>Swarming bot</strong>. (See the <a href="#luci">LUCI</a>
+section below.)</p>
+<ul>
+<li><strong>Builder/Tester Split</strong>: At the end of their builds, some builders may
+trigger builds on other builders. When the parent build only compiles and
+the child build only runs tests, we call this model a &quot;builder/tester
+split&quot;. The child is referred to as the tester, and the parent (confusingly)
+referred to as the builder. The child might also be referred to as a &quot;thin
+tester&quot; if it only runs tests remotely. Read more about builder-tester
+splits
+<a href="builder_types#parent_child-split-a_k_a_builder_tester-split">here</a>.</li>
+<li><strong>CI Builder</strong> or <strong>Post-submit Builder</strong>: A builder that compiles/tests a
+branch of Chromium. Often triggered when changes to the branch are
+submitted, these post-submit builders run on a continuous basis.</li>
+<li><strong>FYI Builder</strong>: A CI builder with reduced priority and impact. Ideally
+used only for experiments or for temporary build/test configs. May also be
+referred to as an &quot;informational&quot; builder.</li>
+<li><strong>Trybot</strong> or <strong>Trybuilder</strong> or <strong>Pre-submit Builder</strong>: A builder that
+compiles/tests a pending CL before submission.</li>
+<li><strong>Tryjob</strong>: A single build of a trybot.</li>
+</ul>
+</li>
+<li><p><strong>Chromium&#39;s CQ</strong>: The set of trybots required for any Chromium CL to pass
+before submission. These are mandatory for nearly every CL.</p>
+<ul>
+<li><strong>CQ Builder</strong>: One of the mandatory trybots. See
+<a href="https://github.com/chromium/chromium/blob/HEAD/infra/config/generated/cq-builders.md#required-builders">here</a> for
+the full list.</li>
+<li><strong>Compilator</strong>: A type of builder that handles only the &quot;compiling&quot; and
+&quot;isolating&quot; phases of a CQ build. (&quot;Isolating&quot; referring to the process of
+uploading test binaries to the CAS server. See CAS in the <a href="#misc">misc</a>
+section below.) The name is a portmanteau of the words &quot;compiler&quot; and
+&quot;isolator&quot;.</li>
+<li><strong>Orchestrator</strong>: A type of CQ builder that delegates all &quot;compiling&quot; and
+&quot;isolating&quot; phases of a build to a triggered child builder called a
+compilator (see above). For example,
+<a href="https://ci.chromium.org/p/chromium/builders/try/linux-rel">linux-rel</a> is
+an orchestrator on the CQ and
+<a href="https://ci.chromium.org/p/chromium/builders/try/linux-rel-compilator">linux-rel-compilator</a>
+is its compilator. This partitioning confines the busy-waiting phases of a
+build (ie: waiting for Swarming tests to finish) to the orchestrator,
+allowing the compilator to quickly move on and pick up new requests. Read
+more about orchestrators and compilators
+<a href="builder_types#orchestrator_compilator">here</a>.</li>
+<li><strong>Optional Trybot</strong>: A trybot that&#39;s not a default CQ builder. These can
+be triggered manually by a developer. Or they can be required by the CQ
+if the CL includes changes to a specific file path. See
+<a href="https://github.com/chromium/chromium/blob/HEAD/infra/config/generated/cq-builders.md#optional-builders">here</a> for a
+list of the optional trybots and the filepaths that require them. Trybots
+that fall into that latter category can also be referred to as
+<strong>path-based trybots</strong>.</li>
+<li><strong>Mega CQ</strong>: An alternative mode of Chromium&#39;s CQ that greatly increases the
+amount of trybots triggered. This increases the confidence that a CL won&#39;t
+be reverted after landing, but at the cost of much longer CQ cycle times.
+Triggered via the <code>Mega CQ</code> buttons in Gerrit. See <a href="cq#modes">CQ docs</a>
+for more info.</li>
+</ul>
+</li>
+<li><p><strong>Builderless</strong>: A Swarming dimension (see below for definition of a
+  dimension) that simply indicates the Swarming bot doesn&#39;t exclusively run
+  builds for a dedicated set of builders. Instead, it belongs to a generic
+  pool of bots (colloquially known as the &quot;builderless pool&quot;) that&#39;s shared
+  across a large group of builders. Any builder that runs builds in said
+  pool is also referred to as being &quot;builderless.&quot;</p>
+</li>
+<li><p><strong>Builderful</strong>: The opposite of <strong>Builderless</strong> (see above). Any builder that
+  runs on a set of machines dedicated to just that builder is said to be
+  &quot;builderful&quot;. This is enforced via the <code>builder:</code> Swarming dimension, whose
+  value is the name of the builder. Note that some builderful machines can be
+  dedicated to one or more builders.</p>
+</li>
+<li><p><strong>Builder Group</strong>: A logical grouping of builders. For example, the
+&quot;chromium.linux&quot; builder group is a set of builders that test basic
+functionality of Chromium on Linux.</p>
+</li>
+<li><p><strong>Waterfall</strong>: A largely historical term that often refers to a particular
+grouping of Builders or Builder Groups. Examples include:</p>
+<ul>
+<li><strong>The Perf Waterfall</strong>: Builders in the
+<a href="https://ci.chromium.org/p/chrome/g/chrome.perf">chrome.perf</a> builder group.</li>
+<li><strong>The Main Waterfall</strong>: Another historical term. Often refers to the set of
+builders whose failures close the
+<a href="https://chromium-status.appspot.com/">Chromium tree</a>. Spans multiple
+builder groups.</li>
+</ul>
+</li>
+</ul>
+<h2 id="luci">LUCI</h2>
+<p>LUCI is a collection of continuous integration services running on Google Cloud.
+These services largely make-up the backbone of Chromium&#39;s CI.</p>
+<ul>
+<li><p><strong>Buildbucket</strong>: A LUCI service that tracks builds, and queues them into
+Builders.</p>
+</li>
+<li><p><strong>Change Verifier</strong> or <strong>CV</strong>: A LUCI service that triggers and manages the
+builds a CL must pass before the CL is submitted into the repository&#39;s trunk.
+These builds are known as &quot;pre-submit&quot;, and the full set of required builds
+that CV enforces for a repo are that repo&#39;s &quot;CQ&quot;. (See above for a description
+of Chromium&#39;s particular CQ.)</p>
+</li>
+<li><p><strong>CIPD</strong>: A LUCI service for hosting and distributing packages. Packages
+stored in CIPD are arbitrary sets of files. Practically, these are often SDKs,
+toolchains, and other various binaries not suitable for being checked-into a
+Git repo directly.</p>
+</li>
+<li><p><strong>Milo</strong>: A LUCI service that renders Builds in a web-browser UI. Hosted on
+<a href="https://ci.chromium.org">https://ci.chromium.org</a>. Alliases also include <a href="https://build.chromium.org">https://build.chromium.org</a> and
+<a href="https://luci-milo.appspot.com">https://luci-milo.appspot.com</a>. Named after the Pokemon
+<a href="https://bulbapedia.bulbagarden.net/wiki/Milotic_(Pok%C3%A9mon)">Milotic</a>.</p>
+</li>
+<li><p><strong>Recipe</strong>: A LUCI technology that defines what steps a build runs. Written in
+a domain-specific language embedded in Python. Nearly all builds run a recipe.
+(The alternative to recipes being a binary that implements the luciexe
+protocol. As of Q3 2022, non-recipe luciexe binaries have limited use in
+Chromium&#39;s infra.)</p>
+</li>
+<li><p><strong>Swarming</strong>: A LUCI service that runs arbitrary tasks across a fleet of
+workers knows as Swarming bots.</p>
+<ul>
+<li><strong>Swarming bot</strong>: A single worker that communicates with the Swarming server
+and executes Swarming tasks. The worker often, but not necessarily, runs on
+a Linux, Mac, or Win VM. A bot belongs to one or more Swarming pools.</li>
+<li><strong>Swarming dimension</strong>: A key:value pair that a Swarming bot tags to itself
+to describe its hardware or software attributes. (e.g. A machine running
+macOS Ventura would tag itself with <code>os:Mac-13</code>.) A task can then include
+certain dimensions in its request, and only bots that match all requested
+dimensions will execute the task.</li>
+<li><strong>Swarming pool</strong>: A collection of Swarming bots. A pool acts as a security
+boundary, enforcing who can view and trigger tasks on its bots.</li>
+<li><strong>Swarming task</strong>: A single workload request. A task defines a command to
+run, and is associated to a single Swarming pool.</li>
+</ul>
+</li>
+</ul>
+<h2 id="misc">Misc</h2>
+<ul>
+<li><strong>CAS</strong>: Content Addresses Storage, a service for storing binary blobs. Used
+on Chromium&#39;s infra to store and transfer test inputs from the builder that
+compiles the tests to the Swarming bots that run them. May also be referred
+to by its predecessor&#39;s name: &quot;isolate&quot;.</li>
+<li><strong>Gerrit</strong>: The code-review tool for changes to Google-hosted Git
+repositoris. See chromium/src.git&#39;s Gerrit instance
+<a href="https://chromium-review.googlesource.com/">here</a>.</li>
+<li><strong>Gitiles</strong>: The web-browser UI for Google-hosted Git repositories. See
+chromium/src.git on gitiles
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD">here</a>.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/infra/glossary.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/infra/glossary.md</a>
+  </p>
+</div>

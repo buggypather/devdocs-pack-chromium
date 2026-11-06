@@ -1,0 +1,234 @@
+<h1>Policy Settings in Chrome</h1>
+<h2 id="summary">Summary</h2>
+<p>Chrome exposes a different set of configurations to administrators. These
+configurations are called policy and they give administrators more advanced
+controls than the normal users. With different device management tools,
+an administrator can deliver these policies to many users. Here is the
+<a href="https://support.google.com/chrome/a/answer/9037717?hl=en">help center article</a>
+that talks about Chrome policy and its deployment.</p>
+<h2 id="do-i-need-a-policy">Do I need a policy</h2>
+<p>Usually you need a policy when</p>
+<ul>
+<li><p>Launching a new feature. Create a policy so that the admin can disable or
+enable the feature for all users.</p>
+</li>
+<li><p>Deprecating an old feature. Create a policy to give enterprise users more
+time to migrate away from the feature.</p>
+</li>
+</ul>
+<p><strong>To read more about best practices for shipping enterprise friendly features,
+please read <a href="https://www.chromium.org/developers/enterprise-changes/">this article</a>.</strong></p>
+<h2 id="adding-a-new-policy">Adding a new policy</h2>
+<blockquote>
+<p>ℹ️️ An AI agent (e.g., Gemini CLI) can help you write your policy YAML, map it to
+a pref, and write tests. Add the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:agents/skills/policy-creation/">policy-creation</a>
+skill, then ask your agent to create a policy.</p>
+<p>Example for Gemini CLI:</p>
+<pre data-language="sh">gemini skills link agents/skills/policy-creation</pre>
+</blockquote>
+<ol>
+<li>Design the policy, decide policy name, type, function, etc.<ul>
+<li>Please read <a href="policy_design">policy_design.md</a> for more information.</li>
+<li>If you are adding support for a GenAI policy, please also read the
+internal <a href="http://go/genai-chrome-policy-instructions">instructions</a> for
+new GenAI policies specifically.</li>
+</ul>
+</li>
+<li>Declare the policy in the <a href="https://cs.chromium.org/chromium/src/components/policy/resources/templates/policies.yaml">policies.yaml</a> file.<ul>
+<li>This file contains the policy names and their ids.</li>
+</ul>
+</li>
+<li>If you need to add a new policy group, create a directory with the name of
+that group under <a href="https://cs.chromium.org/chromium/src/components/policy/resources/templates/policy_definitions/">policy group</a>.<ul>
+<li>Inside the newly created directory, create a <code>.group.details.yaml</code> file
+with the caption and description of the group. This group is used for
+documentation and policy template generation, so it is recommended to
+group policies in meaningful groups.</li>
+<li>Use <a href="https://cs.chromium.org/chromium/src/components/policy/resources/new_policy_templates/.group.details.yaml">.group.details.yaml</a>
+as a templates for group definition.</li>
+</ul>
+</li>
+<li>Create a file named <code>PolicyName.yaml</code> under the appropriate <a href="https://cs.chromium.org/chromium/src/components/policy/resources/templates/policy_definitions/">policy group</a>.
+Please use <a href="https://cs.chromium.org/chromium/src/components/policy/resources/new_policy_templates/policy.yaml">policy.yaml</a> to start off your policy.<ul>
+<li>This file contains meta-level descriptions of all policies and is used
+to generate code, policy templates as well as documentation. Please make
+sure you get the version and feature flags (such as <code>dynamic_refresh</code>
+and <code>supported_on</code>) right. More details on the fields can be found in
+<a href="https://cs.chromium.org/chromium/src/components/policy/resources/new_policy_templates/policy.yaml">policy.yaml</a>.</li>
+<li>See <a href="description_guidelines">description_guidelines.md</a>
+for additional guidelines when creating a description, including how
+various products should be referenced.</li>
+<li>Optional fields can be skipped when they are set to the default value.</li>
+</ul>
+</li>
+<li>Create a policy atomic group.<ul>
+<li><p>If you are adding multiple policies that are closely related and interact
+  with each other, you should put them in policy atomic group. An atomic
+  policy group is used in the Chromium code and affects how policies are
+  applied. When enabled by the admin, this ensures that policies from an
+  atomic group get their values from the same source and are not a mix of
+  policies from multiple sources. This <a href="https://chromeenterprise.google/intl/en_ca/policies/atomic-groups/">feature</a>
+  is controlled by the policy <a href="https://chromeenterprise.google/intl/en_ca/policies/#PolicyAtomicGroupsEnabled">PolicyAtomicGroupsEnabled</a>.</p>
+<ul>
+<li>Declare the atomic group in the <a href="https://cs.chromium.org/chromium/src/components/policy/resources/templates/policies.yaml">policies.yaml</a> file.</li>
+</ul>
+</li>
+<li><p>Create a <code>policy_atomic_groups.yaml</code> file in the group where you added the
+policies if it does not already exist.
+You may use <a href="https://cs.chromium.org/chromium/src/components/policy/resources/new_policy_templates/policy_atomic_groups.yaml">policy_atomic_groups.yaml</a> as reference.</p>
+</li>
+</ul>
+</li>
+<li>Create a preference and map the policy value to it.<ul>
+<li>All policy values need to be mapped into a prefs value before being used
+unless the policy is needed before PrefService initialization.</li>
+<li>To map the policy:<ol>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/prefs/README.md">Create a prefs and register the prefs in <strong>Local State</strong> or
+<strong>Profile Prefs</strong>.</a>
+Please note that, this must match the <code>per_profile</code> attribute in the
+<code>YourPolicyName.yaml</code>. We also strongly encourage developers to
+register the prefs with <strong>Profile Prefs</strong> if possible, because
+this gives admin more flexibility of policy setup.</li>
+<li>Most policies can be mapped to prefs with <code>kSimplePolicyMap</code> in
+<a href="https://cs.chromium.org/chromium/src/chrome/browser/policy/configuration_policy_handler_list_factory.cc?type=cs&amp;q=kSimplePolicyMap&amp;g=0&amp;l=150">configuration_policy_handler_list_factory.cc</a>. If the policy needs additional verification or processing, please
+implement a <code>ConfigurationPolicyHandler</code> to do so.</li>
+<li>Test the mapping by adding PolicyName.json  under
+<a href="https://cs.chromium.org/chromium/src/components/policy/test/data/pref_mapping">policy/test/data/pref_mapping</a> (see <a href="https://cs.chromium.org/chromium/src/docs/enterprise/policy_pref_mapping_test.md">instructions</a>).</li>
+<li>iOS platform has its own
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ios/chrome/browser/policy/model/configuration_policy_handler_list_factory.mm">configuration_policy_handler_list_factory.mm</a>
+and
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ios/chrome/test/data/policy/pref_mapping">policy/pref_mapping</a>
+file.</li>
+</ol>
+</li>
+</ul>
+</li>
+<li>Disable the user setting UI when the policy is applied.<ul>
+<li>If your feature can be controlled by GUI in <code>chrome://settings</code>, the
+associated option should be disabled when the policy controlling it is
+managed.<ul>
+<li><code>PrefService:Preference::IsManaged</code> reveals whether a prefs value
+comes from policy or not.</li>
+<li>The setting needs an
+<a href="https://cs.chromium.org/chromium/src/ui/webui/resources/images/business.svg">indicator</a>
+to tell users that the setting is enforced by the administrator.</li>
+<li>There are more information and util functions can be found <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/webui/resources/cr_elements/policy/">here</a>.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Support <code>dynamic_refresh</code> if possible.<ul>
+<li>We strongly encourage developers to make their policies support this
+attribute. It means the admin can change the policy value and Chrome
+will honor the change at run-time without requiring a restart of the
+browser.<ul>
+<li>If your policy is not dynamic in the sense that its value is only
+evaluated at browser process startup time, it will require special
+care to support ChomeOS and should be avoid in general. Reach out to
+someone from <code>chromeos/ash/components/policy/OWNERS</code> early to discuss
+this.</li>
+</ul>
+</li>
+<li>Most of the time, this requires a
+<a href="https://cs.chromium.org/chromium/src/components/prefs/pref_change_registrar.h">PrefChangeRegistrar</a>
+to listen to the preference change notification and update UI or
+browser behavior right away.</li>
+</ul>
+</li>
+<li>Adding a device policy for ChromeOS.<ul>
+<li>Most policies that are used by the browser can be shared between desktop
+and ChromeOS. However, you need a few additional steps for a device
+policy on ChromeOS.<ul>
+<li>Add a field for your policy in
+<code>components/policy/proto/chrome_device_policy.proto</code>. Please note
+that all proto fields are optional.</li>
+<li>Update
+<code>chrome/browser/ash/policy/core/device_policy_decoder.{h,cc}</code>
+for the new policy.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Test the policy.<ul>
+<li>Add a test to verify the policy. You can add a test in
+<code>chrome/browser/policy/&lt;area&gt;_policy_browsertest.cc</code> or with the policy
+implementation. For example, a network policy test can be put into
+<code>chrome/browser/net</code>. Ideally, your test would set the policy, fire up
+the browser, and interact with the browser just as a user would do to
+check whether the policy takes effect.</li>
+</ul>
+</li>
+<li>Manually testing your policy.<ul>
+<li>This <a href="https://github.com/chromium/chromium/blob/HEAD/docs/enterprise/go/chrome-with-policies">Internal Doc</a> contains the most up to date
+instructions for testing policies. However, the following docs are
+still useful as public references.</li>
+<li>Windows: The simplest way to test is to write the registry keys manually
+to <code>Software\Policies\Chromium</code> (for Chromium builds) or
+<code>Software\Policies\Google\Chrome</code> (for Google Chrome branded builds). If
+you want to test policy refresh, you need to use group policy tools and
+gpupdate; see
+<a href="https://www.chromium.org/administrators/windows-quick-start">Windows Quick Start</a>.</li>
+<li>Mac: See
+<a href="https://www.chromium.org/administrators/mac-quick-start">Mac Quick Start</a>
+(section &quot;Debugging&quot;)</li>
+<li>Linux: See
+<a href="https://www.chromium.org/administrators/linux-quick-start">Linux Quick Start</a>
+(section &quot;Set Up Policies&quot;)</li>
+<li>ChromeOS and Android are more complex to test, as a full end-to-end
+test requires network transactions to the policy test server.
+Instructions on how to set up the policy test server and have the
+browser talk to it are here:
+<a href="https://www.chromium.org/developers/how-tos/enterprise/running-the-cloud-policy-test-server">Running the cloud policy test server</a>.
+If you&#39;d just like to do a quick test for ChromeOS, the Linux code is
+also functional on CrOS, see
+<a href="https://www.chromium.org/administrators/linux-quick-start">Linux Quick Start</a>.</li>
+</ul>
+</li>
+<li>If you are adding a new policy that supersedes an older one, verify that the
+new policy works as expected even if the old policy is set. And if the new
+policy has any interactions with the other policies, make sure to document
+and test all the possible combinations.</li>
+</ol>
+<h2 id="policy-launch-modification-and-deprecation">Policy Launch, modification and deprecation</h2>
+<p>Please read <a href="life_of_a_policy">life of a policy</a> for more information.</p>
+<h2 id="examples">Examples</h2>
+<ul>
+<li>Here is an example for adding a new policy. It&#39;s a good, simple place to
+get started:
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/4004453">https://chromium-review.googlesource.com/c/chromium/src/+/4004453</a></li>
+<li>This is an example for the clean-up CL needed to remove a deprecated, escape
+hatch policy.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/5483886">https://chromium-review.googlesource.com/c/chromium/src/+/5483886</a></li>
+<li>This is an example of a CL that sets the expiration date of a policy in a
+future milestone:
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/4022055">https://chromium-review.googlesource.com/c/chromium/src/+/4022055</a></li>
+</ul>
+<h2 id="cloud-policy">Cloud Policy</h2>
+<p><strong>For Googlers only</strong>: The Cloud Policy will be maintained by the Admin console
+team.
+<a href="https://docs.google.com/document/d/1QgDTWISgOE8DVwQSSz8x5oKrI3O_qAvOmPryE5DQPcw/edit?usp=sharing">See instructions here</a>
+on how to update the Cloud Policy.</p>
+<h2 id="post-policy-update">Post policy update</h2>
+<p>Once the policy is added or modified, nothing else needs to be taken
+care of by the Chromium developers. However, there are a few things that will be
+updated based on the yaml file. Please note that there is no ETA for
+everything listed below.</p>
+<ul>
+<li><a href="https://dl.google.com/dl/edgedl/chrome/policy/policy_templates.zip">Policy templates</a>
+will be updated automatically.</li>
+<li><a href="https://chromeenterprise.google/policies/">Policy documentation</a>
+will be updated automatically.</li>
+</ul>
+<hr>
+<h3 id="additional-notes">Additional Notes</h3>
+<ol>
+<li>The <code>future_on</code> flag can disable policy on Beta of Stable channel only if the
+policy value is copied to <code>PrefService</code> in Step 3 of <strong>Adding a new policy</strong>.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/add_new_policy.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/add_new_policy.md</a>
+  </p>
+</div>

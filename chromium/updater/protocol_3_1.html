@@ -1,0 +1,1022 @@
+<h1>Protocol 3 1</h1>
+<p>Previous versions are described at:</p>
+<ul>
+<li><a href="https://github.com/google/omaha/blob/master/doc/ServerProtocolV3.md">Version 3</a></li>
+<li><a href="https://github.com/google/omaha/blob/master/doc/ServerProtocolV2.md">Version 2</a></li>
+<li>Version 1 of the protocol was never publicly deployed.</li>
+</ul>
+<h2 id="introduction">Introduction</h2>
+<p>The Omaha protocol defines the interactions between a software updater (an
+&quot;Omaha Client&quot;) and a cloud update infrastructure. The cloud infrastructure
+contains both an update control server (an &quot;Omaha Server&quot;) and a collection of
+plain HTTP servers or CDNs (collectively, the &quot;Download Servers&quot;). The protocol
+is an application-layer protocol on top of HTTP.</p>
+<p>Omaha clients interact with the servers in a three-phase <strong>session</strong>. Each step
+in the session involves at least one successful HTTP transaction.</p>
+<ol>
+<li><strong>The Update Check</strong>: The client transmits what applications it has
+installed that may be eligible for update to the server. The server replies
+with whether an update is available for each application. If no updates are
+available, this is the end of the update session.</li>
+<li><strong>The Download(s)</strong>: The client downloads the updates from the download
+servers. It then executes downloaded installers or its own code to apply
+these updates.</li>
+<li><strong>The Ping-Back(s)</strong>: The client transmits data about its activities back
+to the server, including whether the updates were successful, which
+download URLs were used, and any error codes encountered.</li>
+</ol>
+<p>The update check is an HTTP POST with a JSON data body. The response has a JSON
+data body. The integrity of the update check is protected by <a href="cup">CUP</a>, even
+in the presence of compromised TLS.</p>
+<p>The downloads are HTTP GET requests. The client is free to use any HTTP
+technology to fetch the downloads, for example using Range requests.</p>
+<p>The ping-back is an HTTP POST with a JSON data body. The response may contain a
+JSON data body acknowledging the received data, but should be ignored by the
+client unless CUP is in use on this request.</p>
+<h2 id="concepts">Concepts</h2>
+<h3 id="session-id">Session ID</h3>
+<p>All requests in a session are linked by a unique <strong>session ID</strong>. Session IDs are
+random strings with at least 128 bits of entropy. There must be no relationship
+between a previous session ID and the next session ID. In the update check and
+ping-back requests the session id is transmitted in the POST body (details
+below). In the download requests it is transmitted as an HTTP header (details
+below).</p>
+<h3 id="request-id">Request ID</h3>
+<p>Each update check has a unique <strong>request ID</strong>. Each ping-back has a different
+unique request ID. Request IDs are random strings with at least 128 bits of
+entropy. There must be no relationship between a previous request ID and the
+next request ID. Request ID allows an Omaha server to deduplicate repeated
+requests, which have been observed as part of client or proxy retry loops.</p>
+<h3 id="default-values">Default Values</h3>
+<p>The request bodies of the update check and ping-back requests are JSON. Most
+members have a default value defined by this protocol. Clients and servers may
+omit serialization of any members the have default values. Therefore, if a
+client or server does not send the member, the recipient must assume the default
+value of that member.</p>
+<p>The default value of any list-valued member is the empty list. The default value
+of any object-valued member is an empty object (which is equivalent to an object
+of the appropriate type populated with its default members).</p>
+<p>Compatible clients and servers must be able to tolerate unexpected members.</p>
+<h3 id="version-numbers">Version Numbers</h3>
+<p>Version numbers are strings of the form A.B.C.D, where A, B, C, and D are
+base 10 integers between 0 and 2^32 - 1 (inclusive). Suffix elements may be
+omitted if equal to 0; that is, &quot;1.2&quot; is equal to  &quot;1.2.0.0&quot;.</p>
+<p>Version numbers are ordered. Version A is greater than version B if and only if
+there some element of version A is greater than the corresponding element of
+version B, and all the preceding elements are equal. Two versions are equal if
+any only if all their elements are equal.</p>
+<h3 id="application-ids">Application IDs</h3>
+<p>An application ID is a string that identifies an application, for example
+&quot;com.google.chrome&quot;. Application IDs are case-insensitive in the ASCII
+characters. Application IDs should only contain printable, human-readable
+characters.</p>
+<h3 id="user-counting">User Counting</h3>
+<p>The Omaha protocol is anonymous, but allows servers to compute the number of
+unique active or update-checking devices. This is accomplished through
+client-regulated counting.</p>
+<p>The idea of client-regulated counting is to inspect all update check requests
+received over the last N days and discard all but the first request from each
+client. The number of remaining requests is equal to the number of unique
+clients.</p>
+<p>Each response from the server contains a numeric date, representing the date (in
+the server&#39;s choice of timezone) that the client&#39;s request was received. The
+client stores this date, and sends it on the next request to the server. When
+inspecting the next request, the server can determine whether the date is before
+(current date - N + 1). If so, this is the first request from the client in the
+N-day window. Otherwise, this request is a &quot;duplicate&quot; and can be discarded.</p>
+<p>In certain environments (for example, frequently re-imaged VMs in internet
+cafes), it is likely that the client may fail to update the date of the last
+transaction. To avoid overcounting such clients, a technique called
+ping-freshness is used. A ping-freshness value is a random string with at least
+128 bits of entropy that is written into the client&#39;s data store alongside the
+server&#39;s date. This value is sent along with the date in the next request. If
+the server receives multiple requests with the same ping-freshness, this is a
+signal that a machine&#39;s state has been cloned or reset and that the dates in the
+request are not trustworthy. A new ping-freshness value is written any time a
+new date is written.</p>
+<p>In addition to counting the total population for each application, the Omaha
+protocol counts the active user population for each application. When an
+application is actively used, it signals this to the client, and the client will
+transmit the &quot;last reported active&quot; date to the server on the next update check
+(in addition to the &quot;last checked&quot; date). These dates are separately writeable
+and therefore need separate ping-freshness values as well.</p>
+<p>The &quot;last reported active&quot; and &quot;last checked&quot; date may vary per managed
+application, and the client must maintain separate dates (and separate
+ping-freshness values) per application.</p>
+<h3 id="differential-updates">Differential Updates</h3>
+<p>The Omaha protocol supports differential updates. A differential update achieves
+better compression by relying on information (binaries) the client already has.</p>
+<p>A version number is usually insufficient to identify the binaries the client
+already has, since they may vary by architecture, platform, or other variables
+while retaining the same official version number. Therefore, the server sends a
+more precise label with each update payload, which the client reports back in
+subsequent update checks. This value is called a &quot;differential fingerprint&quot;.</p>
+<p>The server should send a value determined by the hash of the binary (not, for
+example, a unique ID). In practice, Google&#39;s servers always send &quot;1.hash&quot; where
+&quot;hash&quot; is the SHA256 hash of the update payload.</p>
+<h3 id="extensions--forward-compatibility">Extensions &amp; Forward Compatibility</h3>
+<p>The protocol is extensible via the addition of new object members. Clients must
+tolerate the existence of members they do not handle. Unofficial or
+application-specific additional members should be prefixed with an underscore to
+avoid colliding with later additions to the protocol.</p>
+<p>Additions to the protocol that specify backward-compatible default values (often
+with a semantic meaning of &quot;unknown&quot;) do not need to increase the protocol
+version. Removals of values with specified defaults from the protocol do not
+need to increase the protocol version, since the default value can be assumed by
+compatible endpoints. All other changes to the protocol may require a new version
+number.</p>
+<h3 id="timing--backoff">Timing &amp; Backoff</h3>
+<p>Clients and servers are free to negotiate the rate at which the client conducts
+update sessions. However, the following best practices are recommended:</p>
+<ul>
+<li>If a client periodically checks according to a time-elapsed scheduled task,
+(e.g. &quot;check every 5 hours&quot;), those checks should happen at an interval
+that is coprime with a 24-hour day. This prevents a specific client from
+being locked to a particular set of times at which it checks for an update.</li>
+<li>As much as possible while respecting a user or administrator&#39;s preferences,
+clients should avoid check policies that rely on specific clock values
+(e.g. &quot;check at 5:00 AM&quot;). Clocks throughout the world are roughly
+synchronized and update schedules like this cause abrupt spikes in update
+load on update infrastructure.</li>
+<li>If a client cannot conduct a check at the scheduled time (it is in an off
+or standby power state or lacks network connectivity, the client should
+check as soon as it recovers from that condition (subject to the below).
+This allows clients who are only briefly connected to reliably update.</li>
+<li>A client doing periodic checks should implement a random chance to postpone
+a periodic update by a fraction of that period. Client update schedules can
+become synchronized by server-side or network outages, by image cloning, by
+synchronized installations, or other effects. This behavior gradually
+desynchronizes a cohort of clients that have become synchronized for any
+reason. A 20% chance to delay by 0% to 20% of the period (chosen randomly)
+is generally good enough.</li>
+<li>Clients should avoid checking at a predictable millisecond within the
+second, a predictable second within the minute, or a predictable minute
+within the hour. This both helps resist fingerprinting of the client and
+smooths load on the server, which might otherwise have spikes of traffic at
+precisely 1:00:00.000, 1:00:01.000, 1:01:00.000, etc.</li>
+</ul>
+<p>In the case of update check failure, retries are generally permitted. The client
+is free to attempt an immediate retry or a retry after a delay.
+At scale, even a single retry may double load on the update server regardless of
+any client delay (unless the client simply delays to its next normal periodic
+update check. Clients must not retry if they successfully receive a
+CUP-validated response from the server, regardless of the contents. Servers may
+protect themselves in the case of overload by issuing an X-Retry-After HTTP
+header, detailed <a href="#headers-update-check-response">below</a>.</p>
+<p>For download requets, clients should prefer to fall back to subsequent download
+URLs rather than attempting retries on a particular URL.</p>
+<h3 id="safe-json-prefixes">Safe JSON Prefixes</h3>
+<p>JSON responses from the server are prefixed with <code>)]}&#39;\n</code>, where \n indicates a
+new line character. This prevents them from being naively executed as a script
+in the context of the update server&#39;s origin.</p>
+<h2 id="update-checks">Update Checks</h2>
+<p>An update check is the first phase of an Omaha session. In an update check, the
+client sends information about what applications it is managing and the server
+responds with whether any updates are available for the applications.</p>
+<h3 id="url-update-check-request">URL (Update Check Request)</h3>
+<p>Update check requests will bear a query parameter as defined by <a href="cup">CUP</a>.</p>
+<h3 id="headers-update-check-request">Headers (Update Check Request)</h3>
+<p>Clients should send the following headers with each request. Request headers are
+not protected by CUP and therefore should be considered untrusted data. They are
+advisory data replicated from the request body so that server-side DoS
+prevention mechanisms can inexpensively reject traffic (i.e. without parsing the
+request body).</p>
+<ul>
+<li><code>X-Goog-Update-Interactivity</code>: Either &quot;fg&quot; or &quot;bg&quot;. &quot;fg&quot; indicating a
+user-initiated foreground update. &quot;bg&quot; indicates that the request is part
+of a background update. If the server is under extremely high load, it may
+use this to prioritize &quot;fg&quot; requests over &quot;bg&quot; requests.</li>
+<li><code>X-Goog-Update-AppId</code>: A comma-separated list of application IDs included
+in this request.</li>
+<li><code>X-Goog-Update-Updater</code>: &quot;name-version&quot;, where &quot;name&quot; is the name of the
+updater as reported in <code>request.updater</code> and &quot;version&quot; is the version of
+the updater as reported in <code>request.updaterversion</code>.</li>
+</ul>
+<h3 id="body-update-check-request">Body (Update Check Request)</h3>
+<p>The request body of an update check contains a JSON object with the following
+members:</p>
+<ul>
+<li><code>request</code>: A <code>request</code> object.</li>
+</ul>
+<h4 id="request-object-update-check-request"><code>request</code> Object (Update Check Request)</h4>
+<p>A request object has the following members:</p>
+<ul>
+<li><code>@os</code>: A string identifying the operating system.
+Added for backwards compatibility with Chrome Web store.
+Recommend: new servers should use <code>os</code> member instead.
+Default: &quot;&quot;. Known values include:<ul>
+<li>&quot;android&quot;: Android.</li>
+<li>&quot;cros&quot;: ChromeOS.</li>
+<li>&quot;fuchsia&quot;: Fuchsia.</li>
+<li>&quot;linux&quot;: Linux.</li>
+<li>&quot;mac&quot;: macOS.</li>
+<li>&quot;openbsd&quot;: OpenBSD.</li>
+<li>&quot;win&quot;: Windows.</li>
+</ul>
+</li>
+<li><code>@updater</code>: A string identifying the client software (e.g. &quot;Omaha&quot;,
+&quot;Chrome&quot;, &quot;Chrome Extension Updater&quot;). Default: &quot;&quot;.</li>
+<li><code>acceptformat</code>: A string, formatted as a comma-separated list of strings
+describing the formats of update payloads that this client accepts.
+Default: &quot;&quot;. The following value(s) are supported:<ul>
+<li>&quot;crx3&quot;: The CRX file format, version 3.</li>
+<li>&quot;puff&quot;: The <a href="https://chromium.googlesource.com/chromium/src.git/+/main/third_party/puffin/README.md">Puffin</a>
+*.puff file format representing a differential Puffin update.</li>
+</ul>
+</li>
+<li><code>app</code>: A list of <code>app</code> objects.</li>
+<li><code>dedup</code>: A string, must be &quot;cr&quot;. This indicates to servers that the client
+intends to use client-regulated counting algorithms rather than any sort of
+unique identifier. Version 3.0 of the protocol also supported &quot;uid&quot;.</li>
+<li><code>dlpref</code>: Specifies the preferred download URL behavior. A comma-separated
+list of values, in order of descending priority. Default: &quot;&quot;. Legal values
+include:<ul>
+<li>&quot;&quot; (empty string): No preference.</li>
+<li>&quot;cacheable&quot;: Proxy-cacheable download URLs are preferred.</li>
+</ul>
+</li>
+<li><code>domainjoined</code>: A boolean. True if the device is a managed enterprise
+device that will respect enterprise group or cloud policies. False
+otherwise.</li>
+<li><code>hw</code>: A <code>hw</code> object (see below).</li>
+<li><code>ismachine</code>: Whether this client is installed system-wide or only for a
+single user. Default: -1. Legal values:<ul>
+<li>-1: unknown</li>
+<li>1: this client is installed in a cross-user context.</li>
+<li>0: this client is installed only for the current user.</li>
+</ul>
+</li>
+<li><code>os</code>: An <code>os</code> object.</li>
+<li><code>protocol</code>: The version of the Omaha protocol. Clients must transmit &quot;3.1&quot;
+as the value when using this protocol.</li>
+<li><code>requestid</code>: A randomly-generated string, unique to this request. Default:
+&quot;&quot; (empty string).</li>
+<li><code>sessionid</code>: A randomly-generated string, unique to this update session.
+Default: &quot;&quot; (empty string).</li>
+<li><code>testsource</code>: A string set in tests, developer requests, or automated
+probers to distinguish this request from real user traffic. Any value
+other than the empty string indicates that the request should not be
+counted toward official metrics. Default: &quot;&quot; (empty string).</li>
+<li><code>updater</code>: A list of <code>updater</code> objects.</li>
+<li><code>updaterchannel</code>: If present, identifies the distribution channel of the
+client (e.g. &quot;stable&quot;, &quot;beta&quot;, &quot;dev&quot;, &quot;canary&quot;, &quot;extended&quot;). Default: &quot;&quot;.</li>
+<li><code>updaterversion</code>: The version of the client that is sending this request.
+Default: &quot;0&quot;.</li>
+</ul>
+<h4 id="hw-objects-update-check-request"><code>hw</code> Objects (Update Check Request)</h4>
+<p>An <code>hw</code> object contains information about the capabilities of the client&#39;s
+hardware. It has the following members:</p>
+<ul>
+<li><code>sse</code>: &quot;1&quot; if the client&#39;s hardware supports the SSE instruction set. &quot;0&quot;
+if the client&#39;s hardware does not. &quot;-1&quot; if unknown. Default: &quot;-1&quot;.</li>
+<li><code>sse2</code>: As <code>sse</code> but for the SSE2 instruction set extension.</li>
+<li><code>sse3</code>: As <code>sse</code> but for the SSE3 instruction set extension.</li>
+<li><code>sse41</code>: As <code>sse</code> but for the SSE4.1 instruction set extension.</li>
+<li><code>sse42</code>: As <code>sse</code> but for the SSE4.2 instruction set extension.</li>
+<li><code>ssse3</code>: As <code>sse</code> but for the SSSE3 instruction set extension.</li>
+<li><code>avx</code>: As <code>sse</code> but for the AVX instruction set extension.</li>
+<li><code>physmemory</code>: The physical memory the client has available to it, measured
+in gibibytes, truncated down to the nearest gibibyte, or &quot;-1&quot; if unknown.
+This value is intended to reflect the maximum theoretical storage capacity
+of the client, not including any hard drive or paging to a hard drive or
+peripheral. Default: &quot;-1&quot;.</li>
+</ul>
+<h4 id="os-objects-update-check-request"><code>os</code> Objects (Update Check Request)</h4>
+<p>An <code>os</code> object contains information about the operating system that the client
+is running within. It has the following members:</p>
+<ul>
+<li><code>platform</code>: The operating system family that the client is running within
+(e.g. &quot;win&quot;, &quot;mac&quot;, &quot;linux&quot;, &quot;ios&quot;, &quot;android&quot;), or &quot;&quot; if unknown. The
+operating system family name should be transmitted in a canonical form.
+Formatting varies across implementations. Default: &quot;&quot;. Known values:<ul>
+<li>&quot;android&quot; or &quot;Android&quot;: Android.</li>
+<li>&quot;chromeos&quot; or &quot;ChromeOS&quot; or &quot;Chrome OS&quot;: Chrome OS.</li>
+<li>&quot;chromiumos&quot; or &quot;ChromiumOS&quot; or &quot;Chromium OS&quot;: Chromium OS.</li>
+<li>&quot;dragonfly&quot;: DragonFly BSD.</li>
+<li>&quot;freebsd&quot; or &quot;FreeBSD&quot;: FreeBSD.</li>
+<li>&quot;Fuchsia&quot;: Fuchsia.</li>
+<li>&quot;ios&quot; or &quot;iOS&quot;: Apple iOS.</li>
+<li>&quot;linux&quot; or &quot;Linux&quot;: Linux and its derivatives, except as mentioned
+below.</li>
+<li>&quot;mac&quot; or &quot;Mac OS X&quot;: Apple macOS and its derivatives.</li>
+<li>&quot;openbsd&quot; or &quot;OpenBSD&quot;: OpenBSD.</li>
+<li>&quot;Solaris&quot;: Solaris.</li>
+<li>&quot;win&quot; or &quot;Windows&quot;: Microsoft Windows and its derivatives.</li>
+<li>&quot;Unknown&quot;: Sent by some clients instead of &quot;&quot; when the platform is not
+recognized.</li>
+</ul>
+</li>
+<li><code>version</code>: The version number of the operating system, or &quot;&quot; if unknown.
+Default: &quot;&quot;.</li>
+<li><code>sp</code>: The service pack level of the operating system, or &quot;&quot; if unknown or
+not applicable. Default: &quot;&quot;.<ul>
+<li>On Windows, the service pack should be formatted as a Title Case
+string (e.g. &quot;Service Pack 2&quot;).</li>
+</ul>
+</li>
+<li><code>arch</code>: The architecture of the operating system, or &quot;&quot; if unknown.
+Default: &quot;&quot;. Known Values:<ul>
+<li>&quot;arm&quot;: ARM</li>
+<li>&quot;arm64&quot;: 64-bit ARM</li>
+<li>&quot;x86&quot;: x86</li>
+<li>&quot;x86_64&quot;: x86-64</li>
+<li>&quot;x64&quot;: x64</li>
+</ul>
+</li>
+<li><code>deviceformfactor</code>: The form factor of the device that the client is running
+within (e.g. &quot;desktop&quot;, &quot;phone&quot;, &quot;tablet&quot;, &quot;tv&quot;, etc.), or &quot;&quot; if unknown.
+The device form factor should be transmitted in a canonical form.
+Formatting varies across implementations. Default: &quot;&quot;.</li>
+</ul>
+<h4 id="app-objects-update-check-request"><code>app</code> Objects (Update Check Request)</h4>
+<p>Each managed application is represented by exactly one <code>app</code> object. It has the
+following members:</p>
+<ul>
+<li><code>appid</code>: The <a href="#application-ids">application id</a> that identifies the
+application. Default: Undefined - Clients must transmit this attribute.</li>
+<li><code>brand</code>: The brand code corresponding to the partner promotion that
+triggered the installation of the application. Brand codes usually match
+the [A-Z]{4} regex, but the protocol supports any string. Default: &quot;&quot;.</li>
+<li><code>cohort</code>: A machine-readable string identifying the release cohort
+(channel) that the app belongs to. Limited to ASCII characters 32 to 126
+(inclusive) and a maximum length of 1024 characters. Default: &quot;&quot;.</li>
+<li><code>cohorthint</code>: A value that expresses a client request to move to another
+release cohort. The exact values may be application-specific and should be
+set up ahead of time on the server. Default: &quot;&quot;.</li>
+<li><code>cohortname</code>: A human-readable string identifying the semantics behind the
+current cohort. For example, this might be displayed to the user and
+indicate the channel or experimental status. Default: &quot;&quot;.</li>
+<li><code>release_channel</code>: The target channel that the app switches to. For
+ example an app can have stable, beta, dev, and canary channels. Note
+ switching to an older channel may have no effect until the older channel
+ catches up with the install. Ex: a machine on today&#39;s beta (107.0.5304.62)
+ that is switched to stable will stay on that version until 107 ships to
+ stable. Downgrade can be forced by the use of the <code>rollback_allowed</code> in
+ the <code>updatecheck</code> node.</li>
+<li><code>data</code>: A list of <code>data</code> objects.</li>
+<li><code>disabled</code>: A list of <code>disabled</code> objects.</li>
+<li><code>enabled</code>: Indicates whether the application is enabled on the client. As
+an example, Chrome extensions can be put into a &quot;disabled&quot; state without
+uninstallation. A value of &quot;-1&quot; indicates that the enabled status is
+unknown, or that the concept of enabling/disabling does not exist. &quot;0&quot;
+indicates that the application is disabled. &quot;1&quot; indicates that the app is
+enabled.  Default: &quot;-1&quot;.</li>
+<li><code>fp</code>: The current <a href="#differential-updates">differential fingerprint</a> of
+the application, or &quot;&quot; if unknown. Default: &quot;&quot;.</li>
+<li><code>iid</code>: Installation ID is an opaque token that identifies an installation
+flow. The installation ID is a unique identifier embedded into a
+metainstaller for the application. It can be used to correlate the first
+update-check of an application with web actions and the application
+download. To avoid creating a persistent unique identifier for this
+installation, clients must clear the <code>iid</code> value after transmitting it
+once. Default: &quot;&quot;.</li>
+<li><code>installdate</code>: The approximate date that the application installation took
+place on, or &quot;-2&quot; if unknown or not applicable. Default: &quot;-2&quot;. During the
+installation request itself (the first communication to the server), the
+client should use a special value of &quot;-1&quot;. The
+<code>response.daystart.elapsed_days</code> value for that request&#39;s response should
+be stored to use in all subsequent requests. To mitigate privacy risk,
+clients should fuzz the value to the week granularity by storing X - X % 7,
+where X is the server-provided date. For offline installs, the client
+should send -2. Default: -2.</li>
+<li><code>installedby</code>: A string describing the original cause of the installation.
+The string should be drawn from a small set of constant values, to minimize
+entropy and the ability for the client to be fingerprinted. Default: &quot;&quot;.</li>
+<li><code>installsource</code>: A string describing the immediate cause of this request.
+Default: &quot;&quot;. Known values include:<ul>
+<li>&quot;&quot; (a normal background update),</li>
+<li>&quot;ondemand&quot; (a foreground, user-initiated update),</li>
+<li>&quot;taggedmi&quot; (a tagged metainstaller was run),</li>
+<li>&quot;offline&quot; (an offline installer was run),</li>
+<li>&quot;policy&quot; (an install was triggered by group policy),
+The string should be drawn from a small set of constant values, to minimize
+entropy and the ability for the client to be fingerprinted.</li>
+</ul>
+</li>
+<li><code>ismachine</code>: &quot;0&quot; if the application is installed for the user specifically
+(i.e. elevated privileges are not needed to update it). &quot;1&quot; if the
+application is installed in a cross-user (system or privileged) context.
+&quot;-1&quot; if unknown or not applicable. Default: &quot;-1&quot;</li>
+<li><code>lang</code>: The language of the application installation, in BCP 47
+representation, or &quot;&quot; if unknown or not applicable. Default: &quot;&quot;.</li>
+<li><code>ping</code>: A <code>ping</code> object.</li>
+<li><code>tag</code>: A string, representing arbitrary application-specific data that the
+client wishes to disclose to the server. Clients should prefer to extend
+this protocol with additional attributes rather than use this field, but in
+some cases transmission of opaque or unparsable data is necessary (for
+example, transmitting the tag of a tagged metainstaller). Default: &quot;&quot;.</li>
+<li><code>version</code>: The <a href="#version-numbers">version number</a> of the current
+installation of the application. A successful installation of an update
+should change this version in future requests, even if the old version of
+the application may still be running.
+Default: &quot;0&quot;.</li>
+<li><code>updatecheck</code>: An <code>updatecheck</code> object. This member may be omitted if the
+client will not honor an update response.</li>
+</ul>
+<h4 id="ping-objects-update-check-request"><code>ping</code> Objects (Update Check Request)</h4>
+<ul>
+<li><code>ad</code>: The date that the previous active report took place on, or &quot;-1&quot; if
+this is the first active report for the application. &quot;-2&quot; if the date of
+the previous active report is unknown or the app has not been active since
+the previous active report. Default: &quot;-2&quot;. If not &quot;-2&quot;, this request is an
+active report. If &quot;-2&quot; but the application is known to have been active,
+this request is an active report. In response to the previous active
+report, the server responded with the date in the <code>response.clock.date</code>
+member. See <a href="#user-counting">User Counting</a>.</li>
+<li><code>rd</code>: The date that the previous roll call took place on, or &quot;-1&quot; if this
+is the application&#39;s first roll call, or &quot;-2&quot; if the date of the previous
+roll call is not known. Default: &quot;-2&quot;. This request is a roll call,
+regardless of the value of this member. In response to the previous roll
+call, the server responded with the date in the <code>response.clock.date</code>
+member. See <a href="#user-counting">User Counting</a>.</li>
+<li><code>ping_freshness</code>: A random 128-bit number, written into the client&#39;s
+storage alongside the next value of rd, and rotated whenever the client
+stores a new value for rd. See <a href="#ping-freshness">Ping Freshess</a>. A value of
+&quot;&quot; (empty string) indicates that no value was available. Default: &quot;&quot;.</li>
+</ul>
+<h4 id="data-objects-update-check-request"><code>data</code> Objects (Update Check Request)</h4>
+<p>A data object represents a request for arbitrary specific application-specific
+data from the server. The server maintains a map of index values to data
+contents, and can supply them if requested. This is used during installation to
+transmit alternate branding or seeded configurations to the application. <code>data</code>
+objects have the following members:</p>
+<ul>
+<li><code>name</code>: The type of data lookup to perform. The only known supported value
+ is &quot;install&quot;. Default: &quot;&quot;.</li>
+<li><code>index</code>: The key to look up on the server. Default: &quot;&quot;.</li>
+</ul>
+<h4 id="disabled-objects-update-check-request"><code>disabled</code> Objects (Update Check Request)</h4>
+<p>A disabled object contains information about why an app is disabled. Multiple
+causes for a disabled state may exist.</p>
+<ul>
+<li><code>reason</code>: an numeric reason that the app is disabled. The meaning of these
+values are client-specific (possibly app-specific), except for &quot;0&quot;, which
+indicates no reason. Default: &quot;0&quot;.</li>
+</ul>
+<h4 id="updatecheck-objects-update-check-request"><code>updatecheck</code> Objects (Update Check Request)</h4>
+<p>An updatecheck object represents the actual intent to update. It has the
+following members:</p>
+<ul>
+<li><code>rollback_allowed</code>: true if the client will accept a version downgrade.
+Typically used in conjunction with a targetversionprefix. Default: false.</li>
+<li><code>sameversionupdate</code>: true if the client is requesting that it be updated
+to the version it currently has (usually as part of a repair or
+overinstallation) instead of receiving no update. Default: false.</li>
+<li><code>targetversionprefix</code>: A component-wise prefix of a version number, or a
+complete version number. The server SHOULD NOT return an update
+instruction to a version number that does not match the prefix or complete
+version number. The prefix is interpreted a dotted-tuple that specifies
+the exactly-matching elements; it is not a lexical prefix. (For example,
+&quot;1.2.3&quot; matches &quot;1.2.3.4&quot; but not &quot;1.2.34&quot;.) Default: &quot;&quot;.</li>
+<li><code>updatedisabled</code>: An indication of whether the client will honor an update
+response, if it receives one. Legal values are &quot;true&quot; (indicating that the
+client will ignore any update instruction) and &quot;false&quot; (indicating that the
+client will attempt an update if one is instructed). Default: &quot;false&quot;.</li>
+</ul>
+<h4 id="updater-objects-update-check-request"><code>updater</code> Objects (Update Check Request)</h4>
+<p>An updater object represents the state of another sibling update program on
+the system. Clients report about other updaters present on the system to enable
+redundancy and recoverability of sibling updaters. For example, Chrome is
+normally updated by GoogleUpdate, but in cases where GoogleUpdate has been
+disabled or is broken (according to the data transmitted here), the server can
+issue an action to Chrome to attempt recovery of GoogleUpdate. An updater
+object has the following members:</p>
+<ul>
+<li><code>autoupdatecheckenabled</code>: 1 if the other updater is subject
+to an enterprise policy that disables its update-checking functionality. 0
+if not. -1 if unknown. Default: -1.</li>
+<li><code>ismachine</code>: 1 if the updater has system or administrator
+privileges, or if it is installed in a cross-user context. 0 if not. -1 if
+unknown. Default: -1.</li>
+<li><code>lastchecked</code>: An estimated number of hours since the other updater
+successfully checked for an update. A value of -1 indicates the last check
+time is unknown. Default: -1. Clients should limit the accuracy of this
+value in order to prevent an observer from correlating this request to the
+one last sent by the subject updater.<blockquote>
+<p>Chrome only sends the following values:</p>
+<ul>
+<li>-1: unknown</li>
+<li>0: [0, 336) hours ago (0 to &lt; ~2 weeks)</li>
+<li>336: [336, 1344) hours ago (~2 weeks to ~2×28 days)</li>
+<li>1344: at least 1344 hours ago (~2×28 days or more)</li>
+</ul>
+</blockquote>
+</li>
+<li><code>lastupdatecheckerrorcat</code>: The numeric error category encountered on
+the last update check. 0 for success. Default: &quot;0&quot;.</li>
+<li><code>lastupdatecheckerrorcode</code>: The numeric error code encountered on the last
+update check. 0 for success. Default: &quot;0&quot;.</li>
+<li><code>lastupdatecheckextracode1</code>: The numeric extra code encountered on the
+last update check. 0 for success. Default: &quot;0&quot;.</li>
+<li><code>laststarted</code>: An estimated number of hours since the other updater
+successfully ran (started and exited without crashing). A value of -1
+indicates the last check time is unknown. Default: -1. Clients should
+limit the accuracy of this value in order to prevent an observer from
+correlating this request to the one last sent by the subject updater.<blockquote>
+<p>Chrome only sends the following values:</p>
+<ul>
+<li>-1: unknown</li>
+<li>0: [0, 336) hours ago (0 to &lt; ~2 weeks)</li>
+<li>336: [336, 1344) hours ago (~2 weeks to ~2×28 days)</li>
+<li>1344: at least 1344 hours ago (~2×28 days or more)</li>
+</ul>
+</blockquote>
+</li>
+<li><code>name</code>: The name of the other updater.</li>
+<li><code>updatepolicy</code>: A numeric indicator of what kind of updater policy the
+other updater has about updating this client. Default: -2. Known values:<ul>
+<li>-2: unknown</li>
+<li>-1: no such policy exists</li>
+<li>0: policy set to allow background and foreground updates.</li>
+<li>1: policy set to allow background updates only.</li>
+<li>2: policy set to allow foreground updates only.</li>
+<li>3: policy set to disable updates.</li>
+</ul>
+</li>
+<li><code>version</code>: The current version number of the other updater. Default: &quot;0&quot;.</li>
+</ul>
+<hr>
+<h3 id="headers-update-check-response">Headers (Update Check Response)</h3>
+<p>In addition to normal HTTP headers, this protocol defines the following update
+check response headers:</p>
+<ul>
+<li><code>X-Cup-Server-Proof</code>: Contains the CUP signature of the response.</li>
+<li><code>X-Retry-After</code>: If present, a positive integer, representing a number of
+seconds for which the client mut not contact the server again for
+background updates, including but not limited to retries of this particular
+request. Clients must respect this header even if paired with
+non-successful HTTP response code. Servers should not send a value in
+excess of 86400 (24 hours), and clients should treat values greater than
+86400 as 86400. Clients may still send a ping-back for this update session.</li>
+</ul>
+<h3 id="body-update-check-response">Body (Update Check Response)</h3>
+<p>The response body of an update check begins with <code>)]}&#39;\n</code>, where \n indicates a
+newline character, followed by a JSON object with the following members:</p>
+<ul>
+<li><code>response</code>: A <code>response</code> object.</li>
+</ul>
+<h4 id="response-objects-update-check-response"><code>response</code> Objects (Update Check Response)</h4>
+<p>A response object contains the server&#39;s response to a corresponding <code>request</code>
+object in the update check request.</p>
+<ul>
+<li><code>app</code>: A list of <code>app</code> objects. There is one object for each <code>app</code> in the
+request body.</li>
+<li><code>daystart</code>: A <code>daystart</code> object.</li>
+<li><code>systemrequirements</code>: A <code>systemrequirements</code> object. The server will not
+send this element, but it may be present in offline installer manifests.</li>
+<li><code>protocol</code>: The version of the Omaha protocol. Servers responding with this
+protocol must send a value of &quot;3.1&quot;.</li>
+<li><code>server</code>: A string identifying the server or server family for diagnostic
+ purposes. As examples, &quot;production&quot;, &quot;test&quot;. Default: &quot;&quot;.</li>
+</ul>
+<h4 id="daystart-objects-update-check-response"><code>daystart</code> Objects (Update Check Response)</h4>
+<p>A clock object contains information about the current datetime according to the
+server&#39;s locale. It has the following members:</p>
+<ul>
+<li><code>elapsed_days</code>: An integer. The number of complete calendar days that have elapsed
+since January 1st, 2007 in the server&#39;s locale, at the time the request was
+received. The client should generally save this value for use in future
+update checks (for examples, see <code>request.app.ping.rd</code> and
+<code>request.app.installdate</code>).</li>
+</ul>
+<h4 id="systemrequirements-objects-update-check-response"><code>systemrequirements</code> Objects (Update Check Response)</h4>
+<p>A <code>systemrequirements</code> object contains information about the operating system
+that the application requires to install. It has the following members:</p>
+<ul>
+<li><p><code>platform</code>: The operating system family that the application requires
+(e.g. &quot;win&quot;, &quot;mac&quot;, &quot;linux&quot;, &quot;ios&quot;, &quot;android&quot;), or &quot;&quot; if not applicable.</p>
+</li>
+<li><p><code>arch</code>: Expected host processor architecture that the app is compatible
+with, or &quot;&quot; if not applicable.</p>
+<p><code>arch</code> can be a single entry, or multiple entries separated with <code>,</code>.
+Entries prefixed with a <code>-</code> (negative entries) indicate non-compatible
+hosts. Non-prefixed entries indicate compatible guests.</p>
+<p>An application is compatible with the current architecture if:</p>
+<ul>
+<li><code>arch</code> is empty, or</li>
+<li>none of the negative entries within <code>arch</code> match the current host
+architecture exactly, and there are no non-negative entries, or</li>
+<li>one of the non-negative entries within <code>arch</code> matches the current
+architecture, or is compatible with the current architecture (i.e., it is
+a compatible guest for the current host). The latter is determined by
+<code>::IsWow64GuestMachineSupported()</code> on Windows.<ul>
+<li>If <code>::IsWow64GuestMachineSupported()</code> is not available, returns <code>true</code>
+if <code>arch</code> is x86.</li>
+</ul>
+</li>
+</ul>
+<p>Examples:</p>
+<ul>
+<li><code>arch</code> == &quot;x86&quot;.</li>
+<li><code>arch</code> == &quot;x64&quot;.</li>
+<li><code>arch</code> == &quot;x86,x64,-arm64&quot;: installation will fail if the underlying host
+is arm64.</li>
+</ul>
+</li>
+<li><p><code>min_os_version</code>: The minimum required version of the operating system, or
+&quot;&quot; if not applicable.</p>
+<p>The <code>min_os_version</code> is in the format <code>major.minor.build.patch</code> for
+Windows. The <code>major</code>, <code>minor</code> and <code>build</code> are the values returned by the
+<code>::GetVersionEx</code> API. The <code>patch</code> is the <code>UBR</code> value under the registry
+path <code>HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion</code>.</p>
+<p>The <code>build</code> and the <code>patch</code> components may be omitted if all that is needed
+is a minimum <code>major.minor</code> version. For example, <code>6.0</code> will match all OS
+versions that are at or above that version, regardless of <code>build</code> and
+<code>patch</code> numbers.</p>
+</li>
+</ul>
+<h4 id="app-objects-update-check-response"><code>app</code> Objects (Update Check Response)</h4>
+<p>An app object represents a per-application acknowledgement of the request. If an
+application appears in the request, it must have a corresponding acknowledgement
+in the response. It has the following members:</p>
+<ul>
+<li><code>appid</code>: The <a href="#application-ids">application ID</a> identifies the application.
+Servers must always transmit this attribute.</li>
+<li><code>cohort</code>: The new cohort value for the application. The client should
+update the cohort of this application to the new value. Subject to the same
+length and language limitations as <code>request.app.cohort</code>. Default: &quot;&quot; (empty
+string).</li>
+<li><code>cohorthint</code>: The new cohort hint value for the application. The client
+should update the cohorthint of this application to this value. Subject to
+the same length and language limitations as <code>request.app.cohorthint</code>.
+Default: &quot;&quot; (empty string).</li>
+<li><code>cohortname</code>: The new cohort name value for the application. The client
+should update the cohortname of this application to this value. Subject to
+the same length and language limitations as <code>request.app.cohortname</code>.
+Default: &quot;&quot; (empty string).</li>
+<li><code>data</code>: A list of <code>data</code> objects.</li>
+<li><code>updatecheck</code>: An <code>updatecheck</code> object, if one was sent in the request.</li>
+<li><code>status</code>: The state of the product on the server. Default: &quot;ok&quot;. Known
+values:<ul>
+<li>&quot;ok&quot;: The application is recognized.</li>
+<li>&quot;restricted&quot;: The application is recognized, but due to policy
+restrictions (such as export law compliance) the server must refuse to
+give a meaningful response.</li>
+<li>&quot;error-unknownApplication&quot;: The server is not aware of an application
+with this ID.</li>
+<li>&quot;error-invalidAppId&quot;: The server is not aware of this application with
+this ID and furthermore the application ID was not in a format the
+server expected.</li>
+</ul>
+</li>
+</ul>
+<h4 id="data-objects-update-check-response"><code>data</code> Objects (Update Check Response)</h4>
+<p>Each data object in the response represents an answer to a data request from the
+client. It has the following members:</p>
+<ul>
+<li><code>name</code>: The requested data name from <code>request.app.data.name</code>, echoed back
+to the client.</li>
+<li><code>index</code>: The requested data index from <code>request.app.data.index</code>, echoed
+back to the client, if valid.</li>
+<li><code>status</code>: The outcome of the data lookup. Default: &quot;ok&quot;. Known values:<ul>
+<li>&quot;ok&quot;: This tag contains the appropriate data response, even if such a
+response is the empty string.</li>
+<li>&quot;error-invalidargs&quot;: The data request could not be parsed or
+understood.</li>
+<li>&quot;error-nodata&quot;: The data request was understood, but the server does
+not have a value for the requested entry. (This is distinct from having
+a zero-length value.)</li>
+</ul>
+</li>
+<li><code>#text</code>: The value of the requested data index.</li>
+</ul>
+<h4 id="updatecheck-objects-update-check-response"><code>updatecheck</code> Objects (Update Check Response)</h4>
+<p>An updatecheck response object contains whether or not there is an update
+available for the application, and if so, the instructions to install it. It has
+the following members:</p>
+<ul>
+<li><code>action</code>: A list of <code>action</code> objects. Actions can be conducted by the
+client independent of the outcome of the updatecheck. If coupled with an
+update response, the actions should be performed after the update, in the
+order they are listed. Default: [] (empty list).</li>
+<li><code>info</code>: An optional string that provides a rationale for the status
+response, for use in debugging.  For example, &quot;update disabled by client&quot;
+or &quot;bandwidth limit exceeded&quot;.  Default: &quot;&quot;.</li>
+<li><code>status</code>: Indicates the outcome of the updatecheck. Servers must always
+send a value here. Known values:<ul>
+<li>&quot;ok&quot;: An update is available and should be applied.</li>
+<li>&quot;noupdate&quot;: No update is available for this application at this time.</li>
+<li>&quot;error-internal&quot;: The server encountered an unspecified internal error.</li>
+<li>&quot;error-hash&quot;: The server attempted to serve an update, but could not
+provide a valid hash for the download.</li>
+<li>&quot;error-osnotsupported&quot;: The server recognized the application, but the
+client does not meet the minimum system requirements to receive any
+version of the application. In particular, it is running on an
+incompatible operating system.</li>
+<li>&quot;error-hwnotsupported&quot;: The server recognized the application, but the
+client does not meet the minimum system requirements to receive any
+version of the application. In particular, it is running on
+incompatible hardware.</li>
+<li>&quot;error-unsupportedprotocol&quot;: This application is incompatible with this
+version of the protocol. (For example, it may require multi-package
+support from the Omaha 3 protocol, or may require some feature added in
+a later version of this protocol.)</li>
+</ul>
+</li>
+</ul>
+<p>Additionally, the following members are set if and only if <code>status == &quot;ok&quot;</code>:</p>
+<ul>
+<li><code>manifest</code>: A <code>manifest</code> object.</li>
+<li><code>urls</code>: A <code>urls</code> object.</li>
+</ul>
+<h4 id="manifest-objects-update-check-response"><code>manifest</code> Objects (Update Check Response)</h4>
+<p>A manifest object contains details about how to fetch and apply an update.</p>
+<ul>
+<li><code>arguments</code>: A string, indicating command-line arguments that should be
+passed to the binary specified in <code>run</code>. Default: &quot;&quot;.</li>
+<li><code>packages</code>: A <code>packages</code> object.</li>
+<li><code>run</code>: A path within the CRX archive to an executable to run as part of the
+update. The executable is typically an application installer. If unsent or
+the empty string, no particular update-delivered installer needs to be run.
+Default: &quot;&quot; (empty string).</li>
+<li><code>version</code>: The new version the client should report for the application,
+after successfully applying this update. Compatible servers must send this
+member.</li>
+</ul>
+<h4 id="packages-objects-update-check-response"><code>packages</code> Objects (Update Check Response)</h4>
+<p>A packages object describes a set of downloadable files. The 3.1 protocol only
+supports a subset of the 3.0 packages, but may be extended in the future to
+implement more of the 3.0 protocol&#39;s package support. A packages object contains
+the following members:</p>
+<ul>
+<li><code>package</code>: A list of <code>package</code> objects. Clients may ignore all but the
+first element in this list if they only implement single-package support.</li>
+</ul>
+<h4 id="package-objects-update-check-response"><code>package</code> Objects (Update Check Response)</h4>
+<p>A package object describes a file that must be downloaded and installed as part
+of the update. In this version of the protocol, all packages describe CRX files.
+Packages can also come in differential update forms. Clients should attempt a
+differential patch of package first, and fall back to a full package if the
+differential patch fails to apply. A package object has the following members:</p>
+<ul>
+<li><code>fp</code>: The <a href="#differential-updates">differential fingerprint</a> of the
+new version of the package.</li>
+<li><code>size</code>: The size of the file, in octets.</li>
+<li><code>sizediff</code>: The size of the differential file, in octets, if one is
+available.</li>
+<li><code>hash_sha256</code>: The SHA-256 hash of the file, encoded as a lowercase base-16
+string.</li>
+<li><code>hashdiff_sha256</code>: The SHA-256 hash of the differential file, encoded as a
+lowercase base-16 string.</li>
+<li><code>name</code>: The basename of the file. The basename can be appended to each
+<code>url.codebase</code> within this <code>manifest</code> object in order to compute a URL from
+which the package can be fetched from.</li>
+<li><code>namediff</code>: The basename of the differential file. The basename can be
+appended to each <code>url.codebasediff</code> within this <code>manifest</code> object in order
+to compute a URL from which the package can be fetched from.</li>
+</ul>
+<h4 id="urls-objects-update-check-response"><code>urls</code> Objects (Update Check Response)</h4>
+<p>A urls object describes an ordered collection of download URL prefixes. Each URL
+in the collection is either a differential or full URL. When attempting a
+download of a differential or full package, clients must attempt downloads from
+each URL of the appropriate type in the specified order, falling back to the
+next URL if a TCP or HTTP error is encountered. A 4xx or 5xx HTTP response
+qualifies as an error that justifies a fallback. A successful download of a file
+that fails to hash to the expected hash or has an unexpected size also
+qualifies. Other network errors may also qualify.</p>
+<ul>
+<li><code>url</code>: A list of <code>url</code> objects.</li>
+</ul>
+<h4 id="url-objects-update-check-response"><code>url</code> Objects (Update Check Response)</h4>
+<p>A url object describes a URL prefix. It has the following members:</p>
+<ul>
+<li><code>codebase</code>: An absolute URL prefix. Presence of this member indicates a
+full download URL. This member will be present if and only if
+<code>codebasediff</code> is not present. To create a full URL, the value must be
+concatenated with a <code>package.name</code> member.</li>
+<li><code>codebasediff</code>: An absolute URL prefix. Presence of this member indicates a
+differential download URL. This member will be present if and only if
+<code>codebase</code> is not present. To create a full URL, the value must be
+concatenated with a <code>package.namediff</code> member.</li>
+</ul>
+<h4 id="action-objects-update-check-response"><code>action</code> Objects (Update Check Response)</h4>
+<p>An action represents a task that the update client must conduct after
+application of the update (if an update is provided), or immediately (if no
+update is provided). It has the following members:</p>
+<ul>
+<li><code>type</code>: Indicates the type of action. Known values:<ul>
+<li>&quot;run&quot;: This action is an instruction to run one of the application&#39;s
+executables. If the run action is served along with an update, and the
+update fails, the run action should not be executed. If the run action
+is served without an update, it should be executed unconditionally.</li>
+<li>&quot;launchcmd&quot;: This action is an instruction to run the application&#39;s
+registered launchcmd command. A launchcmd command is defined as part of
+the protocol between an Omaha client and an application installer.</li>
+<li>&quot;hideui&quot;: This action is an instruction to hide any UI associated with
+the updater, and to exit silently without further user input. For
+example, this can be used in conjunction with a launchcmd action to
+instruct a metainstaller to launch the installing product and
+immediately appear to exit.</li>
+</ul>
+</li>
+</ul>
+<p>Additional members may be present, depending on the action type.</p>
+<p>For <code>type == &quot;run&quot;</code>:</p>
+<ul>
+<li><code>run</code>: The path to the executable (relative to the root of the CRX archive
+that the client was served in this update (if an update was served) or in
+an update with the associated differential fingerprint (if this response
+does not contain an update for this application). For other action types,
+this member may not appear.</li>
+<li><code>arguments</code>: The command line arguments to be passed to the executable,
+formatted as a single string.</li>
+</ul>
+<hr>
+<h2 id="downloads">Downloads</h2>
+<p>Download requests occur when an application update is needed, as a result of a
+<code>response.app.updatecheck.pipelines.operations.urls</code> member.  Download requests
+are HTTP GET requests and can use any HTTP implementation.</p>
+<h3 id="request-headers">Request Headers</h3>
+<p>In addition to the regular HTTP headers, this protocol defines the following
+headers for the download request:</p>
+<ul>
+<li><code>X-Goog-Update-SessionId</code>: The <a href="#session-ids">session ID</a> of the update
+session.</li>
+</ul>
+<hr>
+<h2 id="ping-backs">Ping-Backs</h2>
+<p>Ping-back requests are caused by any install, update, or action attempted during
+an update session. Ping-backs share a similar structure to update check
+requests.</p>
+<p>Ping-back requests are fire-and-forget: the client can discard the server&#39;s
+response. Ping-back transactions need to be protected by CUP if and only if the
+client handles the server&#39;s response.</p>
+<p>Ping-back requests can be <strong>bundled</strong> into a single HTTP transaction, or sent
+immediately as the events triggering the ping-back occurs. Bundling ping-backs
+reduces QPS to the server, but risks ping-back loss if the client crashes,
+loses connectivity, or loses power before it transmits the bundle.</p>
+<h3 id="ping-back-request-headers">Ping-Back Request Headers</h3>
+<p>Similarly to update-check requests, ping-back requests have additional headers
+for the purpose of easier DoS rejection.</p>
+<ul>
+<li><code>X-Goog-Update-AppId</code>: A comma-separated list of application IDs included
+in this request.</li>
+<li><code>X-Goog-Update-Updater</code>: &quot;name-version&quot;, where &quot;name&quot; is the name of the
+updater as reported in <code>request.updater</code> and &quot;version&quot; is the version of
+the updater as reported in <code>request.updaterversion</code>.</li>
+</ul>
+<h3 id="ping-back-request-body">Ping-Back Request Body</h3>
+<p>The request body of an ping-back contains a JSON object with the following
+members:</p>
+<ul>
+<li><code>request</code>: A <code>request</code> object.</li>
+</ul>
+<h4 id="request-objects-ping-back-request"><code>request</code> Objects (Ping-Back Request)</h4>
+<p>A ping-back <code>request</code> object contains all the same members as a update check
+<code>request</code> object. Differences occur in the <code>request.app</code> objects.</p>
+<h4 id="app-objects-ping-back-request"><code>app</code> Objects (Ping-Back Request)</h4>
+<p>A ping-back <code>app</code> object is identical to an update check <code>app</code> object, except
+for the following differences.</p>
+<p>A ping-back <code>app</code> object cannot contain any of the following members:</p>
+<ul>
+<li><code>data</code></li>
+<li><code>ping</code></li>
+<li><code>updatecheck</code></li>
+</ul>
+<p>A ping-back <code>app</code> additionally contains the following members:</p>
+<ul>
+<li><code>event</code>: a list of <code>event</code> objects.</li>
+</ul>
+<h4 id="event-objects-ping-back-request"><code>event</code> Objects (Ping-Back Request)</h4>
+<p>An event object represents a specific report about an operation the client
+attmpted as part of this update session. All events have the following members:</p>
+<ul>
+<li><code>eventtype</code>: The event type is a numeric value indicating the type of the
+event. It must always be specified by the client. The following values are
+known:<ul>
+<li>2: An install operation.</li>
+<li>3: An update operation.</li>
+<li>4: An uninstall operation.</li>
+<li>14: A download operation.</li>
+<li>41: An app command completion event.</li>
+<li>42: An action operation.</li>
+</ul>
+</li>
+<li><code>eventresult</code>: The outcome of the operation. Default: 0. Known values:<ul>
+<li>0: error</li>
+<li>1: success</li>
+<li>4: cancelled</li>
+</ul>
+</li>
+<li><code>errorcat</code>: An error category, for use in distinguishing between different
+classes of error codes. Default: 0. The following values are known:<ul>
+<li>0: No category.</li>
+<li>1: Errors acquiring the download.</li>
+<li>2: Errors during CRX unpacking.</li>
+<li>3: Update client errors during installation.</li>
+<li>4: Errors within the update service itself.</li>
+<li>5: Error during update check.</li>
+<li>7: Application installer errors during installation.</li>
+</ul>
+</li>
+<li><code>errorcode</code>: The error code (if any) of the operation. Default: 0. The
+meaning of an error code may depend on the error category. 0 always means
+&quot;no error&quot; (success).<ul>
+<li>Additional values may exist in
+(update_client_errors.h)[<a href="https://cs.chromium.org/chromium/src/components/update_client/update_client_errors.h]">https://cs.chromium.org/chromium/src/components/update_client/update_client_errors.h]</a></li>
+</ul>
+</li>
+<li><code>extracode1</code>: Additional numeric information about the operation&#39;s result.
+The meaning of an extra code depends on the error category and error code.
+Default: 0.</li>
+</ul>
+<p>Depending on the event type, additional members may be present:</p>
+<p>For <code>eventtype == 2</code> events:</p>
+<ul>
+<li><code>nextfp</code>: The <a href="#differential-updates">differential fingerprint</a> that
+the client was attempting to update to, regardless of whether that update
+was successful.</li>
+<li><code>nextversion</code>: The application version that the client was attempting to
+update to, regardless of whether the update was successful.</li>
+</ul>
+<p>For <code>eventtype == 3</code> events:</p>
+<ul>
+<li>All the members of <code>eventtype == 2</code> events.</li>
+<li><code>diffresult</code>: As <code>eventresult</code> but specifically for a differential update. A
+client that successfully applies a differential update should send the
+result both here and in <code>eventresult</code>. A client that attempts and fails a
+differential update should send the result here, and use <code>eventresult</code> to
+indicate the outcome of the full update attempt.</li>
+<li><code>differrorcat</code>: As <code>errorcat</code> but for differential updates. Similar to
+<code>diffresult</code>.</li>
+<li><code>differrorcode</code>: As <code>errorcode</code> but for differential updates. Similar to
+<code>diffresult</code>.</li>
+<li><code>diffextracode1</code>: As <code>extracode1</code> but for differential updates. Similar to
+<code>diffresult</code>.</li>
+<li><code>previousfp</code>: The <a href="#differential-updates">differential fingerprint</a>
+the client had prior to the update, regardless of whether that update
+was successful.</li>
+<li><code>previousversion</code>: The application version the client had prior to the
+update, regardless of whether that update was successful.</li>
+</ul>
+<p>For <code>eventtype == 14</code> events:</p>
+<ul>
+<li><code>download_time_ms</code>: The time elapsed between the start of the download and
+the end of the download, in milliseconds. -1 if unavailable.
+Default: -1.</li>
+<li><code>downloaded</code>: The number of bytes successfully received from the download
+server. Default: 0.</li>
+<li><code>downloader</code>: A string identifying the download algorithm / stack. Known
+values:<ul>
+<li>&quot;&quot; (empty string): Unknown downloader.</li>
+<li>&quot;nsurlsession_background&quot;: MacOS background NSURLSession.</li>
+<li>&quot;bits&quot;: Microsoft BITS.</li>
+<li>&quot;direct&quot;: The Chromium network stack.</li>
+</ul>
+</li>
+<li><code>total</code>: The number of bytes expected to be downloaded. Default: 0.</li>
+<li><code>url</code>: The URL from which the download was attempted.</li>
+</ul>
+<p>For <code>eventtype == 41</code> events:</p>
+<ul>
+<li><code>appcommandid</code>: The id of the app command for which the ping is being sent.</li>
+</ul>
+<p>For <code>eventtype == 42</code> events:</p>
+<ul>
+<li><code>actiontype</code>: The type of the action that caused this event.</li>
+</ul>
+<h3 id="ping-back-response-body">Ping-Back Response Body</h3>
+<p>Clients are free to ignore the ping-back response body. However, to allow future
+extensions in the ping-back response, the protocol defines a basic ping-back
+response body. Clients that do not ignore the ping-back response must protect
+the ping request using CUP.</p>
+<p>The response body of an ping-back contains a JSON object with the following
+members:</p>
+<ul>
+<li><code>response</code>: A <code>response</code> object.</li>
+</ul>
+<h4 id="response-objects-ping-back-response"><code>response</code> Objects (Ping-Back Response)</h4>
+<p>A ping-back <code>response</code> object contains all the same members as a update check
+<code>response</code> object. Differences occur in the <code>response.app</code> objects.</p>
+<h4 id="app-objects-ping-back-response"><code>app</code> Objects (Ping-Back Response)</h4>
+<p>A ping-back response <code>app</code> object is identical to an update check response <code>app</code>
+object, except for the following differences.</p>
+<p>A ping-back <code>app</code> object cannot contain any of the following members:</p>
+<ul>
+<li><code>action</code></li>
+<li><code>data</code></li>
+<li><code>updatecheck</code></li>
+</ul>
+<p>A ping-back <code>app</code> additionally contains the following members:</p>
+<ul>
+<li><code>event</code>: a list of <code>event</code> objects.</li>
+</ul>
+<h4 id="event-objects-ping-back-response"><code>event</code> Objects (Ping-Back Response)</h4>
+<p>A ping-back response <code>event</code> object indicates the server&#39;s acknowledgement of
+the event. It has the following members:</p>
+<ul>
+<li><code>status</code>: Indicates the result of parsing the action on the server side.
+Known values:<ul>
+<li>&quot;ok&quot;: The server acknowledges successful receipt of this event ping.</li>
+</ul>
+</li>
+</ul>
+<h2 id="future-work">Future Work</h2>
+<p>The 3.1 protocol is expected to expand as the cross-platform updater in
+//src/chrome/updater continues to reach feature parity with Omaha 3.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updater/protocol_3_1.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updater/protocol_3_1.md</a>
+  </p>
+</div>

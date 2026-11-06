@@ -1,0 +1,88 @@
+<h1>Linux — Building and Debugging GTK</h1>
+<p>Sometimes installing the debug packages for gtk and glib isn&#39;t quite enough.
+(For instance, if the artifacts from -O2 are driving you bonkers in gdb, you
+might want to rebuild with -O0.)
+Here&#39;s how to build from source and use your local version without installing
+it.</p>
+<h2 id="32-bit-systems">32-bit systems</h2>
+<p>On Ubuntu, to download and build glib and gtk suitable for debugging:</p>
+<ol>
+<li><p>If you don&#39;t have a gpg key yet, generate one with <code>gpg --gen-key</code>.</p>
+</li>
+<li><p>Create file <code>~/.devscripts</code> containing <code>DEBSIGN_KEYID=yourkey</code>, e.g.
+<code>DEBSIGN_KEYID=CC91A262</code> (See
+<a href="http://www.debian.org/doc/maint-guide/ch-build.en.html">http://www.debian.org/doc/maint-guide/ch-build.en.html</a>)</p>
+</li>
+<li><p>If you&#39;re on a 32 bit system, do:</p>
+<pre data-language="shell">#!/bin/sh
+set -x
+set -e
+# Workaround for &quot;E: Build-dependencies for glib2.0 could not be satisfied&quot;
+# See also https://bugs.launchpad.net/ubuntu/+source/apt/+bug/245068
+sudo apt-get install libgamin-dev
+sudo apt-get build-dep glib2.0 gtk+2.0
+rm -rf ~/mylibs
+mkdir ~/mylibs
+cd ~/mylibs
+apt-get source glib2.0 gtk+2.0
+cd glib2.0*
+DEB_BUILD_OPTIONS=&quot;nostrip noopt debug&quot; debuild
+cd ../gtk+2.0*
+DEB_BUILD_OPTIONS=&quot;nostrip noopt debug&quot; debuild</pre>
+</li>
+</ol>
+<p>This should take about an hour. If it gets stuck waiting for a zombie,
+you may have to kill its closest parent (the makefile uses subshells,
+and bash seems to get confused). When I did this, it continued successfully.</p>
+<p>At the very end, it will prompt you for the passphrase for your gpg key.</p>
+<p>Then, to run an app with those libraries, do e.g.</p>
+<pre>export LD_LIBRARY_PATH=$HOME/mylibs/gtk+2.0-2.16.1/debian/install/shared/usr/lib:$HOME/mylibs/gtk+2.0-2.20.1/debian/install/shared/usr/lib</pre>
+<p>gdb ignores that variable, so in the debugger, you would have to do something like</p>
+<pre>set solib-search-path $HOME/mylibs/gtk+2.0-2.16.1/debian/install/shared/usr/lib:$HOME/mylibs/gtk+2.0-2.20.1/debian/install/shared/usr/lib</pre>
+<p>See also <a href="http://sources.redhat.com/gdb/current/onlinedocs/gdb_17.html">http://sources.redhat.com/gdb/current/onlinedocs/gdb_17.html</a></p>
+<h2 id="64-bit-systems">64-bit systems</h2>
+<p>If you&#39;re on a 64 bit system, you can do the above on a 32
+bit system, and copy the result.  Or try one of the following:</p>
+<h3 id="building-your-own-gtk">Building your own GTK</h3>
+<pre data-language="shell">apt-get source glib-2.0 gtk+-2.0
+
+export CFLAGS='-m32 -g'
+export LDFLAGS=-L/usr/lib32
+export LD_LIBRARY_PATH=/work/32/lib
+export PKG_CONFIG_PATH=/work/32/lib/pkgconfig
+
+# glib
+setarch i386 ./configure --prefix=/work/32 --enable-debug=yes
+
+# gtk
+setarch i386 ./configure --prefix=/work/32 --enable-debug=yes --without-libtiff</pre>
+<h3 id="ia32-libs">ia32-libs</h3>
+<p><em>Note: Evan tried this and didn&#39;t get any debug libs at the end.</em></p>
+<p>Or you could try this instead:</p>
+<pre>#!/bin/sh
+set -x
+set -e
+sudo apt-get build-dep ia32-libs
+rm -rf ~/mylibs
+mkdir ~/mylibs
+cd ~/mylibs
+apt-get source ia32-libs
+cd ia32-libs*
+DEB_BUILD_OPTIONS=&quot;nostrip noopt debug&quot; debuild</pre>
+<p>By default, this just grabs and unpacks prebuilt libraries; see
+ia32-libs-2.7ubuntu6/fetch-and-build which documents a BUILD variable which
+would force actual building. This would take way longer, since it builds dozens
+of libraries. I haven&#39;t tried it yet.</p>
+<h4 id="possible-issues">Possible Issues</h4>
+<p>debuild may fail with</p>
+<pre>gpg: [stdin]: clearsign failed: secret key not available
+debsign: gpg error occurred!  Aborting....</pre>
+<p>if you forget to create <code>~/.devscripts</code> with the right contents.</p>
+<p>The build may fail with a <code>FAIL: abicheck.sh</code> if gold is your system linker. Use
+ld instead.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/building_debug_gtk.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/building_debug_gtk.md</a>
+  </p>
+</div>

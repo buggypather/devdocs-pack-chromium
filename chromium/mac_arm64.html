@@ -1,0 +1,65 @@
+<h1>Chromium for Arm Macs</h1>
+<p>Arm Macs are fully supported. You can build Chromium on an Arm Mac. You
+can cross-build for Arm on an Intel Mac. You can cross-build for Intel on
+an Arm Mac. You don&#39;t need Rosetta for anything.</p>
+<p>There&#39;s a <a href="https://ci.chromium.org/p/chromium/builders/ci/mac-arm64-rel">main waterfall
+bot</a>
+that builds for Arm. It cross-builds on an x86-64 machine.</p>
+<p>There&#39;s a <a href="https://ci.chromium.org/p/chromium/builders/ci/mac-arm64-on-arm64-rel">main waterfall
+bot</a>
+that builds for Arm on an Arm bot as well. This bot does not have Rosetta
+installed.</p>
+<h2 id="building-for-arm-macs">Building <em>for</em> Arm Macs</h2>
+<p>If you are on an Intel Mac, all that&#39;s required to build Chromium for arm64
+is to add a <code>target_cpu = &quot;arm64&quot;</code> line to your <code>args.gn</code>. Then build normally.
+If you are on an Arm Mac, your build will by default be an Arm build, though
+please see the section below about building <em>on</em> Arm Macs for specific things
+to keep in mind.</p>
+<p>A note about copying a Chromium build to your Arm Mac. If you don&#39;t do a
+component build (e.g. a regular <code>is_debug=false</code> build), you can just copy
+over Chromium.app from your build directory. If you copy it using
+macOS&#39;s &quot;Shared Folder&quot; feature and Finder, Chromium.app should be directly
+runnable. If you zip, upload Chromium.app to some web service and download
+it to an Arm Mac, browsers will set the <code>com.apple.quarantine</code> bit, which will
+cause the Finder to say <code>&quot;Chromium&quot; is damanged and can&#39;t be opened. You should move it to the Trash.&quot;</code>. In Console.app, the kernel will log
+<code>kernel: Security policy would not allow process: 2204, /Users/you/Downloads/Chromium.app/Contents/MacOS/Chromium</code> and amfid will log
+<code>amfid: /Users/you/Downloads/Chromium.app/Contents/MacOS/Chromium signature not valid: -67050</code>. To fix this, open a terminal and run</p>
+<pre>% cd ~/Downloads &amp;&amp; xattr -rc Chromium.app</pre>
+<p>After that, it should start fine.</p>
+<p>Arm Mac-specific bugs are tagged with the
+<a href="https://crbug.com/?q=label%3Amac-arm64">Mac-ARM64 label</a>.</p>
+<h3 id="universal-builds">Universal Builds</h3>
+<p>A “universal” (or “fat”) <code>.app</code> can be created from distinct x86_64 and arm64
+builds produced from the same source version. Chromium has a <code>universalizer.py</code>
+tool that can then be used to merge the two builds into a single universal
+<code>.app</code>.</p>
+<pre>% ninja -C out/release_x86_64 chrome
+% ninja -C out/release_arm64 chrome
+% mkdir out/release_universal
+% chrome/installer/mac/universalizer.py \
+      out/release_x86_64/Chromium.app \
+      out/release_arm64/Chromium.app \
+      out/release_universal/Chromium.app</pre>
+<p>The universal build is produced in this way rather than having a single
+all-encompassing <code>gn</code> configuration because:</p>
+<ul>
+<li>Chromium builds tend to take a long time, even maximizing the parallelism
+capabilities of a single machine. This split allows an additional dimension
+of parallelism by delegating the x86_64 and arm64 build tasks to different
+machines.</li>
+<li>During the mac-arm64 bring-up, the x86_64 and arm64 versions were built
+using different SDK and toolchain versions. When using the hermetic SDK and
+toolchain, a single version of this package must be shared by an entire
+source tree, because it’s managed by <code>gclient</code>, not <code>gn</code>. However, as of
+November 2020, Chromium builds for the two architectures converged and are
+expected to remain on the same version indefinitely, so this is now more of a
+historical artifact.</li>
+</ul>
+<h2 id="building-on-arm-macs">Building <em>on</em> arm Macs</h2>
+<p>This just works these days, without any caveats.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac_arm64.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mac_arm64.md</a>
+  </p>
+</div>

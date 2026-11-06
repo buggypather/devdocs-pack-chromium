@@ -1,0 +1,104 @@
+<h1>Session History</h1>
+<p>A browser&#39;s session history keeps track of the navigations in each tab, to
+support back/forward navigations and session restore. This is in contrast to
+&quot;history&quot; (e.g., <code>chrome://history</code>), which tracks the main frame URLs the user
+has visited in any tab for the lifetime of a profile.</p>
+<p>Chromium tracks the session history of each tab in NavigationController, using a
+list of NavigationEntry objects to represent the joint session history items.
+Each frame creates <em>session history items</em> as it navigates. A <em>joint session
+history item</em> contains the state of each frame of a page at a given point in
+time, including things like URL, partially entered form data, scroll position,
+etc. Each NavigationEntry uses a tree of FrameNavigationEntries to track this
+state.</p>
+<h2 id="pruning-forward-navigations">Pruning Forward Navigations</h2>
+<p>If the user goes back and then commits a new navigation, this essentially forks
+the joint session history. However, joint session history is tracked as a list
+and not as a tree, so the previous forward history is &quot;pruned&quot; and forgotten.
+This pruning is performed for all new navigations, unless they commit with
+replacement.</p>
+<h2 id="subframe-navigations">Subframe Navigations</h2>
+<p>When the first commit occurs within a new subframe of a document, it becomes
+part of the existing joint session history item (which we refer to as an &quot;auto
+subframe navigation&quot;). The user can&#39;t go back to the state before the frame
+committed. Any subsequent navigations in the subframe create new joint session
+history items (which we refer to as &quot;manual subframe navigations&quot;), such that
+clicking back goes back within the subframe.</p>
+<h2 id="navigating-with-replacement">Navigating with Replacement</h2>
+<p>Some types of navigations can replace the previously committed joint session
+history item for a frame, rather than creating a new item. These include:</p>
+<ul>
+<li><code>location.replace</code> (which is usually cross-document, unless it is a fragment
+navigation)</li>
+<li><code>history.replaceState</code> (which is always same-document)</li>
+<li>Client redirects</li>
+<li>The first non-blank URL after the initial empty document (unless the frame
+was explicitly created with <code>about:blank</code> as the URL).</li>
+</ul>
+<h2 id="identifying-same--and-cross-document-navigations">Identifying Same- and Cross-Document Navigations</h2>
+<p>Each FrameNavigationEntry contains both an <em>item sequence number</em> (ISN) and a
+<em>document sequence number</em> (DSN). Same-document navigations create a new session
+history item without changing the document, and thus have a new ISN but the same
+DSN. Cross-document navigations create a new ISN and DSN. NavigationController
+uses these ISNs and DSNs when deciding which frames need to be navigated during
+a session history navigation, using a recursive frame tree walk in
+<code>FindFramesToNavigate</code>.</p>
+<h2 id="classifying-navigations">Classifying Navigations</h2>
+<p>Much of the complexity in NavigationController comes from the bookkeeping needed
+to track the various types of navigations as they commit (e.g., same-document vs
+cross-document, main frame vs subframe, with or without replacement, etc). These
+types may lead to different outcomes for whether a new NavigationEntry is
+created, whether an existing one is updated vs replaced, and what events are
+exposed to observers. This is handled by <code>ClassifyNavigation</code>, which determines
+which <code>RendererDidNavigate</code> helper methods are used when a navigation commits.</p>
+<h2 id="persistence">Persistence</h2>
+<p>The joint session history of a tab is persisted so that tabs can be restored
+(e.g., between Chromium restarts, after closing a tab, or on another device).
+This requires serializing the state in each NavigationEntry and its tree of
+FrameNavigationEntries, using a PageState object and other metadata.
+See <a href="modifying_session_history_serialization">Modifying Session History Serialization</a>
+for how to safely add new values to be saved and restored.</p>
+<p>Not everything in NavigationEntry is persisted. All data members of
+NavigationEntryImpl and FrameNavigationEntry should be documented with whether
+they are preserved after commit and whether they need to be persisted.</p>
+<p>Note that the session history of a tab can also be cloned when duplicating a
+tab, or when doing a back/forward/reload navigation in a new tab (such as when
+middle-clicking the back/forward/reload button). This involves direct clones of
+NavigationEntries rather than persisting and restoring.</p>
+<h2 id="invariants">Invariants</h2>
+<ul>
+<li>The <code>pending_entry_index_</code> is either -1 or an index into <code>entries_</code>. If
+<code>pending_entry_</code> is defined and <code>pending_entry_index_</code> is -1, then it is a
+new navigation. If <code>pending_entry_index_</code> is a valid index into <code>entries_</code>,
+then <code>pending_entry_</code> must point to that entry and it is a session history
+navigation.</li>
+<li>Newly created tabs have NavigationControllers with <code>is_initial_navigation_</code>
+set to true. They can have <code>last_committed_entry_index_</code> defined before the
+first commit, however, when session history is cloned from another tab. (In
+this case, <code>pending_entry_index_</code> indicates which entry is going to be
+restored during the initial navigation.)</li>
+<li>Every FrameNavigationEntry that has committed in the current session (as
+opposed to those that have been restored) must have a SiteInstance.</li>
+<li>A renderer process can only update FrameNavigationEntries belonging to a
+SiteInstance in that process. This especially includes attacker-controlled
+data like PageState, which could be dangerous to load into a different
+site&#39;s process.</li>
+<li>Any cross-SiteInstance navigation should result in a new NavigationEntry
+with replacement, rather than updating an existing NavigationEntry.</li>
+</ul>
+<h2 id="caveats">Caveats</h2>
+<ul>
+<li>Not every NavigationRequest has a pending NavigationEntry. For example,
+subframe navigations do not, and renderer-initiated main frame navigations
+may clear an existing browser-initiated pending NavigationEntry (using
+PendingEntryRef) without replacing it with a new one. As a result,
+NavigationRequests are a more reliable way of tracking state associated with
+a pending navigation.</li>
+<li>Some subframe documents may not have a corresponding FrameNavigationEntry
+after commit (e.g., see <a href="https://crbug.com/608402">issue 608402</a>).</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/session_history.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/session_history.md</a>
+  </p>
+</div>

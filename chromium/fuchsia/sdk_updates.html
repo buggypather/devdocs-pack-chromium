@@ -1,0 +1,37 @@
+<h1>Manually updating Chromium to a new Fuchsia SDK</h1>
+<p>Normally the Fuchsia SDK dependency is automatically updated to a recent build
+on a regular basis, by the <a href="https://fuchsia-sdk-chromium-roll.skia.org">Fuchsia SDK AutoRoll Bot</a>.</p>
+<p>Should you need to manually update the SDK dependency for some reason, then:</p>
+<ol>
+<li>Check the <a href="https://luci-scheduler.appspot.com/jobs/fuchsia/sdk-topaz-x64-linux">Fuchsia-side
+job</a>
+for a recent green archive. On the &quot;SUCCEEDED&quot; link, copy the SHA-1 from the
+<code>gsutil.upload</code> link of the <code>upload fuchsia-sdk</code> step.</li>
+<li>Put that into Chromium&#39;s src.git <code>build/fuchsia/linux.sdk.sha1</code>.</li>
+<li><code>gclient sync &amp;&amp; ninja ...</code> and make sure things go OK locally.</li>
+<li>Upload the roll CL, making sure to include the <code>fuchsia</code> trybot. Tag the roll
+with <code>Bug: 707030</code>.</li>
+</ol>
+<p>If you would like to build an SDK locally, <code>tools/fuchsia/local-sdk.py</code> tries to
+do this (so you can iterate on ToT Fuchsia against your Chromium build), however
+it&#39;s simply a copy of the steps run on the bot above, and so may be out of date.</p>
+<p>In order to sync a Fuchsia tree to the state matching an SDK hash, you can use:</p>
+<p><code>jiri update https://storage.googleapis.com/fuchsia-snapshots/&lt;SDK_HASH_HERE&gt;</code></p>
+<p>If you are waiting for a Zircon CL to roll into the SDK, you can check the
+status of the <a href="https://luci-scheduler.appspot.com/jobs/fuchsia/zircon-roller">Zircon
+roller</a>.
+Checking the bot&#39;s <a href="https://fuchsia-review.googlesource.com/q/owner:zircon-roller%40fuchsia-infra.iam.gserviceaccount.com">list of
+CLs</a>
+might be useful too.</p>
+<p>Another useful command, if the SDK was pulled by <code>cipd</code> (which it is in
+Chromium-related projects like Crashpad, instead of directly pulling the
+.tar.gz), is:</p>
+<p><code>cipd describe fuchsia/sdk/linux-amd64 -version &lt;CIPD_HASH_HERE&gt;</code></p>
+<p>This description will show the <code>jiri_snapshot</code> &quot;tag&quot; for the CIPD package which
+corresponds to the SDK revision that&#39;s specified in <code>linux.sdk.sha1</code> here.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/sdk_updates.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/sdk_updates.md</a>
+  </p>
+</div>

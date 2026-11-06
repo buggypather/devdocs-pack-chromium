@@ -1,0 +1,40 @@
+<h1>GN Missing Dependencies</h1>
+<p>This document outlines how to investigate and resolve GN missing dependencies, which cause intermittent build failures. These errors are highly flaky—typically only manifesting on highly parallelized builds.</p>
+<h2 id="the-symptoms">The Symptoms</h2>
+<p><strong>The Failure:</strong> If a target starts compiling before its unlisted dependency finishes generating, the build fails with an error like this:</p>
+<pre>[22664/70808] CXX obj/components/bar/baz.o
+../../third_party/llvm-build/Release+Asserts/bin/clang++ ...
+components/bar/baz.cc:12891:32: fatal error: 'components/foo/foo_features.h' file not found
+#include &quot;components/foo/foo_features.h&quot;
+         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 error generated.</pre>
+<p><strong>The False Success:</strong> If the dependency happens to finish generating first, or if the generated file already exists from a previous run, the build succeeds and hides the bug.</p>
+<h2 id="reliable-reproduction">Reliable Reproduction</h2>
+<p>To reliably reproduce a missing dependency:</p>
+<ol>
+<li><strong>Clean the build directory:</strong><pre data-language="bash">gn clean out/Default</pre>
+</li>
+<li><strong>Build only the failing target:</strong>
+Build only the target containing the failing source file (from the error message):<pre data-language="bash">autoninja -C out/Default obj/components/bar/baz.o</pre>
+</li>
+</ol>
+<p>If the dependency is missing, this will fail 100% of the time on a clean build.</p>
+<h2 id="investigation-workflow">Investigation Workflow</h2>
+<h3 id="1-find-the-generating-target">1. Find the Generating Target</h3>
+<p>Use <code>gn refs</code> to find which GN target generates the missing header:</p>
+<pre data-language="bash">gn refs out/Default //out/Default/gen/components/foo/foo_features.h --relation=output</pre>
+<p>This should return the generating target (e.g., <code>//components/foo:foo_features</code>).</p>
+<h3 id="2-get-the-suggestion-using-gn-suggest">2. Get the Suggestion using <code>gn suggest</code></h3>
+<p>GN&#39;s <code>gn suggest</code> tool can analyze the build graph and suggest the exact dependency change:</p>
+<pre data-language="bash">gn suggest out/Default //components/bar/baz.cc=components/foo/foo_features.h</pre>
+<p><strong>Example Output:</strong></p>
+<pre>Suggestion: Add deps = [ &quot;//components/foo:foo_features&quot; ] to :baz (defined at //components/bar/BUILD.gn:10)</pre>
+<p>Apply the suggestion to the corresponding <code>BUILD.gn</code> file.</p>
+<h2 id="verification">Verification</h2>
+<p>Re-run the reproduction steps to verify the fix. The build should now succeed.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/build/gn_missing_dependencies.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/build/gn_missing_dependencies.md</a>
+  </p>
+</div>

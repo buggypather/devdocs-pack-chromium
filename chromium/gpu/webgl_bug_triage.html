@@ -1,0 +1,109 @@
+<h1>WebGL Bug Triage Rotation</h1>
+<p>The WebGL team receives many bug reports from users of Chrome, and web
+developers in particular. In order to maintain a high quality product, and
+enable customers to deploy successful 3D web applications, it&#39;s important that
+these reports be evaluated in a timely manner.</p>
+<p>In order to better scale the team&#39;s efforts, a bug triage rotation has been
+introduced. The specifics of the rotation follow:</p>
+<ul>
+<li><p>Each rotation is one week long.</p>
+</li>
+<li><p>The current triager is responsible for:</p>
+<ul>
+<li><p>Monitoring the incoming new bugs to the Blink&gt;WebGL component, per the
+following query:</p>
+<ul>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/list?can=2&amp;q=is%3Aopen+component%3ABlink%3EWebGL+status%3AUnconfirmed%2CUntriaged+-label%3ANeeds-Feedback%2CNeeds-Bisect%2CNeeds-TestConfirmation&amp;colspec=ID+Pri+M+Stars+ReleaseBlock+Component+Status+Owner+Summary+OS+Modified&amp;x=m&amp;y=releaseblock&amp;cells=ids">Open bugs not needing feedback, and in the Unconfirmed or Unassigned
+state</a></li>
+</ul>
+</li>
+<li><p>If the query above doesn&#39;t turn up anything, it&#39;s possible that the bug was
+already moved into a different state by the GPU triage rotation. In this
+case please look into the following queries. Please note that these will
+turn up much larger lists, so only focus on the new bugs.</p>
+<ul>
+<li><p><a href="https://bugs.chromium.org/p/chromium/issues/list?can=2&amp;q=is%3Aopen+component%3ABlink%3EWebGL+status%3AUnconfirmed%2CUntriaged%2CAvailable%2CAssigned+-label%3ANeeds-Feedback%2CNeeds-Bisect%2CNeeds-TestConfirmation&amp;colspec=ID+Pri+M+Stars+ReleaseBlock+Component+Status+Owner+Summary+OS+Modified&amp;x=m&amp;y=releaseblock&amp;cells=ids">Same query as above, but including Available and Assigned bugs</a></p>
+</li>
+<li><p><a href="https://bugs.chromium.org/p/chromium/issues/list?can=2&amp;q=is%3Aopen+component%3ABlink%3EWebGL+-status%3AStarted&amp;colspec=ID+Pri+M+Stars+ReleaseBlock+Component+Status+Owner+Summary+OS+Modified&amp;x=m&amp;y=releaseblock&amp;cells=ids">Open bugs which haven&#39;t been
+started</a></p>
+</li>
+<li><p><a href="https://bugs.chromium.org/p/chromium/issues/list?can=2&amp;q=is%3Aopen+component%3ABlink%3EWebGL&amp;colspec=ID+Pri+M+Stars+ReleaseBlock+Component+Status+Owner+Summary+OS+Modified&amp;x=m&amp;y=releaseblock&amp;cells=ids">All open
+bugs</a></p>
+</li>
+</ul>
+</li>
+<li><p>Please also monitor these candidates for closing as WontFix:</p>
+<ul>
+<li><p><a href="https://bugs.chromium.org/p/chromium/issues/list?colspec=ID%20Pri%20M%20Stars%20ReleaseBlock%20Component%20Status%20Owner%20Summary%20OS%20Modified&amp;x=m&amp;y=releaseblock&amp;cells=ids&amp;q=is%3Aopen%20component%3ABlink%3EWebGL%20status%3AUntriaged%20label%3Ahotlist-recharge-cold&amp;can=2">Untriaged bugs labeled Hotlist-Recharge-Cold</a></p>
+</li>
+<li><p><a href="https://bugs.chromium.org/p/chromium/issues/list?can=2&amp;q=is%3Aopen+component%3ABlink%3EWebGL+label%3ANeeds+modified%3Ctoday-30&amp;colspec=ID+Pri+M+Stars+ReleaseBlock+Component+Status+Owner+Summary+OS+Modified&amp;x=m&amp;y=releaseblock&amp;cells=ids">Open bugs needing feedback of some sort, not updated in the last 30
+days</a></p>
+</li>
+</ul>
+</li>
+<li><p>If an issue interacts with other components, add those components. (e.g. V8
+via Blink&gt;JavaScript or sub-components, media usually via
+Internals&gt;GPU&gt;Video or Internals&gt;Media&gt;Video)</p>
+</li>
+<li><p>Determining on what graphics hardware the bug occurs, and assigning GPU- and
+OS- labels.</p>
+</li>
+<li><p>Reproducing these bugs, as best as possible, given the graphics hardware at
+the team&#39;s disposal.</p>
+</li>
+<li><p>Figuring out whether it&#39;s a bug in the application, and, if so, closing the
+bug with an explanation.</p>
+</li>
+<li><p>Figuring out whether the bug is a regression. If it&#39;s appropriate to ask the
+submitter to <a href="https://www.chromium.org/developers/bisect-builds-py">run a
+bisect</a>, please do so;
+if it would be easy for Chrome&#39;s Test Engineering team to run it, add the
+Needs-Bisect label; or run a <a href="https://sites.google.com/a/google.com/chrome-te/home/tools/bisect_builds?pli=1">per-revision
+bisect</a>
+(Google internal, sorry) manually.</p>
+</li>
+<li><p>If the Summary is undescriptive or imprecise, rewriting it.</p>
+</li>
+<li><p>Determining a Type and Priority for the bug, and assigning
+ReleaseBlock-(Stable/Beta/Dev) if appropriate.</p>
+</li>
+<li><p>Working with the submitter to produce a reduced test case if at all
+possible, and, if so, integrating that test into the WebGL conformance
+suite. Add the Needs-Feedback label as appropriate to remove the bug from
+the queries above.</p>
+</li>
+<li><p>Marking the bug as duplicate if necessary.</p>
+</li>
+<li><p>Finding potentially-related bugs and recent changes, adding
+Blocking/Blocked-on links.</p>
+</li>
+<li><p>Assigning to the owner of a likely-related bug or recent change.</p>
+</li>
+</ul>
+</li>
+</ul>
+<p>Prefer to use the &quot;Available&quot; state to indicate that a bug&#39;s been triaged,
+rather than assigning bugs to yourself, to avoid having a big bug backlog. For
+any new bug that&#39;s not related to a recent or existing issue, there should be no
+owner.</p>
+<p>It&#39;s the triager&#39;s responsibility to do the above steps for all of the incoming
+bugs during that shift. Bugs that aren&#39;t handled during a given shift stay with
+the triager; they don&#39;t spill over to the next shift, unless there&#39;s agreement
+with the person next on the triage rotation.</p>
+<p>Please create a saved query in Monorail for <code>component:Blink&gt;WebGL</code> and select
+&quot;Notify Immediately&quot; to get emails for every change to a WebGL bug.</p>
+<p>This is intended to be a lightweight rotation that shouldn&#39;t take too much of
+the triager&#39;s time. For this reason it&#39;s scheduled independently of other shifts
+like <a href="http://go/gpu-pixel-wrangler">pixel wrangling</a>, and may overlap. If any conflicts do
+arise, please reach out or swap shifts.</p>
+<p>The rotation is <a href="https://rotations.corp.google.com/rotation/6257611988008960">managed
+here</a> via the
+Google-internal rotations tool. Shift swaps are managed via the tool. The
+calendar which can be subscribed to in order to see the oncall person is linked
+from the &quot;Google Calendar Integration&quot; heading under &quot;Settings&quot;.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/webgl_bug_triage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/webgl_bug_triage.md</a>
+  </p>
+</div>

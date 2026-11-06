@@ -1,0 +1,72 @@
+<h1>Audio Latency Tracing</h1>
+<p>The <code>“audio.latency”</code> tracing category is a tool to measure internal chromium
+audio latency, without any hardware dependencies. This document outlines how
+to record and analyse a latency trace, and offers suggestions as to how to
+construct test pages.</p>
+<h2 id="overview">Overview</h2>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/media/latency_tracing_overview.png" alt="audio.latency tracing overview"></p>
+<p>When an input stream detects an audio signal peak (e.g. clapping hands in front
+of microphone), we start an “audio.latency” trace event. When the output stream
+detects an audio peak, we stop the tracing event. The duration of the trace
+event should give us the total internal Chrome latency. <strong>This excludes any
+latency incured from hardware</strong> such as a microphone or sound card&#39;s internal
+buffers.</p>
+<h2 id="measuring-latency">Measuring Latency</h2>
+<h3 id="prerequisites">Prerequisites</h3>
+<ul>
+<li>The computer must have a microphone input accessible through <code>getUserMedia()</code></li>
+<li>Only the test page and <code>chrome://tracing</code> should be open.</li>
+<li>The test page must have one call to <code>getUserMedia()</code> + one audio output
+(e.g. one media element OR one WebAudio graph).</li>
+<li>The surrounding area should be relatively quiet.</li>
+<li>If echo cancellation is disabled, consider lowering speaker volume or OS
+volume.</li>
+<li><strong>Trace recording must be started before any streams are created</strong> by the test
+page, or there will be no traces. One can check that there are no <code>Input Controllers</code> or <code>Output Streams</code> in the chrome://media-internals audio tab, as
+pictured below.
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/media/latency_tracing_media_internals.png" alt="No streams"></li>
+</ul>
+<h3 id="steps">Steps</h3>
+<ul>
+<li>Open the latest version of Chrome (114.0.5695.0 or later).</li>
+<li>Open chrome://tracing.</li>
+<li>Record a new trace selecting the “audio” and the “audio.latency” categories.
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/media/latency_tracing_tracing_categories.png" alt="Selecting tracing categories"></li>
+<li>In a separate tab, open the <a href="#Test-pages">test page</a>.</li>
+<li>Initialize the test page, so that it is capturing audio using <code>getUserMedia()</code>
+and playing out the captured stream.</li>
+<li>Repeatedly clap next to the microphone, clearly and loudly, waiting roughly 1
+second between claps.</li>
+<li>Stop the trace.</li>
+<li>Look for the <code>AmplitudePeak</code> trace event: the wall duration corresponds to the
+measured latency
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/media/latency_tracing_results.png" alt="Viewing results"></li>
+</ul>
+<h2 id="test-pages">Test pages</h2>
+<h3 id="baseline-latency-test-page">Baseline latency test page</h3>
+<p>The simplest latency test page involves directly routing a <code>getUserMedia()</code>
+MediaStream to an <code>&lt;audio&gt;</code> element or WebAudio. Such a web page should
+allow us to measure the round trip latency within Chrome, between the audio
+service and the renderer process. For convenience, a simple test page is checked
+in under
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/manual_tests/audio_latency.html"><code>third_party/blink/manual_tests/audio_latency.html</code></a>.
+The audio signal flow for this test pages matches the diagram in the
+<a href="#Overview">overview</a>.</p>
+<h3 id="codec-latency-test-page">Codec latency test page</h3>
+<p>Adding an encoding and decoding step to a simple baseline test web page should
+allow us to measure the extra latency incurred by encoding and decoding audio.
+No such test page is provided, but the signal flow should follow this diagram:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/media/latency_tracing_codec.png" alt="Codec latency test page diagram"></p>
+<h3 id="network-end-to-end-latency-test">Network end-to-end latency test</h3>
+<p>Adding a network round trip to a codec latency test page should simulate the
+expected end-to-end latency in real-world scenarios. The sender and receiver
+test pages can live in two tabs, if only one page calls <code>getUserMedia()</code> and one
+page plays out audio. Again, no example test page is provided, but the signal
+flow should follow this diagram:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/media/latency_tracing_network.png" alt="Network latency test page diagram"></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/media/latency_tracing.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/media/latency_tracing.md</a>
+  </p>
+</div>

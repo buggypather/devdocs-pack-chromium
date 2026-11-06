@@ -1,0 +1,74 @@
+<h1>Kiosk Mode</h1>
+<p>If you have a real world kiosk application that you want to run on Google
+Chrome, then below are the steps to take to simulate kiosk mode.</p>
+<h2 id="steps-to-simulate-kiosk-mode">Steps to Simulate Kiosk Mode</h2>
+<h3 id="step-1">Step 1</h3>
+<p>Compile the following Java code:</p>
+<pre data-language="java">import java.awt.*;
+import java.applet.*;
+import java.security.*;
+import java.awt.event.*;
+
+public class FullScreen extends Applet
+{
+   public void fullScreen()
+   {
+      AccessController.doPrivileged
+      (
+         new PrivilegedAction()
+         {
+            public Object run()
+            {
+               try
+               {
+                  Robot robot = new Robot();
+                  robot.keyPress(KeyEvent.VK_F11);
+               }
+               catch (AWTException e)
+               {
+                  e.printStackTrace();
+               }
+               return null;
+            }
+         }
+      );
+   }
+}</pre>
+<h3 id="step-2">Step 2</h3>
+<p>Include it in an applet on your kiosk application&#39;s home page:</p>
+<pre data-language="html">&lt;applet name=&quot;appletFullScreen&quot;
+        code=&quot;FullScreen.class&quot;
+        width=&quot;1&quot;
+        height=&quot;1&quot;&gt;&lt;/applet&gt;</pre>
+<h3 id="step-3">Step 3</h3>
+<p>Add the following to the kiosk computer&#39;s java.policy file:</p>
+<pre>grant codeBase &quot;http://yourservername/*&quot;
+{
+   permission java.security.AllPermission;
+};</pre>
+<h3 id="step-4">Step 4</h3>
+<p>Include the following JavaScript and assign the <code>doLoad</code> function to the
+<code>onload</code> event:</p>
+<pre data-language="javascript">var _appletFullScreen;
+
+function doLoad()
+{
+   _appletFullScreen = document.applets[0];
+   doFullScreen();
+}
+
+function doFullScreen()
+{
+   if (_appletFullScreen &amp;&amp; _appletFullScreen.fullScreen)
+   {
+      // Add an if statement to check whether document.body.clientHeight is not
+      // indicative of full screen mode
+      _appletFullScreen.fullScreen();
+   }
+}</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/kiosk_mode.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/kiosk_mode.md</a>
+  </p>
+</div>

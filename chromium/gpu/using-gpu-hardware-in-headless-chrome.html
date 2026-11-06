@@ -1,0 +1,25 @@
+<h1>Using Gpu Hardware In Headless Chrome</h1>
+<h2 id="using-gpu-hardware-in-headless-chrome">Using GPU Hardware in Headless Chrome</h2>
+<p>Headless Chrome can utilize the local machine&#39;s GPU, at least in some
+circumstances. This capability is useful for Continuous Integration
+setups, running web workloads server-side, and in other scenarios.</p>
+<p>With headless Chrome, pass the command line argument <code>--enable-gpu</code> to
+disable forcing software rendering. This defers to Chrome&#39;s default
+OpenGL driver autodetection, which on Linux requires that X display is
+available (i.e. X11 server is available and <code>DISPLAY</code> env var is set
+accordingly). While the default auto-detection doesn&#39;t seem to work
+without X11, forcing Vulkan backend (--use-angle=vulkan) have been
+found to work at least on some Linux configurations.</p>
+<p>Linux NVIDIA users may find <a href="server-side-headless-linux-chrome-with-gpus">Server Side Headless Linux Chrome With
+GPUs</a> helpful.</p>
+<p>For additional background and information please see
+<a href="https://crbug.com/40540071">crbug.com/40540071</a>,
+<a href="https://crbug.com/338414704">crbug.com/338414704</a>,
+<a href="https://crbug.com/40256775">crbug.com/40256775</a>, and
+<a href="https://crbug.com/40062624">crbug.com/40062624</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/using-gpu-hardware-in-headless-chrome.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/using-gpu-hardware-in-headless-chrome.md</a>
+  </p>
+</div>

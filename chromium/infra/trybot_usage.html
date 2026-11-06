@@ -1,0 +1,85 @@
+<h1>Using the trybots</h1>
+<h2 id="overview">Overview</h2>
+<p>The trybots let committers try uncommitted patches on multiple platforms in an
+automated way.</p>
+<ul>
+<li>Trybots include all platforms for which we currently build Chromium, though
+they may not support all configurations built on CI.</li>
+<li>The commit queue (CQ) runs a subset of available trybots. See <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/infra/cq.md">here</a> for
+more information.</li>
+<li>Trybots can be manually invoked via <code>git cl try</code> or the &quot;Choose Tryjobs&quot; UI
+in gerrit.</li>
+<li>Custom trybots can be added to the list of builders triggered and checked by
+the CQ via the <code>Cq-Include-Trybots</code> commit message footer. See <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/contributing.md#cl-footer-reference">here</a>
+for more information.</li>
+<li>Any committer can use the trybots.</li>
+<li>Non-committers with tryjob access can also use the trybots. See <a href="https://www.chromium.org/getting-involved/become-a-committer#TOC-Try-job-access">here</a>
+for more information.</li>
+<li>External contributors without tryjob access can ask committers to run
+tryjobs for them.</li>
+</ul>
+<p>*** note
+<strong>Warning</strong>: Please do not trigger more than ~5-10 tryjobs per builder
+per hour. We don&#39;t have enough spare capacity for more than that, and we don&#39;t
+have per-user quotas yet (<a href="https://crbug.com/1091070">https://crbug.com/1091070</a> to implement that).</p>
+<hr>
+<h2 id="workflow">Workflow</h2>
+<ol>
+<li><p>Upload your change to gerrit via <code>git cl upload</code></p>
+</li>
+<li><p>Run trybots:</p>
+<ul>
+<li><p>Run the default set of trybots by starting a CQ dry run, either by
+setting CQ+1 on gerrit or by running <code>git cl try</code> with no arguments.</p>
+</li>
+<li><p>Manually run trybots of your choice by either the &quot;Choose Tryjobs&quot;
+button in gerrit or providing arguments to <code>git cl try</code>:</p>
+<ul>
+<li>specify bucket name with <code>-B/--bucket</code>. For chromium tryjobs, this
+should always be <code>luci.chromium.try</code></li>
+<li>specify bot names with <code>-b/--bot</code>. This can be specified more than
+once.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+<h3 id="examples">Examples</h3>
+<p>Launching a CQ dry run:</p>
+<pre data-language="bash">$ git cl try</pre>
+<p>Launching a particular trybot:</p>
+<pre data-language="bash">$ git cl try -B luci.chromium.try -b linux-rel</pre>
+<p>Launching multiple trybots:</p>
+<pre data-language="bash">$ git cl try -B luci.chromium.try \
+  -b android-binary-size \
+  -b ios-simulator-full-configs \
+  -b linux-blink-rel \
+  -b win7-blink-rel
+  # etc</pre>
+<h2 id="trying-changes-in-dependencies">Trying Changes in Dependencies</h2>
+<p>It is also possible to run a Chromium try job with a pending CL in a separate
+repository that is synced via DEPS. Normally DEPS files specify the SHA1
+revision hash of the dependency. But commits that are part of pending CLs are
+not part of the default
+<a href="https://git-scm.com/book/en/v2/Git-Internals-The-Refspec">refspec</a> fetched when
+gclient checks out the dependency. Instead, you can specify a symbolic reference
+to your change, like <code>refs/changes/12/2277112/3</code>. To determine the ref to use,
+click the &quot;Download&quot; button on the dependency CL in Gerrit, which will show it
+as part of several git commands. Then edit the DEPS file in Chromium.</p>
+<p>If, for example, you wanted to test a pending V8 CL in Chromium, you would edit
+the DEPS line, which may look like this:</p>
+<pre>  'v8_revision': '50bc0b22b15da1410a1be6240a25a184d5896908',</pre>
+<p>And change it to:</p>
+<pre>  'v8_revision': 'refs/changes/12/2277112/3',</pre>
+<p>When you run the try job, gclient will sync in your pending CL. Note that if
+your pending CL is based on a revision that is either older or newer than the
+revision specified in DEPS, the tryjob may fail. You can rebase your CL to be on
+top of the same revision specified in the DEPS file to avoid this.</p>
+<h2 id="bugs-feature-requests-questions">Bugs? Feature requests? Questions?</h2>
+<p><a href="https://g.co/bugatrooper">File a trooper bug.</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/infra/trybot_usage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/infra/trybot_usage.md</a>
+  </p>
+</div>

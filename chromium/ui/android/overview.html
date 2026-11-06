@@ -1,0 +1,48 @@
+<h1>Chrome for Android UI</h1>
+<h2 id="ramping-up">Ramping-up</h2>
+<p>Android has a number of <a href="https://developer.android.com/guide">developer guides</a> that are helpful for getting ramped up on general Android development. We recommend reading the following as primers for developing UI:</p>
+<ul>
+<li><a href="https://developer.android.com/guide/components/fundamentals">Application fundamentals</a></li>
+<li><a href="https://developer.android.com/guide/topics/resources/providing-resources.html">Providing resources</a></li>
+<li><a href="https://developer.android.com/guide/topics/ui/declaring-layout">Layouts</a></li>
+<li><a href="https://developer.android.com/guide/components/activities/intro-activities">Introduction to activities</a></li>
+</ul>
+<h2 id="colors-and-text-styles">Colors and text styles</h2>
+<p><a href="dynamic_colors">Dynamic Color doc</a> should be followed when working on UI. For colors that cannot/should not be made dynamic (as mentioned in the doc), Chrome for Android has a color palette defined in <a href="https://chromium.googlesource.com/chromium/src/+/main/ui/android/java/res/values/color_palette.xml">//ui/android/java/res/values/color_palette.xml</a> and a set of reusable semantic colors defined in <a href="https://chromium.googlesource.com/chromium/src/+/main/ui/android/java/res/values/semantic_colors_adaptive.xml">//ui/android/java/res/values/semantic_colors_adaptive.xml</a>. The semantic colors from semantic_colors_adaptive.xml should be used to ensure colors adapt properly for dark mode and can be consistently and easily updated during product-wide visual refreshes.</p>
+<p>For more information on selecting the right color, see <a href="night_mode">Night Mode on Chrome Android</a>.</p>
+<p>Text should be styled with a pre-defined text appearance from <a href="https://chromium.googlesource.com/chromium/src/+/main/components/browser_ui/styles/android/java/res/values/styles.xml">//components/browser_ui/styles/android/java/res/values/styles.xml</a>. If the text color cannot/should not be dynamic, pre-defined text styles from <a href="https://chromium.googlesource.com/chromium/src/+/main/ui/android/java/res/values/styles.xml">//ui/android/java/res/values/styles.xml</a> can be used. If leading (aka line height) is needed, use <a href="https://chromium.googlesource.com/chromium/src/+/main/ui/android/java/src/org/chromium/ui/widget/TextViewWithLeading.java">org.chromium.ui.widget.TextViewWithLeading</a> with <code>app:leading</code> set to one of the pre-defined *_leading dimensions in <a href="https://chromium.googlesource.com/chromium/src/+/main/ui/android/java/res/values/dimens.xml">//ui/android/java/res/values/dimens.xml</a>.</p>
+<h2 id="widgets">Widgets</h2>
+<p>The Chromium code base contains a number of wrappers around Android classes (to smooth over bugs or save on binary size) and many UI widgets that provide Chrome-specific behavior and/or styling.</p>
+<p>These can be found in <a href="https://chromium.googlesource.com/chromium/src/+/main/components/browser_ui/widget/android/">//components/browser_ui/widget/android/</a> and <a href="https://chromium.googlesource.com/chromium/src/+/main/ui/android/">//ui/android/</a>. There is an ongoing effort to consolidate all widgets in //components/browser_ui/widget/android.</p>
+<h2 id="mvc">MVC</h2>
+<p>UI development should follow a modified Model-View-Controller pattern. MVC base classes live in <a href="https://chromium.googlesource.com/chromium/src/+/main/ui/android/java/src/org/chromium/ui/modelutil/">//ui/android/java/src/org/chromium/ui/modelutil</a>.</p>
+<p>The following guides introduce MVC in Chrome for Android:</p>
+<ul>
+<li><a href="mvc_architecture_tutorial">So, you want to do MVC...</a></li>
+<li><a href="mvc_simple_list_tutorial">Simple Lists in MVC Land</a></li>
+<li><a href="mvc_simple_recycler_view_tutorial">Simple RecyclerView use in MVC</a></li>
+<li><a href="mvc_testing">So, you want to test MVC...</a></li>
+</ul>
+<h2 id="styles-and-widgets-shared-with-webview">Styles and widgets shared with WebView</h2>
+<p>Styles and widgets in //ui/android/ may be used by WebView. UI shown in WebView is inflated using the host Activity as the Context, so Chrome&#39;s custom theme attributes won&#39;t be set and android theme attributes may or may not be set. When creating new styles/widgets or modifying styles/widgets used by WebView, either avoid theme attributes or define a fallback if the theme attribute cannot be resolved.</p>
+<h2 id="handling-activity-results">Handling activity results</h2>
+<p>Currently, there are 2 custom tools to catch activity results in Chrome:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/java/src/org/chromium/ui/base/WindowAndroid.java;l=444;drc=f4b1a5f91e14941349a0319b35f71d3efb7350af"><code>IntentRequestTracker</code></a>
+can be called from a <code>WindowAndroid</code> to start an activity. The provided
+callback will be called when the started activity returns a result. One
+known limitation is that the callback is lost if the base activity is
+recreated. The result will be lost if it&#39;s received after the base activity
+is recreated.
+<a href="activity_result_tracker"><code>ActivityResultTracker</code></a> using the Android
+<a href="https://developer.android.com/training/basics/intents/result"><code>ActivityResultRegistry</code></a>
+API is introduced to ensure that the in-flight activities&#39; result is caught
+even after base activity&#39;s recreation.</p>
+<h2 id="settings">Settings</h2>
+<p>Settings screens are built using AndroidX preferences and Chromium&#39;s settings infrastructure in <a href="https://chromium.googlesource.com/chromium/src/+/main/components/browser_ui/settings/android/">//components/browser_ui/settings/android/</a>.
+To ensure settings remain reachable via search and prevent UI discrepancies, see the <a href="https://chromium.googlesource.com/chromium/src/+/main/components/browser_ui/settings/android/settings_search_testing.md">Android Settings Search Testing Guide</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/overview.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/overview.md</a>
+  </p>
+</div>

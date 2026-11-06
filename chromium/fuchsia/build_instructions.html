@@ -1,0 +1,77 @@
+<h1>Checking out and building on Fuchsia</h1>
+<p><em><strong>If you have followed the instructions below and are still having trouble,
+see <a href="fuchsia#contact-information">Contact information</a>.</strong></em></p>
+<h2 id="system-requirements">System requirements</h2>
+<p>Building and running on Linux is officially supported, mac build is not. If you
+are willing to run emulator based tests locally, KVM is required. You may check
+if <code>/dev/kvm</code> exists on the system, or follow the <a href="#enable-kvm">Enable KVM</a>
+section.</p>
+<ol>
+<li><p>Follow up <a href="../linux/build_instructions">chromium for linux</a> to setup
+chromium environment.</p>
+</li>
+<li><p>Edit your <code>.gclient</code> to add <code>fuchsia</code> to the <code>target_os</code> list. The file
+should look similar to this:</p>
+<pre>solutions = [
+  {
+    &quot;url&quot;: &quot;https://chromium.googlesource.com/chromium/src.git&quot;,
+    &quot;managed&quot;: False,
+    &quot;name&quot;: &quot;src&quot;,
+    &quot;custom_deps&quot;: {},
+    &quot;custom_vars&quot;: {}
+  }
+]
+target_os = ['fuchsia']</pre>
+</li>
+<li><p>Run <code>gclient sync</code></p>
+</li>
+<li><p>Create a build directory:</p>
+<pre data-language="shell">$ gn gen out/fuchsia --args=&quot;is_debug=false dcheck_always_on=true is_component_build=false target_os=\&quot;fuchsia\&quot;&quot;</pre>
+<p>You can add many of the usual GN arguments like <code>use_remoteexec = true</code>. In
+particular, when working with devices, consider using <code>is_debug = false</code> and
+<code>is_component_build = false</code> since debug and component builds can drastically
+increase run time and used space.</p>
+</li>
+<li><p>Build the target as you would for any other platform, you may specify the
+targets to build at the end of the command line:</p>
+</li>
+</ol>
+<pre data-language="shell">$ autoninja -C out/fuchsia</pre>
+<ol start="5">
+<li>Most of the gtests based tests can be executed via
+<code>out/fuchsia/bin/run_***_unittests</code>, e.g.</li>
+</ol>
+<pre data-language="shell">$ out/fuchsia/bin/run_base_unittests</pre>
+<p>   It starts a fresh new emulator instance and executes the tests on it under
+   the hood. Also see the <a href="#running-test-suites">Running test suites</a> section
+   for other types of tests.</p>
+<h2 id="enable-kvm">Enable KVM</h2>
+<p>Under Linux, if your host and target CPU architectures are the same (e.g. you&#39;re
+building for Fuchsia/x64 on a Linux/x64 host) then you can benefit from QEMU&#39;s
+support for the KVM hypervisor:</p>
+<ol>
+<li>Install the KVM module for your kernel, to get a /dev/kvm device.</li>
+<li>Ensure that your system has a &quot;kvm&quot; group, and it owns /dev/kvm. You can do
+that by installing the QEMU system common package: <code>$ sudo apt-get install qemu-system-common</code></li>
+<li>Add users to the &quot;kvm&quot; group, and have them login again, to pick-up the new
+group.</li>
+</ol>
+<pre data-language="shell">$ sudo adduser &lt;user&gt; kvm
+$ exit [log in again]</pre>
+<h2 id="running-test-suites">Running test suites</h2>
+<p>There are four types of tests available to run on Fuchsia:</p>
+<ol>
+<li><a href="gtests">Gtests</a></li>
+<li><a href="gpu_testing">GPU integration tests</a></li>
+<li><a href="web_tests">Blink tests</a></li>
+<li><a href="webpage_tests">Webpage tests</a></li>
+</ol>
+<p>Check the documentations to learn more about how to run these tests.</p>
+<p>Documentation for the underlying testing scripts work can be found
+<a href="test_scripts">here</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/build_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/build_instructions.md</a>
+  </p>
+</div>

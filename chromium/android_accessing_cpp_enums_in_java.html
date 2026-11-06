@@ -1,0 +1,178 @@
+<h1>Accessing C++ Enums In Java</h1>
+<h2 id="introduction">Introduction</h2>
+<p>Accessing C++ enums in Java is implemented via a Python script which analyzes
+the C++ enum and spits out the corresponding Java class. The enum needs to be
+annotated in a particular way. By default, the generated class name will be the
+same as the name of the enum. If all the names of the enum values are prefixed
+with the MACRO_CASED_ name of the enum those prefixes will be stripped from
+the Java version.</p>
+<h2 id="features">Features</h2>
+<ul>
+<li>Customize the package name of the generated class using the
+<code>GENERATED_JAVA_ENUM_PACKAGE</code> directive (required)</li>
+<li>Customize the class name using the <code>GENERATED_JAVA_CLASS_NAME_OVERRIDE</code>
+directive (optional)</li>
+<li>Strip enum entry prefixes to make the generated classes less verbose using
+the <code>GENERATED_JAVA_PREFIX_TO_STRIP</code> directive (optional)</li>
+<li>Follows best practices by using
+<a href="https://chromium.googlesource.com/chromium/src/+/main/styleguide/java/java.md#IntDef-Instead-of-Enum">IntDef Instead of Enum</a></li>
+<li>Generate the <code>flag</code> attribute using the <code>GENERATED_JAVA_IS_FLAG</code> directive (optional)</li>
+<li>Copies comments that directly precede enum entries into the generated Java
+class</li>
+</ul>
+<h2 id="usage">Usage</h2>
+<ol>
+<li><p>Add directives to your C++ enum. Only the <code>GENERATED_JAVA_ENUM_PACKAGE</code>
+directive is required:</p>
+<pre data-language="cpp">// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome
+// GENERATED_JAVA_CLASS_NAME_OVERRIDE: FooBar
+// GENERATED_JAVA_PREFIX_TO_STRIP: BAR_
+// GENERATED_JAVA_IS_FLAG: true
+enum SomeEnum {
+  BAR_A = 1 &lt;&lt; 0,
+  BAR_B = 1 &lt;&lt; 1,
+  BAR_C = BAR_B,
+};</pre>
+</li>
+<li><p>Add a new build target and add it to the <code>srcjar_deps</code> of an
+<code>android_library</code> target:</p>
+<pre data-language="gn">if (is_android) {
+  import(&quot;//build/config/android/rules.gni&quot;)
+}
+
+if (is_android) {
+  java_cpp_enum(&quot;java_enum_srcjar&quot;) {
+    # External code should depend on &quot;:foo_java&quot; instead.
+    visibility = [ &quot;:*&quot; ]
+    sources = [
+      # Include the .h or .cc file(s) which defines the enum(s).
+      &quot;base/android/native_foo_header.h&quot;,
+    ]
+  }
+
+  # If there's already an android_library target, you can add
+  # java_enum_srcjar to that target's srcjar_deps. Otherwise, the best
+  # practice is to create a new android_library just for this target.
+  android_library(&quot;foo_java&quot;) {
+    srcjar_deps = [ &quot;:java_enum_srcjar&quot; ]
+
+    # Important: the generated enum uses the @IntDef annotation provided by
+    # this dependency.
+    deps = [ &quot;//third_party/androidx:androidx_annotation_annotation_java&quot; ]
+  }
+}</pre>
+</li>
+<li><p>The generated file <code>org/chromium/chrome/FooBar.java</code> would contain:</p>
+<pre data-language="java">package org.chromium.chrome;
+
+import androidx.annotation.IntDef;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+
+@IntDef(flag = true, value = {
+    FooBar.A, FooBar.B, FooBar.C
+})
+@Retention(RetentionPolicy.SOURCE)
+public @interface FooBar {
+  int A = 1 &lt;&lt; 0;
+  int B = 1 &lt;&lt; 1;
+  int C = 1 &lt;&lt; 1;
+}</pre>
+</li>
+</ol>
+<h2 id="formatting-notes">Formatting Notes</h2>
+<ul>
+<li><p>Handling long package names:</p>
+<pre data-language="cpp">// GENERATED_JAVA_ENUM_PACKAGE: (
+//   org.chromium.chrome.this.package.is.too.long.to.fit.on.a.single.line)</pre>
+</li>
+<li><p>Enum entries</p>
+<ul>
+<li><p>Single line enums should look like this:</p>
+<pre data-language="cpp">// GENERATED_JAVA_ENUM_PACKAGE: org.foo
+enum NotificationActionType { BUTTON, TEXT };</pre>
+</li>
+<li><p>Multi-line enums should have one enum entry per line, like this:</p>
+<pre data-language="cpp">// GENERATED_JAVA_ENUM_PACKAGE: org.foo
+enum NotificationActionType {
+  BUTTON,
+  TEXT
+};</pre>
+</li>
+<li><p>Multi-line enum entries are allowed but should be formatted like this:</p>
+<pre data-language="cpp">// GENERATED_JAVA_ENUM_PACKAGE: org.foo
+enum NotificationActionType {
+  LongKeyNumberOne,
+  LongKeyNumberTwo,
+  ...
+  LongKeyNumberThree =
+      LongKeyNumberOne | LongKeyNumberTwo | ...
+};</pre>
+</li>
+</ul>
+</li>
+<li><p>Preserving comments</p>
+<pre data-language="cpp">// GENERATED_JAVA_ENUM_PACKAGE: org.chromium
+enum CommentEnum {
+  // This comment will be preserved.
+  ONE,
+  TWO, // This comment will NOT be preserved.
+  THREE
+}</pre>
+<pre data-language="java">...
+public @interface CommentEnum {
+  ...
+  /**
+   * This comment will be preserved.
+   */
+  int ONE = 0;
+  int TWO = 1;
+  int THREE = 2;
+}</pre>
+</li>
+</ul>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="symbol-not-foundcould-not-resolve-intdef">Symbol not found/could not resolve IntDef</h3>
+<p>You may see an error like this when compiling:</p>
+<pre data-language="shell">$ autoninja -C out/Default base/foo_java
+util.build_utils.CalledProcessError: Command failed: ...
+org/chromium/chrome/FooBar.java:13: error: symbol not found androidx.annotation.IntDef
+Hint: Add &quot;//third_party/androidx:androidx_annotation_annotation_java&quot; to deps of //base/foo_java
+import androidx.annotation.IntDef;
+       ^
+org/chromium/chrome/FooBar.java:18: error: could not resolve IntDef
+@IntDef({
+^</pre>
+<p>The fix is to add
+<code>&quot;//third_party/androidx:androidx_annotation_annotation_java&quot;</code> to the <code>deps</code> of
+the <code>android_library</code>. Note: <strong>do not</strong> add this to the <code>java_cpp_enum</code> target
+by mistake, otherwise you&#39;ll see a new error:</p>
+<pre data-language="shell">$ autoninja -C out/Default base/foo_java
+[0/1] Regenerating ninja files
+ERROR at //base/BUILD.gn:194:12: Assignment had no effect.
+    deps = [ &quot;//third_party/androidx:androidx_annotation_annotation_java&quot; ]
+           ^--------------------------------------------------------------
+You set the variable &quot;deps&quot; here and it was unused before it went
+out of scope.
+...</pre>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="android_accessing_cpp_switches_in_java">Accessing C++ Switches In Java</a></li>
+<li><a href="android_accessing_cpp_features_in_java">Accessing C++ Features In Java</a></li>
+</ul>
+<h2 id="code">Code</h2>
+<ul>
+<li><a href="https://cs.chromium.org/chromium/src/build/android/gyp/java_cpp_enum.py?dr=C&amp;sq=package:chromium">Generator
+code</a>
+and
+<a href="https://cs.chromium.org/chromium/src/build/android/gyp/java_cpp_enum_tests.py?dr=C&amp;q=java_cpp_enum_tests&amp;sq=package:chromium&amp;l=1">Tests</a></li>
+<li><a href="https://cs.chromium.org/chromium/src/build/config/android/rules.gni?q=java_cpp_enum.py&amp;sq=package:chromium&amp;dr=C&amp;l=458">GN
+template</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_accessing_cpp_enums_in_java.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/android_accessing_cpp_enums_in_java.md</a>
+  </p>
+</div>

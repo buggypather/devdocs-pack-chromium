@@ -1,0 +1,79 @@
+<h1>Rust API Design Principles</h1>
+<p>This policy lays out guidelines for designing the user-facing parts of core Rust
+libraries in Chromium. It is meant to provide guidance on relative priorities
+to help decide between different possible designs.</p>
+<p>Note: These guidelines are aimed at <em>core</em> Rust libraries (e.g. <code>//base</code>) which
+expect to see broad, general use across Chromium. They may or may not apply to
+code designed for more specialized parts of the codebase. Conversely, since
+these guidelines are aimed at libraries <em>in Chromium</em>, they have different
+considerations than the Rust standard library, which aims to support all
+possible use cases.</p>
+<p>These design principles are undergoing constant development; expect more to be
+added in the future. Existing guidelines should change only rarely.</p>
+<h2 id="core-design-goals">Core Design Goals</h2>
+<p>The first of these goals is the most important; beyond that, these goals are not
+ordered.</p>
+<ol>
+<li>APIs must promote the use of Rust in Chromium. If Chromium developers are
+unwilling to use an API (because it’s unergonomic, not performant, etc), then it
+is a bad design.</li>
+<li>Therefore…<ol>
+<li>APIs should be performant, imposing as little runtime overhead as
+possible.</li>
+<li>APIs should be ergonomic, requiring as little boilerplate as possible.</li>
+<li>APIs should be idiomatic Rust, to make it easy for Rust developers to
+use it, and for C++ developers to familiarize themselves with Rust.</li>
+</ol>
+</li>
+<li>APIs should minimize the potential for misuse, especially misuse with
+security implications (such as undefined behavior).</li>
+</ol>
+<h2 id="compatibility-with-the-generic-rust-guidelines">Compatibility with the Generic Rust Guidelines</h2>
+<ol>
+<li>APIs should follow the
+<a href="https://rust-lang.github.io/api-guidelines/">Rust API Guidelines</a></li>
+</ol>
+<h2 id="unsafety">(Un)Safety</h2>
+<ol>
+<li>APIs should not require users to use <code>unsafe</code> code if at all possible.<ol>
+<li>This includes <code>unsafe</code> functions, as well as those that require <code>unsafe</code>
+in order to use the result (e.g. by returning a raw pointer).</li>
+<li>Examples of exceptions are code that imposes such a large performance hit
+that it’s deemed unacceptable to use, or that requires patterns that are
+annoying enough that developers will try to avoid using them.</li>
+</ol>
+</li>
+<li>If we provide an <code>unsafe</code> API, we should try to provide an equivalent safe
+API and encourage its use when possible.</li>
+<li><em>Internal</em> use of <code>unsafe</code> is acceptable, so long it is encapsulated and
+not exposed to the user, and there isn’t an easy safe alternative.</li>
+</ol>
+<h2 id="cc-interop-via-ffi">C/C++ Interop via FFI</h2>
+<p>Chromium has three options available for interoperation with C and C++:</p>
+<ol>
+<li>Bindgen: Automatically generates bindings for C code. Supported by the Rust
+maintainers.</li>
+<li>Cxx: Generates user-specified bindings to C++ code. A
+<a href="https://cxx.rs/">third-party crate</a> with minimal new feature development.</li>
+<li>Crubit: Automatically generates bindings. Supported in Chromium for calling
+Rust from C++ in most directories (except where Cronet support is required).
+Support for the reverse direction (calling C++ from Rust) is under development.</li>
+</ol>
+<p>For more information, see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/ffi.md">ffi.md</a>. In the long run, we
+prefer Crubit, but since it is not yet universally available or fully integrated,
+we recommend Cxx for now.
+Therefore, these guidelines aim to minimize the migration cost from Cxx to
+Crubit in the future.</p>
+<ol>
+<li>For C bindings, use bindgen.</li>
+<li>For C++ bindings, use Crubit if possible, and Cxx otherwise.</li>
+<li>Wrap FFI functions in safe, idiomatic Rust APIs.</li>
+<li>When using Cxx, keep APIs minimal, to minimize the surface area of a future
+migration to Crubit.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/api_design.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/api_design.md</a>
+  </p>
+</div>

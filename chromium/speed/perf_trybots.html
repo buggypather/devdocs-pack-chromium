@@ -1,0 +1,124 @@
+<h1>Perf Try Bots</h1>
+<p>Chrome has a performance lab with dozens of device and OS configurations.
+<a href="https://pinpoint-dot-chromeperf.appspot.com">Pinpoint</a> is the service that lets
+you run performance tests in the lab. With Pinpoint, you can run try jobs, which
+let you put in a Gerrit patch, and it will run tip-of-tree with and without the
+patch applied.</p>
+<h2 id="why-perf-try-jobs">Why perf try jobs?</h2>
+<ul>
+<li>All of the devices exactly match the hardware and OS versions in the perf
+continuous integration suite.</li>
+<li>The devices have the &quot;maintenance mutex&quot; enabled, reducing noise from
+background processes.</li>
+<li>Some regressions take multiple repeats to reproduce, and Pinpoint
+automatically runs multiple times and aggregates the results.</li>
+<li>Some regressions reproduce on some devices but not others, and Pinpoint will
+run the job on multiple devices.</li>
+<li>Each iteration runs both arms on the same device, eliminating confounding factors like across-device variability</li>
+</ul>
+<h2 id="starting-a-perf-try-job">Starting a perf try job</h2>
+<ul>
+<li>Visit <a href="https://pinpoint-dot-chromeperf.appspot.com">Pinpoint</a>.</li>
+<li>Check the upper-right corner of the page. If you see a &quot;Sign in&quot; link,
+click it and sign in with an account that has trybot access.
+(If the link shows &quot;Sign out&quot;, then you are already signed in.)</li>
+<li>Click the perf try button in the bottom right corner of the screen.</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/images/pinpoint-perf-try-button.png" alt="Pinpoint Perf Try Button"></p>
+<p>You should see the following dialog popup:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/images/pinpoint-perf-try-dialog.png" alt="Perf Try Dialog"></p>
+<table>
+<thead>
+<tr>
+<th><strong>Benchmark Configuration</strong></th>
+<th><strong>Description</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Bot</td>
+<td>The device type to run the test on. All hardware configurations in our perf lab are supported.</td>
+</tr>
+<tr>
+<td>Benchmark</td>
+<td>A telemetry benchmark. E.g. <code>system_health.common_desktop</code><br><br>All the telemetry benchmarks are supported by the perf trybots. To get a full list, run <code>tools/perf/run_benchmark list</code><br><br>To learn more about the benchmarks, you can read about the <a href="https://docs.google.com/document/d/1BM_6lBrPzpMNMtcyi2NFKGIzmzIQ1oH3OlNG27kDGNU/edit?ts=57e92782">system health benchmarks</a>, which test Chrome&#39;s performance at a high level, and the <a href="https://docs.google.com/spreadsheets/d/1ZdQ9OHqEjF5v8dqNjd7lGUjJnK6sgi8MiqO7eZVMgD0/edit#gid=0">benchmark harnesses</a>, which cover more specific areas.</td>
+</tr>
+<tr>
+<td>Story</td>
+<td>(optional) A specific story from the benchmark to run. Note that if the story you want isn&#39;t on the dropdown it could be because the story is new and so the Chromeperf dashboard database doesn&#39;t know about it yet. In that case you can still free-form type the exact story name into the field.</td>
+</tr>
+<tr>
+<td>Story Tags</td>
+<td>(optional) A list of story tags. All stories in the given benchmark that match any of the tags will be run.</td>
+</tr>
+</tbody></table>
+<p>Note that you must provide either a Story or a Story Tag for Pinpoint to run.
+Per <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1017811#c6">this explanation</a>, running an entire benchmark on Pinpoint can cause significant problems if the benchmark is large. For this reason, some small benchmarks have an &#39;all&#39; tag available that applies to all the stories in the benchmark, so please use that tag to run all the stories for a small benchmark. Please see <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1023451">this bug</a> for details on work to add the &#39;all&#39; tag to more benchmarks. If you want to run a large benchmark, consider choosing one of the tags that benchmark provides to select a subset of the available stories for that benchmark.</p>
+<p><br><br></p>
+<table>
+<thead>
+<tr>
+<th><strong>Job Configuration</strong></th>
+<th><strong>Description</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Attempt Count</td>
+<td>The number of iterations Pinpoint will run on both arms. Pinpoint will spread iterations evenly across all available devices. Pinpoint will also randomize which arm runs first and ensure that the number of iterations going first are the same for both arms.</td>
+</tr>
+<tr>
+<td>Base Git Hash</td>
+<td>The Git Hash of the control arm. This git hash must have already landed on main or a release branch and cannot be the git hash associated with a gerrit CL in flight. Default is <code>HEAD</code>.</td>
+</tr>
+<tr>
+<td>Exp Git Hash</td>
+<td>Same as Base Git Hash for the experiment arm. Default is <code>HEAD</code>.</td>
+</tr>
+<tr>
+<td>Base Patch</td>
+<td>(optional) The patch you want the control arm to run the benchmark on. Patches in dependent repos (e.g. v8, skia) are supported. Pinpoint will also post updates on the Gerrit comment list. Must be entered as a URL.</td>
+</tr>
+<tr>
+<td>Exp Patch</td>
+<td>(optional) Same as Base Patch for the experiment arm.</td>
+</tr>
+<tr>
+<td>Extra arguments on base commit</td>
+<td>(optional) Extra arguments for the test. E.g. <code>--extra-chrome-categories=foo,bar</code><br>or<code>--enable-features=foo,bar</code>(shortening the args by omitting &quot;--extra-browser-args&quot; prefix)<br><br>To see all arguments, run <code>tools/perf/run_benchmark run --help</code></td>
+</tr>
+<tr>
+<td>Extra arguments on experiment commit</td>
+<td>(optional) Same as base commit for the experiment arm. Note that some arguments will apply to both arms.</td>
+</tr>
+<tr>
+<td>Monorail Project</td>
+<td>The repo the Git hashes are from. Default is <code>chromium</code>.</td>
+</tr>
+<tr>
+<td>Bug ID</td>
+<td>(optional) A bug ID. Pinpoint will post updates on the bug.</td>
+</tr>
+<tr>
+<td>Batch ID</td>
+<td>(optional) A batch ID used to track relevant jobs for the Chrome Health Initiative. We recommend leaving this blank.</td>
+</tr>
+</tbody></table>
+<h3 id="example-evaluating-a-cls-impact-on-the-performance-of-speedometer2-on-mac-m1">Example: Evaluating a CL&#39;s impact on the performance of Speedometer2 on Mac M1</h3>
+<p>Here is an example of a try job that would evaluate the impact of a <a href="https://chromium-review.googlesource.com/c/chromium/src/+/3498915/1">patch CL</a> at the tip of main on Speedometer2 on Mac M1. This experiment set up can also be used to see if the patch CL can address a performance regression as long as the regression is visible at HEAD.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/images/example-try-job.png" alt="Perf Try Dialog"></p>
+<h2 id="interpreting-the-results">Interpreting the results</h2>
+<h3 id="detailed-results">Detailed results</h3>
+<p>On the Job result page, click the &quot;Analyze benchmark results&quot; link at the top. See the <a href="https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/metrics-results-ui.md">metrics results UI documentation</a> for more details on reading the results.</p>
+<h3 id="traces">Traces</h3>
+<p>On the Job result page, there is a chart containing two dots. The left dot represents HEAD and the right dot represents the patch. Clicking on the right dot reveals some colored bars; each box represents one benchmark run. Click on one of the runs to see trace links.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/images/pinpoint-trace-links.png" alt="Trace links"></p>
+<h1 id="contact">Contact</h1>
+<ul>
+<li>For more questions, email <a href="mailto:browser-perf-engprod@google.com">browser-perf-engprod@google.com</a></li>
+<li>Bugs on Pinpoint issues should have Component: <a href="https://bugs.chromium.org/p/chromium/issues/list?q=component:Speed%3EBisection">Speed&gt;Bisection</a>.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/perf_trybots.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/perf_trybots.md</a>
+  </p>
+</div>

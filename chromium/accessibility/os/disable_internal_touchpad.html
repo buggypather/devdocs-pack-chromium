@@ -1,0 +1,103 @@
+<h1>ChromeOS Disable internal touchpad</h1>
+<p>To prevent accidental clicks and improve the experience for external mouse users,
+ChromeOS allows you to disable the built-in touchpad. This accessibility feature
+offers options for always-off or disabling the touchpad only when a mouse is connected.</p>
+<h2 id="summary">Summary</h2>
+<h3 id="user-flow">User flow</h3>
+<p>ChromeOS allows users to disable the built-in touchpad through the accessibility
+settings. Here&#39;s the user flow:</p>
+<ol>
+<li><p><strong>Navigate to Settings</strong>: Go to Accessibility &gt; Cursor and touchpad &gt;
+Disable internal touchpad.</p>
+</li>
+<li><p><strong>Choose a mode</strong>: Select one of the following options:</p>
+</li>
+</ol>
+<ul>
+<li><strong>Never</strong>: The touchpad is always enabled.</li>
+<li><strong>Always</strong>: The touchpad is always disabled.</li>
+<li><strong>When a mouse is connected</strong>: The touchpad is disabled only when an external
+mouse is connected.</li>
+</ul>
+<ol start="3">
+<li><strong>Confirmation (Applies when mode is &quot;Always&quot; or &quot;When a mouse is connected&quot;):</strong>
+The internal touchpad is disabled when the confirmation dialog is shown. This
+ensures you don&#39;t accidentally disable the touchpad without an alternative
+input method (keyboard or mouse). If the dialog isn&#39;t confirmed or canceled before
+the 30 second timeout the touchpad will be re-enabled.</li>
+</ol>
+<ul>
+<li>Once confirmed, a notification appears in the bottom right corner indicating
+the touchpad is disabled. You can re-enable the touchpad directly from this
+notification.</li>
+</ul>
+<ol start="4">
+<li><p><strong>Device Page</strong>: The touchpad&#39;s status (enabled/disabled) is also reflected
+in the Devices page.</p>
+</li>
+<li><p><strong>&quot;When a mouse is connected&quot; mode specifics</strong>:</p>
+</li>
+</ol>
+<ul>
+<li>The confirmation dialog appears only the first time an external mouse is connected
+after enabling this mode.</li>
+</ul>
+<h3 id="technical-overview">Technical Overview</h3>
+<p>The internal touchpad disabling feature in ChromeOS is implemented using Event Rewriters.
+Event Rewriters intercept and modify event streams, allowing the system to selectively
+block touchpad input.</p>
+<p>Key Components:</p>
+<ol>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/accessibility/disable_touchpad_event_rewriter.cc?q=DisableTouchpadEventRewriter">DisableTouchpadEventRewriter</a>:</li>
+</ol>
+<ul>
+<li>Determines the source of mouse events (internal touchpad or external mouse).</li>
+<li>Detects the presence of a connected external mouse.</li>
+<li>Disables mouse events from the internal touchpad based on the configured mode
+and mouse connection status.</li>
+<li>Includes a mechanism (e.g. pressing the Shift key 5 times) to re-enable
+the touchpad.</li>
+</ul>
+<ol start="2">
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/ash/settings/os_a11y_page/cursor_and_touchpad_page.ts">Disable Touchpad Dropdown</a>:</li>
+</ol>
+<ul>
+<li>Provides the user interface for selecting the touchpad disabling mode.</li>
+<li>Displays instructions to the user on how to re-enable the touchpad (e.g. by pressing the Shift key 5 times).</li>
+</ul>
+<ol start="3">
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/ash/settings/device_page/per_device_touchpad_subsection.ts">Devices Page</a>:</li>
+</ol>
+<ul>
+<li>This page displays the current status of the touchpad (enabled or disabled), providing visual feedback
+to the user.</li>
+</ul>
+<ol start="4">
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/accessibility/accessibility_controller.cc">AccessibilityController</a>:</li>
+</ol>
+<ul>
+<li>Manages the display of confirmation dialogs and notifications to the user.</li>
+<li>Monitors user preferences for touchpad disabling mode and informs the DisableTouchpadEventRewriter.</li>
+</ul>
+<h3 id="testing">Testing</h3>
+<ul>
+<li><p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/test/data/webui/chromeos/settings/os_a11y_page/cursor_and_touchpad_page_test.ts">Settings Tests</a>:
+Verify that user selections in the &quot;Cursor and touchpad&quot; settings page correctly update
+the underlying preferences.</p>
+</li>
+<li><p><a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/accessibility/disable_touchpad_event_rewriter_unittest.cc">DisableTouchpadEventRewriter Tests</a>:
+Validate the core logic of the DisableTouchpadEventRewriter, ensuring it correctly
+disables and enables the touchpad based on different scenarios (mode selection,
+mouse connection status, etc.).</p>
+</li>
+<li><p><a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/system/accessibility/floating_accessibility_controller_unittest.cc">AccessibilityController Tests</a>:
+Confirm that the AccessibilityController correctly manages the display of confirmation
+dialogs and notifications to the user.</p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/disable_internal_touchpad.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/disable_internal_touchpad.md</a>
+  </p>
+</div>

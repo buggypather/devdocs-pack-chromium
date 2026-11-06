@@ -1,0 +1,36 @@
+<h1>Power Telemetry tests</h1>
+<h2 id="overview">Overview</h2>
+<p>The Telemetry power benchmarks measure power indirectly by measuring the CPU time used by Chrome while it performs various tasks (a.k.a. user stories).</p>
+<h2 id="list-of-power-metrics">List of power metrics</h2>
+<h3 id="cpu_time_percentage_avg"><code>cpu_time_percentage_avg</code></h3>
+<p>This metric measures the average number of cores that Chrome used over the duration of the trace.</p>
+<p>This metric is enabled by adding <code>&#39;cpuTimeMetric&#39;</code> to the list of TBM2 metrics in the benchmark&#39;s Python class:</p>
+<pre data-language="python">options.SetTimelineBasedMetrics(['cpuTimeMetric', 'memoryMetric'])</pre>
+<p>Additionally, the <code>toplevel</code> trace category must be enabled for this metric to function correctly because it ensures that a trace span is active whenever Chrome is doing work:</p>
+<pre data-language="python">category_filter = chrome_trace_category_filter.ChromeTraceCategoryFilter(filter_string='toplevel')</pre>
+<h2 id="list-of-power-benchmarks">List of power benchmarks</h2>
+<p>The primary power benchmarks are:</p>
+<ul>
+<li><strong><code>system_health.common_desktop</code></strong>: A desktop-only benchmark in which each page focuses on a single, common way in which users use Chrome (e.g. browsing Facebook photos, shopping on Amazon, searching Google)</li>
+<li><strong><code>system_health.common_mobile</code></strong>: A mobile-only benchmark that parallels <code>system_health.common_desktop</code></li>
+<li><strong><code>power.desktop</code></strong>: A desktop-only benchmark made up of two types of pages:<ul>
+<li>Pages focusing on a single, extremely simple behavior (e.g. a blinking cursor, a CSS blur animation)</li>
+<li>Pages on which Chrome has exhibited pathological idle behavior in the past</li>
+</ul>
+</li>
+<li><strong><code>media.desktop</code></strong>: A desktop-only benchmark in which each page tests a particular media-related scenario (e.g. playing a 1080p, H264 video with sound)</li>
+<li><strong><code>media.mobile</code></strong>: A mobile-only benchmark that parallels <code>media.desktop</code></li>
+</ul>
+<p><a href="https://docs.google.com/spreadsheets/d/1xaAo0_SU3iDfGdqDJZX_jRV0QtkufwHUKH3kQKF3YQs/edit#gid=0">This spreadsheet</a> lists the owner for each benchmark.</p>
+<h2 id="adding-new-power-test-cases">Adding new power test cases</h2>
+<p>To add a new test case to a power benchmark, contact the owner of the benchmark above that sounds like the best fit.</p>
+<h2 id="running-the-benchmarks-locally">Running the benchmarks locally</h2>
+<p>See <a href="https://chromium.googlesource.com/catapult/+/refs/heads/main/telemetry/docs/run_benchmarks_locally.md">this page</a> for instructions on how to run the benchmarks locally.</p>
+<h2 id="seeing-power-benchmark-results">Seeing power benchmark results</h2>
+<p>Enter the platform, benchmark, and metric you care about on <a href="https://chromeperf.appspot.com/report">this page</a> to see how the power metrics have moved over time.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/harnesses/power_perf.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/harnesses/power_perf.md</a>
+  </p>
+</div>

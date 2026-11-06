@@ -1,0 +1,265 @@
+<h1>Servicifying Chromium Features</h1>
+<h2 id="overview">Overview</h2>
+<p>Much to the dismay of Chromium developers, practicing linguists, and keyboard
+operators everywhere, the term <strong>servicificificification</strong> [sic] has been
+egregiously smuggled into the Chromium parlance.</p>
+<p>Lots of Chromium code is contained in reasonably well-isolated component
+libraries with some occasionally fuzzy boundaries and often a surprising number
+of gnarly runtime interdependencies among a complex graph of components. Y
+implements one of Z&#39;s delegate interfaces, while X implements one of Y&#39;s
+delegate interfaces, and now it&#39;s possible for some ridiculous bug to creep in
+where W calls into Z at the wrong time and causes a crash in X. Yikes.</p>
+<p>Servicification embodies the ongoing process of <strong>servicifying</strong> Chromium
+features and subsystems, or refactoring these collections of library code into
+services with well-defined public API boundaries and very strong runtime
+isolation via Mojo interfaces.</p>
+<p>The primary goals are to improve maintainability and extensibility of the system
+over time, while also allowing for more flexible runtime configuration. For
+example, with the Network Service in place we can now run the entire network
+stack either inside or outside of the browser process with the flip of a
+command-line switch. Client code using the Network Service stays the same,
+independent of that switch.</p>
+<p>This document focuses on helpful guidelines and patterns for servicifying parts
+of Chromium.</p>
+<p>Also see general <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/README.md#Mojo-Services">Mojo &amp; Services</a>
+documentation for other introductory guides, API references, <em>etc.</em></p>
+<h2 id="setting-up-the-service">Setting Up The Service</h2>
+<p>This section briefly covers early decisions and implementation concerns when
+introducing a new service.</p>
+<h3 id="where-in-the-tree">Where in the Tree?</h3>
+<p>Based on the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/services/README.md">service development guidelines</a>, any service which could
+be reasonably justified as a core system service in a hypothetical,
+well-designed operating system may belong in the top-level <code>//services</code>
+directory. If that sounds super hand-wavy and unclear, that&#39;s because it is!
+There isn&#39;t really a great universal policy here, so when in doubt, contact your
+favorite local
+<a href="https://groups.google.com/a/chromium.org/forum#!forum/services-dev">services-dev@chromium.org</a>
+mailing list and start a friendly discussion.</p>
+<p>Other common places where developers place services, and why:</p>
+<ul>
+<li><code>//components/services</code> for services which haven&#39;t yet made the cut for
+<code>//services</code> but which are either used by Content directly or by multiple
+Content embedders.</li>
+<li><code>//chrome/services</code> for services which are used exclusively within Chrome and
+not shared with other Content embedders.</li>
+<li><code>//chromeos/services</code> for services which are used on Chrome OS by more than
+just Chrome itself (for example, if the <code>ash</code> service must also connect to
+them for use in system UI).</li>
+</ul>
+<h3 id="launching-service-processes">Launching Service Processes</h3>
+<p>Content provides a simple
+<a href="https://cs.chromium.org/chromium/src/content/public/browser/service_process_host.h?rcl=723edf64a56ef6058e886afc67adc786bea39e78&amp;l=47"><code>ServiceProcessHost</code></a>
+API to launch a new Service Process. The Mojo Remote corresponding to each
+process launch is effectively a lifetime control for the launched process.</p>
+<p>You may choose to maintain only a single concurrent instance of your service
+at a time, similar to the Network or Storage services. In this case, typically
+you will have some browser code maintain a lazy Mojo Remote to the service
+process, and any clients of the service will have their connections brokered
+through this interface.</p>
+<p>In other cases you may want to manage multiple independent service processes.
+The Data Decoder service, for example, allows for arbitrary browser code
+to launch a unique isolated instance to process a single decode operation or
+a batch of related operations (e.g. to decode a bunch of different objects
+from the same untrusted origin).</p>
+<p>Insofar as the browser can use ServiceProcessLauncher however it likes, and the
+corresponding Mojo Remotes can be owned just like any other object, developers
+are free to manage their service instances however they like.</p>
+<h3 id="hooking-up-the-service-implementation">Hooking Up the Service Implementation</h3>
+<p>For out-of-process service launching, Content uses its &quot;utility&quot; process type.</p>
+<p>For services known to content, this is accomplished by adding an appropriate
+factory function to
+<a href="https://cs.chromium.org/chromium/src/content/utility/services.cc"><code>//content/utility/services.cc</code></a></p>
+<p>For other services known only to Chrome, we have a similar file at
+<a href="https://cs.chromium.org/chromium/src/chrome/utility/services.cc"><code>//chrome/utility/services.cc</code></a>.</p>
+<p>Once an appropriate service factory is registered for your main service
+interface in one of these places, <code>ServiceProcessHost::Launch</code> can be used to
+acquire a new isolated instance from within the browser process.</p>
+<p>To run a service in-process, you can simply instantiate your service
+implementation (e.g. on a background thread) like you would any other object,
+and you can then bind a Mojo Remote which is connected to that instance.</p>
+<p>This is useful if you want to avoid the overhead of extra processes in some
+scenarios, and it allows the detail of where and how the service runs to be
+fully hidden behind management of the main interface&#39;s Mojo Remote.</p>
+<h2 id="incremental-servicification">Incremental Servicification</h2>
+<p>For large Chromium features it is not feasible to convert an entire subsystem
+to a service all at once. As a result, it may be necessary for the subsystem
+to spend a considerable amount of time (weeks or months) split between the old
+implementation and your beautiful, sparkling new service implementation.</p>
+<p>In creating your service, you likely have two goals:</p>
+<ul>
+<li>Making the service available to its consumers</li>
+<li>Making the service self-contained</li>
+</ul>
+<p>Those two goals are not the same, and to some extent are at tension:</p>
+<ul>
+<li><p>To satisfy the first, you need to build out the API surface of the service to
+a sufficient degree for the anticipated use cases.</p>
+</li>
+<li><p>To satisfy the second, you need to convert all clients of the code that you
+are servicifying to instead use the service, and then fold that code into the
+internal implementation of the service.</p>
+</li>
+</ul>
+<p>Whatever your goals, you will need to proceed incrementally if your project is
+at all non-trivial (as they basically all are given the nature of the effort).
+You should explicitly decide what your approach to incremental bringup and
+conversion will be. Here are some approaches that have been taken for various
+services:</p>
+<ul>
+<li>Build out your service depending directly on existing code,
+convert the clients of that code 1-by-1, and fold the existing code into the
+service implementation when complete (<a href="https://docs.google.com/document/d/1EPLEJTZewjiShBemNP5Zyk3b_9sgdbrZlXn7j1fubW0/edit">Identity Service</a>).</li>
+<li>Build out the service with new code and make the existing code
+into a client library of the service. In that fashion, all consumers of the
+existing code get converted transparently (<a href="https://docs.google.com/document/d/1JU8QUWxMEXWMqgkvFUumKSxr7Z-nfq0YvreSJTkMVmU/edit#heading=h.19gc5b5u3e3x">Preferences Service</a>).</li>
+<li>Build out the new service piece-by-piece by picking a given
+bite-size piece of functionality and entirely servicifying that functionality
+(<a href="https://docs.google.com/document/d/1_1Vt4ShJCiM3fin-leaZx00-FoIPisOr8kwAKsg-Des/edit#heading=h.c3qzrjr1sqn7">Device Service</a>).</li>
+</ul>
+<p>These all have tradeoffs:</p>
+<ul>
+<li>The first lets you incrementally validate your API and implementation, but
+leaves the service depending on external code for a long period of time.</li>
+<li>The second can create a self-contained service more quickly, but leaves
+all the existing clients in place as potential cleanup work.</li>
+<li>The third ensures that you&#39;re being honest as you go, but delays having
+the breadth of the service API up and going.</li>
+</ul>
+<p>Which makes sense depends both on the nature of the existing code and on
+the priorities for doing the servicification. The first two enable making the
+service available for new use cases sooner at the cost of leaving legacy code in
+place longer, while the last is most suitable when you want to be very exacting
+about doing the servicification cleanly as you go.</p>
+<h2 id="platform-specific-issues-android">Platform-Specific Issues: Android</h2>
+<p>As you servicify code running on Android, you might find that you need to port
+interfaces that are served in Java. Here is an
+<a href="https://codereview.chromium.org/2643713002">example CL</a> that gives a basic
+pattern to follow in doing this.</p>
+<p>You also might need to register JNI in your service. That is simple to set
+up, as illustrated in <a href="https://codereview.chromium.org/2690963002">this CL</a>.
+(Note that that CL is doing more than <em>just</em> enabling the Device Service to
+register JNI; you should take the register_jni.cc file added there as your
+starting point to examine the pattern to follow).</p>
+<p>Finally, it is possible that your feature will have coupling to UI process state
+(e.g., the Activity) via Android system APIs. To handle this challenging
+issue, see the section on <a href="#Coupling-to-UI">Coupling to UI</a>.</p>
+<h2 id="platform-specific-issues-ios">Platform-Specific Issues: iOS</h2>
+<p>*** aside
+<strong>WARNING:</strong> Some of this content is obsolete and needs to be updated. When in
+doubt, look approximately near the recommended bits of code and try to find
+relevant prior art.</p>
+<hr>
+<p>Services are supported on iOS insofar as Mojo is supported. However, Chrome on
+iOS is strictly single-process, and all services thus must run in-process on
+iOS.</p>
+<p>If you have a use case or need for services on iOS, contact
+<a href="mailto:blundell@chromium.org">blundell@chromium.org</a>. For general information on the motivations and vision for
+supporting services on iOS, see the high-level
+<a href="https://docs.google.com/document/d/15I7sQyQo6zsqXVNAlVd520tdGaS8FCicZHrN0yRu-oU/edit">servicification design doc</a>.
+In particular, search for the mentions of iOS within the doc.</p>
+<h2 id="client-specific-issues">Client-Specific Issues</h2>
+<h4 id="mocking-interface-impls-in-js">Mocking Interface Impls in JS</h4>
+<p>It is a common pattern in Blink&#39;s web tests to mock a remote Mojo interface
+in JS so that native Blink code requests interfaces from the test JS rather
+than whatever would normally service them in the browser process.</p>
+<p>The current way to set up that sort of thing looks like
+<a href="https://cs.chromium.org/chromium/src/third_party/blink/web_tests/battery-status/resources/mock-battery-monitor.js?rcl=be6e0001855f7f1cfc26205d0ff5a2b5b324fcbd&amp;l=19">this</a>.</p>
+<h4 id="feature-impls-that-depend-on-blink-headers">Feature Impls That Depend on Blink Headers</h4>
+<p>In the course of servicifying a feature that has Blink as a client, you might
+encounter cases where the feature implementation has dependencies on Blink
+public headers (e.g., defining POD structs that are used both by the client and
+by the feature implementation). These dependencies pose a challenge:</p>
+<ul>
+<li>Services should not depend on Blink, as this is a dependency inversion (Blink
+is a client of services).</li>
+<li>However, Blink is very careful about accepting dependencies from Chromium.</li>
+</ul>
+<p>To meet this challenge, you have two options:</p>
+<ol>
+<li>Move the code in question from C++ to mojom (e.g., if it is simple structs).</li>
+<li>Move the code into the service&#39;s C++ client library, being very explicit
+about its usage by Blink. See
+<a href="https://codereview.chromium.org/2415083002">this CL</a> for a basic pattern to
+follow.</li>
+</ol>
+<h4 id="frame-scoped-connections">Frame-Scoped Connections</h4>
+<p>You must think carefully about the scoping of the connection being made
+from Blink. In particular, some feature requests are necessarily scoped to a
+frame in the context of Blink (e.g., geolocation, where permission to access the
+interface is origin-scoped). Servicifying these features is then challenging, as
+Blink has no frame-scoped connection to arbitrary services (by design, as
+arbitrary services have no knowledge of frames or even a notion of what a frame
+is).</p>
+<p>After a
+<a href="https://groups.google.com/a/chromium.org/forum/#!topic/services-dev/CSnDUjthAuw">long discussion</a>,
+the policy that we have adopted for this challenge is the following:</p>
+<p>CURRENT</p>
+<ul>
+<li>The renderer makes a request through its frame-scoped connection to the
+browser.</li>
+<li>The browser obtains the necessary permissions before directly servicing the
+request.</li>
+</ul>
+<p>AFTER SERVICIFYING THE FEATURE IN QUESTION</p>
+<ul>
+<li>The renderer makes a request through its frame-scoped connection to the
+browser.</li>
+<li>The browser obtains the necessary permissions before forwarding the
+request on to the underlying service that hosts the feature.</li>
+</ul>
+<p>Notably, from the renderer&#39;s POV essentially nothing changes here.</p>
+<h2 id="strategies-for-challenges-to-decoupling-from-content">Strategies for Challenges to Decoupling from //content</h2>
+<h3 id="coupling-to-ui">Coupling to UI</h3>
+<p>Some feature implementations have hard constraints on coupling to UI on various
+platforms. An example is NFC on Android, which requires the Activity of the view
+in which the requesting client is hosted in order to access the NFC platform
+APIs. This coupling is at odds with the vision of servicification, which is to
+make the service physically isolatable. However, when it occurs, we need to
+accommodate it.</p>
+<p>The high-level decision that we have reached is to scope the coupling to the
+feature <em>and</em> platform in question (rather than e.g. introducing a
+general-purpose FooServiceDelegate), in order to make it completely explicit
+what requires the coupling and to avoid the coupling creeping in scope.</p>
+<p>The basic strategy to support this coupling while still servicifying the feature
+in question is to inject a mechanism of mapping from an opaque &quot;context ID&quot; to
+the required context. The embedder (e.g., //content) maintains this map, and the
+service makes use of it. The embedder also serves as an intermediary: it
+provides a connection that is appropriately context-scoped to clients. When
+clients request the feature in question, the embedder forwards the request on
+along with the appropriate context ID.  The service impl can then map that
+context ID back to the needed context on-demand using the mapping functionality
+injected into the service impl.</p>
+<p>To make this more concrete, see
+<a href="https://codereview.chromium.org/2734943003">this CL</a>.</p>
+<h3 id="shutdown-of-singletons">Shutdown of Singletons</h3>
+<p>You might find that your feature includes singletons that are shut down as part
+of //content&#39;s shutdown process. As part of decoupling the feature
+implementation entirely from //content, the shutdown of these singletons must be
+either ported into your service or eliminated:</p>
+<ul>
+<li>In general, as Chromium is moving away from graceful shutdown, the first
+question to analyze is: Do the singletons actually need to be shut down at
+all?</li>
+<li>If you need to preserve shutdown of the singleton, the naive approach is to
+move the shutdown of the singleton to the destructor of your service</li>
+<li>However, you should carefully examine when your service is destroyed compared
+to when the previous code was executing, and ensure that any differences
+introduced do not impact correctness.</li>
+</ul>
+<p>See
+<a href="https://groups.google.com/a/chromium.org/forum/#!topic/services-dev/Y9FKZf9n1ls">this thread</a>
+for more discussion of this issue.</p>
+<h2 id="additional-support">Additional Support</h2>
+<p>If this document was not helpful in some way, please post a message to your
+friendly local
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/chromium-mojo">chromium-mojo@chromium.org</a>
+or
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/services-dev">services-dev@chromium.org</a>
+mailing list.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/servicification.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/servicification.md</a>
+  </p>
+</div>

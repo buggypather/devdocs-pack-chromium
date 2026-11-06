@@ -1,0 +1,51 @@
+<h1>Optimizing Chrome Web UIs</h1>
+<h2 id="how-do-i-do-it">How do I do it?</h2>
+<p>In order to build with a fast configuration, try setting these options in your
+GN args:</p>
+<pre data-language="python">optimize_webui = true
+is_debug = false</pre>
+<h2 id="how-is-the-code-optimized">How is the code optimized?</h2>
+<h3 id="bundling">Bundling</h3>
+<p><a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules">JS Modules</a>
+are used heavily throughout the code. Fetching all imports and their transitive
+dependencies can be slow, especially when there are too many requests during
+initial page load.</p>
+<p>To reduce this latency, Chrome uses <a href="https://rollupjs.org">Rollup</a> to bundle the
+code into a couple JS bundle files (usually one or two). This greatly decreases
+latency of initial load, by eliminating the overhead that is associated with
+each individual request.</p>
+<h3 id="javascript-minification">JavaScript Minification</h3>
+<p>In order to minimize disk size, we run
+<a href="https://github.com/terser/terser">terser</a> on all combined JavaScript. This
+reduces installer and the size of resources required to load to show a UI.</p>
+<p>Code like this:</p>
+<pre data-language="js">function fizzBuzz() {
+  for (var i = 1; i &lt;= 100; i++) {
+    var fizz = i % 3 == 0 ? 'fizz' : '';
+    var buzz = i % 5 == 0 ? 'buzz' : '';
+    console.log(fizz + buzz || i);
+  }
+}
+fizzBuzz();</pre>
+<p>would be minified to:</p>
+<pre data-language="js">function fizzBuzz(){for(var z=1;100&gt;=z;z++){var f=z%3==0?&quot;fizz&quot;:&quot;&quot;,o=z%5==0?&quot;buzz&quot;:&quot;&quot;;console.log(f+o||z)}}fizzBuzz();</pre>
+<p>If you&#39;d like to more easily debug minified code, click the &quot;{}&quot; prettify button
+in Chrome&#39;s developer tools, which will beautify the code and allow setting
+breakpoints on the un-minified version.</p>
+<h3 id="gzip-compression-of-web-resources">Gzip compression of web resources</h3>
+<p>As of <a href="https://chromium.googlesource.com/chromium/src/+/6b83ee683f6c545be29ee807c6d0b6ac1508a549">r761031</a>
+all HTML, JS, CSS and SVG resources are compressed by default with gzip
+Previously this was only happening if the <code>compress=&quot;gzip&quot;</code> attribute was
+specified as follows in the corresponding .grd file:</p>
+<pre data-language="xml">&lt;include name=&quot;IDR_MY_PAGE&quot; file=&quot;my/page.html&quot; type=&quot;BINDATA&quot; compress=&quot;gzip&quot; /&gt;</pre>
+<p>This is no longer necessary, and should be omitted. Only specify the <code>compress</code>
+attribute if the value is <code>false</code> or <code>brotli</code>.</p>
+<p>Compressed resources are uncompressed at a fairly low layer within
+ResourceBundle, and WebUI authors typically do not need to do anything special
+to serve those files to the UI.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webui/optimizing_web_uis.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webui/optimizing_web_uis.md</a>
+  </p>
+</div>

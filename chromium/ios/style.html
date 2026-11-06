@@ -1,0 +1,43 @@
+<h1>Style</h1>
+<h2 id="all-files-are-objective-c">All files are Objective-C++</h2>
+<p>Chrome back-end code is all C++ and we want to leverage many C++ features, such
+as stack-based classes and namespaces. As a result, all front-end Bling files
+should be .mm files, as we expect eventually they will contain C++ code or
+language features.</p>
+<h2 id="use-objccast-and-objccaststrict">Use ObjCCast<T> and ObjCCastStrict<T></h2>
+<p>As the C++ style guide tells you, we never use C casts and prefer
+<code>static_cast&lt;T&gt;</code> and <code>dynamic_cast&lt;T&gt;</code>. However, for Objective-C casts we have
+two specific casts: <code>base::apple::ObjCCast&lt;T&gt;arg</code> is similar to <code>dynamic_cast&lt;T&gt;</code>,
+and <code>ObjCCastStrict</code> <code>DCHECKs</code> against that class.</p>
+<h2 id="blocks">Blocks</h2>
+<p>We follow Google style for blocks, except that historically we have used 2-space
+indentation for blocks that are parameters, rather than 4. You may continue to
+use this style when it is consistent with the surrounding code.</p>
+<h2 id="notimplemented-and-notreached-logging-macros">NOTIMPLEMENTED and NOTREACHED logging macros</h2>
+<p><code>NOTREACHED</code>: This function should not be called. If it is, we have a problem
+somewhere else.
+<code>NOTIMPLEMENTED</code>: This isn&#39;t implemented because we don&#39;t use it yet. If it&#39;s
+called, then we need to figure out what it should do.</p>
+<p>When something is called but doesn&#39;t need an implementation, just add a comment
+indicating this instead of using a logging macro.</p>
+<h2 id="todo-comments">TODO comments</h2>
+<p>Sometimes we include TODO comments in code. Generally we follow
+<a href="https://google.github.io/styleguide/cppguide.html#TODO_Comments">C++ style</a>,
+but here are some more specific practices we&#39;ve agreed upon as a team:</p>
+<ul>
+<li><strong>Every TODO must have a bug</strong></li>
+<li>Bug should be labeled with <strong>Hotlist-TODO-iOS</strong></li>
+<li>Always list bug in parentheses following &quot;TODO&quot;<ul>
+<li><code>// TODO(crbug.com/######): Something that needs doing.</code></li>
+<li>Do NOT include http://</li>
+</ul>
+</li>
+<li>Optionally include a username for reference</li>
+<li>Optionally include expiration date (make sure it&#39;s documented in the bug!)</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ios/style.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ios/style.md</a>
+  </p>
+</div>

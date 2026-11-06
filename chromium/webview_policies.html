@@ -1,0 +1,20 @@
+<h1>WebView Policies</h1>
+<h2 id="overview">Overview</h2>
+<p>WebView supports a subset of Chrome&#39;s policies, that can be set via the
+<a href="https://developer.android.com/training/enterprise/app-restrictions.html">App Restrictions</a> mechanism. They are read on the embedder app itself rather
+than from a centralized location. That gives administrator more flexibility and
+granularity, but to apply a global policy, it has to be set separately
+on each app.</p>
+<p>The policies will be applied to WebViews used inside the targeted apps without
+having to modify the apps themselves. No special WebView APIs have been added
+to expose policy information. If developers want to change their app&#39;s behavior
+depending on that, they can <a href="https://chromeenterprise.google/policies/">read them</a> as they have access to the
+App Restrictions.</p>
+<p>Please see the <a href="https://chromeenterprise.google/policies/">Policy List on chromium.org</a> for more information and the
+list of supported policies.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webview_policies.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webview_policies.md</a>
+  </p>
+</div>

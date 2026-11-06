@@ -1,0 +1,119 @@
+<h1>The Domain Lens Pattern</h1>
+<p>The Domain Lens Pattern exposes a specific, more restricted view of a
+complicated class, customized to the needs of a specific domain. The name comes
+from the metaphor of looking at a class &quot;through a specific lens&quot;, which
+magnifies parts of the class and hides other parts. This helps decouple clients
+from the entire implementation of the complicated class.</p>
+<p>Here&#39;s an example. Suppose we have a class NetworkRequest:</p>
+<pre data-language="c++">class NetworkRequest {
+  // ... lots of state ...
+  size_t bytes_done() const;
+  size_t bytes_to_do() const;
+};</pre>
+<p>and suppose that we are implementing a UI component that displays the status of
+a download, which is backed by a NetworkRequest. We could implement that like:</p>
+<pre data-language="c++">class DownloadView : public NetworkRequestObserver {
+ public:
+  // Start displaying the status of the given network request.
+  DownloadView(NetworkRequest* request);
+
+  // NetworkRequestObserver:
+  void OnRequestProgress(NetworkRequest* request) override;
+};</pre>
+<p>But there are two problems with this:</p>
+<ol>
+<li>When testing DownloadView, we need an entire NetworkRequest, and it&#39;s not
+clear which parts of the NetworkRequest need to be filled in for DownloadView
+to work;</li>
+<li>If we are refactoring and adding a different class (say for example
+<code>DiskFileRequest</code> for a load from local disk), that class must subclass
+<code>NetworkRequest</code> for DownloadView to be usable with it, which usually
+involves a lot of empty methods and stub data.</li>
+</ol>
+<p>Instead, we can define a domain-specific lens, containing only the subset of the
+data in <code>NetworkRequest</code> needed to display download progress, like this:</p>
+<pre data-language="c++">struct DownloadProgress {
+  base::FilePath destination;
+  size_t bytes_done;
+  size_t bytes_to_do;
+};</pre>
+<p>and two interfaces for receiving updates on that domain-specific lens:</p>
+<pre data-language="c++">class DownloadProgressObserver {
+ public:
+  void OnDownloadProgress(const DownloadProgress&amp; progress);
+};
+
+class DownloadProgressProvider {
+ public:
+  void AddObserver(DownloadProgressObserver* observer);
+  void RemoveObserver(DownloadProgressObserver* observer);
+
+  DownloadProgress GetCurrentProgress() const;
+};</pre>
+<p>at which point <code>DownloadView</code> is:</p>
+<pre data-language="c++">class DownloadView : public DownloadProgressObserver {
+ public:
+  DownloadView(DownloadProgressProvider* provider);
+};</pre>
+<p>or perhaps, using a callback rather than an observer class:</p>
+<pre data-language="c++">using DownloadProgressCallback =
+    base::RepeatingCallback&lt;void(const DownloadProgress&amp; progress)&gt;;
+
+class DownloadProgressProvider {
+ public:
+  base::CallbackListSubscription RegisterDownloadProgressCallback(
+      DownloadProgressCallback callback);
+  DownloadProgress GetCurrentProgress();
+};
+
+class DownloadView {
+ public:
+  DownloadView(DownloadProgressProvider* provider);
+};</pre>
+<h2 id="when-to-use-a-domain-lens">When To Use A Domain Lens</h2>
+<p>A domain lens makes sense when you have:</p>
+<ul>
+<li>A complicated object with a lot of state</li>
+<li>A well-defined domain or client class that makes use of part of that
+complicated object</li>
+</ul>
+<p>A common use of domain lenses is to extract only the data needed to display an
+object into a separate type, to decouple the object from its display logic. One
+Chromium example of this is <a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/ui/tabs/tab_data.h">tabs::TabData</a>, which encapsulates only the state
+of a Tab needed to draw that Tab somewhere, without providing access to the
+Tab&#39;s underlying webcontents or any methods for mutating it.</p>
+<p>Here&#39;s another hypothetical, to illustrate this pattern. We have a class
+<a href="https://github.com/chromium/chromium/blob/HEAD/chrome/browser/profiles/profile_attributes_entry.h">ProfileAttributesEntry</a>, which contains a lot of different pieces of data about
+a Profile. We might define a type and a new method on <code>ProfileAttributes</code>,
+specifically for drawing the profile &quot;chip&quot; that can replace the app menu icon:</p>
+<pre data-language="c++">// Note that this is a separate top-level type from ProfileAttributes. One could
+// instead define this as a nested type ProfileAttributes::LensForChip or
+// something similar, but then any user of this domain lens would need to have
+// the declaration of ProfileAttributes visible as well, which would cause some
+// of the coupling we're trying to avoid in the first place.
+struct ProfileAttributesForChip {
+  gfx::ImageSkia icon;
+  std::string name;
+  ...
+};
+
+ProfileAttributesForChip ProfileAttributes::ForChip() {
+  ...
+}</pre>
+<p>and then have the profile chip code use a <code>ProfileAttributesForChip</code> instead of
+a <code>ProfileAttributes</code>.</p>
+<h2 id="when-not-to-use-a-domain-lens">When Not To Use A Domain Lens</h2>
+<p>Domain lenses are easy to overuse. In general, any given client of a complicated
+class uses only a subset of that class&#39;s functionality, but that does not mean
+each client should have its own lens - that would cause a lot of extra lens
+types and tangle the code needlessly. This pattern always involves writing extra
+translation functions and adapters, so it should only be done when the decreased
+coupling is worth the extra code needed to implement the lens itself. Clients
+that don&#39;t have their own domain lens on an object can continue to use the
+object itself as usual.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/domain-lens.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/domain-lens.md</a>
+  </p>
+</div>

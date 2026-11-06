@@ -1,0 +1,76 @@
+<h1>Opening links in Chrome for iOS</h1>
+<p>The easiest way to have your iOS app open links in Chrome is to use the
+<a href="https://github.com/GoogleChrome/OpenInChrome">OpenInChromeController</a> class.
+This API is described here along with the URI schemes it supports.</p>
+<h2 id="using-openinchromecontroller-to-open-links">Using OpenInChromeController to open links</h2>
+<p>The <strong>OpenInChromeController</strong> class provides methods that
+encapsulate the URI schemes and the scheme replacement process also described
+in this document. Use this class to check if Chrome is installed or to specify
+the URL to open.</p>
+<h3 id="methods">Methods</h3>
+<ul>
+<li><code>isChromeInstalled</code>: returns YES if Chrome is installed</li>
+<li><code>openInChrome</code>: opens a given URL in Chrome</li>
+</ul>
+<p>For example, use the OpenInChromeController class as follows:</p>
+<pre>if ([openInController_ isChromeInstalled]) {
+    [openInController_ openInChrome:urlToOpen];
+}</pre>
+<h2 id="downloading-the-class-file">Downloading the class file</h2>
+<p>The OpenInChromeController class file is available
+<a href="https://github.com/GoogleChrome/OpenInChrome">here</a>. Copy it into
+your Xcode installation.</p>
+<p>The rest of this document describes the underpinnings of this API.</p>
+<h2 id="uri-schemes">URI schemes</h2>
+<p>Chrome for iOS handles the following URI Schemes:</p>
+<ul>
+<li><code>googlechrome</code> for http</li>
+<li><code>googlechromes</code> for https</li>
+</ul>
+<p>To check if Chrome is installed, an app can simply check if either of these URI schemes is available:</p>
+<pre>[[UIApplication sharedApplication] canOpenURL:
+    [NSURL URLWithString:@&quot;googlechrome://&quot;]];</pre>
+<p>This step is useful in case an app would like to change the UI depending
+on if Chrome is installed or not. For instance the app could add an
+option to open URLs in Chrome in a share menu or action sheet.</p>
+<p>To actually open a URL in Chrome, the URI scheme provided in the URL
+must be changed from <code>http</code> or <code>https</code> to the Google Chrome equivalent of
+<code>googlechrome</code> or <code>googlechromes</code> respectively.
+The following sample code opens a URL in Chrome:</p>
+<pre>NSURL *inputURL = &lt;the URL to open&gt;;
+NSString *scheme = inputURL.scheme;
+
+// Replace the URL Scheme with the Chrome equivalent.
+NSString *chromeScheme = nil;
+if ([scheme isEqualToString:@&quot;http&quot;]) {
+  chromeScheme = @&quot;googlechrome&quot;;
+} else if ([scheme isEqualToString:@&quot;https&quot;]) {
+  chromeScheme = @&quot;googlechromes&quot;;
+}
+
+// Proceed only if a valid Google Chrome URI Scheme is available.
+if (chromeScheme) {
+  NSString *absoluteString = [inputURL absoluteString];
+  NSRange rangeForScheme = [absoluteString rangeOfString:@&quot;:&quot;];
+  NSString *urlNoScheme =
+      [absoluteString substringFromIndex:rangeForScheme.location];
+  NSString *chromeURLString =
+      [chromeScheme stringByAppendingString:urlNoScheme];
+  NSURL *chromeURL = [NSURL URLWithString:chromeURLString];
+
+  // Open the URL with Chrome.
+  [[UIApplication sharedApplication] openURL:chromeURL];
+}</pre>
+<p>If Chrome is installed, the above code converts the URI scheme found in
+the URL to the Google Chrome equivalent. When Google Chrome opens, the
+URL passed as a parameter will be opened in a new tab.</p>
+<p>If Chrome is not installed the user can be prompted to download it from the App Store.
+If the user agrees, the app can open the App Store download page using the following:</p>
+<pre>[[UIApplication sharedApplication] openURL:[NSURL URLWithString:
+    @&quot;itms-apps://itunes.apple.com/us/app/chrome/id535886823&quot;]];</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ios/opening_links.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ios/opening_links.md</a>
+  </p>
+</div>

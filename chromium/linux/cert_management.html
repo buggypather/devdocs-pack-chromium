@@ -1,0 +1,61 @@
+<h1>Linux Cert Management</h1>
+<p>The easy way to manage certificates is navigate to chrome://settings/certificates.
+Then click on the &quot;Manage Certificates&quot; button. This will load a built-in
+interface for managing certificates.</p>
+<p>On Linux, Chromium uses the
+<a href="https://wiki.mozilla.org/NSS_Shared_DB_And_LINUX">NSS Shared DB</a>. If the
+built-in manager does not work for you then you can configure certificates with
+the
+<a href="http://www.mozilla.org/projects/security/pki/nss/tools/">NSS command line tools</a>.</p>
+<blockquote>
+<p>Note: Since M146, Chromium defaults to $HOME/.local/share/pki/nssdb
+for the NSS Shared DB.</p>
+<p>If you still have an existing $HOME/.pki/nssdb database, Chromium will use
+that instead. Adjust the paths in the commands below to match whichever
+location your browser is using.</p>
+</blockquote>
+<h2 id="details">Details</h2>
+<h3 id="get-the-tools">Get the tools</h3>
+<ul>
+<li>Debian/Ubuntu: <code>sudo apt install libnss3-tools</code></li>
+<li>Fedora: <code>sudo dnf install nss-tools</code></li>
+<li>Gentoo: <code>su -c  &quot;echo &#39;dev-libs/nss utils&#39; &gt;&gt; /etc/portage/package.use &amp;&amp; emerge dev-libs/nss&quot;</code> (You need to launch all commands below with the <code>nss</code>
+prefix, e.g., <code>nsscertutil</code>.)</li>
+<li>Opensuse: <code>sudo zypper install mozilla-nss-tools</code></li>
+</ul>
+<h3 id="list-all-certificates">List all certificates</h3>
+<pre>certutil -d sql:$HOME/.local/share/pki/nssdb -L</pre>
+<h3 id="list-details-of-a-certificate">List details of a certificate</h3>
+<pre>certutil -d sql:$HOME/.local/share/pki/nssdb -L -n &lt;certificate nickname&gt;</pre>
+<h3 id="add-a-certificate">Add a certificate</h3>
+<pre data-language="shell">certutil -d sql:$HOME/.local/share/pki/nssdb -A -t &lt;TRUSTARGS&gt; -n &lt;certificate nickname&gt; \
+-i &lt;certificate filename&gt;</pre>
+<p>The TRUSTARGS are three strings of zero or more alphabetic characters, separated
+by commas. They define how the certificate should be trusted for SSL, email, and
+object signing, and are explained in the
+<a href="https://nss-crypto.org/reference/security/nss/legacy/tools/nss_tools_certutil/index.html">certutil docs</a>
+or
+<a href="https://web.archive.org/web/20131212024426/https://blogs.oracle.com/meena/entry/notes_about_trust_flags">Meena&#39;s blog post on trust flags</a>.</p>
+<p>For example, to trust a root CA certificate for issuing SSL server certificates,
+use</p>
+<pre data-language="shell">certutil -d sql:$HOME/.local/share/pki/nssdb -A -t &quot;C,,&quot; -n &lt;certificate nickname&gt; \
+-i &lt;certificate filename&gt;</pre>
+<p>To import an intermediate CA certificate, use</p>
+<pre data-language="shell">certutil -d sql:$HOME/.local/share/pki/nssdb -A -t &quot;,,&quot; -n &lt;certificate nickname&gt; \
+-i &lt;certificate filename&gt;</pre>
+<p>Note: to trust a self-signed server certificate, we should use</p>
+<pre>certutil -d sql:$HOME/.local/share/pki/nssdb -A -t &quot;P,,&quot; -n &lt;certificate nickname&gt; \
+-i &lt;certificate filename&gt;</pre>
+<h4 id="add-a-personal-certificate-and-private-key-for-ssl-client-authentication">Add a personal certificate and private key for SSL client authentication</h4>
+<p>Use the command:</p>
+<pre>pk12util -d sql:$HOME/.local/share/pki/nssdb -i PKCS12_file.p12</pre>
+<p>to import a personal certificate and private key stored in a PKCS #12 file. The
+TRUSTARGS of the personal certificate will be set to &quot;u,u,u&quot;.</p>
+<h3 id="delete-a-certificate">Delete a certificate</h3>
+<pre>certutil -d sql:$HOME/.local/share/pki/nssdb -D -n &lt;certificate nickname&gt;</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/cert_management.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/cert_management.md</a>
+  </p>
+</div>

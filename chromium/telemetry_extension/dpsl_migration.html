@@ -1,0 +1,309 @@
+<h1>DPSL.js Migration Guide</h1>
+<h1 id="objective">Objective</h1>
+<p>As we are encouraging OEMs to call Chrome Extension APIs directly instead of via
+DPSL.js, this document provides an overview of what is changing for OEMs. In
+most cases this only requires a method call replacement, since DPSL.js is a thin
+wrapper around our Chrome Extension APIs.</p>
+<h1 id="the-telemetry-namespace-dpsltelemetry">The telemetry namespace (dpsl.telemetry)</h1>
+<p>Calls in the <code>chrome.os.telemetry</code> namespace are a 1:1 mapping from dpsl APIs to
+extension API calls. The only difference is that dpsl catches the case of
+calling an <code>undefined</code> API (assuming it is undefined because it is not yet
+released) and throws a
+<a href="https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos/blob/main/src/utils.js#L47-L60"><code>MethodNotFoundError</code></a>.</p>
+<p>The table below shows the mapping from dpsl calls to Chrome Extension calls, the
+returned data is equivalent and the chrome extension APIs are also
+asynchronous.</p>
+<table>
+<thead>
+<tr>
+<th><strong>DPSL function</strong></th>
+<th><strong>Chrome Extension function</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>dpsl.telemetry.getVpdInfo</td>
+<td>chrome.os.telemetry.getVpdInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getOemData</td>
+<td>chrome.os.telemetry.getOemData</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getCpuInfo</td>
+<td>chrome.os.telemetry.getCpuInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getMemoryInfo</td>
+<td>chrome.os.telemetry.getMemoryInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getBatteryInfo</td>
+<td>chrome.os.telemetry.getBatteryInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getStatefulPartitionInfo</td>
+<td>chrome.os.telemetry.getStatefulPartitionInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getOsVersionInfo</td>
+<td>chrome.os.telemetry.getOsVersionInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getNonRemovableBlockDevicesInfo</td>
+<td>chrome.os.telemetry.getNonRemovableBlockDevicesInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getInternetConnectivityInfo</td>
+<td>chrome.os.telemetry.getInternetConnectivityInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getTpmInfo</td>
+<td>chrome.os.telemetry.getTpmInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getAudioInfo</td>
+<td>chrome.os.telemetry.getAudioInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getMarketingInfo</td>
+<td>chrome.os.telemetry.getMarketingInfo</td>
+</tr>
+<tr>
+<td>dpsl.telemetry.getUsbBusInfo</td>
+<td>chrome.os.telemetry.getUsbBusInfo</td>
+</tr>
+</tbody></table>
+<h1 id="the-diagnostics-namespace-dpsldiagnostics">The diagnostics namespace (dpsl.diagnostics)</h1>
+<p>Similar to the telemetry namespace, functions in the diagnostics namespace also
+map 1:1 to Chrome Extension functions. The only difference is, that dpsl APIs
+return a
+<a href="https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos/blob/main/src/diagnostics_manager.js#L40-L97"><code>Routine</code></a>
+object that wraps Chrome Extension APIs for handling diagnostics nicely. OEMs
+can copy the
+<a href="https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos/blob/main/src/diagnostics_manager.js#L40-L97">definition</a>
+of this wrapper class to their own codebase to have the same experience as with
+using <code>dpsl.Routine</code>.</p>
+<p>Alternatively, OEMs can also interact directly with Chrome Extension calls to
+control a routine. The return value of every
+<code>chrome.os.diagnostics.runXYZRoutine</code> is an object that defines the following
+fields:</p>
+<pre>// Will be represented as a string in JavaScript, e.g. &quot;ready&quot;.
+enum RoutineStatus {
+  unknown,
+  ready,
+  running,
+  waiting_user_action,
+  passed,
+  failed,
+  error,
+  cancelled,
+  failed_to_start,
+  removed,
+  cancelling,
+  unsupported,
+  not_run
+};
+
+// Returned from `chrome.os.runXYZRoutine`.
+dictionary RunRoutineResponse {
+  // The id will turn into a `number` in JavaScript.
+  long id;
+  RoutineStatus status;
+};</pre>
+<p>The <code>RoutineStatus</code> tells the OEMs whether the request to start a routine was
+successful. If the status is &quot;running&quot;, one can assume that the routine has been
+started successfully. However, for routines that complete very quickly, it is
+possible that the routine will enter a final state (&quot;passed&quot;, &quot;failed&quot;, or
+&quot;error&quot;) before the &quot;running&quot; state is observed. The id is a unique identifier
+used for tracking a specific routine over its lifetime.</p>
+<p>To interact with a started routine, OEMs can use the
+<code>chrome.os.diagnostics.getRoutineUpdate</code> function. It takes an
+<code>RoutineUpdateRequest</code> object as a parameter and returns a
+<code>GetRoutineUpdateResponse</code> object. The two objects are defined as follows:</p>
+<pre>enum RoutineCommandType {
+  cancel,
+  remove,
+  resume,
+  status
+};
+
+dictionary GetRoutineUpdateRequest {
+  long id;
+  RoutineCommandType command;
+};
+
+enum UserMessageType {
+  unknown,
+  unplug_ac_power,
+  plug_in_ac_power
+};
+
+dictionary GetRoutineUpdateResponse {
+  long progress_percent;
+  // The question mark represents an optional value.
+  DOMString? output;
+  // The routine status is the same as above.
+  RoutineStatus status;
+  DOMString status_message;
+  // Returned for routines that require user action (e.g. unplug power cable), the
+  // question mark represents an optional value.
+  UserMessageType? user_message;
+};</pre>
+<p>The following operations can be done via calling
+<code>chrome.os.diagnostics.getRoutineUpdate</code>, all represented by a different
+<code>RoutineCommandType</code>:</p>
+<ul>
+<li>Resume a currently waiting routine (e.g. after it needed user input)
+ with &quot;resume&quot;</li>
+<li>Cancel a running routine with &quot;cancel&quot;</li>
+<li>Get the status of a routine with &quot;status&quot;</li>
+<li>Remove a routine (and release its allocated resources) with “remove”</li>
+</ul>
+<p><strong>Note: OEMs need to make sure to properly remove routines they manually stopped,
+since cancel doesn&#39;t include removal and doesn&#39;t deallocate resources. After
+canceling a routine it should always be removed.</strong></p>
+<p>As mentioned above the <code>dpsl.Routine</code> object encapsulates all this functionality
+into three methods:</p>
+<ul>
+<li>getStatus: Calling routine update with &quot;status&quot;, returns information
+ about the current routine status</li>
+<li>resume: Resumes a currently waiting routine</li>
+<li>stop: Stops a routine and also removes it (so resulting in two calls to
+ <code>getRoutineUpdate</code>)</li>
+</ul>
+<p>The following table shows the mapping from dpsl API calls to Chrome Extension
+API calls; the input parameters are the same.</p>
+<table>
+<thead>
+<tr>
+<th><strong>DPSL function</strong></th>
+<th><strong>Chrome Extension function</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>dpsl.diagnostics.getAvailableRoutines</td>
+<td>chrome.os.diagnostics.getAvailableRoutines</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.audio.runAudioDriverRoutine</td>
+<td>chrome.os.diagnostics.runAudioDriverRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.battery.runCapacityRoutine</td>
+<td>chrome.os.diagnostics.runBatteryCapacityRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.battery.runHealthRoutine</td>
+<td>chrome.os.diagnostics.runBatteryHealthRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.battery.runDischargeRoutine</td>
+<td>chrome.os.diagnostics.runBatteryDischargeRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.battery.runChargeRoutine</td>
+<td>chrome.os.diagnostics.runBatteryChargeRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.bluetooth.runBluetoothPowerRoutine</td>
+<td>chrome.os.diagnostics.runBluetoothPowerRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.bluetooth.runBluetoothDiscoveryRoutine</td>
+<td>chrome.os.diagnostics.runBluetoothDiscoveryRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.bluetooth.runBluetoothScanningRoutine</td>
+<td>chrome.os.diagnostics.runBluetoothScanningRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.bluetooth.runBluetoothPairingRoutine</td>
+<td>chrome.os.diagnostics.runBluetoothPairingRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.cpu.runCacheRoutine</td>
+<td>chrome.os.diagnostics.runCpuCacheRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.cpu.runStressRoutine</td>
+<td>chrome.os.diagnostics.runCpuStressRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.cpu.runFloatingPointAccuracyRoutine</td>
+<td>chrome.os.diagnostics.runCpuFloatingPointAccuracyRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.cpu.runPrimeSearchRoutine</td>
+<td>chrome.os.diagnostics.runCpuPrimeSearchRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.disk.runReadRoutine</td>
+<td>chrome.os.diagnostics.runDiskReadRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.emmc.runEmmcLifetimeRoutine</td>
+<td>chrome.os.diagnostics.runEmmcLifetimeRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.hardwareButton.runPowerButtonRoutine</td>
+<td>chrome.os.diagnostics.runPowerButtonRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.memory.runMemoryRoutine</td>
+<td>chrome.os.diagnostics.runMemoryRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.nvme.runSmartctlCheckRoutine</td>
+<td>chrome.os.diagnostics.runSmartctlCheckRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.nvme.runWearLevelRoutine</td>
+<td>chrome.os.diagnostics.runNvmeWearLevelRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.nvme.runSelfTestRoutine</td>
+<td>chrome.os.diagnostics.runNvmeSelfTestRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.network.runLanConnectivityRoutine</td>
+<td>chrome.os.diagnostics.runLanConnectivityRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.network.runSignalStrengthRoutine</td>
+<td>chrome.os.diagnostics.runSignalStrengthRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.network.runDnsResolverPresentRoutine</td>
+<td>chrome.os.diagnostics.runDnsResolverPresentRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.network.runDnsResolutionRoutine</td>
+<td>chrome.os.diagnostics.runDnsResolutionRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.network.runGatewayCanBePingedRoutine</td>
+<td>chrome.os.diagnostics.runGatewayCanBePingedRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.power.runAcPowerRoutine</td>
+<td>chrome.os.diagnostics.runAcPowerRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.sensor.runSensitiveSensorRoutine</td>
+<td>chrome.os.diagnostics.runSensitiveSensorRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.sensor.runFingerprintAliveRoutine</td>
+<td>chrome.os.diagnostics.runFingerprintAliveRoutine</td>
+</tr>
+<tr>
+<td>dpsl.diagnostics.ufs.runUfsLifetimeRoutine</td>
+<td>chrome.os.diagnostics.runUfsLifetimeRoutine</td>
+</tr>
+</tbody></table>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/dpsl_migration.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/dpsl_migration.md</a>
+  </p>
+</div>

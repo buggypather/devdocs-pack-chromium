@@ -1,0 +1,185 @@
+<h1>Android Studio</h1>
+<h2 id="usage">Usage</h2>
+<p>Make sure you have followed
+<a href="android_build_instructions">android build instructions</a> already.</p>
+<pre data-language="shell">build/android/gradle/generate_gradle.py --output-directory out/Debug</pre>
+<p>The above commands create a project dir <code>gradle</code> under your output directory.
+Use <code>--project-dir &lt;project-dir&gt;</code> to change this.</p>
+<p>To import the project:</p>
+<ul>
+<li>Use &quot;Import Project&quot;, and select the directory containing the generated
+project, e.g. <code>out/Debug/gradle</code>.</li>
+</ul>
+<p>See <a href="testing/android_test_instructions#Using-Emulators">android_test_instructions.md</a>
+for more information about building and running emulators.</p>
+<p>Feel free to accept Android Studio&#39;s recommended actions. <code>generate_gradle.py</code>
+should have already set up a working version of the gradle wrapper and the
+android gradle plugin, as well as a default Android SDK location at
+<code>~/Android/Sdk</code>. Since the same script needs to support various versions of
+Android Studio, the defaults may have lower version than the one recommended by
+your version of Android Studio. After you accept Android Studio&#39;s update actions
+the <code>generate_gradle.py</code> script will try to keep the newer versions when it is
+re-run.</p>
+<p>You&#39;ll need to re-run <code>generate_gradle.py</code> whenever new directories containing
+source files are added.</p>
+<ul>
+<li>After regenerating, Android Studio should prompt you to &quot;Sync&quot;. If it
+doesn&#39;t, try some of the following options:<ul>
+<li>File -&gt; &quot;Sync Project with Gradle Files&quot;</li>
+<li>Button with two arrows on the right side of the top strip.</li>
+<li>Help -&gt; Find Action -&gt; &quot;Sync Project with Gradle Files&quot;</li>
+<li>After <code>gn clean</code> you may need to restart Android Studio.</li>
+<li>File -&gt; &quot;Invalidate Caches / Restart...&quot;</li>
+</ul>
+</li>
+</ul>
+<h2 id="how-it-works">How It Works</h2>
+<p>By default, only an <code>_all</code> module containing all java apk targets is generated.
+If just one apk target is explicitly specified, then a single apk module is
+generated.</p>
+<p>If you really prefer a more detailed structure of gn targets, the deprecated
+<code>--split-projects</code> flag can be used. This will generate one module for every gn
+target in the dependency graph. This can be very slow and is no longer
+supported.</p>
+<h3 id="generated-files">Generated files</h3>
+<p>Most generated .java files in GN are stored as <code>.srcjars</code>. Android Studio does
+not support them. Our build will automatically extract them to a
+<code>generated_java</code> directory in the output directory during the build. Thus if a
+generated file is missing in Android Studio, build it with ninja first and it
+should show up in Android Studio afterwards.</p>
+<h3 id="native-files">Native Files</h3>
+<p>This option is deprecated and no longer supported since Android Studio is very
+slow when editing in a code base with a large number of C++ files, and Chromium
+has a lot of C++ code. It is recommended to use <a href="vscode">VS Code</a> to edit
+native files and stick to just editing java files in Android Studio.</p>
+<p>If you still want to enable editing native C/C++ files with Android Studio, pass
+in any number of <code>--native-target [target name]</code> flags in order to use it. The
+target must be the full path and name of a valid gn target (no short-forms).
+This will require you to install <code>cmake</code> and <code>ndk</code> when prompted. Accept Android
+Studio&#39;s prompts for these SDK packages.</p>
+<p>You need to disable a new gradle option in order to edit native files:
+File -&gt; Settings -&gt; Experimental
+-&gt; Gradle and uncheck &quot;Only resolve selected variants&quot;.</p>
+<p>This is not necessary, but to avoid &quot;This file is not part of the project...&quot;,
+you can either add an extra <code>--native-target</code> flag or simply copy and paste the
+absolute path to that file into the CMakeLists.txt file alongside the existing
+file paths. Note that changes to CMakeLists.txt will be overwritten on your next
+invocation of <code>generate_gradle.py</code>.</p>
+<p>Example:</p>
+<pre data-language="shell">build/android/gradle/generate_gradle.py --native-target //chrome/android:libchrome</pre>
+<h2 id="tips">Tips</h2>
+<ul>
+<li>Use environment variables to avoid having to specify <code>--output-directory</code>.<ul>
+<li>Example: Append <code>export CHROMIUM_OUT_DIR=out; export BUILDTYPE=Debug</code> to
+your <code>~/.bashrc</code> to always default to <code>out/Debug</code>.</li>
+</ul>
+</li>
+<li>Using the Java debugger is documented
+<a href="android_debugging_instructions#android-studio">here</a>.</li>
+<li>Configuration instructions can be found
+<a href="http://tools.android.com/tech-docs/configuration">here</a>. One suggestions:<ul>
+<li>Launch it with more RAM:
+<code>STUDIO_VM_OPTIONS=-Xmx2048m /opt/android-studio-stable/bin/studio-launcher.sh</code></li>
+</ul>
+</li>
+<li>If you ever need to reset it: <code>rm -r ~/.config/Google/AndroidStudio*/</code></li>
+<li>Import Chromium-specific style and inspections settings:<ul>
+<li>Help -&gt; Find Action -&gt; &quot;Code Style&quot; (settings) -&gt; Java -&gt;
+Scheme -&gt; Import Scheme<ul>
+<li>Select <code>tools/android/android_studio/ChromiumStyle.xml</code> -&gt; OK</li>
+</ul>
+</li>
+<li>Help -&gt; Find Action -&gt; &quot;Inspections&quot; (settings) -&gt;
+Profile -&gt; Import profile<ul>
+<li>Select <code>tools/android/android_studio/ChromiumInspections.xml</code> -&gt; OK</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Turn on automatic import:<ul>
+<li>Help -&gt; Find Action -&gt; &quot;Auto Import&quot;<ul>
+<li>Tick all the boxes under &quot;Java&quot; and change the dropdown to &quot;All&quot;.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Turn on documentation on mouse hover:<ul>
+<li>Help -&gt; Find Action -&gt; &quot;Show quick documentation on mouse move&quot;</li>
+</ul>
+</li>
+<li>Turn on line numbers:<ul>
+<li>Help -&gt; Find Action -&gt; &quot;Show line numbers&quot;</li>
+</ul>
+</li>
+<li>Turn off indent notification:<ul>
+<li>Help -&gt; Find Action -&gt; &quot;Show notifications about detected indents&quot;</li>
+</ul>
+</li>
+<li>Format changed files (Useful for changes made by running code inspection):<ul>
+<li>Set up version control<ul>
+<li>File -&gt; Settings -&gt; Version Control</li>
+<li>Add src directories</li>
+</ul>
+</li>
+<li>Commit changes and reformat<ul>
+<li>Help -&gt; Find Action -&gt; &quot;Commit Changes&quot;</li>
+<li>Check &quot;Reformat code&quot; &amp; &quot;Optimize imports&quot; and commit</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Change theme from GTK+ to another one to avoid invisible menus.<ul>
+<li>Help -&gt; Find Action -&gt; &quot;Theme: Settings &gt; Appearance&quot;</li>
+</ul>
+</li>
+</ul>
+<h3 id="useful-shortcuts">Useful Shortcuts</h3>
+<ul>
+<li><code>Shift - Shift</code>: Search to open file or perform IDE action</li>
+<li><code>Ctrl + N</code>: Jump to class</li>
+<li><code>Ctrl + Shift + T</code>: Jump to test</li>
+<li><code>Ctrl + Shift + N</code>: Jump to file</li>
+<li><code>Ctrl + F12</code>: Jump to method</li>
+<li><code>Ctrl + G</code>: Jump to line</li>
+<li><code>Shift + F6</code>: Rename variable</li>
+<li><code>Ctrl + Alt + O</code>: Organize imports</li>
+<li><code>Alt + Enter</code>: Quick Fix (use on underlined errors)</li>
+<li><code>F2</code>: Find next error</li>
+</ul>
+<h3 id="building-with-gradle">Building with Gradle</h3>
+<p>Gradle builds are not supported. Only editing is supported in Android Studio.
+Use ninja to build as usual.</p>
+<h2 id="status">Status</h2>
+<h3 id="what-works">What works</h3>
+<ul>
+<li>Android Studio v2021~v2023.</li>
+<li>Java editing.<ul>
+<li>Application code in <code>main</code> sourceset.</li>
+<li>Instrumentation test code in <code>androidTest</code> sourceset.</li>
+</ul>
+</li>
+<li>Native code editing (deprecated, use <a href="vscode">VS Code</a> instead).</li>
+<li>Symlinks to existing .so files in jniLibs (doesn&#39;t generate them).</li>
+<li>Editing resource xml files</li>
+<li>Layout editor (limited functionality).</li>
+<li>Java debugging (see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_debugging_instructions.md#Android-Studio">here</a>).</li>
+<li>Import resolution and refactoring across java files.</li>
+<li>Separate Android SDK for Android Studio.</li>
+</ul>
+<h3 id="what-doesnt-work">What doesn&#39;t work</h3>
+<ul>
+<li>Building with Gradle.</li>
+<li>The &quot;Make Project&quot; button doesn&#39;t work.<ul>
+<li>Stick to using <code>autoninja</code> to build targets and just use Android Studio
+for editing java source files.</li>
+</ul>
+</li>
+<li>No active work is underway or planned to expand Android Studio support.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_studio.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/android_studio.md</a>
+  </p>
+</div>

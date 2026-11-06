@@ -1,0 +1,574 @@
+<h1>App Bundles and Dynamic Feature Modules (DFMs)</h1>
+<h2 id="about-bundles">About Bundles</h2>
+<p><a href="https://developer.android.com/guide/app-bundle">Android App bundles</a> is a Play Store feature that allows packaging an app as
+multiple <code>.apk</code> files, known as &quot;splits&quot;. Bundles are zip files with an <code>.aab</code>
+extension. See <a href="android_build_instructions#multiple-chrome-targets">android_build_instructions.md#multiple-chrome-targets</a> for a
+list of buildable bundle targets.</p>
+<p>Bundles provide three main advantages over monolithic <code>.apk</code> files:</p>
+<ol>
+<li>Language resources are split into language-specific <code>.apk</code> files, known as
+&quot;resource splits&quot;. Delivering only the active languages reduces the overhead
+of UI strings.<ul>
+<li>Resource splits can also be made on a per-screen-density basis (for drawables),
+but Chrome has not taken advantage of this (yet).</li>
+</ul>
+</li>
+<li>Features can be packaged into lazily loaded <code>.apk</code> files, known as
+&quot;feature splits&quot;. Chrome enables <a href="android_isolated_splits">isolated splits</a>, which means feature
+splits have no performance overhead until used (on Android O+ at least).</li>
+<li>Feature splits can be downloaded on-demand, saving disk space for users that
+do not need the functionality they provide. These are known as
+&quot;Dynamic feature modules&quot;, or &quot;DFMs&quot;.<ul>
+<li><strong>The install experience for DFMs is quite poor (5-30 seconds install times,
+sometimes fails, sometimes <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_isolated_splits.md#Conflicting-ClassLoaders-2">triggers a crash</a>).</strong></li>
+</ul>
+</li>
+</ol>
+<p>You can inspect which <code>.apk</code> files are produced by a bundle target via:</p>
+<pre>out/Default/bin/${target_name} build-bundle-apks --output-apks foo.apks
+unzip -l foo.apks</pre>
+<p>*** note
+Adding new features via feature splits is highly encouraged when it makes sense
+to do so:</p>
+<ul>
+<li>Has a non-trivial amount of Java code (after optimization). E.g. &gt;150kb</li>
+<li>Not needed on startup</li>
+<li>Has a small integration surface (calls into it must be done with reflection)</li>
+<li>Not used by WebView</li>
+</ul>
+<hr>
+<h3 id="declaring-app-bundles-with-gn-templates">Declaring App Bundles with GN Templates</h3>
+<p>Here&#39;s an example that shows how to declare a simple bundle that contains a
+single base module, which enables language-based splits:</p>
+<pre data-language="gn">  android_app_bundle_module(&quot;foo_base_module&quot;) {
+    # Declaration are similar to android_apk here.
+    ...
+  }
+
+  android_app_bundle(&quot;foo_bundle&quot;) {
+    base_module_target = &quot;:foo_base_module&quot;
+
+    # The name of our bundle file (without any suffix).
+    bundle_name = &quot;FooBundle&quot;
+
+    # Enable language-based splits for this bundle. Which means that
+    # resources and assets specific to a given language will be placed
+    # into their own split APK in the final .apks archive.
+    enable_language_splits = true
+
+    # Proguard settings must be passed at the bundle, not module, target.
+    proguard_enabled = !is_java_debug
+  }</pre>
+<p>When generating the <code>foo_bundle</code> target with Ninja, you will end up with
+the following:</p>
+<ul>
+<li><p>The bundle file under <code>out/Release/apks/FooBundle.aab</code></p>
+</li>
+<li><p>A helper script called <code>out/Release/bin/foo_bundle</code>, which can be used
+to install / launch / uninstall the bundle on local devices.</p>
+<p>This works like an APK wrapper script (e.g. <code>foo_apk</code>). Use <code>--help</code>
+to see all possible commands supported by the script.</p>
+</li>
+</ul>
+<p>The remainder of this doc focuses on DFMs.</p>
+<h2 id="declaring-dynamic-feature-modules-dfms">Declaring Dynamic Feature Modules (DFMs)</h2>
+<p>This guide walks you through the steps to create a DFM called <em>Foo</em> and add it
+to the Chrome bundles.</p>
+<p>*** note
+<strong>Note:</strong> To make your own module you&#39;ll essentially have to replace every
+instance of <code>foo</code>/<code>Foo</code>/<code>FOO</code> with <code>your_feature_name</code>/<code>YourFeatureName</code>/
+<code>YOUR_FEATURE_NAME</code>.</p>
+<hr>
+<h3 id="create-dfm-target">Create DFM target</h3>
+<p>DFMs are APKs. They have a manifest and can contain Java and native code as well
+as resources. This section walks you through creating the module target in our
+build system.</p>
+<p>First, create the file
+<code>//chrome/android/modules/foo/internal/java/AndroidManifest.xml</code> and add:</p>
+<pre data-language="xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;manifest xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;
+    xmlns:dist=&quot;http://schemas.android.com/apk/distribution&quot;
+    featureSplit=&quot;foo&quot;&gt;
+
+    &lt;!-- dist:onDemand=&quot;true&quot; makes this a separately installed module.
+         dist:onDemand=&quot;false&quot; would always install the module alongside the
+         rest of Chrome. --&gt;
+    &lt;dist:module
+        dist:onDemand=&quot;true&quot;
+        dist:title=&quot;@string/foo_module_title&quot;&gt;
+        &lt;!-- This will fuse the module into the base APK if a system image
+             APK is built from this bundle. --&gt;
+        &lt;dist:fusing dist:include=&quot;true&quot; /&gt;
+    &lt;/dist:module&gt;
+
+    &lt;!-- Remove android:hasCode=&quot;false&quot; when adding Java code. --&gt;
+    &lt;application android:hasCode=&quot;false&quot; /&gt;
+&lt;/manifest&gt;</pre>
+<p>Next, create a descriptor configuring the Foo module. To do this, create
+<code>//chrome/android/modules/foo/foo_module.gni</code> and add the following:</p>
+<pre data-language="gn">foo_module_desc = {
+  name = &quot;foo&quot;
+  android_manifest =
+      &quot;//chrome/android/modules/foo/internal/java/AndroidManifest.xml&quot;
+}</pre>
+<p>Then, add the module descriptor to the appropriate descriptor list in
+//chrome/android/modules/chrome_feature_modules.gni, e.g. the Chrome list:</p>
+<pre data-language="gn">import(&quot;//chrome/android/modules/foo/foo_module.gni&quot;)
+...
+chrome_module_descs += [ foo_module_desc ]</pre>
+<p>The next step is to add Foo to the list of feature modules for UMA recording.
+For this, add <code>foo</code> to the <code>AndroidFeatureModuleName</code> in
+<code>//tools/metrics/histograms/metadata/android/histograms.xml</code>:</p>
+<pre data-language="xml">&lt;variants name=&quot;AndroidFeatureModuleName&quot;&gt;
+  ...
+  &lt;variant name=&quot;foo&quot; summary=&quot;Super Duper Foo Module&quot; /&gt;
+  ...
+&lt;/variants&gt;</pre>
+<p>Lastly, give your module a title that Chrome and Play can use for the install
+UI. To do this, add a string to
+<code>//chrome/browser/ui/android/strings/android_chrome_strings.grd</code>:</p>
+<pre data-language="xml">...
+&lt;message name=&quot;IDS_FOO_MODULE_TITLE&quot;
+  desc=&quot;Text shown when the Foo module is referenced in install start, success,
+        failure UI (e.g. in IDS_MODULE_INSTALL_START_TEXT, which will expand to
+        'Installing Foo for Chrome…').&quot;&gt;
+  Foo
+&lt;/message&gt;
+...</pre>
+<p>*** note
+<strong>Note:</strong> This is for module title only. Other strings specific to the module
+should go in the module, not here (in the base module).</p>
+<hr>
+<p>Congrats! You added the DFM Foo to Chrome. That is a big step but not very
+useful so far. In the next sections you&#39;ll learn how to add code and resources
+to it.</p>
+<h3 id="building-and-installing-modules">Building and installing modules</h3>
+<p>Before we are going to jump into adding content to Foo, let&#39;s take a look on how
+to build and deploy the Chrome bundle with the Foo DFM. The remainder of
+this guide assumes the environment variable <code>OUTDIR</code> is set to a properly
+configured GN build directory (e.g. <code>out/Debug</code>).</p>
+<p>To build and install the Chrome bundle to your connected device, run:</p>
+<pre data-language="shell">$ autoninja -C $OUTDIR chrome_public_bundle
+$ $OUTDIR/bin/chrome_public_bundle install -m foo</pre>
+<p>This will install the <code>Foo</code> module, the <code>base</code> module, and all modules with an
+<code>AndroidManifest.xml</code> that:</p>
+<ul>
+<li>Sets <code>&lt;module dist:onDemand=&quot;false&quot;&gt;</code>, or</li>
+<li>Has <code>&lt;dist:delivery&gt;</code> conditions that are satisfied by the device being
+installed to.</li>
+</ul>
+<p>*** note
+<strong>Note:</strong> The install script may install more modules than you specify, e.g.
+when there are default or conditionally installed modules (see
+<a href="#conditional-install">below</a> for details).</p>
+<hr>
+<p>You can then check that the install worked with:</p>
+<pre data-language="shell">$ adb shell dumpsys package org.chromium.chrome | grep splits
+&gt;   splits=[base, config.en, foo]</pre>
+<p>Then try installing the Chrome bundle without your module and print the
+installed modules:</p>
+<pre data-language="shell">$ $OUTDIR/bin/chrome_public_bundle install
+$ adb shell dumpsys package org.chromium.chrome | grep splits
+&gt;   splits=[base, config.en]</pre>
+<p>*** note
+The wrapper script&#39;s <code>install</code> command does approximately:</p>
+<pre data-language="sh">java -jar third_party/android_build_tools/bundletool/cipd/bundletool.jar build-apks --output tmp.apks ...
+java -jar third_party/android_build_tools/bundletool/cipd/bundletool.jar install-apks --apks tmp.apks</pre>
+<p>The <code>install-apks</code> command uses <code>adb install-multiple</code> under-the-hood.</p>
+<hr>
+<h3 id="adding-java-code">Adding Java code</h3>
+<p>To make Foo useful, let&#39;s add some Java code to it. This section will walk you
+through the required steps.</p>
+<p>First, define a module interface for Foo. This is accomplished by adding the
+<code>@ModuleInterface</code> annotation to the Foo interface. This annotation
+automatically creates a <code>FooModule</code> class that can be used later to install and
+access the module. To do this, add the following in the new file
+<code>//chrome/browser/foo/android/java/src/org/chromium/chrome/browser/foo/Foo.java</code>:</p>
+<pre data-language="java">package org.chromium.chrome.browser.foo;
+
+import org.chromium.components.module_installer.builder.ModuleInterface;
+
+/** Interface to call into Foo feature. */
+@ModuleInterface(module = &quot;foo&quot;, impl = &quot;org.chromium.chrome.browser.FooImpl&quot;)
+public interface Foo {
+    /** Magical function. */
+    void bar();
+}</pre>
+<p>Next, define an implementation that goes into the module in the new file
+<code>//chrome/browser/foo/internal/android/java/src/org/chromium/chrome/browser/foo/FooImpl.java</code>:</p>
+<pre data-language="java">package org.chromium.chrome.browser.foo;
+
+import org.chromium.base.Log;
+
+public class FooImpl implements Foo {
+    @Override
+    public void bar() {
+        Log.i(&quot;FOO&quot;, &quot;bar in module&quot;);
+    }
+}</pre>
+<p>You can then use this provider to access the module if it is installed. To test
+that, instantiate Foo and call <code>bar()</code> somewhere in Chrome:</p>
+<pre data-language="java">if (FooModule.isInstalled()) {
+    FooModule.getImpl().bar();
+} else {
+    Log.i(&quot;FOO&quot;, &quot;module not installed&quot;);
+}</pre>
+<p>The interface has to be available regardless of whether the Foo DFM is present.
+Therefore, put those classes into the base module, creating a new public
+build target in: <code>//chrome/browser/foo/BUILD.gn</code>:</p>
+<pre data-language="gn">import(&quot;//build/config/android/rules.gni&quot;)
+import(&quot;//components/module_installer/android/module_interface_processor.gni&quot;)
+
+module_interface_processor(&quot;module_interface&quot;) {
+  sources = [
+    &quot;android/java/src/org/chromium/chrome/browser/foo/Foo.java&quot;,
+  ]
+}
+
+android_library(&quot;java&quot;) {
+  sources = [
+    &quot;android/java/src/org/chromium/chrome/browser/foo/Foo.java&quot;,
+  ]
+  srcjar_deps = [ &quot;:module_interface&quot; ]
+  deps = [
+    &quot;//components/module_installer/android:module_installer_java&quot;,
+    &quot;//components/module_installer/android:module_interface_java&quot;,
+  ]
+}</pre>
+<p>Then, depend on this target from where it is used as usual. For example, if the
+caller is in <code>chrome_java in //chrome/android/BUILD.gn</code>:</p>
+<pre data-language="gn">...
+android_library(&quot;chrome_java&quot;) {
+  deps =[
+    ...
+    &quot;//chrome/browser/foo:java&quot;,
+    ...
+  ]
+}
+...</pre>
+<p>The actual implementation, however, should go into the Foo DFM. For this
+purpose, create a new file <code>//chrome/browser/foo/internal/BUILD.gn</code> and
+make a library with the module Java code in it:</p>
+<pre data-language="gn">import(&quot;//build/config/android/rules.gni&quot;)
+
+android_library(&quot;java&quot;) {
+  # Define like ordinary Java Android library.
+  sources = [
+    &quot;android/java/src/org/chromium/chrome/browser/foo/FooImpl.java&quot;,
+    # Add other Java classes that should go into the Foo DFM here.
+  ]
+  deps = [
+    &quot;//base:base_java&quot;,
+    # Put other Chrome libs into the classpath so that you can call into them
+    # from the Foo DFM.
+    &quot;//chrome/browser/bar:java&quot;,
+    # The module can depend even on `chrome_java` due to factory magic, but this
+    # is discouraged. Consider passing a delegate interface in instead.
+    &quot;//chrome/android:chrome_java&quot;,
+    # Also, you'll need to depend on any //third_party or //components code you
+    # are using in the module code.
+  ]
+}</pre>
+<p>Then, add this new library as a dependency of the Foo module descriptor in
+<code>//chrome/android/modules/foo/foo_module.gni</code>:</p>
+<pre data-language="gn">foo_module_desc = {
+  ...
+  java_deps = [
+    &quot;//chrome/browser/foo/internal:java&quot;,
+  ]
+}</pre>
+<p>Finally, tell Android that your module is now containing code. Do that by
+removing the <code>android:hasCode=&quot;false&quot;</code> attribute from the <code>&lt;application&gt;</code> tag in
+<code>//chrome/android/modules/foo/internal/java/AndroidManifest.xml</code>. You should be
+left with an empty tag like so:</p>
+<pre data-language="xml">...
+    &lt;application /&gt;
+...</pre>
+<p>Rebuild and install <code>chrome_public_bundle</code>. Start Chrome and run through a
+flow that tries to executes <code>bar()</code>. Depending on whether you installed your
+module (<code>-m foo</code>) &quot;<code>bar in module</code>&quot; or &quot;<code>module not installed</code>&quot; is printed to
+logcat. Yay!</p>
+<h3 id="adding-pre-built-native-libraries">Adding pre-built native libraries</h3>
+<p>You can add a third-party native library (or any standalone library that doesn&#39;t
+depend on Chrome code) by adding it as a loadable module to the module descriptor in
+<code>//chrome/android/modules/foo/foo_module.gni</code>:</p>
+<pre data-language="gn">foo_module_desc = {
+  ...
+  loadable_modules_32_bit = [ &quot;//path/to/32/bit/lib.so&quot; ]
+  loadable_modules_64_bit = [ &quot;//path/to/64/bit/lib.so&quot; ]
+}</pre>
+<h3 id="adding-android-resources">Adding Android resources</h3>
+<p>In this section we will add the required build targets to add Android resources
+to the Foo DFM.</p>
+<p>First, add a resources target to
+<code>//chrome/browser/foo/internal/BUILD.gn</code> and add it as a dependency on
+Foo&#39;s <code>java</code> target in the same file:</p>
+<pre data-language="gn">...
+android_resources(&quot;java_resources&quot;) {
+  # Define like ordinary Android resources target.
+  ...
+  custom_package = &quot;org.chromium.chrome.browser.foo&quot;
+}
+...
+android_library(&quot;java&quot;) {
+  ...
+  deps = [
+    &quot;:java_resources&quot;,
+  ]
+}</pre>
+<p>To add strings follow steps
+<a href="http://dev.chromium.org/developers/design-documents/ui-localization">here</a> to
+add new Java GRD file. Then create
+<code>//chrome/browser/foo/internal/android/resources/strings/android_foo_strings.grd</code> as
+follows:</p>
+<pre data-language="xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;grit current_release=&quot;1&quot; latest_public_release=&quot;0&quot;&gt;
+  &lt;outputs&gt;
+    &lt;output
+        filename=&quot;values-am/android_foo_strings.xml&quot;
+        lang=&quot;am&quot;
+        type=&quot;android&quot; /&gt;
+    &lt;!-- List output file for all other supported languages. See
+         //chrome/browser/ui/android/strings/android_chrome_strings.grd for the
+         full list. --&gt;
+    ...
+  &lt;/outputs&gt;
+  &lt;translations&gt;
+    &lt;file lang=&quot;am&quot; path=&quot;vr_translations/android_foo_strings_am.xtb&quot; /&gt;
+    &lt;!-- Here, too, list XTB files for all other supported languages. --&gt;
+    ...
+  &lt;/translations&gt;
+  &lt;release seq=&quot;1&quot;&gt;
+    &lt;messages fallback_to_english=&quot;true&quot;&gt;
+      &lt;message name=&quot;IDS_BAR_IMPL_TEXT&quot; desc=&quot;Magical string.&quot;&gt;
+        impl
+      &lt;/message&gt;
+    &lt;/messages&gt;
+  &lt;/release&gt;
+&lt;/grit&gt;</pre>
+<p>Then, create a new GRD target and add it as a dependency on <code>java_resources</code> in
+<code>//chrome/browser/foo/internal/BUILD.gn</code>:</p>
+<pre data-language="gn">...
+java_strings_grd(&quot;java_strings_grd&quot;) {
+  defines = chrome_grit_defines
+  grd_file = &quot;android/resources/strings/android_foo_strings.grd&quot;
+}
+...
+android_resources(&quot;java_resources&quot;) {
+  ...
+  deps = [&quot;:java_strings_grd&quot;]
+  custom_package = &quot;org.chromium.chrome.browser.foo&quot;
+}
+...</pre>
+<p>You can then access Foo&#39;s resources using the
+<code>org.chromium.chrome.browser.foo.R</code> class. To do this change
+<code>//chrome/browser/foo/internal/android/java/src/org/chromium/chrome/browser/foo/FooImpl.java</code>
+to:</p>
+<pre data-language="java">package org.chromium.chrome.browser.foo;
+
+import org.chromium.base.ContextUtils;
+import org.chromium.base.Log;
+import org.chromium.chrome.browser.foo.R;
+
+public class FooImpl implements Foo {
+    @Override
+    public void bar() {
+        Log.i(&quot;FOO&quot;, ContextUtils.getApplicationContext().getString(
+                R.string.bar_impl_text));
+    }
+}</pre>
+<h3 id="adding-non-string-native-resources">Adding non-string native resources</h3>
+<p>This section describes how to add non-string native resources to Foo DFM.
+Key ideas:</p>
+<ul>
+<li>The compiled resource file shipped with the DFM is <code>foo_resourcess.pak</code>.</li>
+<li>At run time, native resources need to be loaded before use. Also, DFM native
+resources can only be used from the Browser process.</li>
+</ul>
+<h4 id="creating-pak-file">Creating PAK file</h4>
+<p>Two ways to create <code>foo_resourcess.pak</code> (using GRIT) are:</p>
+<ol>
+<li>(Preferred) Use <code>foo_resourcess.grd</code> to refer to individual files (e.g.,
+  images, HTML, JS, or CSS) and assigns resource text IDs. <code>foo_resourcess.pak</code>
+  must have an entry in <code>/tools/gritsettings/resource_ids.spec</code>.</li>
+<li>Combine existing .pak files via <code>repack</code> rules in GN build files. This is
+  done by the DevUI DFM, which aggregates resources from many DevUI pages.</li>
+</ol>
+<h4 id="loading-pak-file">Loading PAK file</h4>
+<p>At runtime, <code>foo_resources.pak</code> needs to be loaded (memory-mapped) before any of
+its resource gets used. Alternatives to do this are:</p>
+<ol>
+<li>(Simplest) Specify native resources (with native libraries if any exist) to
+  be automatically loaded on first call to <code>FooModule.getImpl()</code>. This behavior
+  is specified via <code>load_native_on_get_impl = true</code> in <code>foo_module_desc</code>.</li>
+<li>In Java code, call <code>FooModule.ensureNativeLoaded()</code>.</li>
+<li>In C++ code, use JNI to call <code>FooModule.ensureNativeLoaded()</code>. The code to do
+  this can be placed in a helper class, which can also have JNI calls to
+  <code>FooModule.isInstalled()</code> and <code>FooModule.installModule()</code>.</li>
+</ol>
+<h4 id="cautionary-notes">Cautionary notes</h4>
+<p>Compiling <code>foo_resources.pak</code> auto-generates <code>foo_resources.h</code>, which defines
+textual resource IDs, e.g., <code>IDR_FOO_HTML</code>. C++ code then uses these IDs to get
+resource bytes. Unfortunately, this behavior is fragile: If <code>IDR_FOO_HTML</code> is
+accessed before the Foo DFM is (a) installed, or (b) loaded, then runtime error
+ensues! Some mitigation strategies are as follows:</p>
+<ul>
+<li>(Ideal) Access Foo DFM&#39;s native resources only from code in Foo DFM&#39;s native
+libraries. So by the time that <code>IDR_FOO_HTML</code> is accessed, everything is
+already in place! This isn&#39;t always possible; henceforth we assume that
+<code>IDR_FOO_HTML</code> is accessed by code in the base DFM.</li>
+<li>Before accessing IDR_FOO_HTML, ensure Foo DFM is installed and loaded. The
+latter can use <code>FooModule.ensureNativeLoaded()</code> (needs to be called from
+Browser thread).</li>
+<li>Use inclusion of <code>foo_resources.h</code> to restrict availability of <code>IDR_FOO_HTML</code>.
+Only C++ files dedicated to &quot;DFM-gated code&quot; (code that runs only when its DFM
+is installed and loaded) should include <code>foo_resources.h</code>.</li>
+</ul>
+<h4 id="associating-native-resources-with-dfm">Associating native resources with DFM</h4>
+<p>Here are the main GN changes to specify PAK files and default loading behavior
+for a DFM&#39;s native resources:</p>
+<pre data-language="gn">foo_module_desc = {
+  ...
+  paks = [ &quot;$root_gen_dir/chrome/browser/foo/internal/foo_resourcess.pak&quot; ]
+  pak_deps = [ &quot;//chrome/browser/foo/internal:foo_paks&quot; ]
+  load_native_on_get_impl = true
+}</pre>
+<h3 id="module-install">Module install</h3>
+<p>So far, we have installed the Foo DFM as a true split (<code>-m foo</code> option on the
+install script). In production, however, we have to explicitly install the Foo
+DFM for users to get it. There are three install options: <em>on-demand</em>,
+<em>deferred</em> and <em>conditional</em>.</p>
+<h4 id="on-demand-install">On-demand install</h4>
+<p>On-demand requesting a module will try to download and install the
+module as soon as possible regardless of whether the user is on a metered
+connection or whether they have turned updates off in the Play Store app.</p>
+<p>You can use the autogenerated module class to on-demand install the module like
+so:</p>
+<pre data-language="java">FooModule.install((success) -&gt; {
+    if (success) {
+        FooModule.getImpl().bar();
+    }
+});</pre>
+<p><strong>Optionally</strong>, you can show UI telling the user about the install flow. For
+this, add a function like the one below. Note, it is possible
+to only show either one of the  install, failure and success UI or any
+combination of the three.</p>
+<pre data-language="java">public static void installModuleWithUi(
+        Tab tab, OnModuleInstallFinishedListener onFinishedListener) {
+    ModuleInstallUi ui =
+            new ModuleInstallUi(
+                    tab,
+                    R.string.foo_module_title,
+                    new ModuleInstallUi.FailureUiListener() {
+                        @Override
+                        public void onFailureUiResponse(retry) {
+                            if (retry) {
+                                installModuleWithUi(tab, onFinishedListener);
+                            } else {
+                                onFinishedListener.onFinished(false);
+                            }
+                        }
+                    });
+    // At the time of writing, shows toast informing user about install start.
+    ui.showInstallStartUi();
+    FooModule.install(
+            (success) -&gt; {
+                if (!success) {
+                    // At the time of writing, shows infobar allowing user
+                    // to retry install.
+                    ui.showInstallFailureUi();
+                    return;
+                }
+                // At the time of writing, shows toast informing user about
+                // install success.
+                ui.showInstallSuccessUi();
+                onFinishedListener.onFinished(true);
+            });
+}</pre>
+<p>To test on-demand install, &quot;fake-install&quot; the DFM. It&#39;s fake because
+the DFM is not installed as a true split. Instead it will be emulated by play
+core&#39;s <code>--local-testing</code> <a href="https://developer.android.com/guide/playcore/feature-delivery/on-demand#local-testing">mode</a>.
+Fake-install and launch Chrome with the following command:</p>
+<pre data-language="shell">$ $OUTDIR/bin/chrome_public_bundle install -f foo
+$ $OUTDIR/bin/chrome_public_bundle launch</pre>
+<p>When running the install code, the Foo DFM module will be emulated.
+This will be the case in production right after installing the module. Emulation
+will last until Play Store has a chance to install your module as a true split.
+This usually takes about a day. After it has been installed, it will be updated
+atomically alongside Chrome. Always check that it is installed and available
+before invoking code within the DFM.</p>
+<p>*** note
+<strong>Warning:</strong> There are subtle differences between emulating a module and
+installing it as a true split. We therefore recommend that you always test both
+install methods.</p>
+<hr>
+<p>*** note
+To simplify development, the DevUI DFM (dev_ui) is installed by default, i.e.,
+<code>-m dev_ui</code> is implied by default. This is overridden by:</p>
+<ul>
+<li><code>--no-module dev_ui</code>, to test error from missing DevUI,</li>
+<li><code>-f dev_ui</code>, for fake module install.</li>
+</ul>
+<hr>
+<h4 id="deferred-install">Deferred install</h4>
+<p>Deferred install means that the DFM is installed in the background when the
+device is on an unmetered connection and charging. The DFM will only be
+available after Chrome restarts. When deferred installing a module it will
+not be faked installed.</p>
+<p>To defer install Foo do the following:</p>
+<pre data-language="java">FooModule.installDeferred();</pre>
+<h4 id="conditional-install">Conditional install</h4>
+<p>Conditional install means the DFM will be installed automatically upon first
+installing or updating Chrome if the device supports a particular feature.
+Conditional install is configured in the module&#39;s manifest. To install your
+module on all Daydream-ready devices for instance, your
+<code>//chrome/android/modules/foo/internal/java/AndroidManifest.xml</code> should look
+like this:</p>
+<pre data-language="xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;manifest xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;
+    xmlns:dist=&quot;http://schemas.android.com/apk/distribution&quot;
+    featureSplit=&quot;foo&quot;&gt;
+
+    &lt;dist:module
+      dist:instant=&quot;false&quot;
+      dist:title=&quot;@string/foo_module_title&quot;&gt;
+      &lt;dist:fusing dist:include=&quot;true&quot; /&gt;
+      &lt;dist:delivery&gt;
+        &lt;dist:install-time&gt;
+          &lt;dist:conditions&gt;
+            &lt;dist:device-feature
+              dist:name=&quot;android.hardware.vr.high_performance&quot; /&gt;
+          &lt;/dist:conditions&gt;
+        &lt;/dist:install-time&gt;
+        &lt;!-- Allows on-demand or deferred install on non-Daydream-ready
+             devices. --&gt;
+        &lt;dist:on-demand /&gt;
+      &lt;/dist:delivery&gt;
+    &lt;/dist:module&gt;
+
+    &lt;application /&gt;
+&lt;/manifest&gt;</pre>
+<p>You can also specify no conditions to have your module always installed.
+You might want to do this in order to delay the performance implications
+of loading your module until its first use (true only on Android O+ where
+<a href="https://developer.android.com/reference/android/R.attr#isolatedSplits">android:isolatedSplits</a>
+is supported. See <a href="http://go/isolated-splits-dev-guide">go/isolated-splits-dev-guide</a>
+(googlers only).</p>
+<h3 id="chrome_public_apk-and-integration-tests">chrome_public_apk and Integration Tests</h3>
+<p>To make the Foo feature available in the non-bundle <code>chrome_public_apk</code>
+target, add the <code>java</code> target to the template in
+<code>//chrome/android/chrome_public_apk_tmpl.gni</code> like so:</p>
+<pre data-language="gn">  # Add to where &quot;chrome_all_java&quot; is added:
+  if (!_is_bundle) {
+    deps += [ &quot;//chrome/browser/foo/internal:java&quot; ]
+  }
+}</pre>
+<p>You may also have to add <code>java</code> as a dependency of
+<code>//chrome/android/javatests/chrome_test_java_org.chromium.chrome.browser.foo</code>
+if you want to call into Foo from test code.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_dynamic_feature_modules.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/android_dynamic_feature_modules.md</a>
+  </p>
+</div>

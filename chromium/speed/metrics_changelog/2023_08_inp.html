@@ -1,0 +1,17 @@
+<h1>Interaction to Next Paint Changes in Chrome 116</h1>
+<h2 id="patched-inp-measurement-of-interactions-with--menus-on-macos">Patched INP measurement of interactions with <select> menus on MacOS</h2>
+<p>Clicking on MacOS select menu dropdown was sometimes reporting arbitrarily long
+INP because of artificial events dispatching. We <a href="https://chromium.googlesource.com/chromium/src/+/851b8bd317b3af1a678b72e48dbd791954e373ed">fixed</a>
+it by identifying artificial pointerups &amp; clicks in event timing and reporting
+processingEnd as entry&#39;s ending timestamp rather than an incorrect arbitrarily
+long presentation delay.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>Pages employing select menu dropdowns may see a decrease on INP on Mac OS.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 116 was released the week of August 15, 2023.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_08_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_08_inp.md</a>
+  </p>
+</div>

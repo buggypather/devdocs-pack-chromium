@@ -1,0 +1,337 @@
+<h1>Debugging Chromium on macOS</h1>
+<h2 id="debug-vs-release-builds">Debug vs. Release Builds</h2>
+<p>Debug builds are the default configuration for Chromium and can be explicitly
+specified with <code>is_debug=true</code> in the <code>args.gn</code> file of the out directory. Debug
+builds are larger and non-portable because they default to
+<code>is_component_build=true</code>, but they contain full debug information.</p>
+<p>If you set <code>is_debug=false</code>, a release build will be created with no symbol
+information, which cannot be used for effective debugging.</p>
+<p>A middle-ground is to set <code>symbol_level=1</code>, which will produce a minimal symbol
+table, capable of creating backtraces, but without frame-level local variables.
+This is faster to build than a debug build, but it is less useful for debugging.</p>
+<p>When doing an <code>is_official_build=true</code> build (which is meant for producing
+builds with full compiler optimization suitable for shipping to users),
+<code>enable_dsyms</code> and <code>enable_stripping</code> both get set to <code>true</code>. The binary itself
+will be stripped of its symbols, but the debug information will be saved off
+into a dSYM file. Producing a dSYM is rather slow, so it is uncommon for
+developers to build with this configuration.</p>
+<h3 id="chrome-builds">Chrome Builds</h3>
+<p>The official Google Chrome build has published dSYMs that can be downloaded with
+the script at <code>tools/mac/download_symbols.py</code> or by using the LLDB integration
+at <code>tools/lldb/lldb_chrome_symbols.py</code>.</p>
+<p>However, the official Chrome build is
+<a href="https://github.com/chromium/chromium/blob/HEAD/chrome/installer/mac/signing/README.md">codesigned</a> with the <code>restrict</code>
+and <code>runtime</code> options, which generally prohibit debuggers from attaching.</p>
+<p>In order to debug production/released Chrome, you need to do one of two things
+while Chrome is not running:</p>
+<ol>
+<li>Disable <a href="https://developer.apple.com/documentation/security/disabling_and_enabling_system_integrity_protection">System Integrity
+Protection</a>,
+by:<ol>
+<li>Rebooting into macOS recovery mode</li>
+<li>Launching Terminal</li>
+<li>Running <code>csrutil enable --without debug</code></li>
+<li>Rebooting</li>
+</ol>
+</li>
+<li>Stripping or force-re-codesigning the binary to not use those options:
+<code>codesign --sign=- --deep --force  path/to/Google\ Chrome.app</code></li>
+</ol>
+<p>If you will frequently debug official builds, (1) is recommended. Note that
+disabling SIP reduces the overall security of the system, so your system
+administrator may frown upon it.</p>
+<h2 id="the-debugger">The Debugger</h2>
+<p>The debugger on macOS is <code>lldb</code> and it is included in both a full Xcode install
+and the Command Line Tools package. There are two ways to use LLDB: either
+launching Chromium directly in LLDB, or attaching to an existing process:</p>
+<pre>lldb ./out/debug/Chromium.app/Contents/MacOS/Chromium
+lldb -p &lt;pid&gt;</pre>
+<p>LLDB has an extensive help system which you can access by typing <code>help</code> at the
+<code>(lldb)</code> command prompt. The commands are organized into a functional hierarchy,
+and you can explore the subcommands via <code>(lldb) help breakpoint</code>, etc. Commands
+can take arguments in a command-line flag style. Many commands also have short
+mnemonics that match the <code>gdb</code> equivalents. You can also just use enough letters
+to form a unique prefix of the command hierarchy.  E.g., these are equivalent:</p>
+<pre>(lldb) help breakpoint set
+(lldb) h br s</pre>
+<p>When the program is running, you can use <strong>Ctrl-C</strong> to interrupt it and pause
+the debugger.</p>
+<h3 id="passing-arguments">Passing Arguments</h3>
+<p>To pass arguments to LLDB when starting Chromium, use a <code>--</code>:</p>
+<pre>lldb ./out/debug/Chromium.app/contents/MacOS/Chromium -- --renderer-startup-dialog</pre>
+<h3 id="breakpoints">Breakpoints</h3>
+<p>Simple function-name breakpoints can be specified with a short mnemonic:</p>
+<pre>(lldb) b BrowserWindow::Close</pre>
+<p>But there are a range of other options for setting breakpoints using the, such
+as:</p>
+<ul>
+<li><code>-t</code> to limit the breakpoint to a specific thread</li>
+<li><code>-s</code> to specify a specific shared library, if the same symbol name is exported
+by multiple libraries</li>
+<li><code>-o</code> for a one-shot breakpoint (delete after first hit)</li>
+</ul>
+<p>See <code>(lldb) help br set</code> for full details.</p>
+<h3 id="navigating-the-stack">Navigating the Stack</h3>
+<p>When the debugger is paused, you can get a backtrace by typing <code>bt</code>. To navigate
+the stack by-1 type either <code>up</code> or <code>down</code>. You can also jump to a specific index
+in the stack by typing <code>f #</code> (short for <code>frame select #</code>).</p>
+<p>To see local variables, type <code>v</code> (short for <code>frame variable</code>).</p>
+<h3 id="examining-execution">Examining Execution</h3>
+<p>To step through the program, use:</p>
+<ul>
+<li><code>s</code> or <code>si</code> for step-in</li>
+<li><code>n</code> for step-over</li>
+<li><code>c</code> to continue (resume or go to next breakpoint)</li>
+</ul>
+<h3 id="printing-values">Printing Values</h3>
+<p>To print values, use the <code>p &lt;value&gt;</code> command, where <code>&lt;value&gt;</code> can be a variable,
+a variable expression like <code>object-&gt;member_-&gt;sub_member_.value</code>, or an address.</p>
+<p>If <code>&lt;value&gt;</code> is a pointer to a structure, <code>p &lt;value&gt;</code> will usually just print
+the address. To show the contents of the structure, dereference the value. E.g.:</p>
+<pre>(lldb) p item
+(HistoryMenuBridge::HistoryItem *) $3 = 0x0000000245ef5b30
+(lldb) p *item
+(HistoryMenuBridge::HistoryItem) $4 = {
+  title = u&quot;Google&quot;
+  url = {
+    spec_ = &quot;https://www.google.com/&quot;
+    is_valid_ = true
+…</pre>
+<p>Note above that LLDB has also stored the results of the expressions passed to
+<code>p</code> into the variables <code>$3</code> and <code>$4</code>, which can be referenced in other LLDB
+expressions.</p>
+<p>Often (and always when printing addresses) there is not type information to
+enable printing the full structure of the referenced memory. In these cases, use
+a C-style cast:</p>
+<pre>(lldb) p 0x0000000245ef5b30  # Does not have type information
+(long) $5 = 9763248944
+(lldb) p (HistoryMenuBridge::HistoryItem*)0x0000000245ef5b30
+(HistoryMenuBridge::HistoryItem *) $6 = 0x0000000245ef5b30
+(lldb) p *$6
+(HistoryMenuBridge::HistoryItem) $7 = {
+  title = u&quot;Google&quot;
+…</pre>
+<ul>
+<li>For printing Cocoa NSObjects, use the <code>po</code> command to get the <code>-[NSObject description]</code>.</li>
+<li>If <code>uptr</code> is a <code>std::unique_ptr</code>, the address it wraps is accessible as
+<code>uptr.__ptr_.__value_</code>.</li>
+<li>To pretty-print <code>std::u16string</code>, follow the instructions <a href="../lldbinit">here</a>.</li>
+</ul>
+<h2 id="multi-process-debugging">Multi-Process Debugging</h2>
+<p>Chrome is split into multiple processes, which can mean that the logic you want
+to debug is in a different process than the main browser/GUI process. There are
+a few ways to debug the multi-process architecture, discussed below.</p>
+<h3 id="a-attach-to-a-running-process">(a) Attach to a Running Process</h3>
+<p>You can use Chrome&#39;s Task Manager to associate specific sites with their PID.
+Then simply attach with LLDB:</p>
+<pre>lldb -p &lt;pid&gt;</pre>
+<p>Or, if you have already been debugging a Chrome process and want to retain your
+breakpoints:</p>
+<pre>(lldb) attach &lt;pid&gt;</pre>
+<h3 id="b-debug-process-startup">(b) Debug Process Startup</h3>
+<p>If you need to attach early in the child process&#39;s lifetime, you can use one of
+these startup-dialog switches for the relevant process type:</p>
+<ul>
+<li><code>--renderer-startup-dialog</code></li>
+<li><code>--utility-startup-dialog</code></li>
+<li><code>--utility-startup-dialog=data_decoder.mojom.DataDecoderService</code></li>
+</ul>
+<p>After the process launches, it will print a message like this to standard error:</p>
+<pre>[80156:775:0414/130021.862239:ERROR:content_switches_internal.cc(112)] Renderer (80156) paused waiting for debugger to attach. Send SIGUSR1 to unpause.</pre>
+<p>Then attach the the process like above in <strong>(a)</strong>, using the PID in parenthesis
+(e.g. <em>80156</em> above).</p>
+<h3 id="c-run-chrome-in-a-single-process">(c) Run Chrome in a single process</h3>
+<blockquote>
+<p>This option is not recommended. Single-process mode is not tested and is
+frequently broken.</p>
+</blockquote>
+<p>Chrome has an option to run all child processes as threads inside a single
+process, using the <code>--single-process</code> command line flag. This can make debugging
+easier.</p>
+<h2 id="debugging-out-of-process-tests">Debugging Out-of-Process Tests:</h2>
+<p>Similar to debugging the renderer process, simply attaching LLDB to a
+out-of-process test like browser_tests will not hit the test code. In order to
+debug a browser test, you need to run the test binary with  &quot;<code>--single_process</code>&quot;
+(note the underscore in <code>single_process</code>). Because you can only run one browser
+test in the same process, you&#39;re probably going to need to add <code>--gtest_filter</code>
+as well. So your command will look like this:</p>
+<pre>/path/to/src/out/debug/browser_tests --single_process --gtest_filter=GoatTeleporterTest.DontTeleportSheep</pre>
+<h2 id="working-with-xcode">Working with Xcode</h2>
+<p>If you&#39;d prefer to use Xcode GUI to use the debugger, there are two options:</p>
+<h3 id="1-empty-xcode-project">(1) Empty Xcode Project</h3>
+<p>This approach creates an empty Xcode project that only provides a GUI debugger:</p>
+<ol>
+<li>Select <strong>File</strong> &gt; <strong>New</strong> &gt; <strong>Project...</strong> and make a new project. Dump it
+anywhere, call it anything. It doesn&#39;t matter.</li>
+<li>Launch Chromium.</li>
+<li>In Xcode, select <strong>Debug</strong> &gt; <strong>Attach to Process</strong> &gt; <em>Chromium</em>.</li>
+<li>You can now pause the process and set breakpoints. The debugger will also
+activate if a crash occurs.</li>
+</ol>
+<h3 id="2-use-gn">(2) Use <em>gn</em></h3>
+<ol>
+<li>Tell <code>gn</code> to generate an Xcode project for your out directory:
+<code>gn gen --ide=xcode out/debug --ninja-executable=autoninja</code></li>
+<li>Open <em>out/debug/all.xcodeproj</em></li>
+<li>Have it automatically generate schemes for you</li>
+<li>You can now build targets from within Xcode, which will simply call out to
+<code>autoninja</code> via an Xcode script. But the resulting binaries are available as
+debuggable targets in Xcode.</li>
+</ol>
+<p>Note that any changes to the .xcodeproj will be overwritten; all changes to the
+build system need to be done in GN.</p>
+<h2 id="debugging-the-sandbox">Debugging the Sandbox</h2>
+<p>See the page on <a href="sandbox_debugging">sandbox debugging</a>.</p>
+<h2 id="system-permission-prompts-transparency-consent-and-control-tcc">System Permission Prompts; Transparency, Consent, and Control (TCC)</h2>
+<p>When debugging issues with OS-mediated permissions (e.g. Location, Camera,
+etc.), you need to launch Chromium with LaunchServices rather than through a
+shell. If you launch Chromium as a subprocess of your terminal shell, the
+permission requests get attributed to the terminal app rather than Chromium.</p>
+<p>To launch Chromium via launch services, use the <code>open(1)</code> command:</p>
+<pre>open ./out/debug/Chromium.app</pre>
+<p>To pass command line arguments:</p>
+<pre>open ./out/debug/Chromium.app --args --enable-features=MyCoolFeature</pre>
+<h2 id="taking-cpu-samples">Taking CPU Samples</h2>
+<p>A quick and easy way to investigate slow or hung processes is to use the sample
+facility, which will generate a CPU sample trace. This can be done either in the
+Terminal with the sample(1) command or by using Activity Monitor:</p>
+<ol>
+<li>Open Activity Monitor</li>
+<li>Find the process you want to sample (for &quot;Helper&quot; processes, you may want to
+consult the Chrome Task Manager)</li>
+<li>Double-click on the row</li>
+<li>Click the <strong>Sample</strong> button in the process&#39;s information window</li>
+</ol>
+<p>After a few seconds, the sample will be completed. For official Google Chrome
+builds, the sample should be symbolized using
+<a href="https://goto.google.com/crsym/">crsym</a>. If you do not have access to crsym,
+save the <em>entire</em> contents as a file and attach it to a bug report for later
+analysis.</p>
+<p>See also <a href="../memory-infra/heap_profiler#how-to-obtain-a-heap-dump-m66_linux_macos_windows">How to Obtain a Heap
+Dump</a>.</p>
+<h2 id="profiling-using-instruments-time-profiler">Profiling using Instruments Time Profiler</h2>
+<p>For more sophisticated CPU sampling, use the Time Profiler tool from Instruments. Instruments is macOS&#39;s performance analysis toolkit that comes with Xcode. The following steps assume that you&#39;ve installed Xcode 12.0 or later.</p>
+<p>After installing Xcode, run <code>xcode-select -s XCODE_FOLDER</code> from the command line to set up the Xcode folder for the command line tools. <code>XCODE_FOLDER</code> is where the Xcode is installed, and should be something like <code>/Applications/Xcode.app/Contents/Developer</code>.</p>
+<p>Time Profiler provides a GUI to record traces, but is likely to be janky. To generate a trace from the terminal,</p>
+<ol>
+<li>Start Chrome.</li>
+<li>Run <code>xcrun xctrace record --template &#39;Time Profiler&#39; --all-processes</code> in terminal to start tracing.</li>
+<li>Perform actions that you want to profile, e.g. open a new tab page.</li>
+<li>Back to the terminal, press Ctrl+C to terminate the profiling. A <code>.trace</code> profile file will be generated at the current working path.</li>
+</ol>
+<p>In Step 2, if you know which process you are looking at, you can change the <code>--all-processes</code> to <code>--attach PID</code>.</p>
+<p>To visualize a trace,</p>
+<ol>
+<li>In Time Profiler, load the profile file by File &gt; Open. You will see the traces of all threads and other stats like the Thermal State. You may filter the threads of your interest.</li>
+<li>For official Google Chrome builds, you need to follow <a href="https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/mac/debugging.md#chrome-builds">this doc</a> to download the dSYMs files for symbolization.</li>
+<li>In Time Profiler, use File &gt; Symbols to load symbols. Loading symbols only for the main executable (Google Chrome) should be sufficient for other executables (Google Chrome Helper and Renderer) as well.</li>
+</ol>
+<h2 id="working-with-minidumps">Working with Minidumps</h2>
+<p><a href="https://sites.google.com/a/chromium.org/dev/developers/crash-reports">See this
+page.</a></p>
+<h2 id="disabling-reportcrash">Disabling ReportCrash</h2>
+<p>macOS helpfully tries to write a crash report every time a binary crashes –
+which happens for example when a test in unit_tests fails. Since Chromium&#39;s
+debug binaries are huge, this takes forever. If this happens, &quot;ReportCrash&quot; will
+be the top cpu consuming process in Activity Monitor. You should disable
+ReportCrash while you work on Chromium. Run <code>man ReportCrash</code> to learn how to do
+this on your version of macOS. On 10.15, the command is</p>
+<pre>launchctl unload -w /System/Library/LaunchAgents/com.apple.ReportCrash.plist
+sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.ReportCrash.Root.plist</pre>
+<p>Yes, you need to run this for both the normal user and the admin user.</p>
+<h2 id="processing-apple-crash-reports">Processing Apple Crash Reports</h2>
+<p>If you get a Google Chrome crash report caught by ReportCrash/macOS, it will not
+have symbols (every frame will be ChromeMain). To get a symbolized stack trace,
+use the internal <a href="https://goto.google.com/crsym">crsym</a> tool by simply pasting
+the contents of an entire Apple crash report.</p>
+<h2 id="testing-other-locales">Testing Other Locales</h2>
+<p>To test Chrome in a different locale, change your system locale via the System
+Preferences. (Keep the preferences window open so that you can change the
+locale back without needing to navigate through menus in a language you may not
+know.)</p>
+<h2 id="using-dtrace">Using DTrace</h2>
+<p>DTrace is a powerful, kernel-level profiling and dynamic tracing utility. In
+order to use DTrace, you need to (at least partially) disable System Integrity
+Protection with (<a href="#Chrome-Builds">see above</a>):</p>
+<pre>csrutil enable --without dtrace</pre>
+<p>Using DTrace is beyond the scope of this document, but the following resources
+are useful:</p>
+<ul>
+<li><a href="http://www.mactech.com/articles/mactech/Vol.23/23.11/ExploringLeopardwithDTrace/index.html">jgm&#39;s awesome introductory article</a></li>
+<li><a href="https://www.bignerdranch.com/blog/hooked-on-dtrace-part-1/">Big Nerd Ranch&#39;s four-part series</a></li>
+<li><a href="http://www.macresearch.org/tuning-cocoa-applications-using-dtrace-custom-static-probes-and-instruments">Defining static probes on macOS</a></li>
+<li><a href="http://www.brendangregg.com/dtrace.html#Examples">Examples</a></li>
+<li><a href="http://blogs.sun.com/bmc/resource/dtrace_tips.pdf">Tips from Sun</a></li>
+</ul>
+<p>DTrace examples on macOS: <code>/usr/share/examples/DTTk</code></p>
+<p>To get truss on macOS, use dtruss. That requires root, so use <code>sudo dtruss -p</code>
+and to attach to a running non-root program.</p>
+<h2 id="memoryheap-inspection">Memory/Heap Inspection</h2>
+<p>Chrome has <a href="../memory-infra">built-in memory instrumentation</a> that can
+be used to identify allocations and potential leaks.</p>
+<p>MacOS also provides several low-level command-line tools that can be used to
+inspect what&#39;s going on with memory inside a process. Note that most of these
+tools only work effectively with system malloc and not PartitionAlloc. Since
+<a href="https://docs.google.com/document/d/1R1H9z5IVUAnXJgDjnts3nTJVcRbufWWT9ByXLgecSUM/preview">PartitionAlloc Everywhere</a>,
+you should additionally disable PartitionAlloc with these GN args:</p>
+<pre>use_partition_alloc_as_malloc = false
+enable_backup_ref_ptr_support = false</pre>
+<p>Note that PartitionAlloc will still be used in Blink, just not for <code>malloc</code> in
+other places anymore. See <a href="https://github.com/chromium/chromium/blob/HEAD/base/allocator/partition_allocator/build_config.md">PartitionAlloc build config</a>
+for disabling PartitionAlloc completely via GN arg <code>use_partition_alloc</code>.</p>
+<p><strong><code>heap</code></strong> summarizes what&#39;s currently in the malloc heap(s) of a process. It
+shows a number of useful things:</p>
+<ul>
+<li>How much of the heap is used or free</li>
+<li>The distribution of block sizes</li>
+<li>A listing of every C++, Objective-C and CoreFoundation class found in the
+heap, with the number of instances, total size and average size.</li>
+</ul>
+<p>It identifies C++ objects by their vtables, so it can&#39;t identify vtable-less
+classes, including a lot of the lower-level WebCore ones like StringImpl. To
+work around, temporarily added the <code>virtual</code> keyword to <code>blink::RefCounted</code>&#39;s
+destructor method, which forces every ref-counted object to include a vtable
+pointer identifying its class.</p>
+<p><strong><code>malloc_history</code></strong> identifies the stack backtrace that allocated every malloc
+block in the heap. It lists every unique backtrace together with its number of
+blocks and their total size. It requires that the process use malloc stack
+logging, which is enabled if the environment variable MallocStackLogging is set
+when it launches. The <code>env</code> command is handy for this:</p>
+<pre>$ env MallocStackLogging=1 Chromium.app/Contents/MacOS/Chromium</pre>
+<p>Then in another shell you run</p>
+<pre>$ malloc_history &lt;pid&gt; -allBySize</pre>
+<p>Watch out: the output is <em>big</em>.</p>
+<p><strong><code>leaks</code></strong> finds malloc blocks that have no pointers to them and are probably
+leaked. It doesn&#39;t require MallocStackLogging, but it&#39;s more useful if it&#39;s on
+because it can then show the backtrace that allocated each leaked block.</p>
+<p><strong><code>vmmap</code></strong> shows all the virtual-memory regions in the process&#39;s address space.
+This is less useful since it doesn&#39;t say anything about individual malloc blocks
+(except huge ones) but it can be useful for looking at things like static data
+size, mapped files, and how much memory is paged out. The &quot;-resident&quot; flag shows
+how much of each allocation is currently paged into RAM. See the man page for
+details.</p>
+<p>Notes:</p>
+<ul>
+<li>These are not going to be very useful on stripped binaries, and they&#39;re less
+useful in release builds.</li>
+<li>All of these except vmmap take several <em>minutes</em> to run, apparently because
+of the number of symbols in Chrome. They spend most of their time pegging
+one CPU down inside system code that&#39;s reading symbol tables from the
+binary. Be patient.</li>
+<li>Instruments is an application bundled with Xcode that provides GUI interfaces
+for many of these tools, including <code>sample</code> and <code>leaks</code>. Most Chromies prefer
+the command line tools, but Instruments can be useful. If running Instruments
+on a local build, expect to wait a few minutes for it to load symbols before
+it starts recording useful data</li>
+</ul>
+<h2 id="resources">Resources</h2>
+<p>The <a href="https://developer.apple.com/technotes/tn2004/tn2124.html">Mac OS X Debugging Magic
+Technote</a> contains a
+wealth of (mostly outdated) information about various debugging options built in
+to macOS.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac/debugging.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mac/debugging.md</a>
+  </p>
+</div>

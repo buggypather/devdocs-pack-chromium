@@ -1,0 +1,32 @@
+<h1>Largest Contentful Paint change in Chrome 112 to ignore low-entropy images</h1>
+<p>In Chrome 112, LCP will begin to ignore images with very low content relative
+to their display sizes.</p>
+<p>LCP has historically ignored full screen background images, as well as solid
+or simple gradient backgrounds when implemented through CSS. That heuristic
+discounts paints which are not contentful, but just serve as backgrounds or
+placeholders for other content.</p>
+<p>This change extends that heuristic to other images as well, when those images
+have very little content, when compared to the size at which they are displayed.
+The threshold is currently 0.05 bits of image data per displayed pixel, and
+images which fall below this threshold will not be considered for LCP. We expect
+that this threshold will mostly cover large simple background images or viewport
+overlays, as well as simple placeholders which are sometimes used for lazily-
+loaded images.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>By ignoring ver low-content images, Chrome will instead report the first paint
+with either text or a more contentful image as LCP. This may result in LCP times
+increasing, if a low-content background was being painted very early, or if a
+low-content placeholder was being used to reserve space for a more contentful
+image which loaded later. This may also improve LCP in cases where a low-content
+background or viewport overlay was being added to the page after other content.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>This change was launched to Chrome users starting on roughly April 6, 2023,
+and was rolled out to existing Chrome installs. This roughly coincides with
+Chrome 112, although previous versions (back to Chrome 109) will also pick
+up this change.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_04_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_04_lcp.md</a>
+  </p>
+</div>

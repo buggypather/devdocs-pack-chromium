@@ -1,0 +1,37 @@
+<h1>Life of Increasing Code Coverage</h1>
+<p>The goal of this doc is to provide guidance on how to write better tests using
+code coverage information rather than increase code coverage itself.</p>
+<ol>
+<li><p>Pay attention to <strong>untested</strong> code in both the
+<a href="https://analysis.chromium.org/coverage/p/chromium">coverage dashboard</a> and
+<a href="code_coverage_in_gerrit">code coverage in Gerrit</a> during code review.</p>
+</li>
+<li><p>Is this dead code? If yes, draft a CL
+(<a href="https://chromium-review.googlesource.com/c/chromium/src/+/1550769">example</a>)
+to remove it, otherwise, please go to step 3.</p>
+</li>
+<li><p>Think about why the code is not covered by any test. Is it because it&#39;s
+too complicated to be testable? If yes, draft a CL to refactor the code and add
+tests (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/1558233">example</a>),
+otherwise, please go to step 4.</p>
+</li>
+<li><p>If the code is testable, but a test was forgotten, draft a CL to add
+tests for it (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/1447030">example</a>).</p>
+</li>
+</ol>
+<p>Anytime you upload a CL to refactor or add tests, you can use
+<a href="code_coverage_in_gerrit">code coverage in Gerrit</a> to help you verify the
+previously untested code is now tested by your CL.</p>
+<p>Please refer to <a href="code_coverage">code_coverage.md</a> for how code coverage works
+in Chromium in general.</p>
+<h3 id="contacts">Contacts</h3>
+<p>For any breakage report and feature requests, please
+<a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ETest%3ECodeCoverage">file a bug</a>.</p>
+<p>For questions and general discussions, please join
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/code-coverage">code-coverage group</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/life_of_increasing_code_coverage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/life_of_increasing_code_coverage.md</a>
+  </p>
+</div>

@@ -1,0 +1,108 @@
+<h1>Clangd</h1>
+<h2 id="introduction">Introduction</h2>
+<p><a href="https://clangd.llvm.org/">clangd</a> is a clang-based <a href="https://langserver.org/">language server</a>.
+It brings IDE features (e.g. diagnostics, code completion, code navigations) to
+your editor.</p>
+<h2 id="quick-start">Quick Start</h2>
+<ul>
+<li><a href="#getting-clangd">Get clangd</a></li>
+<li>Make sure generated ninja files are up-to-date</li>
+<li>Optional: build chrome normally to get generated headers</li>
+<li>Generate compilation database (note: it&#39;s not regenerated automatically):</li>
+</ul>
+<pre>tools/clang/scripts/generate_compdb.py -p out/Default &gt; compile_commands.json</pre>
+<p>*** note
+Note: If you&#39;re using a different build directory, you&#39;ll need to replace <code>out/Default</code>
+in this and other commands with your build directory.</p>
+<hr>
+<ul>
+<li>Indexing is enabled by default (since clangd 9), note that this might consume
+lots of CPU and RAM.</li>
+<li>Use clangd in your favourite editor</li>
+</ul>
+<h2 id="getting-clangd">Getting clangd</h2>
+<p>For the best results, you should use a clangd that exactly matches the version
+of Clang used by Chromium. This avoids problems like mismatched versions of
+compiler diagnostics.</p>
+<p>The easiest way to do this is to set the <code>checkout_clangd</code> var in <code>.gclient</code>:</p>
+<pre>solutions = [
+  {
+    &quot;url&quot;: &quot;https://chromium.googlesource.com/chromium/src.git&quot;,
+    &quot;managed&quot;: False,
+    &quot;name&quot;: &quot;src&quot;,
+    &quot;custom_deps&quot;: {},
+    &quot;custom_vars&quot;: {
+      &quot;checkout_clangd&quot;: True,
+    },
+  },
+]</pre>
+<p>After this, <code>gclient</code> will keep the binary at
+<code>third_party/llvm-build/Release+Asserts/bin/clangd</code> in sync with the version of
+Clang used by Chromium.</p>
+<p>Alternatively, you may use the <code>build_clang_tools_extra.py</code> script to build
+clangd from source:</p>
+<pre>tools/clang/scripts/build_clang_tools_extra.py --fetch out/Default clangd</pre>
+<p>The resulting binary will be at
+<code>out/Default/tools/clang/third_party/llvm/build/bin/clangd</code>.</p>
+<p>Once you have an appropriate clangd binary, you must configure your editor to
+use it, either by placing it first on your <code>PATH</code>, or through editor-specific
+configuration.</p>
+<h2 id="setting-up">Setting Up</h2>
+<ol>
+<li>Make sure generated ninja files are up-to-date.</li>
+</ol>
+<pre>gn gen out/Default</pre>
+<ol start="2">
+<li>Generate the compilation database, clangd needs it to know how to build a
+source file.</li>
+</ol>
+<pre>tools/clang/scripts/generate_compdb.py -p out/Default &gt; compile_commands.json</pre>
+<p>Note: the compilation database is not regenerated automatically. You need to
+regenerate it manually whenever build rules change, e.g., when you have new files
+checked in or when you sync to head.</p>
+<p>If using Windows PowerShell, use the following command instead to set the
+output&#39;s encoding to UTF-8 (otherwise Clangd will hit &quot;YAML:1:4: error: Got
+empty plain scalar&quot; while parsing it).</p>
+<pre>tools/clang/scripts/generate_compdb.py -p out/Default | out-file -encoding utf8 compile_commands.json</pre>
+<ol start="3">
+<li>Optional: build chrome normally. This ensures generated headers exist and are
+up-to-date. clangd will still work without this step, but it may give errors or
+inaccurate results for files which depend on generated headers.</li>
+</ol>
+<pre>ninja -C out/Default chrome</pre>
+<ol start="4">
+<li><p>Use clangd in your favourite editor, see detailed <a href="https://clangd.llvm.org/installation.html#editor-plugins">instructions</a>.</p>
+<ul>
+<li>Optional: You may want to add <code>--header-insertion=never</code> to the clangd
+flags, so that your editor doesn&#39;t automatically add incorrect #include
+lines. The feature doesn&#39;t correctly handle some common Chromium headers
+like <code>base/functional/callback_forward.h</code>.</li>
+</ul>
+</li>
+</ol>
+<h2 id="background-indexing">Background Indexing</h2>
+<p>clangd builds an incremental index of your project (all files listed in the
+compilation database). The index improves code navigation features
+(go-to-definition, find-references) and code completion.</p>
+<ul>
+<li>clangd only uses idle cores to build the index, you can limit the total amount
+of cores by passing the <em>-j=&lt;number&gt;</em> flag;</li>
+<li>the index is saved to the <code>.cache/clangd/index</code> in the project root; index
+shards for common headers e.g. STL will be stored in
+<em>$HOME/.cache/clangd/index</em>;</li>
+<li>background indexing can be disabled by the <code>--background-index=false</code> flag;
+Note that, disabling background-index will limit clangd’s knowledge about your
+codebase to files you are currently editing.</li>
+</ul>
+<p>Note: the first index time may take hours (for reference, it took 2~3 hours on
+a 48-core, 64GB machine). A full index of Chromium (including v8, blink) takes
+~550 MB disk space and ~2.7 GB memory in clangd.</p>
+<h2 id="questions">Questions</h2>
+<p>If you have any questions, reach out to
+<a href="https://github.com/clangd/clangd">clangd/clangd</a> or <a href="mailto:clangd-dev@lists.llvm.org">clangd-dev@lists.llvm.org</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/clangd.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/clangd.md</a>
+  </p>
+</div>

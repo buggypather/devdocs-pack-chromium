@@ -1,0 +1,54 @@
+<h1>Interaction to Next Paint Changes in Chrome 133</h1>
+<h2 id="enable-eventtimingselectionautoscrollnointeractionid-by-default">Enable EventTimingSelectionAutoScrollNoInteractionId by default</h2>
+<p>Typically, highlighting text on a page with a pointing device does count as an
+interaction, will get reported with interactionID and will count towards INP.</p>
+<p>This is because long tasks on the page will prevent the highlighted area from
+updating, and a site will certainly feel unresponsive to users.</p>
+<p>At the moment, Event Timing will only measure the first pointerdown, and final
+pointerup, gestures of these types of interactions.  Pointermove events in the
+middle, although they might update highlighted area and may feel slow, are
+never measured.</p>
+<p>This feature which is launching updates one specific use case we learned should
+not warrant being labelled an Event Timing interaction: when the highlighted
+area goes beyond the viewport boundary, and updates force the page to scroll
+automatically.  At this point, this becomes a &quot;scrolling&quot; interaction, which
+Event Timing ignores under typical flows.</p>
+<p>Although technically still a pointer interaction, and although highlighted area
+is still being updated, Scrolling has very different characteristics than other
+interactions:</p>
+<ul>
+<li>Smoothness and consistency across many animation frames, rather than
+responsiveness of a single frame, matter more</li>
+<li>Scrolling is typically driven by the compositor thread, without the need for
+main thread scheduling.  The &quot;default action&quot; of scrolling produces a &quot;next
+paint&quot; before the event is dispatched and measured by Event Timing.  Thus even a
+slow event timing might still feel fast to the user because of the immediate
+scroll offset update.</li>
+<li>Finally, at scroll end many effects might trigger, such as intersection
+observers or lazy loaded content, which can slow down the pointerup event.</li>
+</ul>
+<p>Note: this experiment was first landed in Chrome 132:
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/5719352">Reland &quot;Flush event timings at visibility change&quot;</a>, and was slowly rolled out.</p>
+<h3 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h3>
+<p>In practice, it shouldn&#39;t affect most sites at all.  Most sites will never
+even have a chance to be affected by this change, and for those that might, it
+is unlikely to affect your high percentile field data.</p>
+<p>However, for the few sites which have the following patterns:</p>
+<ul>
+<li>Users are often highlighting enough text to scroll the page (i.e. perhaps
+on desktop devices, with long articles)</li>
+<li>Effects trigger during scroll or after stop (i.e. scroll linked animations,
+which require main thread, or intersection observers + lazy loaded content)</li>
+<li>Long tasks that trigger from these effects</li>
+</ul>
+<p>Under criteria such as these, you might have a long interaction triggered by a
+pointerup event which also immediately stop the scroll of the page.</p>
+<h3 id="when-were-users-affected">When were users affected?</h3>
+<p>Launch was the week of Feb 27, 2025, when m133 was in stable, but a limited
+number of early adopters might have seen this change as early as m132.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2025_02_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2025_02_inp.md</a>
+  </p>
+</div>

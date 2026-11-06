@@ -1,0 +1,48 @@
+<h1>TLS SHA-1 Server Signatures</h1>
+<ul>
+<li>Specification: <a href="https://www.rfc-editor.org/rfc/rfc9155.html">RFC 9155</a></li>
+<li>Chrome Status: <a href="https://chromestatus.com/feature/4832850040324096">Deprecate TLS SHA-1 server signatures</a></li>
+</ul>
+<p><a href="https://www.nist.gov/news-events/news/2022/12/nist-retires-sha-1-cryptographic-algorithm">SHA-1</a> is an insecure hash algorithm with increasingly significant attacks discovered (<a href="https://en.wikipedia.org/wiki/SHA-1#The_SHAppening">2015</a>, <a href="https://shattered.io/">2017</a>, <a href="https://sha-mbles.github.io/">2020</a>). To ensure these attacks cannot be used to impersonate a web server, browsers have steadily removed SHA-1 dependencies from HTTPS. In 2017, Chrome removed support for SHA-1 in <a href="https://www.chromium.org/Home/chromium-security/education/tls/sha-1">certificates</a>. In 2020, Chrome disabled <a href="https://www.chromestatus.com/feature/5759116003770368">TLS 1.0 and 1.1</a>, which use SHA-1 throughout.</p>
+<p>Chrome 117 is <a href="https://chromestatus.com/feature/4832850040324096">removing</a> support for SHA-1 from the TLS 1.2 <a href="https://www.rfc-editor.org/rfc/rfc9155.html">server signature</a>.</p>
+<h2 id="background">Background</h2>
+<p>TLS authenticates servers in two parts. First, the certificate, signed by the CA, tells the client what is <code>example.com</code>&#39;s public key. Second, the TLS server software uses the corresponding private key in the handshake, to bind it to the connection. In most cipher suites, this involves the server making a signature. This change is to no longer allow SHA-1 in this signature. That is, Chrome will no longer <a href="https://www.rfc-editor.org/rfc/rfc9155.html">offer SHA-1 in the signature_algorithms field</a> and, correspondingly will no longer <a href="https://www.rfc-editor.org/rfc/rfc9155.html#section-4">accept it in ServerKeyExchange signatures</a>.</p>
+<p>This use of SHA-1 is <em>not</em> the same as:</p>
+<ul>
+<li>SHA-1 in the server&#39;s certificate</li>
+<li>&quot;SHA&quot; in cipher suites, which refers to HMAC-SHA-1 in legacy CBC cipher suites</li>
+</ul>
+<h2 id="is-my-website-affected">Is my website affected?</h2>
+<p>You can test your website by toggling the &quot;Allow SHA-1 server signatures in TLS&quot; flag. Go to <code>chrome://flags/#use-sha1-server-handshakes</code>. If setting it to &quot;Enabled&quot; causes the site to work, but setting it to &quot;Disabled&quot; causes it to break, the website is affected. This flag is temporary and will be removed in the future. It may be used for now to help diagnose issues, but, long-term, the server should be fixed.</p>
+<p>Depending on the exact cause, this issue can appear differently, such as an <code>ERR_SSL_PROTOCOL_ERROR</code> or <code>ERR_CONNECTION_RESET</code>, though this is not the only possible cause of those errors.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>All correctly-implemented TLS 1.2 servers already support SHA-2 and pick a common algorithm based on server support and what the client offers. While it is possible to misconfigure servers such that SHA-1 is the only algorithm, this is rare. This is most commonly a bug in the server software.</p>
+<p>Here are known issues and how to fix them. If your server software is not listed, contact your software vendor for a fix.</p>
+<h3 id="openssl">OpenSSL</h3>
+<p>OpenSSL versions from 1.0.1 to 1.0.1i (August 2014), as 1.0.2 to 1.0.2l (May 2017) did not correctly track signature algorithm state and, as a result, some server applications would lose track of the peer&#39;s preferences and only sign SHA-1 when <a href="https://en.wikipedia.org/wiki/Server_Name_Indication">SNI</a> is offered.</p>
+<p>Impacted servers will usually fail with <code>ERR_SSL_PROTOCOL_ERROR</code>. Impacted servers will also respond to connections with and without SNI distinctively. Replace <code>EXAMPLE.COM</code> with the name of the server:</p>
+<pre>$ openssl s_client -connect EXAMPLE.COM:443 -servername EXAMPLE.COM -sigalgs rsa_pkcs1_sha256 -tls1_2 -quiet
+...
+40E7F950417F0000:error:0A000172:SSL routines:tls12_check_peer_sigalg:wrong signature type:../ssl/t1_lib.c:1594:
+
+$ openssl s_client -connect EXAMPLE.COM:443 -noservername -sigalgs rsa_pkcs1_sha256 -tls1_2 -quiet
+(connection succeeds)</pre>
+<p>This was <a href="https://github.com/openssl/openssl/commit/4e05aedbcab7f7f83a887e952ebdcc5d4f2291e4">fixed for the 1.0.1</a> series in 1.0.1j, released October 2014. There was a <a href="https://github.com/openssl/openssl/commit/1ce95f19601bbc6bfd24092c76c8f8105124e857">partial fix</a> for 1.0.2, but it was incomplete, so some applications continued to be affected until a <a href="https://github.com/openssl/openssl/pull/4577">complete fix</a> in 1.0.2m, released November 2017. Impacted servers should update to a sufficiently new version. The 1.0.1 and 1.0.2 series have been end-of-life since December 2016 and December 2019, respectively, so updating to a supported version is recommended.</p>
+<p>Additionally, there have been many <a href="https://www.openssl.org/news/vulnerabilities.html">OpenSSL security advisories</a> since these bugs were fixed. While unrelated to this Chrome change, we would also recommend reviewing the missed advisories for further actions. In particular, very old OpenSSL versions may be vulnerable to <a href="https://heartbleed.com/">Heartbleed</a>, in which case the server private key should be assumed compromised.</p>
+<h3 id="iis-with-sha-1-server-certificates">IIS with SHA-1 server certificates</h3>
+<p>The <code>signature_algorithms</code> field is primarily used for negotiating the server signature, but it is also used to guide server certificate selection. Some servers, notably IIS, apply this strictly and will reject the connection if any server certificate is inconsistent with the client&#39;s <code>signature_algorithms</code>.</p>
+<p>Chrome already removed support for SHA-1 server certificates in 2017. However, some servers are configured to send an unnecessary self-signed SHA-1 root certificate. This certificate is normally ignored by the client and thus harmless. However, older versions of IIS will still apply strict checks to it and then reject the connection.</p>
+<p>If the impacted server uses IIS and sends a server certificate chain with SHA-1 at the root (or elsewhere), this is a likely cause.</p>
+<p>Newer versions of Windows Schannel no longer check the extraneous certificate. Impacted servers should apply Windows updates. Alternatively, impacted servers can reconfigure their servers to <a href="https://www.rfc-editor.org/rfc/rfc5246.html#section-7.4.2">not send the unnecessary certificate</a> and reduce bandwidth.</p>
+<h3 id="iis-with-sha-1-client-certificates">IIS with SHA-1 client certificates</h3>
+<p>TLS client certificates (sometimes referred to with the non-standard term “mTLS”) authenticate analogously to server certificates: the certificate tells the server the public key, then the client makes a client signature with the client private key. As in the analogous direction, the server sends a list of signature algorithms, which the client picks from.</p>
+<p>While this change does not impact SHA-1 in either client certificates or client private key, older versions of IIS would apply the client&#39;s preferences (which control the server certificate and signature) to the client ones. Thus, deployments that depend on SHA-1 client certificates or signatures would break when SHA-1 <em>server</em> signatures are no longer allowed. Impacted servers will usually fail <em>after</em> the client sends the client certificate.</p>
+<p>Newer versions of Windows Schannel have fixed this issue. Impacted servers should apply Windows updates. Additionally, while unrelated to this deprecation, enterprises relying on SHA-1 client certificates or signatures are recommended to migrate to SHA-2, to ensure attackers cannot use SHA-1 weaknesses to impersonate clients.</p>
+<h2 id="enterprise-policy">Enterprise policy</h2>
+<p>Enterprise administrators who need more time can set the <a href="https://chromeenterprise.google/policies/#InsecureHashesInTLSHandshakesEnabled">InsecureHashesInTLSHandshakesEnabled</a> enterprise policy as a temporary workaround. However, this is a temporary policy and will be removed in Chrome 123. Additionally, as this allows an insecure hash function in a critical part of the TLS handshake, enabling this policy does increase the risk of attackers impersonating servers within an enterprise deployment.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/tls-sha1-server-signatures.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/tls-sha1-server-signatures.md</a>
+  </p>
+</div>

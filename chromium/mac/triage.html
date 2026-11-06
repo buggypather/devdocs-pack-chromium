@@ -1,0 +1,134 @@
+<h1>Chrome Mac Team Triage Process</h1>
+<p>This document outlines how the Chrome Mac Team triages bugs. Triage is the
+process of converting raw bug reports filed by developers or users into
+actionable, prioritized tasks assigned to engineers.</p>
+<p>*** promo If you are not on the Chrome Mac Team and want to send a bug to them
+for triage, please add the <a href="https://issues.chromium.org/hotlists/5648764">Mac-TriageQueue
+hotlist</a> and allow the Mac triage
+rotation to assign them.</p>
+<hr>
+<p>The Mac bug triage process is split into two phases. First-phase triage is done
+daily in week-long shifts by a single person. Second-phase triage is done in a
+standing meeting on Mondays by the Mac team as a group.</p>
+<h2 id="quick-reference">Quick Reference</h2>
+<p>*** promo All necessary hotlists and saved searches are bundled into the <a href="https://issues.chromium.org/bookmark-groups/861056">Mac
+triage bookmark group</a>.</p>
+<hr>
+<ol>
+<li><p>During the week, the primary works from the <a href="https://issues.chromium.org/savedsearches/6676543">&quot;Mac triage candidates&quot; saved
+search</a>. The primary has
+two main goals:</p>
+<ul>
+<li><p>To ensure that each bug is looked at.</p>
+</li>
+<li><p>To add bugs that should be seen by the whole team to the <a href="https://issues.chromium.org/hotlists/5648764">Mac-TriageQueue
+hotlist</a></p>
+</li>
+</ul>
+</li>
+</ol>
+<blockquote>
+<p>As of March 2024, the candidates saved search is greatly inflated by bugs
+that became unassigned as a part of the Buganizer transition. Due to this,
+it&#39;s not expected that the primary gets through the whole search. Instead,
+the primary should focus on bugs filed or updated within the past one or two
+weeks. We expect that we will shrink the queue to a reasonable size within
+the next few months</p>
+</blockquote>
+<ol start="2">
+<li><p>During the triage meeting, the team as a whole looks at the triage queue. At
+the end of the triage meeting, it&#39;s expected that every bug in the queue will be
+in one of the following states:</p>
+<ul>
+<li><a href="https://issues.chromium.org/hotlists/5433459">Awaiting feedback</a></li>
+<li>Assigned</li>
+<li>Closed</li>
+<li>Passed to another team</li>
+<li><a href="https://issues.chromium.org/hotlists/5432664">Bypassed</a></li>
+</ul>
+</li>
+</ol>
+<h2 id="first-phase-triage">First-phase triage</h2>
+<p>First-phase triage is, first and foremost, a filter.  Not every bug that is
+filed on a Mac, or even exclusively occurs on the Mac is best handled by the Mac
+team. If the bug is obviously very domain-specific (eg: &quot;this advanced CSS
+feature is behaving strangely&quot;, or &quot;my printer is printing everything upside
+down&quot;), feel free to skip this iteration step and send the bug straight to the
+involved team&#39;s component. Our triage filter is coarse enough that this isn&#39;t
+always sufficient to get the bug out of our queue; in these cases the bug should
+also be <a href="https://issues.chromium.org/hotlists/5432664">bypassed</a></p>
+<p>If the primary determines that the Mac team is responsible for this bug (or it
+isn&#39;t immediately apparent), the next step is to ensure the symptoms and
+reproduction steps of the bug are well-understood.</p>
+<blockquote>
+<p>If the bug is clearly of interest to the wider team, or seems like it could
+use input from domain experts, it makes sense to put it directly into the
+triage queue at this point.</p>
+</blockquote>
+<p>The main work of this phase is iterating with the bug reporter to get crash IDs,
+repro steps, traces, and other data we might need to nail down the bug.  Useful
+hotlists at this step are:</p>
+<ul>
+<li>Needs-Feedback, which marks the bug as waiting for a response from the
+reporter</li>
+<li>Needs-TestConfirmation, which requests that Test Engineering attempt the bug&#39;s
+repro steps</li>
+<li>Needs-Bisect, which requests that Test Engineering bisect the bug down to a
+first bad release</li>
+</ul>
+<p>The latter two hotlists work much better when there are reliable repro steps for
+a bug, so endeavour to get those first - TE time is precious and we should make
+good use of it.</p>
+<p>Once the bug is sufficiently understood, it should end up in one of the
+following states:</p>
+<ul>
+<li>In the <a href="https://issues.chromium.org/hotlists/5648764">Mac team triage queue</a></li>
+<li>WontFix, if they are invalid bug reports or working as intended</li>
+<li>Duplicate, if they are identical to an existing bug</li>
+<li>Assigned to an obvious assignee</li>
+<li>Moved to another team&#39;s component</li>
+<li><a href="https://issues.chromium.org/hotlists/5432664">Bypassed</a></li>
+</ul>
+<p>We wait <strong>28 days</strong> for user feedback on Needs-Feedback bugs; after 28 days
+without a response to a question we move bugs to WontFix.</p>
+<p>Some useful debugging questions here:</p>
+<ul>
+<li>What are your exact OS version and Chrome version?</li>
+<li>Does it happen all the time?</li>
+<li>Does it happen in Incognito? (this checks for bad cached data, cookies, etc)</li>
+<li>Does it happen with extensions disabled?</li>
+<li>Does it happen in a new profile?</li>
+<li>Does it happen in a new user-data-dir?</li>
+<li>If it&#39;s a web bug, is there a reduced test case? We generally can&#39;t act on &quot;my
+website is broken&quot; type issues</li>
+<li>Can you attach a screenshot/screen recording of what you mean?</li>
+<li>Can you paste the crash IDs from chrome://crashes?</li>
+<li>Can you get a sample of the misbehaving process with Activity Monitor?</li>
+<li>Can you upload a trace from chrome://tracing?</li>
+<li>Can you paste the contents of chrome://gpu?</li>
+<li>Can you paste the contents of chrome://version?</li>
+</ul>
+<h2 id="second-phase-triage">Second-phase triage</h2>
+<p>Second-phase triage is for &quot;complicated&quot; bugs that benefit from the full team&#39;s
+perspective. In principle, anything with clear and unambiguous next steps should
+not make it to the triage queue.</p>
+<p>The primary &quot;drives&quot; by presenting the triage queue in Chromium&#39;s issue tracker,
+and the team goes through each bug one by one, taking action by consensus. If
+the queue is exhausted, the team proceeds to look at the triage candidate queue.</p>
+<p>Some bugs require more feedback from either the reporter, or cc&#39;ed members of
+other teams; in that case we may choose to keep it in the queue for a week or
+two for monitoring. Otherwise, the set of outcomes is similar to first-phase
+triage:</p>
+<ul>
+<li>WontFix, if they are invalid bug reports or working as intended</li>
+<li>Duplicate, if they are identical to an existing bug</li>
+<li>Assigned to an obvious assignee</li>
+<li>Moved to another team&#39;s component</li>
+<li><a href="https://issues.chromium.org/hotlists/5432664">Bypassed</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac/triage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mac/triage.md</a>
+  </p>
+</div>

@@ -1,0 +1,119 @@
+<h1>Local Prototyping and Testing Chromium Web Platform Features with Web Platform Tests</h1>
+<p>This document can be useful if you want to create a local prototype of a new
+web feature and test it using WPT before proposing any changes in WebDriver BiDi
+or in Chromium.</p>
+<p>This guide details the process of configuring your local development environment
+for prototyping and testing new web features. It covers the entire workflow for
+Chromium browsers, from initial ideation and implementing Chromium DevTools
+Protocol (CDP) methods to creating and running Web Platform Tests (WPT).</p>
+<p>The following aspects are covered:</p>
+<ol>
+<li>Chrome Devtools Protocol (CDP)</li>
+<li>WebDriver BiDi CDDL</li>
+<li>Chromium BiDi</li>
+<li>WPT</li>
+</ol>
+<h2 id="cdp">CDP</h2>
+<p>If the required functionality is not yet supported by CDP, begin by implementing
+it yourself. Clone the Chromium repository to your machine and add your new
+methods and events to CDP.
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/devtools_protocol/README.md">Refer to this doc guidance</a>.</p>
+<p><strong>Don&#39;t forget to add <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/web_tests/http/tests/inspector-protocol/">inspector protocol tests</a>
+to ensure everything works as expected!</strong>
+Refer to <a href="https://crrev.com/c/6578504">this example CL</a>.</p>
+<h3 id="build-chromium">Build Chromium</h3>
+<p>You will need the following targets to be build:</p>
+<pre data-language="shell">autoninja -C out/Default chrome chromedriver headless_shell</pre>
+<p>Let’s assume the build artefacts have paths <code>${LOCAL_BROWSER_BIN}</code>,
+<code>${LOCAL_HEADLESS_SHELL_BIN}</code> and <code>${LOCAL_CHROMEDRIVER_BIN}</code>.</p>
+<h2 id="webdriver-bidi-cddl">WebDriver BiDi CDDL</h2>
+<p>WebDriver BiDi uses <a href="https://datatracker.ietf.org/doc/html/rfc8610">CDDL</a> to
+declare the types for commands and events. To prototype changes to the WebDriver
+BiDi protocol&#39;s CDDL before they are merged into the main repository, follow
+these steps.</p>
+<h3 id="clone-repository">Clone repository</h3>
+<p>Clone the
+<a href="https://github.com/w3c/webdriver-bidi">WebDriver BiDi repository</a>, add the new
+methods and events to the CDDL schemas. The specification text can be omitted at
+this prototyping stage. You can refer to the
+<a href="https://github.com/w3c/webdriver-bidi/blob/a8b68a1e3468ffa90502d2507444b9b1d394b287/index.bs#L5810">emulation.setLocaleOverride</a>
+command and to the
+<a href="https://github.com/w3c/webdriver-bidi/blob/a8b68a1e3468ffa90502d2507444b9b1d394b287/index.bs#L3092">browsingContext.ContextCreated</a>
+event. The important part here is to add the proper CDDL.</p>
+<h3 id="verify-the-change">Verify the change</h3>
+<p>Verify the change in the spec is correct by running this command:</p>
+<pre data-language="shell">sh scripts/test.sh
+sh scripts/build.sh</pre>
+<h3 id="generate-cddl">Generate CDDL</h3>
+<p>Generate the CDDL by running this command (refer to <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/chromium-bidi/README.md#prerequisites">chromium-bidi README</a> for prerequisites):</p>
+<pre data-language="shell">scripts/cddl/generate.js</pre>
+<p>This will create a file <code>all.cddl</code>. Let its path be <code>${LOCAL_CDDL}</code>.</p>
+<h3 id="external-specifications">External Specifications</h3>
+<p>If the changes are done in an existing external spec, for example
+<a href="https://www.w3.org/TR/permissions/">Permissions</a> or
+<a href="https://webbluetoothcg.github.io/web-bluetooth/">Web Bluetooth</a>, the CDDL
+should be generated differently. For example, for changes in &quot;Web Bluetooth&quot;:</p>
+<ol>
+<li>Checkout <a href="https://webbluetoothcg.github.io/web-bluetooth/"><code>web-bluetooth</code></a>
+spec locally.</li>
+<li>Enter the <code>web-bluetooth</code> spec directory.</li>
+<li>Run providing the proper path to the <code>webdriver-bidi</code> spec folder.</li>
+</ol>
+<pre data-language="sh">../webdriver-bidi/scripts/cddl/generate.js ./index.bs
+mv all.cddl bluetooth.cddl</pre>
+<p>This will generate <code>bluetooth.cddl</code> in the <code>web-bluetooth</code> folder. Let its path
+ be <code>${LOCAL_CDDL}</code>.</p>
+<h2 id="chromium-bidi">Chromium BiDi</h2>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/chromium-bidi/">Chromium BiDi</a> is an
+implementation of the WebDriver BiDi protocol for Chromium, located under <code>third_party/chromium-bidi</code>.</p>
+<h3 id="regenerate-bidi-types">Regenerate BiDi types</h3>
+<p>Generate the TypeScript types and zod schemes from the local CDDL file (refer to <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/chromium-bidi/README.md#prerequisites">chromium-bidi README</a> for prerequisites). Run from <code>third_party/chromium-bidi</code>:</p>
+<pre data-language="shell">./tools/node.py tools/generate-bidi-types.mjs --cddl-file ${LOCAL_CDDL}
+./tools/node.py node_modules/prettier/bin/prettier.cjs --cache --write .</pre>
+<h3 id="implement-the-new-command">Implement the new command</h3>
+<p>After regenerating types, implement the new commands, parameters, and events. Refer to the <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/chromium-bidi/README.md#implement-the-new-command">chromium-bidi README</a> for detailed instructions on:</p>
+<ul>
+<li>Handling the command in <code>CommandProcessor</code></li>
+<li>Parsing command parameters</li>
+<li>Implementing domain processor logic</li>
+</ul>
+<p>As a temporary workaround for local prototyping before your CDP changes are landed, cast any new CDP calls or event handlers to <code>any</code> to allow compilation.</p>
+<p>Verify the build works:</p>
+<pre data-language="shell">autoninja -C out/Default third_party/chromium-bidi:default</pre>
+<h3 id="add-e2e-tests">Add e2e tests</h3>
+<p>Add e2e tests verifying the new BiDi command works as expected. This is expected to fail with
+the Canary Chromium, as the required CDP changes are not present there, so you
+will need to point the tests to your local Chromium built by the <code>BROWSER_BIN</code>
+and <code>CHROMEDRIVER_BIN</code> environment variables.</p>
+<p>Build the E2E test target:</p>
+<pre data-language="shell">autoninja -C out/Default third_party/chromium-bidi:webdriver_bidi_e2e_tests</pre>
+<p>Test it in headless shell, headless and headful modes:</p>
+<pre data-language="shell">BROWSER_BIN=${LOCAL_HEADLESS_SHELL_BIN} CHROMEDRIVER_BIN=${LOCAL_CHROMEDRIVER_BIN} HEADLESS=old CHROMEDRIVER=true \
+out/Default/bin/run_webdriver_bidi_e2e_tests -- ${YOUR_TEST_PATH}
+
+BROWSER_BIN=${LOCAL_BROWSER_BIN} CHROMEDRIVER_BIN=${LOCAL_CHROMEDRIVER_BIN} HEADLESS=true CHROMEDRIVER=true \
+out/Default/bin/run_webdriver_bidi_e2e_tests -- ${YOUR_TEST_PATH}
+
+BROWSER_BIN=${LOCAL_BROWSER_BIN} CHROMEDRIVER_BIN=${LOCAL_CHROMEDRIVER_BIN} HEADLESS=false CHROMEDRIVER=true \
+out/Default/bin/run_webdriver_bidi_e2e_tests -- ${YOUR_TEST_PATH}</pre>
+<h3 id="build-chromium-bidi">Build Chromium BiDi</h3>
+<p>Build again. The path to the built Chromium BiDi script <code>out/Default/gen/third_party/chromium-bidi/src/mapperTab.js</code>
+will be <code>${LOCAL_MAPPER_TAB_PATH}</code>.</p>
+<pre data-language="shell">autoninja -C out/Default third_party/chromium-bidi:default</pre>
+<h2 id="wpt">WPT</h2>
+<p>After the previous steps are complete, you can add the required WPT tests and endpoints. To run WPT tests with the locally built browser, use the following command in the WPT root directory:</p>
+<pre data-language="shell">./wpt run --manifest MANIFEST.json --no-manifest-download \
+    --binary ${LOCAL_BROWSER_BIN} \
+    --webdriver-binary ${LOCAL_CHROMEDRIVER_BIN} \
+    --webdriver-arg=--bidi-mapper-path=${LOCAL_MAPPER_TAB_PATH} \
+    chrome \
+    infrastructure/testdriver/bidi/emulation/set_locale_override.https.html</pre>
+<p>Refer to <a href="https://docs.google.com/document/d/1uQmNMUzznAH_JvJOTllpL2qNhOEzClTkmZliTnlsNIs/edit?tab=t.0#bookmark=id.lh4ijkuvdxhf">this documentation</a>
+for instructions on how to add the new commands or events to WPT’s
+testdriver.js.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/local_prototyping_guide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/local_prototyping_guide.md</a>
+  </p>
+</div>

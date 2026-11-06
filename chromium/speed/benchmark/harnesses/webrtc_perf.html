@@ -1,0 +1,74 @@
+<h1>WebRTC Telemetry Tests</h1>
+<h2 id="overview">Overview</h2>
+<p>For its telemetry benchmarks, WebRTC uses the
+<a href="https://webrtc.github.io/test-pages/">test pages</a> and
+<a href="https://webrtc.github.io/samples/">sample pages</a> from the
+<a href="https://github.com/webrtc">WebRTC GitHub project</a>.</p>
+<p>These are downloaded by the
+<a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/update_webrtc_cases"><code>update_webrtc_cases</code></a>
+script into the
+<a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/webrtc_cases/"><code>webrtc_cases</code></a>
+directory, and then referenced in
+<a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/webrtc_cases.py"><code>webrtc_cases.py</code></a>,
+which controls the user interactions and duration of the test.</p>
+<p>The <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/benchmarks/webrtc.py"><code>webrtc.py</code></a>
+benchmark specifies which metrics should be collected for the
+test pages, and extra options that we pass to the test to fake the real camera
+and skip assign permission to get access to the video and audio from the user.</p>
+<h2 id="running-the-tests">Running the Tests</h2>
+<p>To run the tests in the browser you should simply open the page, either in
+GitHub or the <code>webrtc_cases</code> directory.</p>
+<p>To collect traces and compute metrics you can run the following command
+(assuming you are in <code>chromium/src</code>):</p>
+<pre>./tools/perf/run_benchmark webrtc --browser-executable=out/Release/chrome</pre>
+<p>You can filter the pages you want to test using the <code>--story-tag-filter</code> flag
+with the tags specified in
+<a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/webrtc_cases.py#127"><code>webrtc_cases.py</code></a>.</p>
+<p>For example, to run only the <em>multiple-peerconnections</em> test page, you can use
+the following command:</p>
+<pre>./tools/perf/run_benchmark webrtc --browser-executable=out/Release/chrome
+--story-tag-filter=stress</pre>
+<p>Or you can run the single story directly:</p>
+<pre>./tools/perf/run_benchmark webrtc --story multiple-peerconnections --browser-executable=out/Release/chrome</pre>
+<h2 id="adding-telemetry-tests-for-webrtc">Adding Telemetry Tests for WebRTC</h2>
+<p>To add a new test page you should:</p>
+<ol>
+<li><strong>Add a new test page to the
+<a href="https://github.com/webrtc/test-pages">test-pages</a> repository under the
+<a href="https://github.com/webrtc/test-pages/tree/gh-pages/src"><code>src</code> directory</a> in the
+gh-pages branch.</strong></li>
+</ol>
+<p> The test page should be named <code>index.html</code>, and the logic for the test should
+ be inside the <code>js</code> folder in a file named <code>main.js</code>. Don’t forget to reference
+ it at the
+ <a href="https://github.com/webrtc/test-pages/blob/gh-pages/index.html">index page</a>.</p>
+<p> See the <em><a href="https://github.com/webrtc/test-pages/tree/gh-pages/src/multiple-peerconnections">multiple-peerconnections</a></em>
+ test page for an example.</p>
+<ol start="2">
+<li><strong>Edit the <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/update_webrtc_cases#21"><code>update_webrtc_cases_script</code></a>
+to reference the page you added, and run it.</strong></li>
+</ol>
+<p> This will download the <code>index.html</code> file and the <code>main.js</code> file into the
+ <code>webrtc_cases</code> directory, and rename them with the name of the test.</p>
+<p> For example, the <em>multiple-peerconnections</em> test page will be downloaded as
+ <code>multiple-peerconnections.html</code> and <code>multiple-peerconnections.js</code>.</p>
+<ol start="3">
+<li><strong>Add a new class to <code>webrtc_cases.py</code> to load the page and control the user
+interactions.</strong></li>
+</ol>
+<p> See the
+ <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/webrtc_cases.py#101"><code>MultiplePeerConnections</code></a>
+ class for example.</p>
+<ol start="4">
+<li><strong>Add the story to the <code>WebrtcPageSet</code> class.</strong></li>
+</ol>
+<p> See <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/page_sets/webrtc_cases.py#127">here</a> for example.</p>
+<ol start="5">
+<li><strong>Submit your changes as a CL</strong></li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/harnesses/webrtc_perf.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/harnesses/webrtc_perf.md</a>
+  </p>
+</div>

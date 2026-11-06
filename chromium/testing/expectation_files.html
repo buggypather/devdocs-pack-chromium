@@ -1,0 +1,197 @@
+<h1>Expectation Files</h1>
+<p>A number of test suites in Chromium use expectation files to handle test
+failures in order to have more granular control compared to the usual approach
+of entirely disabling failing tests. This documentation goes into the general
+usage of expecation files, while suite-specific details are handled in other
+files.</p>
+<p>Currently, the test suites that use expectation files can be broadly categorized
+as Blink tests and GPU tests. Blink-specific documentation can be found
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:docs/testing/web_test_expectations.md">here</a>, while GPU-specific documentation can be found
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:docs/gpu/gpu_expectation_files.md">here</a>.</p>
+<h2 id="design">Design</h2>
+<p>The full design for the format can be found <a href="http://bit.ly/chromium-test-list-format">here</a> if
+the overview in this documentation is not sufficient.</p>
+<h2 id="code">Code</h2>
+<p>The parser implementation used by Chromium can be found <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/catapult/third_party/typ/typ/expectations_parser.py">here</a>. This
+handles the parsing of the text files into Python objects usable by Chromium&#39;s
+test harnesses.</p>
+<h2 id="syntax">Syntax</h2>
+<p>An expectation file can be broadly broken up into two sections: the header and
+test expectations.</p>
+<h3 id="header">Header</h3>
+<p>The header consists of specially formatted comments that define what tags and
+expected results are usable in expectations later in the file. All header
+content must be before any expectation content. Failure to do so will result in
+the parser raising errors. An example header is:</p>
+<pre># tags: [ linux ubuntu jammy
+#         mac mac10 mac11 mac12 mac13
+#         win win7 win10 ]
+# tags: [ release debug ]
+# results: [ Failure Skip Slow ]</pre>
+<p>Specifically, the header consists of one or more tag sets and exactly one
+expected result set.</p>
+<h4 id="tag-sets">Tag Sets</h4>
+<p>Each tag set begins with a <code># tags:</code> comment followed by a space-separated list
+of tags between <code>[ ]</code>. Order does not matter to the parser, and tags are
+case-insensitive. Tag sets can span multiple lines as long as each line starts
+with <code>#</code> and all tags are within the brackets.</p>
+<p>Each tag set contains all the tags that can be used in expectations for a
+particular aspect of a test configuration. In the example header, the first tag
+set contains values for operating systems, while the second tag set contains
+values for browser build type. Grouping tags together into different sets
+instead of having a monolithic set with all possible tag values is necessary
+in order to handle conflicting expectation detection (explained later in
+<a href="#Conflicts">the conflict section</a>).</p>
+<p>One important note about tag sets is that unless a test harness is implementing
+custom conflict detection logic, all tags within a set should be mutually
+exclusive, i.e. only one tag from each tag set should be produced when running a
+test. Failure to do so can result in conflict detection false negatives, the
+specifics of which are explained in <a href="#Conflicts">the conflict section</a>.</p>
+<h4 id="expected-result-set">Expected Result Set</h4>
+<p>The expected result set begins with a <code># results:</code> comment followed by a
+space-separated list of expected results between <code>[ ]</code>. Order does not matter to
+the parser, but expected results are case sensitive. Additionally, only values
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/catapult/third_party/typ/typ/expectations_parser.py;l=40">known to the parser</a> can be used. The expected results can
+span multiple lines as long as each line starts with <code>#</code> and all values are
+within the brackets.</p>
+<p>The expected result set contains all the expected results that can be used in
+expectations. The specifics of how each expected result affects test behavior
+can differ slightly between test suites, but generally do the following:</p>
+<ul>
+<li>Pass - The default expected result for all tests. Let the test run, and expect
+it to run without issue.</li>
+<li>Failure - Let the test run, but treat failures as a pass.</li>
+<li>Crash - Let the test run, but treat test failures due to crashes as a pass.</li>
+<li>Timeout - Let the test run, but treat test failures due to timeouts as a pass.</li>
+<li>Skip - Do not run the test.</li>
+<li>RetryOnFailure - Re-enable automatic retries of a test if a suite has them
+disabled by default.</li>
+<li>Slow - Indicate that the test is expected to take longer than normal, usually
+as a signal to increase timeouts.</li>
+</ul>
+<h3 id="expectations">Expectations</h3>
+<p>After the header, the rest of the file consists of test expectations which
+specify what non-standard test behavior is expected on specific test machine
+configurations. An expectation is a single line in the following format:</p>
+<pre>bug_identifier [ tags ] test_name [ expected_results ]</pre>
+<p>As an example, the following would be an expectation specifying that the
+<code>foo.html</code> test is expected to fail on Windows machines with Debug browsers:</p>
+<pre>crbug.com/1234 [ win debug ] foo.html [ Failure ]</pre>
+<p>The bug identifier and tags are both optional and can be omitted. Not specifying
+any tags means that the expectation applies to the test regardless of where it
+is run. When omitting tags, the brackets are also omitted. Additionally,
+multiple bug identifiers are allowed as long as they are space-separated. The
+parser looks for certain prefixes, e.g. <code>crbug.com/</code> to determine what is
+considered a bug. This allows the parser to properly disambiguate one or more
+bug identifiers from the test name in the event that an expectation does not
+have any tags.</p>
+<p>Multiple expected results are allowed and are space-separated like tags. As an
+example, <code>[ Failure Crash ]</code> would specify that the test is expected to either
+fail or crash.</p>
+<p>Additionally, the test name is allowed to have up to one wildcard at the very
+end to match any tests that begin with the specified name. As an example, the
+following would be an expectation specifying that any test starting with <code>foo</code>
+is expected to fail on Windows machines with Debug browsers.</p>
+<pre>crbug.com/1234 [ win debug ] foo* [ Failure ]</pre>
+<p>The restriction of only having one wildcard at the end can be lifted via the
+<code>full_wildcard_support</code> annotation found under
+<a href="#Annotations">the annotations section</a>.</p>
+<h4 id="priority">Priority</h4>
+<p>When using wildcards, it is possible for multiple expectations to apply to a
+test at runtime. For example, given the following:</p>
+<pre>[ win ] foo* [ Slow ]
+[ win ] foo/bar* [ Failure ]
+[ win ] foo/bar/specific_test.html [ Skip ]</pre>
+<p><code>foo/bar/specific_test.html</code> running on a Windows machine would have three
+applicable expectations. In these cases, the most specific (i.e. the
+longest-named) expectation will be used.</p>
+<p>The order in which expectations are defined is <em>not</em> considered when determining
+priority.</p>
+<h2 id="conflicts">Conflicts</h2>
+<p>When more than one expectation exists for a test, it is possible that there will
+be a conflict where a test run on a particular test machine could have more than
+one expectation apply to it. Whether these conflicts are treated as errors and
+how conflicts get resolved are both configurable options via annotations found
+under <a href="#Annotations">the annotations section</a>.</p>
+<h3 id="detection">Detection</h3>
+<p>Two expectations for the same test conflict with each other if they do not use
+different tags from at least one shared tag set. As an example, look at the
+following expectations:</p>
+<pre># Group 1
+[ win ] foo.html [ Failure ]
+[ mac ] foo.html [ Skip ]
+
+# Group 2
+[ win ] bar.html [ Failure ]
+[ debug ] bar.html [ Skip ]
+
+# Group 3
+[ linux ] foo.html [ Failure ]
+[ linux debug ] foo.html [ Skip ]</pre>
+<p>Group 1 would not result in a conflict since both <code>win</code> and <code>mac</code> are from the
+same tag set and are different values. Thus, the parser would be able to
+determine that at most one expectation will apply when running a test.</p>
+<p>Group 2 would result in a conflict since there are no tag sets that both
+expectations use, and thus there could be a test configuration that causes both
+expectations to apply. In this case, a configuration that produces both the
+<code>win</code> and <code>debug</code> tags is possible. This conflict could be resolved by adding
+a browser type tag to the first expectation or an operating system tag to the
+second expectation.</p>
+<p>Group 3 would result in a conflict since there is a tag set that both
+expectations use (operating system), but the exact tag is the same. Thus, a
+test running on Linux with a Debug browser would have both expectations apply.
+This conflict could be resolved by changing the first expectation to use
+<code>[ linux release ]</code>.</p>
+<p>It is important to be aware of the following when it comes to conflicts:</p>
+<ol>
+<li>The expectation file has no knowledge of which tag combinations are actually
+possible in the real world, only what is theoretically possible given the
+defined tag sets. A real world example of this would be the use of the Metal
+API, which is Mac-specific. While a human would be able to reason that
+<code>[ metal ]</code> implies <code>[ mac metal ]</code>, the latter is necessary for the
+conflict detection to work properly.</li>
+<li>If tag sets include non-mutually-exclusive values and the test suite has not
+implemented custom conflict checking logic, there can be false negatives when
+checking for conflicts. For example, if <code>win</code> and <code>win10</code> were both in the OS
+tag set, <code>[ win ] foo.html [ Failure ]</code> and <code>[ win10 ] foo.html [ Skip ]</code>
+would not be found to conflict even though they can in the real world due to
+<code>win10</code> being a more specific version of <code>win</code>.</li>
+<li>Expectations that use wildcards can result in conflict detection false
+negatives. Conflict detection is only run on expectations with identical test
+names. Thus, while <code>[ win ] foo* [ Failure ]</code> and <code>[ debug ] foo* [ Skip ]</code>
+would be found to conflict since the test name is <code>foo*</code> in both cases,
+<code>[ win ] f* [ Failure ]</code> and <code>[ debug ] foo* [ Skip ]</code> would not be found to
+conflict.</li>
+</ol>
+<h3 id="annotations">Annotations</h3>
+<p>By default, conflicts result in a parsing error. However, expectation files
+support several annotations to affect how conflicts are handled.</p>
+<p><code># conflicts_allowed: true</code> causes conflicts to no longer cause parsing errors.
+Instead, conflicts will be handled gracefully depending on the conflict
+resolution setting, the default of which is to take the union of expected
+results.</p>
+<p><code># conflict_resolution: </code> specifies how conflicts will be handled when they are
+allowed. Supported values are <code>union</code> (the default) and <code>override</code>. <code>union</code>
+causes all conflicted expectations to be merged together. For example, the
+following:</p>
+<pre>[ win ] foo.html [ Failure ]
+[ debug ] foo.html [ Slow ]</pre>
+<p>would be equivalent to <code>[ win debug ] foo.html [ Failure Slow ]</code> when running on
+a Windows machine with a Debug browser.</p>
+<p><code>override</code> uses whatever expectation was parsed last. Using the above example,
+A Windows machine with a Debug browser would end up using the
+<code>[ debug ] foo.html [ Slow ]</code> expectation.</p>
+<p>Additionally, by default, only a single wildcard is allowed at the end of a test
+name. This behavior is preferred for tests whose names are hierarchical in
+nature, e.g. for filepaths. However, if this behavior is not suitable for a
+test suite, full wildcard support can be enabled via the
+<code># full_wildcard_support: true</code> annotation. This allows an arbitrary number of
+wildcards to be used anywhere in the test name. While this is more flexible and
+can make sense for certain test suites, it does make it harder for humans to
+determine which expectations apply to which tests.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/expectation_files.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/expectation_files.md</a>
+  </p>
+</div>

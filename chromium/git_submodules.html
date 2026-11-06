@@ -1,0 +1,199 @@
+<h1>Git submodules</h1>
+<p>A Git submodule is a Git repository inside another Git repository. Chromium
+project doesn&#39;t rely on Git submodules directly. Instead, gclient sync is used
+to manage Git dependencies.</p>
+<p>In 2023Q3, we started to move source of Git dependencies from DEPS files to Git
+submodules. While we do our best to hide complexities of submodules, some will
+be exposed.</p>
+<h2 id="a-quick-introduction-to-git-submodules">A quick introduction to Git submodules</h2>
+<p><a href="https://git-scm.com/docs/gitsubmodules">Git submodules</a> are managed via the
+combination of <code>.gitmodules</code> files and gitlinks. <code>.gitmodules</code> is a text file
+that configures submodules, and each submodule entry contains the path to the
+submodule&#39;s worktree and the URL of the submodule. Gitlink is a special type of
+file in the Git database that tracks a submodule commit.</p>
+<p>You can find an example of Git dependency below. Note that gclient-condition is
+a custom property used by gclient and not git. It&#39;s identical to <code>condition</code> in
+<code>DEPS</code> and the allowed variables are defined in <code>vars = {</code> section of <code>DEPS</code>.</p>
+<p><code>.gitmodules</code>:</p>
+<pre>[submodule &quot;third_party/catapult&quot;]
+	path = third_party/catapult
+	url = https://chromium.googlesource.com/catapult.git
+	gclient-condition = checkout_linux</pre>
+<p>gitlink entry, retrieved using <code>git ls-files -s -- third_party/catapult</code>:</p>
+<pre>160000 0b39a694c0b61392d1180520ed1c13e390029c41 0       third_party/catapult</pre>
+<p>Corresponding DEPS entry would look like:</p>
+<pre>  'third_party/catapult': {
+    'url': 'https://chromium.googlesource.com/catapult.git@0b39a694c0b61392d1180520ed1c13e390029c41',
+    'condition': 'checkout_linux',
+}</pre>
+<h2 id="how-to-avoid-accidental-git-submodule-updates">How to avoid accidental Git submodule updates?</h2>
+<p>The simplest approach is to always run <code>gclient sync -D</code> after updating chromium
+checkout (e.g. after <code>git pull</code>, or <code>git checkout</code>). You can automate that by
+adding post-checkout hook (example below). To confirm there are no changes, run
+<code>git status</code>. If you use <code>git commit -a</code>, check the &quot;Changes to be committed&quot;
+section that shows up in the edit commit message.</p>
+<h3 id="automatically-run-gclient-sync-after-git-pull--git-checkout">Automatically run gclient sync after git pull / git checkout</h3>
+<p>We need to have Git two hooks: post-checkout and post-merge. In chromium/src
+directory, edit <code>.git/hooks/post-checkout</code>:</p>
+<pre>#!/bin/sh
+
+set -u
+gclient sync -D</pre>
+<p>and set it to be executable: <code>chmod +x .git/hooks/post-checkout</code>. Repeat the
+same for <code>.git/hooks/post-merge</code>.</p>
+<p>More information about githooks can be found
+<a href="https://git-scm.com/docs/githooks">here</a>.</p>
+<h3 id="git-status-shows-modified-dependencies-what-does-that-mean">Git status shows modified dependencies. What does that mean?</h3>
+<p>If a submodule is checked out at a different commit than one tracked by its
+parent, <code>git status</code> in the parent repo will show unstaged changes with &quot;new
+commits&quot; in parenthesis, such as:</p>
+<pre>modified: &lt;git deps name&gt; (new commits)</pre>
+<p>Commands like <code>git commit -a</code> or <code>git add *|.|-A|u</code> WILL include this in your
+commit and your CL (which is likely NOT what you want).</p>
+<p>Instead you can:</p>
+<pre># Run gclient sync to sync dependencies
+gclient sync
+# check git status again
+
+# OR
+git add &lt;file&gt; # for each file you want to stage
+# Then commit your staged files
+git commit -v -m &quot;Fix foo/bar&quot;</pre>
+<p>If a submodule has uncommitted changes (i.e. you made some manual changes to the
+affected submodule), running <code>git status</code> in its parent repo will show them as
+unstaged changes:</p>
+<pre>  modified: &lt;git deps name&gt; (modified content)
+
+# or
+
+  modified: &lt;git deps name&gt; (untracked content)</pre>
+<p>It&#39;s not possible to add those changes to the parent repository. You can ignore
+such status, or you can cd into submodule and address it. E.g. you may delete
+untracked files (content) or reset modified content to match HEAD.</p>
+<h2 id="i-accidentally-staged-git-submodule-not-yet-committed">I accidentally staged Git submodule (not yet committed)</h2>
+<p>If you accidentally stage a Git submodule, you can unstage it by running <code>git restore --staged &lt;path to submodule&gt;</code>.</p>
+<h2 id="i-accidentally-committed-git-submodule">I accidentally committed Git submodule</h2>
+<p>We will need to create either a commit that sets it back to old value, or amend
+the commit that added it. You can try to run <code>gclient sync</code> to bring the commit
+back to what is expected. If that doesn&#39;t work, you can use <code>gclient setdep -r &lt;path&gt;@&lt;old hash&gt;</code>, run <code>gclient gitmodules</code> to sync all submodules commits back
+to what is in DEPS, or check detailed instructions in <a href="dependencies">Managing
+dependencies</a>.</p>
+<p>NOTE: setdep for chromium/src is always prefixed with src/. For example, if you
+are updating v8, the command would be `gclient setdep -r src/v8@<hash>.</p>
+<h2 id="workflows-with-submodules">Workflows with submodules</h2>
+<h3 id="submodules-during-git-status-git-commit-and-git-add">Submodules during &#39;git status&#39;, &#39;git commit&#39;, and &#39;git add&#39;</h3>
+<p>For <code>git status</code>, submodules that show up under <code>Changes not staged for commit</code>
+can be hidden with <code>git -c diff.ignoreSubmodules=all status</code></p>
+<p>For <code>git commit -a</code> you can exclude all submodules with
+<code>git -c diff.ignoreSubmodules=all commit -a</code>.</p>
+<p><code>git add</code> does NOT support <code>diff.ignoreSubmodules</code>. Submodules that were
+hidden from you with <code>git -c diff.ignoreSubmodules=all status</code> would still
+be staged with <code>git add .|--all|-A</code> and therefore committed with
+<code>git -c diff.ignoreSubmodules=all commit</code>.</p>
+<p>Instead you can run <code>git add &#39;:(exclude,attr:builtin_objectmode=160000)&#39;</code> which
+will stage all changes except for submodules.</p>
+<p>(git assigns <code>160000</code> as the objectmode submodules. You can read more about
+<a href="https://kernel.googlesource.com/pub/scm/git/git/+/refs/heads/next/Documentation/gitattributes.txt#110"><code>builtin_objectmode</code></a>
+and magic <a href="https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefpathspecapathspec">pathspecs</a>)</p>
+<p>To make these commands shorter, you can create git aliases for them by adding
+the following to your $HOME/.gitconfig (globally) or src/.git/config file (just
+chromium/src):</p>
+<pre>[alias]
+        # 's', 'c', or whatever alias you want for each command
+        s = -c diff.ignoreSubmodules=all status
+        c = -c diff.ignoreSubmodules=all commit -a
+        d = -c diff.ignoreSubmodules=all difftool --dir-diff
+        a = add ':(exclude,attr:builtin_objectmode=160000)'</pre>
+<p>With the above, you can execute these commands by running <code>git s</code>, <code>git c</code>, etc.
+Or you may also use the pre-commit git hook detailed below.</p>
+<h3 id="understanding-diffignoresubmodules">Understanding diff.ignoreSubmodules</h3>
+<p><code>git config diff.ignoreSubmodules</code> sets a default behavior for <code>diff</code>, <code>status</code>,
+and several other git subcommands, using one of the <a href="https://www.git-scm.com/docs/git-diff/#Documentation/git-diff.txt---ignore-submodulesltwhengt">supported values of
+<code>--ignore-submodules</code></a>.</p>
+<p>By default, <code>gclient sync</code> sets this to <code>dirty</code> as a local config in the
+chromium checkout. This elides submodule output for <code>git status</code> in a clean
+checkout, but will show submodules as modified when developers locally touch
+them.</p>
+<p>Manually setting this to <code>all</code> elides such output in all cases. This also omits
+submodule changes from <code>git commit -a</code>, which can decrease the likelihood of
+accidental submodule commits. However, it does not omit such changes from
+<code>git add -A</code>, meaning developers who use this flow are actually <em>more</em> likely to
+commit accidental changes, since they&#39;ll be invisible beforehand unless
+developers manually set <code>--ignore-submodules=dirty</code> or use a lower-level command
+such as <code>git diff-tree</code>.</p>
+<p>Because <code>all</code> can result in misleading output and doesn&#39;t fully prevent
+accidental submodule commits, typical developers are likely better-served by
+leaving this configured to <code>dirty</code> and installing the
+<a href="#install-hook">commit hook described below</a> to prevent such commits.
+Accordingly, <code>gclient sync</code> will warn if it detects a different setting locally;
+developers who understand the consequences can silence the warning via the
+<code>GCLIENT_SUPPRESS_SUBMODULE_WARNING</code> environment variable.</p>
+<h3 id="submodules-during-a-git-rebase-update">Submodules during a &#39;git rebase-update&#39;</h3>
+<p>While resolving merge conflicts during a <code>git rebase-update</code> you may see
+submodules show up in unexpected places.</p>
+<h4 id="submodules-under-changes-not-staged-for-commit">Submodules under &quot;Changes not staged for commit&quot;</h4>
+<p>Submodules under this section can be safely ignored. This simply shows that the
+local commits of these submodules do not match the latest pinned commits fetched
+from remote. In other words, these submodules have been rolled since your last
+<code>git rebase-update</code>.</p>
+<p>If you use a diff tool like meld you can run:
+<code>git -c diff.ignoreSubmodules=all difftool --dir-diff</code>
+to prevent these submodules from showing up in your diff tool.</p>
+<h4 id="submodules-under-unmerged-paths">Submodules under &quot;Unmerged paths&quot;</h4>
+<p>If Submodules show up under this section it means that new revisions were
+committed for those submodules (either intentional or unintentionally) and these
+submodules were also rolled at remote. So now there is a conflict.</p>
+<p>If you DID NOT intentionally make any submdoules changes, you should run:
+<code>gclient gitmodules</code>. This will update the submdoules for you, to match whatever
+commits are listed in DEPS (which you have just pulled from remote).</p>
+<p>If you DID intentionally roll submodules, you can resolve this conflict just by
+resetting it:
+<code>gclient setdep -r {path}@{hash}</code></p>
+<h2 id="install-hook">Install a hook to help detect unintentional submodule commits</h2>
+<p>depot_tools provides an opt-in pre-commit hook to detect unintentional submodule
+ changes during <code>git commit</code> and remove them from the commit.</p>
+<p>To install the hook: <code>gclient installhooks</code></p>
+<p>If there is an existing pre-commit hook, gclient will instruct you how to update
+it. If you have already installed this hook, gclient will do nothing.</p>
+<p>To uninstall the hook, in <code>chromium/src</code> <code>rm .git/hooks/pre-commit</code> if you have
+no other hooks. Otherwise update <code>.git/hooks/pre-commit</code> to remove the gclient
+provided hook.</p>
+<p>To bypass this hook run <code>git commit --no-verify</code> (which bypasses all hooks you
+ may have) OR set the following environment variable: <code>SKIP_GITLINK_PRECOMMIT=1</code>
+(which bypasses this specific hook).</p>
+<p>Note that this is currently and best effort solution and does not guarantee
+that unintentional commits will always be detected. The team will iterate
+quickly on this hook to fill in other gaps and behavior is subject to change.
+Please file an <a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ESDK&amp;labels=submodules-feedback&amp;cc=sokcevic@chromium.org,jojwang@chromium.org&amp;description=Please%20steps%20to%20reproduce%20the%20problem:%0A%0ADo%20you%20have%20any%20custom%20environment%20setups%20like%20git%20hooks%20or%20git%20configs%20that%20you%20have%20set%20yourself%0A%0APlease%20attach%20output%20of:%0Agit%20config%20-l%0Agit%20map-branches%20-vv%0A%0AIf%20this%20is%20an%20issue%20with%20git%20cl%20upload%20please%20include%20the%20git%20trace%20file%20for%20the%20problematic%20run%20found%20in:%0A%3Cdepot_tools_path%3E/traces/%3Clatest%20trace%3E">issue</a> for any feedback.</p>
+<h2 id="faq">FAQ</h2>
+<h3 id="why-do-we-have-git-dependencies-in-both-deps-and-git-submodules">Why do we have Git dependencies in both DEPS and Git submodules?</h3>
+<p>Lots of Chromium infrastructure already parse DEPS file directly. Instead of a
+massive switch, it&#39;s easier to transition to Git submodules this way. Moreover,
+unwanted Git submodule updates can be detected and developers can be warned.</p>
+<h3 id="how-do-i-manually-roll-git-submodule">How do I manually roll Git submodule?</h3>
+<p>See the <a href="dependencies">dependencies</a> page.</p>
+<h3 id="i-got-a-conflict-on-a-submodule-how-do-i-resolve-it">I got a conflict on a submodule, how do I resolve it?</h3>
+<p>First, you will need to determine what is the right commit hash. If you
+accidentally committed a gitlink, which got in the meantime updated, you most
+likely want to restore the original updated gitlink. You can run <code>gclient gitmodules</code>, which will take care of all unmerged submodule paths, and set it to
+match DEPS file.</p>
+<p>If you prefer to manually resolve it, under git status, you will see &quot;Unmerged
+paths&quot;. If those are submodules, you want to restore them by running the
+following command:</p>
+<pre>git restore --staging &lt;affected path&gt;</pre>
+<h3 id="how-do-i-see-what-revision-is-pinned">How do I see what revision is pinned?</h3>
+<p><code>gclient getdep</code> will return whatever commit is pinned for the deps in <code>DEPS</code>
+(unstaged, staged, or committed). If the repo is using git submodules only
+(and has no git deps in <code>DEPS</code>) it will return the whatever pinned commit is
+staged or committed.</p>
+<pre>gclient getdep -r &lt;path&gt;</pre>
+<p>If you want to keep your gitlink, then run <code>git add &lt;affected path&gt;</code>.</p>
+<h3 id="how-can-i-provide-feedback">How can I provide feedback?</h3>
+<p>Please file <a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ESDK">a bug under Infra&gt;SDK
+component</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/git_submodules.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/git_submodules.md</a>
+  </p>
+</div>

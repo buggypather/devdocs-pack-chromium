@@ -1,0 +1,256 @@
+<h1>Trybot: fuchsia-binary-size</h1>
+<h2 id="about">About</h2>
+<p>The fuchsia-binary-size trybot exists for two reasons:</p>
+<ol>
+<li>To measure and make developers aware of the binary size impact of commits
+on Chrome-Fuchsia products. Reducing growth on Chrome-Fuchsia products
+on the limited-size platforms is key to shipping Chrome (and its derivatives)
+successfully on Fuchsia.</li>
+<li>To perform checks that require comparing builds with &amp; without patch.</li>
+</ol>
+<h2 id="measurements-and-analysis">Measurements and Analysis</h2>
+<p>The bot provides analysis using:</p>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/build/fuchsia/binary_sizes.py">binary_sizes.py</a>: Computes growth across compressed archives,
+ breaking them down by blob size.</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/build/fuchsia/binary_size_differ.py">binary_size_differ.py</a>: Computes deltas from output of the
+binary_sizes.py script.</li>
+</ul>
+<h2 id="checks">Checks:</h2>
+<ul>
+<li>The changes are aggregated in the <code>Generate commit size analysis files</code> step of the trybot</li>
+<li>The difference with &amp; without the patch are compared in the <code>Generate Diffs</code>
+step. This summarizes how each package grew, shrank, or stayed the same.</li>
+</ul>
+<p>***note
+<strong>Note:</strong> The tool currently excludes shared-libary contributions to the
+package size.</p>
+<hr>
+<h3 id="binary-size-increase">Binary Size Increase</h3>
+<ul>
+<li><strong>What:</strong> Checks that <a href="#compressed-vs-uncompressed">compressed fuchsia archive</a> size increases by no more
+than 12kb.<ul>
+<li>These packages are <code>cast_runner</code> and <code>web_engine</code>.</li>
+</ul>
+</li>
+<li><strong>Why:</strong> Chrome-Fuchsia deploys on platforms with small footprints. As each
+release rolls, Fuchsia runs its own set of size checks that will reject a
+release if the Chrome-Fuchsia packages exceed the allocated size budget. This
+builder tries to mitigate the unending growth of Chromium&#39;s impact on
+Chrome-Fuchsia continuous deployment.</li>
+</ul>
+<h4 id="what-to-do-if-the-check-fails">What to do if the Check Fails?</h4>
+<ul>
+<li>The <code>Read diff results</code> stdout will also give a breakdown of growth by
+package, if any:</li>
+</ul>
+<pre data-language="json">{
+  &quot;archive_filenames&quot;: [],
+  &quot;compressed&quot;: {
+    &quot;cast_runner&quot;: 0,
+    &quot;chrome_fuchsia&quot;: 40960,  # chrome_fuchsia = web_engine + cast_runner
+    &quot;web_engine&quot;: 40960  # This package grew by 40kB (post-compression)
+  },
+  &quot;links&quot;: [],
+  &quot;status_code&quot;: 1,
+[...]
+  &quot;uncompressed&quot;: {
+    &quot;cast_runner&quot;: 0,
+    &quot;chrome_fuchsia&quot;: 33444,
+    &quot;web_engine&quot;: 33444  # This package grew by 32.66kB (pre-compression)
+  }
+}</pre>
+<ul>
+<li>If <code>cast_runner</code> grew in size, you may need assistance from
+  the Chrome-Fuchsia team (<a href="mailto:fuchsia-dev@chromium.org">fuchsia-dev@chromium.org</a>).</li>
+<li>If you are writing a new feature or including a new library, consider:<ul>
+<li>If it is a feature only intended for Chrome (a full-browser), Contact
+<a href="mailto:fuchsia-dev@chromium.org">fuchsia-dev@chromium.org</a> to help fix this.</li>
+<li>Whether it belongs on a size-contrained device (think a low-end phone with a
+&lt;1GB in total disk storage). <a href="mailto:fuchsia-dev@chromium.org">fuchsia-dev@chromium.org</a> can be helpful:<ul>
+<li>If it does, look into how to reduce the
+<a href="#obvious-regressions">overall size</a></li>
+<li>If it does not, look to remove it. See below.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>If you find it <em>should</em> be removed from a size-constrained platform, you should
+guard the code with a <code>BUILDFLAG</code> and disable the associated feature in
+size-constrained builds by explicitly setting the GN arg in
+<a href="https://github.com/chromium/chromium/blob/HEAD/build/config/fuchsia/size_optimized_cast_receiver_args.gn"><code>size_optimized_cast_receiver_args.gn</code></a>.</p>
+<ul>
+<li>See if any of the generic <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/optimization_advice.md">optimization advice</a> is applicable.</li>
+<li>See <a href="#obvious-regressions">the section below</a></li>
+<li>If reduction is not practical, add a rationale for the increase to the commit
+description, and <a href="#skipping-the-check">skip the check</a>. It could include:<ul>
+<li>A list of any optimizations that you attempted (if applicable)</li>
+<li>If you think that there might not be a consensus that the code your adding
+is worth the added file size, then add why you think it is.</li>
+</ul>
+</li>
+</ul>
+<h3 id="skipping-the-check">Skipping the check</h3>
+<p>Add a <strong>footer</strong> to the commit description along the lines of:</p>
+<ul>
+<li><code>Fuchsia-Binary-Size: Size increase is unavoidable.</code></li>
+<li><code>Fuchsia-Binary-Size: Increase is temporary.</code></li>
+<li><code>Fuchsia-Binary-Size: See commit description.</code> &lt;-- use this if longer
+than one line.</li>
+</ul>
+<p>***note
+<strong>Note:</strong> Make sure there are no blank lines between <code>Fuchsia-Binary-Size:</code> and
+other footers.</p>
+<hr>
+<h2 id="compressed-vs-uncompressed">Compressed vs Uncompressed</h2>
+<p>The size metric we care about the most is the compressed size. This is an
+<strong>estimate</strong> of how large the Chrome-Fuchsia packages will be when delivered on
+device (actual compression can vary between devices, so the computed numbers may
+not be accurate). However,  you may see the uncompressed and compressed size
+grow by different amounts (and sometimes the compressed size is larger than the
+uncompressed)!</p>
+<p>This is due to how sizes are calculated and how the compression is done.
+The uncompressed size is exactly that: the size of the package before it is
+compressed.</p>
+<p>Compression is done via the <code>blobfs-compression</code> tool, exported from the
+Fuchsia SDK. This compresses the file into a package that is ready to be
+deployed to the Fuchsia device. With the current (default) compression-mode,
+this compresses the package in page-sizes designed for the device and
+filesystem. Since each page is at least 8K, <strong>increments in the compressed size
+are always multiples of 8K with the current compression mode</strong>. So, if your
+change causes the previous compression page to go over the limit, you may see
+an 8K increase for an otherwise small change.</p>
+<p>Large changes will increase more than a page&#39;s work (to at least 16K), which is
+why we only monitor 12K+ changes (12K isn&#39;t possible due to the 8K page size)
+and not 8K+.</p>
+<p><strong>You are responsible only for pre-compression size increases. If your change
+did not cause a pre-compression size increase, but still failed the builder,
+please ignore it using the <code>Fuchsia-Binary-Size:</code>
+<a href="#skipping-the-check">footer</a>.</strong></p>
+<h2 id="running-a-local-binary-size-check">Running a local binary-size check</h2>
+<p>If you want to check your changes impact to binary size locally (instead of
+against the trybot), do the following:</p>
+<h3 id="0-first-time-compiling-chrome-fuchsia">0. First time compiling Chrome-Fuchsia</h3>
+<p>Add the following to your <code>.gclient</code> config:</p>
+<pre>{
+  # ... whatever you have here ...
+  &quot;solutions&quot;: [
+    {
+      # ...whatever you have here...
+    }
+  ],
+  &quot;target_os&quot;: [
+    &quot;fuchsia&quot;
+  ],
+}</pre>
+<p>Then run <code>gclient sync</code> to add the fuchsia-sdk to your <code>third_party</code> directory.</p>
+<h3 id="1-gn-args">1. GN Args</h3>
+<p>Set up a build directory with the following GN Args:</p>
+<pre>import(&quot;//build/config/fuchsia/size_optimized_cast_receiver_args.gn&quot;)
+dcheck_always_on = false
+is_debug = false
+is_official_build = true
+target_cpu = &quot;arm64&quot;
+target_os = &quot;fuchsia&quot;
+use_remoteexec = true  # If appropriate.</pre>
+<h3 id="2-build">2. Build</h3>
+<p>Build the <code>fuchsia_sizes</code> target:</p>
+<pre>autoninja -C &lt;path/to/out/dir&gt; fuchsia_sizes</pre>
+<h3 id="3-run-the-size-script">3. Run the size script</h3>
+<p>Run the size script with the following command:</p>
+<pre>build/fuchsia/binary_sizes.py --build-out-dir &lt;path/to/out/dir&gt;</pre>
+<p>The size breakdown by blob and package will be given, followed by a summary at
+the end, for <code>chrome_fuchsia</code>, <code>web_engine</code>, and <code>cast_runner</code>. The number that
+is deployed to the device is the <code>compressed</code> version.</p>
+<h2 id="how-to-reduce-your-binary-size-for-fuchsia">How to reduce your binary-size for Fuchsia</h2>
+<p>TODO(crbug.com/40821616): Fill this out.</p>
+<h3 id="obvious-regressions">Obvious regressions</h3>
+<h4 id="many-new-blobs">Many new blobs</h4>
+<p>(shamelessly stolen from this
+<a href="https://docs.google.com/document/d/1K3fOJJ3rsKA5WtvRCJtuLQSqn7MtOuVUzJA9cFXQYVs/edit#">doc</a>,
+but looking for any tips on how to improve this for Fuchsia specifically)</p>
+<p>Look at blobs and see that there aren&#39;t a huge number of blobs added in.</p>
+<ul>
+<li>What does it mean if blobs are added in?<ul>
+<li>Something changed in the dependencies, causing new files to be pulled in.</li>
+</ul>
+</li>
+<li>Is there a way to reverse-engineer a blobs source?<ul>
+<li>Locales are language pack</li>
+<li>Try searching BUILD files to see if the .so was included from somewhere
+in particular.</li>
+</ul>
+</li>
+</ul>
+<h3 id="bloaty">Bloaty</h3>
+<p><a href="https://github.com/google/bloaty">Bloaty</a> can be used
+to determine the composition of the binary (and can be helpful for determining
+the cause of the increase).</p>
+<ol start="0">
+<li>(first time only) Install Bloaty using these
+<a href="https://github.com/google/bloaty#install">instructions</a>.</li>
+<li>Build two copies of the packages (see
+<a href="#running-a-local-binary_size-check">above</a>) -
+with and without your changes in two separate output directories.</li>
+<li>Generate Bloaty results. You can run Bloaty against the stripped binaries
+(<code>&lt;out dir&gt;/web_engine_exe</code> and <code>&lt;out dir&gt;/cast_runner_exe</code>). However, if
+you want more information, you will have to run it against the unstripped
+binaries (located in <code>&lt;out dir&gt;/exe.unstripped</code>. You only need to run Bloaty
+against the binary your change affected.</li>
+</ol>
+<pre data-language="bash">$ bloaty -d compileunits,symbols $OUT_DIR/exe.unstripped/web_engine_exe \
+  -n $ROW_LIMIT -s vm</pre>
+<p><code>-n $ROW_LIMIT</code> determines the number of rows to show per level before
+collapsing. Setting to <code>0</code> shows all rows. Default is 20.</p>
+<p><code>-s vm</code> indicates to sort by Virtual Memory (VM) size increase. This is the
+metric that grows somewhat closely to the binary-size bot&#39;s size metric.</p>
+<p><strong>NOTE</strong>: that the sizes reported from Bloaty will not be exactly the same as
+those reported by the <a href="#run-the-size-script"><code>binary_sizes</code> script</a> since
+Bloaty analyzes the uncompressed (and potentially unstripped) binary, but
+the reported relative growth can point you in the right direction. The
+<code>File Size</code> can vary a lot due to debug symbol information. The <code>VM Size</code> is
+usually a good lead.</p>
+<p><strong>If Bloaty reports your change decreased the uncompressed size, use a
+<a href="#skipping-the-check">footer</a> to
+ignore the check.</strong></p>
+<p>You can also directly generate a comparison with the following:</p>
+<pre data-language="bash">$ bloaty -d compileunits,symbols \
+  $OUT_DIR_WITH_CHANGE/exe.unstripped/web_engine_exe -n $ROW_LIMIT -s vm -- \
+  $OUT_DIR_WITHOUT_CHANGE/exe.unstripped/web_engine_exe</pre>
+<p>You can find out more about sections of ELF binaries
+<a href="https://refspecs.linuxbase.org/LSB_3.0.0/LSB-PDA/LSB-PDA/specialsections.html">here</a>.</p>
+<h2 id="if-all-else-fails">If All Else Fails</h2>
+<ul>
+<li>For help, email [<a href="mailto:fuchsia-dev@chromium.org">fuchsia-dev@chromium.org</a>]. They&#39;re expert
+Chrome-Fuchsia developers! See <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/README.md">here for more
+details</a>.</li>
+<li>Not all checks are perfect and sometimes you want to overrule the trybot (for
+example if you did your best and are unable to reduce binary size any
+further).</li>
+<li>Check out the
+<a href="https://groups.google.com/a/chromium.org/g/binary-size">Chromium binary-size</a> Google
+group.</li>
+<li>Adding a “Fuchsia-Binary-Size: $ANY_TEXT_HERE”
+<a href="#skipping-the-check">footer</a> to your cl (next to “Bug:”)  will bypass
+the bot assertions.<ul>
+<li>Most commits that trigger the warnings will also result in Telemetry
+alerts and be reviewed by a binary size sheriff. Failing to write an
+adequate justification may lead to the binary size sheriff filing a bug
+against you to improve your cl.</li>
+</ul>
+</li>
+</ul>
+<h2 id="code-locations">Code Locations</h2>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/tools/build/+/main:recipes/recipes/binary_size_fuchsia_trybot.py">Trybot recipe</a>,
+<a href="https://source.chromium.org/chromium/chromium/tools/build/+/main:recipes/recipe_modules/binary_size/api.py">recipe module</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/build/fuchsia/binary_sizes.py">Link to src-side binary_size script</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/build/fuchsia/binary_size_differ.py">Link to src-side binary_size_differ script</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/fuchsia_binary_size_trybot.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/fuchsia_binary_size_trybot.md</a>
+  </p>
+</div>

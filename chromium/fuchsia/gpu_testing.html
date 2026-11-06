@@ -1,0 +1,52 @@
+<h1>Running GPU integration tests on Fuchsia</h1>
+<p>General instruction on running and debugging GPU integration tests can be
+found <a href="../gpu/gpu_testing">here</a>.</p>
+<p>Fuchsia uses either <a href="https://github.com/chromium/chromium/blob/HEAD/fuchsia_web/shell/README.md">web_engine_shell</a>
+or the Chrome browser to run GPU integration tests. For the sake of this
+example, we will be using <code>web_engine_shell</code> as the target browser and
+<code>gpu_process</code> as the test suite we wish to execute. Build the target
+<code>telemetry_gpu_integration_test_fuchsia</code> and run the appropriate commands:</p>
+<h2 id="hermetic-emulation">Hermetic emulation</h2>
+<p>The test script brings up an emulator, runs the tests on it, and shuts the
+emulator down when finished.</p>
+<pre data-language="bash">$ content/test/gpu/run_gpu_integration_test_fuchsia.py gpu_process
+--browser=web-engine-shell --out-dir=/path/to/outdir</pre>
+<h2 id="additional-flags">Additional flags</h2>
+<p>You can specify the following flags to help replicate failure cases:</p>
+<ul>
+<li><code>--test-filter=&lt;regex of test cases&gt;</code>: Use this to filter test cases</li>
+<li><code>--total-shards=&lt;num shards&gt;</code>: Specify total number of shards to split tests
+over. You would use this to replicate sharding on a bot.</li>
+<li><code>--shard-index=&lt;shard index&gt;</code>: Specify shard index for splitting up the given
+tests.</li>
+</ul>
+<h2 id="run-on-an-physical-device">Run on an physical device</h2>
+<p>If ffx has already been set up to use the target device by default,
+or if there is only one discoverable device on the host:</p>
+<pre data-language="bash">$ content/test/gpu/run_gpu_integration_test_fuchsia.py gpu_process
+--browser=web-engine-shell --out-dir=/path/to/outdir -d</pre>
+<p>Otherwise, specify the id of the target device:</p>
+<pre data-language="bash">$ content/test/gpu/run_gpu_integration_test_fuchsia.py gpu_process
+--browser=web-engine-shell --out-dir=/path/to/outdir --target-id=[TARGET_ID]</pre>
+<h3 id="updating-os-flag">Updating OS flag</h3>
+<p>You can update the OS of a device by specifying the path to an image and how
+to check the OS:</p>
+<pre data-language="bash">$ content/test/gpu/run_gpu_integration_test_fuchsia.py gpu_process
+--browser=web-engine-shell --out-dir=/path/to/outdir -d --os-check=check
+--system-image-dir=path/to/dir/containing/image</pre>
+<h2 id="run-on-a-device-that-needs-packages-built-from-fuchsia-source">Run on a device that needs packages built from Fuchsia source</h2>
+<pre data-language="bash">$ content/test/gpu/run_gpu_integration_test_fuchsia.py gpu_process
+--browser=web-engine-shell --out-dir=/path/to/outdir -d
+--repo=/path/to/fuchsia/outdir --no-repo-init</pre>
+<p>Note that <code>fx serve</code> should not be running, since the script
+handles launching the package server from the Fuchsia output directory.</p>
+<h2 id="run-on-a-device-the-host-is-connected-to-remotely-via-ssh">Run on a device the host is connected to remotely via ssh</h2>
+<pre data-language="bash">$ content/test/gpu/run_gpu_integration_test_fuchsia.py gpu_process
+--browser=web-engine-shell --out-dir=/path/to/outdir --target-id=[::1]:8022</pre>
+<p>Note the this requires a remote tunnel to have been set up first.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/gpu_testing.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/fuchsia/gpu_testing.md</a>
+  </p>
+</div>

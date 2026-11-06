@@ -1,0 +1,83 @@
+<h1>&quot;Lookalike&quot; Warnings in Google Chrome</h1>
+<h2 id="what-are-lookalike-warnings">What are lookalike warnings?</h2>
+<p>&quot;Lookalike&quot; domains are domains that are crafted to impersonate the URLs of
+other sites in order to trick users into believing they&#39;re on a different site.
+These domains are used in social engineering attacks, from phishing to retail
+fraud.</p>
+<p>In addition to <a href="https://safebrowsing.google.com/">Google Safe Browsing</a>
+protections, Chrome attempts to detect these lookalike domains by comparing the
+URL you visited with other URLs that are either very popular, or that you have
+visited previously. These checks all happen within Chrome -- Chrome does not
+communicate with Google to perform these checks.</p>
+<p>When Chrome detects a potential lookalike domain, it may block the page and show
+a full-page warning, or it may show a pop-up warning, depending on how certain
+Chrome is that the site is a spoof. These warnings typically have a &quot;Did you
+mean ...?&quot; message.</p>
+<table>
+<thead>
+<tr>
+<th align="center">High-confidence warnings</th>
+<th align="center">Low-confidence warning</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center"><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/lookalikes/interstitial.png" alt="Interstitial page"></td>
+<td align="center"><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/lookalikes/tip.png" alt="Safety Tip bubble"></td>
+</tr>
+</tbody></table>
+<p>These warnings do not indicate that the site the user has visited is malicious.
+The warnings indicate that the site looks like another site, and that the user
+should make sure that they are visiting the site that they expected.</p>
+<h2 id="examples-of-lookalike-domains">Examples of lookalike domains</h2>
+<p>Chrome&#39;s checks are designed to detect spoofing techniques in the wild. Some
+example &quot;lookalike&quot; patterns that trigger warnings include:</p>
+<ul>
+<li>Domains that are a small edit-distance away from other domains, such as
+<code>goog0le.com</code>.</li>
+<li>Domains that embed other domain names within their own hostname, such as
+<code>google.com.example.com</code>.</li>
+<li>Domains that use IDN
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/idn.md">homographs</a>,
+such as <code>goögle.com</code>.</li>
+</ul>
+<p>This list is not exhaustive, and developers are encouraged to avoid using
+domains that users without technical backgrounds may confuse for another site.</p>
+<h2 id="lookalike-checks-are-imperfect">Lookalike checks are imperfect</h2>
+<p>Chrome&#39;s lookalike checks are not always right. Chrome can not detect all
+lookalike domains, and often lookalike domains are not malicious. Our
+intent with Chrome&#39;s lookalike warnings is not to make spoofing impossible,
+but to force attackers to use less convincing lookalikes, allowing users to
+notice spoofs more easily.</p>
+<p>While Chrome&#39;s checks sometimes label some benign pages as lookalikes, we use
+several approaches to minimize mistakes:</p>
+<ul>
+<li>Checks are tuned to minimize warnings on legitimate pages.</li>
+<li>Users are never prohibited from visiting the site requested, and the warnings
+shown are designed to be helpful and informative, rather than scary.</li>
+<li>Following the introduction of new lookalike checks, we proactively monitor
+what sites trigger the most warnings, and disable those that we identify as
+mistakes.</li>
+<li>For domains used in company environments, we provide an <a href="https://chromeenterprise.google/policies/?policy=LookalikeWarningAllowlistDomains">Enterprise
+Policy</a>
+allowing businesses to selectively disable warnings as needed for their
+users.</li>
+<li>For several months following the roll-out of new lookalike checks, we accept
+review requests from site operators whose sites have been flagged.</li>
+<li>New lookalike checks trigger a console message informing site owners of the
+issue for at least one release prior to triggering user-visible warnings.</li>
+</ul>
+<h2 id="not-all-users-see-all-warnings">Not all users see all warnings</h2>
+<p>Chrome shows warnings in part based on a users&#39; browsing history. This allows
+Chrome to be both more helpful (by providing better recommendations) and make
+fewer mistakes (by not flagging lookalikes for irrelevant sites).</p>
+<p>Chrome only shows warnings on sites that the user has not used frequently.
+Further, Chrome will only recommend sites that are either well-known (i.e. top)
+sites, or the user has an established relationship.</p>
+<p>Sites that show a warning to you may not show for another user, unless that user
+has visited the same sites that you have.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/lookalikes/lookalike-domains.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/lookalikes/lookalike-domains.md</a>
+  </p>
+</div>

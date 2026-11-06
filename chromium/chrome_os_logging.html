@@ -1,0 +1,56 @@
+<h1>Chrome Logging on Chrome OS</h1>
+<h2 id="locations">Locations</h2>
+<p>Messages written via the logging macros in <a href="https://github.com/chromium/chromium/blob/HEAD/base/logging.h">base/logging.h</a> end up in different
+locations depending on Chrome&#39;s state:</p>
+<p><code>/var/log/ui/ui.LATEST</code>
+:   contains data written to stdout and stderr by Chrome (and technically also
+    <a href="https://chromium.googlesource.com/chromiumos/platform2/+/main/login_manager/">session_manager</a>). This generally comprises messages that are written very
+    early in Chrome&#39;s startup process, before logging has been initialized.</p>
+<p><code>/var/log/chrome/chrome</code>
+:   contains messages that are written before a user has logged in. It also
+    contains messages written after login on test images, where Chrome runs with
+    <code>--disable-logging-redirect</code>.</p>
+<p><code>/home/chronos/user/log/chrome</code>
+:   contains messages that are written while a user is logged in on non-test
+    images. Note that this path is within the user&#39;s encrypted home directory
+    and is only accessible while the user is logged in.</p>
+<p><code>/var/log/audit/audit.log</code>:
+:   contains SECCOMP violation messages.</p>
+<p><code>/var/log/messages</code>
+:   contains messages written by services such as <code>session_manager</code>,
+    <code>cryptohomed</code> and <code>cros-disks</code> that may be useful in determining when or why
+    Chrome started or stopped.</p>
+<p>Some of the above files are actually symlinks. Older log files can be found
+alongside them in the same directories.</p>
+<h2 id="how-to-increase-chromes-log-level-to-info-on-a-test-device">How to increase Chrome&#39;s log level to <code>INFO</code> on a test device</h2>
+<p>By default, only <code>WARNING</code>, <code>ERROR</code> and <code>FATAL</code> messages are written to disk,
+whereas <code>INFO</code> and <code>VERBOSE</code> messages are discarded.</p>
+<p>To log <code>INFO</code> messages, pass <code>--log-level=0</code> to Chrome. See the
+<a href="https://chromium.googlesource.com/chromiumos/platform2/+/main/login_manager/docs/flags.md">Passing Chrome flags from session_manager</a> document for more details, and
+specifically the <code>/etc/chrome_dev.conf</code> configuration file that can be used to
+change flags on test devices.</p>
+<p>Remount the root filesystem in read-write mode (to be able to modify
+<code>chrome_dev.conf</code>):</p>
+<pre data-language="sh">(dut)$ sudo mount -o remount,rw /</pre>
+<p>Add <code>--log-level=0</code> to <code>chrome_dev.conf</code>:</p>
+<pre data-language="sh">(dut)$ echo &quot;--log-level=0&quot; | sudo tee -a /etc/chrome_dev.conf &gt; /dev/null</pre>
+<p>Restart Chrome:</p>
+<pre data-language="sh">(dut)$ sudo restart ui</pre>
+<p>Follow Chrome&#39;s logs:</p>
+<pre data-language="sh">(dut)$ tail -F /var/log/chrome/chrome</pre>
+<h2 id="verbose-logging">Verbose Logging</h2>
+<p>When actively debugging issues, Chrome&#39;s <code>--vmodule</code> flag can be used to log
+verbose messages for particular modules.</p>
+<p>For example, to log <code>VERBOSE1</code> messages produced by <code>VLOG(1)</code> in
+<code>volume_manager.cc</code> or <code>volume_manager.h</code>:</p>
+<pre data-language="sh">(dut)$ echo &quot;--vmodule=volume_manager=1&quot; | sudo tee -a /etc/chrome_dev.conf &gt; /dev/null</pre>
+<p>Restart Chrome:</p>
+<pre data-language="sh">(dut)$ sudo restart ui</pre>
+<p>Follow <code>volume_manager</code>&#39;s logs:</p>
+<pre data-language="sh">(dut)$ tail -F /var/log/chrome/chrome | grep volume_manager</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/chrome_os_logging.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/chrome_os_logging.md</a>
+  </p>
+</div>

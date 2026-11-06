@@ -1,0 +1,20 @@
+<h1>Usage of tools/gdb/gdbinit</h1>
+<p>Usage of Chromium&#39;s <a href="https://github.com/chromium/chromium/blob/HEAD/tools/gdb/gdbinit">gdbinit</a> is recommended when
+debugging with gdb on any platform. This is necessary for source-level debugging
+when <code>strip_absolute_paths_from_debug_symbols</code> or <code>use_custom_libcxx</code> are
+enabled (they&#39;re enabled by default), and also adds extra features like
+pretty-printing of custom Chromium types.</p>
+<p>To use, add the following to your <code>~/.gdbinit</code></p>
+<pre>source /path/to/chromium/src/tools/gdb/gdbinit</pre>
+<p>*** promo
+Notice that in components builds, the debug files will be loaded lazily. Because of this, the program needs to run at least once before breakpoints can be set. Alternatively, gdb will ask for confirmation as follows:</p>
+<blockquote>
+<p>Make breakpoint pending on future shared library load? (y or [n])</p>
+</blockquote>
+<hr>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gdbinit.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gdbinit.md</a>
+  </p>
+</div>

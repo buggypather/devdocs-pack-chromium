@@ -1,0 +1,13 @@
+<h1>Mixed content Autoupgrade</h1>
+<h2 id="description">Description</h2>
+<p>Chrome will now (starting on M80) attempt to upgrade some types of mixed content (HTTP on an HTTPS site) subresources. Subresources that fail to load over HTTPS will not be loaded. For more information see <a href="https://blog.chromium.org/2019/10/no-more-mixed-messages-about-https.html">the official announcement</a>.</p>
+<h2 id="scope">Scope</h2>
+<p>Audio, video, and image subresources are upgraded. Blockable (i.e. all other types of) mixed content are blocked without an autoupgrade attempt.</p>
+<h2 id="opt-out">Opt-out</h2>
+<p>Users can disable autoupgrades, and allow blockable mixed content to load, on a per-site basis through content settings (chrome://settings/content/insecureContent).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/autoupgrade-mixed.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/autoupgrade-mixed.md</a>
+  </p>
+</div>

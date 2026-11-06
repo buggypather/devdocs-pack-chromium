@@ -1,0 +1,128 @@
+<h1>How to Deal with Android Size Alerts</h1>
+<p>Googlers, see also: go/chrome-binary-size-garderning</p>
+<blockquote>
+<p>Not all alerts should not have a bug created for them. Please read on...</p>
+</blockquote>
+<h2 id="step-1-identify-the-commit">Step 1: Identify the Commit</h2>
+<h3 id="monochromeminimalapks-alerts-single-commit">Monochrome.minimal.apks Alerts (Single Commit)</h3>
+<ul>
+<li>Zoom in on the graph to make sure the alert is not
+<a href="https://github.com/catapult-project/catapult/issues/3444">off-by-one</a><ul>
+<li>Replace <code>&amp;num_points=XXXX</code> with <code>&amp;rev=COMMIT_POSITION</code> in the URL.</li>
+<li>It will be obvious from this whether or not the point is off. Use the
+&quot;nudge&quot; feature to correct it when this happens.</li>
+</ul>
+</li>
+</ul>
+<h3 id="monochromeminimalapks-alerts-multiple-commits-or-rolls">Monochrome.minimal.apks Alerts (Multiple Commits or Rolls)</h3>
+<ul>
+<li>Bisects <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=678338">will not help you</a>.</li>
+<li>For rolls, you can sometimes guess the commit(s) that caused the regression
+by looking at the <code>android-binary-size</code> trybot result for the roll commit, or
+by looking for &quot;Binary-Size:&quot; footers in the blamelist.</li>
+<li>For V8 rolls, try checking the <a href="https://chromeperf.appspot.com/report?sid=59435a74c93b42599af4b02e2b3df765faef4685eb015f8aaaf2ecf7f4afb29c">V8 size graph</a>
+to see if any jumps correspond with a CL in the roll.</li>
+<li>Otherwise, use <a href="https://chromium.googlesource.com/chromium/src/+/main/tools/binary_size/README.md#diagnose_bloat_py">diagnose_bloat.py</a>
+in a <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_build_instructions.md">local Android checkout</a>
+to build all commits locally and find the culprit.<ul>
+<li>If there were multiple commits due to a build breakage, use <code>--apply-patch</code>
+with the fixing commit (last one in the range).</li>
+</ul>
+</li>
+</ul>
+<p><strong>Example:</strong></p>
+<pre> tools/binary_size/diagnose_bloat.py AFTER_GIT_REV --reference-rev BEFORE_GIT_REV --all [--subrepo v8] [--apply-patch AFTER_GIT_REV]</pre>
+<ul>
+<li>You can usually find the before and after revs in the roll commit message
+(<a href="https://chromium.googlesource.com/chromium/src/+/10c40fd863f4ae106650bba93b845f25c9b733b1">example</a>)<ul>
+<li>You may need to click through for the list of changes to find the actual
+first commit hash since some rollers (e.g. v8&#39;s) use an extra commit for
+tagging. In the linked example <code>BEFORE_GIT_REV</code> would actually be
+<code>876f37c</code> and not <code>c1dec05f</code>.</li>
+</ul>
+</li>
+</ul>
+<h3 id="systemwebviewgoogleapk-alerts">SystemWebviewGoogle.apk Alerts</h3>
+<ul>
+<li>Check if the same increase happened in Monochrome.minimal.apks.<ul>
+<li>The goal is to ensure nothing creeps into webview unintentionally.</li>
+</ul>
+</li>
+</ul>
+<h2 id="step-2-file-bug-or-silence-alert">Step 2: File Bug or Silence Alert</h2>
+<ul>
+<li>If the commit message&#39;s <code>Binary-Size:</code> footer clearly justifies the size
+increase, silence the alert.</li>
+<li>If the commit is a revert / reland, silence the alert.</li>
+<li>If the <code>android-binary-size</code> bot on the associated code review did not
+detect a regression, and the size increase is from native code, then the
+disparity is likely due to AFDO profiles not being active on perf bots.
+Silence the alert.</li>
+</ul>
+<p>Otherwise, file a bug.</p>
+<ul>
+<li>Change the bug&#39;s title from <code>X%</code> to <code>XXkb</code></li>
+<li>Assign to commit author (often this is done automatically)</li>
+<li>Set description to (replacing <strong>bold</strong> parts):</li>
+</ul>
+<blockquote>
+<p>Caused by &quot;<strong>First line of commit message</strong>&quot;</p>
+<p>Commit: <strong>abc123abc123abc123abc123abc123abc123abcd</strong></p>
+<p>Link to size graph:
+<a href="https://chromeperf.appspot.com/report?sid=6269078068c45a41e23f5ee257da65d3f02da342849cdf3bde6aed0d5c61e450&amp;num_points=10&amp;rev=480214">https://chromeperf.appspot.com/report?sid=6269078068c45a41e23f5ee257da65d3f02da342849cdf3bde6aed0d5c61e450&amp;num_points=10&amp;rev=<strong>$CRREV</strong></a><br>
+Link to trybot result:
+<a href="https://ci.chromium.org/p/chromium/builders/luci.chromium.try/android-binary-size/11111">https://ci.chromium.org/p/chromium/builders/luci.chromium.try/android-binary-size/<strong>$TRYJOB_NUMBER</strong></a></p>
+<p>Debugging size regressions is documented at:
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/apk_size_regressions.md#Debugging-Apk-Size-Increase">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/apk_size_regressions.md#Debugging-Apk-Size-Increase</a></p>
+<p>Based on the trybot result: <strong>20kb of native code, 8kb of pngs. <em>(or some other explanation as to what caused the growth).</em></strong></p>
+<p>It&#39;s not clear to me whether or not this increase was expected.<br>
+Please have a look and either:</p>
+<ol>
+<li>Close as &quot;Won&#39;t Fix&quot; with a short justification, or</li>
+<li>Land a revert / fix-up.</li>
+</ol>
+<p><em><strong>Optional addition:</strong></em></p>
+<p>It typically takes about a week of engineering time to reduce binary size by
+50kb so we&#39;d really appreciate you taking some time exploring options to
+address this regression!</p>
+</blockquote>
+<ul>
+<li>If the regression is &gt;50kb, add ReleaseBlock-Stable <strong>M-##</strong> (next branch cut).*</li>
+<li>If the regression was caused by a non-Googler, assign it to the closest Googler
+to the patch (e.g. reviewer). The size graphs are <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=962483">not public</a>.</li>
+</ul>
+<h1 id="debugging-apk-size-increase">Debugging Apk Size Increase</h1>
+<p>It typically takes about a week of engineering time to reduce binary size by
+50kb so it&#39;s important that an effort is made to address all new regressions.
+For more about binary size, see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/binary_size_explainer.md">binary_size_explainer.md</a>.</p>
+<h2 id="step-1-identify-what-grew">Step 1: Identify what Grew</h2>
+<p>Figure out which file within the <code>.apk</code> increased (native library, dex, pak
+resources, etc.) by looking at the trybot results or size graphs that were
+linked from the bug (if it was not linked in the bug, see above).</p>
+<p><strong>See <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/metrics.md">//docs/speed/binary_size/metrics.md</a>
+for a description of high-level binary size metrics.</strong></p>
+<p><strong>See <a href="https://chromium.googlesource.com/chromium/src/+/main/tools/binary_size/README.md">//tools/binary_size/README.md</a>
+for a description of binary size tools.</strong></p>
+<h2 id="step-2-analyze">Step 2: Analyze</h2>
+<p>See <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/optimization_advice.md">optimization advice</a>.</p>
+<h2 id="step-3-give-up-">Step 3: Give Up :/</h2>
+<p>If you aren&#39;t sure where to start and would like help with the investigation,
+comment on the bug or reach out to <a href="mailto:binary-size@chromium.org">binary-size@chromium.org</a> to ask for help.</p>
+<p>If you are pretty sure that your implementation is optimal(ish), add a comment
+to the bug with the following:</p>
+<ol>
+<li>A description of where the size is coming from (show that you spent the time
+to understand why your code translated to a large binary size).</li>
+<li>What things you tried to reduce the size (show that you&#39;ve at least read this
+doc and tried any relevant guidance).</li>
+<li>Why your commit is &quot;worth&quot; the size increase. For new features, feel free
+to link to a design doc (which presumably includes the motivation for adding
+the feature).</li>
+</ol>
+<p>Close the bug as &quot;Won&#39;t Fix&quot;.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/apk_size_regressions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/apk_size_regressions.md</a>
+  </p>
+</div>

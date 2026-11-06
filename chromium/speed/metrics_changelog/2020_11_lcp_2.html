@@ -1,0 +1,35 @@
+<h1>Largest Contentful Paint Definition Change in M88</h1>
+<h2 id="definition-change-in-chrome-88">Definition Change in Chrome 88</h2>
+<p>In Chrome 88, some changes were made to Largest Contentful Paint to bring its
+implementation in line with the updated <a href="https://wicg.github.io/largest-contentful-paint/">specification</a>.</p>
+<p>The definition change was the following: image or text content which is later
+removed from the page is now considered valid largest contentful paints.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2480845">Source code for this change</a>.</p>
+<p>Before this change, an element being removed caused it to no longer be
+considered a valid LCP candidate. In particular, if the current LCP candidate
+was removed from the site, this would immediately cause a new LCP candidate to
+be found among the content remaining on the page.</p>
+<p>After this change, an element being removed is still considered a valid LCP
+candidate. What this means is that if this candidate is removed then we do not
+need to immediately find a new LCP candidate. In particular, a new LCP candidate
+is only dispatched when a larger size is found, so the LCP entries should have
+size values that only increase over time.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>The change to include content which is later removed from the DOM as possible
+largest contentful paints will improve Largest Contentful Paint times on sites
+which have images of the same size inserted multiple times. This is a common
+pattern for carousels, as well as some JavaScript frameworks which do
+server-side rendering.</p>
+<p>It&#39;s worth noting that while the change was made for the web API in Chrome 88,
+some tools which display real user metrics lagged behind this change, as we
+provided both LCP values (using the old definition and using the new one) to
+these tools while they make the necessary adjustments to swap to the new
+definition.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 88 is currently scheduled to be released the week of January 19, 2021.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_11_lcp_2.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_11_lcp_2.md</a>
+  </p>
+</div>

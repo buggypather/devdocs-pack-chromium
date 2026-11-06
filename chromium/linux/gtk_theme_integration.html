@@ -1,0 +1,43 @@
+<h1>Linux GTK Theme Integration</h1>
+<p>The GTK+ port of Chromium has a mode where we try to match the user&#39;s GTK theme
+(which can be enabled under Settings -&gt; Appearance -&gt; Use GTK+ theme).</p>
+<h2 id="how-chromium-determines-which-colors-to-use">How Chromium determines which colors to use</h2>
+<p>GTK3 added a new CSS theming engine which gives fine-tuned control over how
+widgets are styled. Chromium&#39;s themes, by contrast, are much simpler: it is
+mostly a list of about 80 colors (see //src/ui/native_theme/native_theme.h)
+overridden by the theme. Chromium usually doesn&#39;t use GTK to render entire
+widgets, but instead tries to determine colors from them.</p>
+<p>Chromium needs foreground, background and border colors from widgets.  The
+foreground color is simply taken from the CSS &quot;color&quot; property.  Backgrounds and
+borders are complicated because in general they might have multiple gradients or
+images. To get the color, Chromium uses GTK to render the background or border
+into a 24x24 bitmap and uses the average color for theming. This mostly gives
+reasonable results, but in case theme authors do not like the resulting color,
+they have the option to theme Chromium widgets specially.</p>
+<h2 id="note-to-gtk-theme-authors-how-to-theme-chromium-widgets">Note to GTK theme authors: How to theme Chromium widgets</h2>
+<p>Every widget Chromium uses will have a &quot;chromium&quot; style class added to it. For
+example, a textfield selector might look like:</p>
+<pre>.window.background.chromium .entry.chromium</pre>
+<p>If themes want to handle Chromium textfields specially, for GTK3.0 - GTK3.19,
+they might use:</p>
+<pre>/* Normal case */
+.entry {
+    color: #ffffff;
+    background-color: #000000;
+}
+
+/* Chromium-specific case */
+.entry.chromium {
+    color: #ff0000;
+    background-color: #00ff00;
+}</pre>
+<p>For GTK3.20 or later, themes will as usual have to replace &quot;.entry&quot; with
+&quot;entry&quot;.</p>
+<p>The list of CSS selectors that Chromium uses to determine its colors is in
+//src/ui/gtk/native_theme_gtk.cc.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/gtk_theme_integration.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/gtk_theme_integration.md</a>
+  </p>
+</div>

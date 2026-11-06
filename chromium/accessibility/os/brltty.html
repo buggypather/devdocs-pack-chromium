@@ -1,0 +1,154 @@
+<h1>BRLTTY in Chrome OS</h1>
+<p>Chrome OS uses the open-source <a href="http://mielke.cc/brltty/">BRLTTY</a>
+library to provide support for refreshable braille displays.</p>
+<p>We typically ship with a stable release build of BRLTTY plus some
+permanent or cherry-picked patches.</p>
+<h2 id="updating-brltty-or-adding-a-patch">Updating BRLTTY or adding a patch</h2>
+<p>First, follow the public
+<a href="http://www.chromium.org/chromium-os/developer-guide">Chromium OS Developer Guide</a> to check out the source.
+At a minimum you&#39;ll need to create a chroot.
+You do not need to build everything from source.
+You do need to start the devserver.</p>
+<p>Next, flash your device to a very recent test build. Internally at Google
+you can do this with the following command when the dev server is running,
+where CHROMEBOOK_IP_ADDRESS is the IP address of your Chromebook already
+in developer mode, and $BOARD is your Chromebook&#39;s board name.</p>
+<p><code>cros flash ssh://CHROMEBOOK_IP_ADDRESS xbuddy://remote/$BOARD/latest-dev/test</code></p>
+<p>The BRLTTY files can be found in this directory:</p>
+<p><code>third_party/chromiumos-overlay/app-accessibility/brltty</code></p>
+<p>###Major release</p>
+<p>You&#39;ll first want to rename all files to the new major release. For example, brltty-5.6.ebuild and remove all revision symlinks (see below).</p>
+<p>###Revision release</p>
+<p>A revision release is the same release build of brltty, but with additional patches.</p>
+<p>The first thing you&#39;ll need to do is edit the ebuild symlink to change the
+revision number. The real file is something like brltty-5.4.ebuild,
+but the revision will be something like brltty-5.4-r5.ebuild. You&#39;ll need
+to increment it.</p>
+<p>To increment it from r5 to r6, you&#39;d do something like this:</p>
+<pre>rm brltty-5.4-r5.ebuild
+ln -s brltty-5.4.ebuild brltty-5.4-r6.ebuild
+git add brltty-5.4-r6.ebuild</pre>
+<p>The changes we make are all patches against a stable release of brltty.
+To add a new patch, put it in the files/ directory and reference it in
+brltty.bashrc</p>
+<p>Once you&#39;re done adding patches or making other changes, flash it to your
+device like this:</p>
+<pre>emerge-$BOARD brltty
+cros deploy CHROMEBOOK_IP_ADDRESS brltty</pre>
+<p>After that, reboot your Chromebook and verify that brltty works.</p>
+<p>To upload a change, use repo, something like this:</p>
+<pre>repo start &lt;branch_name&gt; .
+git commit -a
+  Bug: chromium:12345
+  Test: Write what you tested here
+repo upload .</pre>
+<p>Note that you shouldn&#39;t need to run cros_workon.</p>
+<h2 id="uprevving-brltty">Uprevving Brltty</h2>
+<p>This section outlines the process to upgrade Brltty to a major release.</p>
+<h3 id="prerequisites">Prerequisites</h3>
+<p>First, download the latest brltty release tarball
+<a href="http://mielke.cc/brltty/archive">http://mielke.cc/brltty/archive</a>
+E.g.
+brltty-5.6.tar.gz</p>
+<p>The server holding all Chrome OS source packages is Google Cloud Storage. In
+order to update Brltty, you will need to first get started with GCS.
+<a href="https://sites.google.com/a/google.com/chromeos/resources/engineering/releng/localmirror">Google-internal only</a></p>
+<p>If you follow the alternative cli workflow, you should have the ability to
+list the Chrome OS GCS bucket:</p>
+<p><code>gsutil ls gs://chromeos-localmirror/</code></p>
+<p>for example:
+gs://chromeos-localmirror/distfiles/brltty-5.6.tar.gz
+is the latest release as of writing.</p>
+<p>It will also be handy to checkout brltty.</p>
+<p><code>Git clone http://github.com/brltty/brltty</code></p>
+<p>And follow the instructions in the readme to configure/build.</p>
+<h3 id="upload-the-latest-stable-release-of-brltty">Upload the latest stable release of brltty.</h3>
+<p>You can do this via <code>gsutil cp</code>.</p>
+<p>After copying, you will likely want the package to be world readable:</p>
+<pre>gsutil acl ch -u AllUsers:R gs://chromeos-localmirror/distfiles/brltty-5.6.tar.gz</pre>
+<h3 id="upreving">Upreving</h3>
+<p>Next, you will need to uprev the ebuild. Do this by renaming all files from the previous version to the new one.
+E.g.
+Brltty-5.4.ebuild -&gt; brltty-5.6.ebuild</p>
+<p>Start a build with your changes by doing</p>
+<p>emerge brltty
+(or emerge{$BOARD} brltty).</p>
+<p>Note: Manifest has various checksums computed based on the release you uploaded to GCS. Each of these will need to be replaced/updated.</p>
+<p>This should be enough to kick off a build. It is likely patches won’t apply cleanly.
+Apply patches
+It is often much easier to apply patches to your local checkout of brltty from github, an build there.</p>
+<p><code>git tags</code></p>
+<p>Will ensure you find the right release. You can then checkout that release via</p>
+<p><code>Git checkout tags/&lt;tag_name&gt;</code></p>
+<p>Finally apply each of the *.patch files to this tag of brltty.</p>
+<p>This is more or less straightforward. If conflicts arise, it is useful to list
+commits to the file containing the conflict</p>
+<p><code>git log --oneline &lt;file&gt;</code></p>
+<p>then understanding the history since the last release. If the patch is already
+upstreamed, you can remove it from the Chrome OS repo.</p>
+<h3 id="chrome-side-changes">Chrome side changes</h3>
+<p>Chrome communicates with brltty using libbrlapi.
+libbrlapi resides at //third_party/libbrlapi.</p>
+<p>Chrome loads this library dynamically and hard-codes the expected version of the api so in
+chrome/browser/extensions/api/braille_display_private/braille_controller_brlapi.cc</p>
+<p>which should match up with the header in
+third_party/libbrlapi/brlapi.h.</p>
+<p>During uppreving, if brltty increments its api version, it will be necessary to update the header for libbrlapi, as well as incrementing the supported api version of the libbrlapi shared object.</p>
+<p>First, grab the generated header from your Chrome OS build above.
+cp <chromeos root>/build/$BOARD/usr/include/brlapi.h &lt;chrome_root&gt;/third_party/libbrlapi/brlapi.h</p>
+<p>This header contains the specific socket path for Chrome OS which differs from brltty defaults.</p>
+<p>Next, ensure the version in
+chrome/browser/extensions/api/braille_display_private/braille_controller_brlapi.cc</p>
+<p>matches the one in the new brltty.</p>
+<h4 id="chromevox">ChromeVox</h4>
+<p>ChromeVox keeps a list of bluetooth braille display names
+(search for bluetooth_display_manager.js).</p>
+<p>Within the brltty sources (as of 6.3), one can find all bluetooth display names
+in:
+brltty/Programs/bluetooth_names.c</p>
+<h3 id="testing">Testing</h3>
+<p>Firstly, try to test against brltty on linux. This involves building brltty at
+the proposed stable release and fully patching all of our changes from Chrome
+OS.</p>
+<p>You would do something like:</p>
+<pre>./autogen
+./configure
+make
+./run-brltty -n</pre>
+<p>This will launch brltty (in the foreground and not as a daemon).</p>
+<p>Any connected displays should automatically work.</p>
+<p>Next, once you have a build deployed on a Chrome OS machine, here are a few
+useful things to check:</p>
+<ul>
+<li>Routing keys within a text field</li>
+<li>Routing keys on a link</li>
+<li>Basic braille output</li>
+<li>Chorded commands (e.g. space + s to toggle speech)</li>
+<li>Typing (e.g. dots 1-2-3 within a text field)</li>
+<li>Display specific hardware keys</li>
+<li>Unload ChromeVox (ctrl+alt+z), plug in a display; ChromeVox should auto
+start</li>
+</ul>
+<p>Try to test with at least two displays.
+###Debugging</p>
+<p>In the event things don&#39;t go well (such as no braille appearing on the display),
+you may find it helpful to:</p>
+<ol>
+<li>examine chrome logging</li>
+</ol>
+<p>/var/log/chrome</p>
+<p>Look for any errors in <em>brl</em> related files. For example, a new release of
+libbrlapi could require additional so versions be added to our loader.</p>
+<ol start="2">
+<li>modify the way in which brltty gets run.</li>
+</ol>
+<p>In particular, look at the invocation of the minijail in</p>
+<p>third_party/chromiumos-overlay/app-accessibility/brltty/files/brltty</p>
+<p>You may want to add the &#39;-l debug&#39; flag to the brltty call and redirect stderr/stdout to a file.
+... brltty -n ... -l debug,server,usb,brldrv ... &gt; /tmp/brltty_errors 2&gt;&amp;1</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/brltty.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/brltty.md</a>
+  </p>
+</div>

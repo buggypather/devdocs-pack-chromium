@@ -1,0 +1,101 @@
+<h1>No VM Sandboxes</h1>
+<p><strong>As of: 2025-12-17</strong></p>
+<p>Every so often, someone has the following idea:</p>
+<p>&quot;Instead of sandboxing processes using OS primitives, what if we ran them in a
+virtual machine and used the VM as the isolation layer?&quot;</p>
+<p>This doc outlines why we don&#39;t do that. It&#39;s written in terms of &quot;the renderer&quot;
+since this is the process people usually are talking about sandboxing this way,
+but the same rationales apply to the other processes we create.</p>
+<h2 id="porting-the-renderer">Porting the Renderer</h2>
+<p>The renderer depends on a lot of OS primitives. At a minimum, to work it
+<em>requires</em>:</p>
+<ul>
+<li>Memory allocation (including mapping executable memory)</li>
+<li>Concurrency primitives (threads, sync primitives, etc)</li>
+<li>I/O sufficiently fast to move frames worth of content in and out</li>
+<li>Access to various platform data sources (fonts, icons, and the like)</li>
+</ul>
+<p>The renderer currently runs on several operating systems, and we have
+implementations of all these primitives for those operating systems. If we were
+to run the renderer inside a VM, we&#39;d need to either:</p>
+<ul>
+<li>Boot an existing OS the renderer runs on in the VM, or</li>
+<li>Boot an existing OS the renderer doesn&#39;t currently run on in the VM, or</li>
+<li>Write a new OS to provide these services to the renderer in the VM, or</li>
+<li>Port the renderer to the bare &quot;hardware&quot; interface the VM provides</li>
+</ul>
+<p>All of these are basically impractical:</p>
+<ul>
+<li>Booting an existing OS the renderer already supports doesn&#39;t necessarily
+require porting, means that at a minimum we would pay the memory overhead
+of an entire OS kernel. This footprint is in the multiple megabytes even for
+a stripped-down Linux kernel.</li>
+<li>Porting-based approaches mean we&#39;d be reimplementing a lot of OS primitives.
+These are often heavily optimized on existing systems and deeply integrated -
+for example, the OS primitive mutex implementation may well be integrated with
+the OS scheduler. We would need to figure out how to make this work correctly
+(if it was possible) between guest and host, even if the guest and OS are
+quite different OSes.</li>
+</ul>
+<h2 id="io">I/O</h2>
+<p>A single graphical frame at 4K resolution is about 30MB of pixel data,
+uncompressed. Delivering 4K at 60hz requires the renderer to produce over 1GB of
+data per second and deliver it to the host GPU. This essentially forces shared
+guest/host memory mappings to retain acceptable performance, and virtually
+mandates that data passes directly to the GPU without being copied or
+expensively validated. This isn&#39;t impossible, but it constrains the design of
+the VM and requires sharing of host devices directly with the guest.
+<a href="https://chromium.googlesource.com/chromiumos/platform2/+/master/vm_tools/sommelier/">Sommelier</a> addresses some of these problems, but only for one host (ChromeOS).</p>
+<p>The challenges of (for example) having a guest running on Linux use a graphics
+stack hosted on a Windows device in a high-performance way are considerable, and
+solving those challenges could add a serious amount of complexity to Chromium.</p>
+<h2 id="performance">Performance</h2>
+<p>Hot areas of the renderer are extremely performance sensitive, and penalties of
+1-2% of performance may already be too much for us to pay. Since at a <em>minimum</em>
+VMs have to trap and emulate not only system calls but some machine
+instructions, this performance target may be difficult to hit. Even with
+paravirtualization, there are likely to be difficult performance problems to
+resolve.</p>
+<p>Separately from that, some areas of the renderer require access to relatively
+esoteric CPU features for performance reasons. If those are not implemented in
+whichever VM monitor we use or write, we would need to add them, or otherwise
+figure out how to deal with the performance hit. This could include things like:</p>
+<ul>
+<li>Vector / SIMD instructions or AVX</li>
+<li>Crypto instructions like AESNI</li>
+<li>Specialized floating-point instructions</li>
+</ul>
+<p>Some I/O paths into and out of the renderer are also on the hot path for page
+loads, which is a metric that we optimize for heavily. Adding additional hops to
+this path, and especially extra context switches or hypervisor entries / exits,
+is likely to add intolerable amounts of latency here.</p>
+<h2 id="debugging--crash-reporting">Debugging &amp; Crash Reporting</h2>
+<p>If the renderer is inside a VM, crashes that happen inside the VM somehow need
+to be exposed to the host so they can be uploaded to the crash reporting
+service. Also, developers need to somehow be able to attach debuggers and use
+tools like ASAN on renderers running in this manner, which will probably involve
+building a remote-debug setup.</p>
+<p>Some mechanisms, like HWAsan, are not likely to work at all inside a VM.</p>
+<h2 id="security-implications">Security Implications</h2>
+<p>One of the promising areas for security investment is control-flow integrity.
+There are many technologies for doing this; all of them require hardware support
+and none of them are likely to work well from within a VM. Whichever VM we
+choose or build will need to understand CFI, as applied to the renderer running
+under it, well enough to integrate with the host&#39;s CFI primitives. This could be
+extremely challenging or even impossible depending on the host and guest OSes
+and hardware.</p>
+<p>Therefore, moving to a VM-based sandbox would likely prevent deployment of CFI,
+or at least make it considerably more difficult. There are ongoing efforts
+currently to support CET (one such technology from Intel) inside VM guests.</p>
+<p>Additionally, while the VM sandbox would add a layer of isolation between the
+renderer and the host kernel, it adds new attack surface we have to secure: the
+VM hypervisor itself. That hypervisor will need to be relatively full-featured
+to deliver the primitives the renderer needs to function with acceptable
+performance, which means it is likely to be a large body of code with security
+bugs of its own.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/takes/no-vm-sandbox.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/takes/no-vm-sandbox.md</a>
+  </p>
+</div>

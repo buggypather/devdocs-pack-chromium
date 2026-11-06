@@ -1,0 +1,44 @@
+<h1>Back/forward cache NotRestoredReasons API</h1>
+<p>Contact: <a href="mailto:bfcache-dev@chromium.org">bfcache-dev@chromium.org</a></p>
+<p>This document describes the status of the current implementation of the
+<a href="https://github.com/rubberyuzu/bfcache-not-retored-reason/blob/main/NotRestoredReason.md">NotRestoredReasons API</a>
+in Chrome, and how to enable it.</p>
+<p>Starting from version 108,
+Chrome experimentally supports NotRestoredReasons API.
+This allows sites to access what reasons are preventing their pages from
+being restored from back/forward cache..</p>
+<p>Note that this API is not available by default.
+Chrome plans to do an origin trial
+to evaluate its effectiveness
+and to allow site authors to give feedback.</p>
+<h2 id="whats-supported">What’s supported</h2>
+<p>A new field <a href="https://github.com/rubberyuzu/bfcache-not-retored-reason/blob/main/NotRestoredReason.md">notRestoredReasons</a> is added to 
+performanceNavigationTiming API.
+This new field will report the reasons that prevented back/forward cache on the page in a frame tree structure.</p>
+<h2 id="activation">Activation</h2>
+<p>The policy can be enabled in several ways.</p>
+<h3 id="using-the-chromium-ui">Using the Chromium UI</h3>
+<p>Enable the flag chrome://flags/#enable-experimental-web-platform-features .
+You also have to enable back/forward cache flag via chrome://flags/#back-forward-cache .</p>
+<h3 id="using-origin-trial">Using Origin Trial</h3>
+<p>The <a href="https://developer.chrome.com/blog/origin-trials/">Origin Trial</a> feature is named <code>NotRestoredReasons</code>.
+Registration for the trial is <a href="https://developer.chrome.com/origintrials/#/view_trial/3101854243351429121">here</a>.
+See <a href="https://chromestatus.com/feature/5760325231050752">feature status</a> to find out
+if the origin trial is currently running.</p>
+<p>The <a href="https://developer.chrome.com/docs/web-platform/origin-trials/#take-part-in-an-origin-trial">origin trial tutorial</a> describes how to participate.</p>
+<h3 id="verifying-the-api-is-working">Verifying the API is working</h3>
+<p>In devtools, run the following piece of javascript after navigating to a page, and clicking back/forward button.</p>
+<pre data-language="js">performance.getEntriesByType('navigation')[0].notRestoredReasons;</pre>
+<p>If it gives you a value, it succeeds.
+If it gives <code>undefined</code> then the feature is not enabled.</p>
+<h2 id="related-links">Related Links</h2>
+<ul>
+<li><a href="https://chromestatus.com/feature/5760325231050752">Chrome Status</a></li>
+<li><a href="https://github.com/rubberyuzu/bfcache-not-retored-reason/blob/main/NotRestoredReason.md">NotRestoredReasons API Explainer</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/not-restored-reasons.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/not-restored-reasons.md</a>
+  </p>
+</div>

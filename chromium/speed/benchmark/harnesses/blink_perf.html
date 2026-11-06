@@ -1,0 +1,145 @@
+<h1>Blink Performance Tests</h1>
+<h2 id="overview">Overview</h2>
+<p>Blink perf tests are used for micro benchmarking the surface of Blink that
+is exposed to the Web. They are the counterpart of <a href="../../../testing/web_tests">web_tests/</a>
+but for performance coverage.</p>
+<h2 id="writing-tests">Writing Tests</h2>
+<p>Each test entry point is a HTML file written using
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/perf_tests/resources/runner.js">runner.js</a>
+testing framework. The test file is placed inside a sub folder of
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/perf_tests/">blink/perf_tests/</a>
+and is started by importing <code>runner.js</code> script into the document:</p>
+<pre>  &lt;script src=&quot;../resources/runner.js&quot;&gt;&lt;/script&gt;</pre>
+<h3 id="synchronous-perf-tests">Synchronous Perf Tests</h3>
+<p>In a nutshell, to measure speed of synchronous code encapsulated in a test run
+method <code>F</code>, synchronous perf tests exercises this loop:</p>
+<pre>   FOR i = 1 to NUMBER_OF_REPEAT
+      Start timer
+      F()
+      Stop timer</pre>
+<p>Depending on how fast <code>F</code> runs, one can choose between
+<code>PerfTestRunner.measureTime</code> or <code>PerfTestRunner.measureRunsPerSecond</code>
+(very fast). In either case, you create a test object &amp; run by invoking the
+measure method as follow:</p>
+<pre>PerfTestRunner.measureTime({  // the &quot;test&quot; object
+   description: '...',
+   setup: function () { ... },  // test setup logic, called once before each run
+   run: function () { ... },  // contains the code to benchmark
+   iterationCount: 5   // repeat the test 5 times
+});</pre>
+<p>In the case of <code>PerfTestRunner.measureRunsPerSecond</code>, each run invokes
+<code>test.run</code> multiple times.</p>
+<p><strong>Tracing support</strong></p>
+<p>When the test is run through Telemetry, you can also collect timing of trace
+events that happen during each run by specifying <code>tracingCategories</code> &amp;
+<code>traceEventsToMeasure</code> in the test object. For example:</p>
+<pre>PerfTestRunner.measureTime({
+   ...
+   run: foo,
+   iterationCount: 3,
+   tracingCategories: 'blink',
+   traceEventsToMeasure: ['A', 'B'],
+});</pre>
+<p>To illustrate what the framework computes, imaging the test timeline as
+follow:</p>
+<pre>Test run times (time duration of each slice is right under it):
+-----------[       foo        ]-----[   foo       ]-----[    foo        ]------
+                    u1                   u2                  u3
+---------------[    A   ]------------------------------------------------------
+                     v0
+-----------------[ A  ]--[ A ]---------[ B  ]--[A]----------[ B  ]--[C]--------
+                   v1      v2            v3     v4            v5     v6</pre>
+<p>Besides outputting timeseries <code>[u1, u2, u3]</code>, telemetry perf test runner will
+also compute the total CPU times for trace events  &#39;A&#39; &amp; &#39;B&#39; per <code>foo()</code> run:</p>
+<ul>
+<li>CPU times of trace events A: <code>[v0 + v2, v4, 0.0]</code></li>
+<li>CPU times of trace events B: <code>[0.0, v3, v5]</code></li>
+</ul>
+<p>Example tracing synchronous tests:</p>
+<ul>
+<li><p><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/perf_tests/test_data/append-child-measure-time.html">append-child-measure-time.html</a></p>
+</li>
+<li><p><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/perf_tests/test_data/simple-html-measure-page-load-time.html">simple-html-measure-page-load-time.html</a></p>
+</li>
+</ul>
+<h3 id="asynchronous-perf-tests">Asynchronous Perf Tests</h3>
+<p>In asynchronous perf test, you define your test scheduler and do your own
+measurement. For example:</p>
+<pre>var isDone = false;
+var startTime;
+
+function runTest() {
+    if (startTime) {
+        PerfTestRunner.measureValueAsync(PerfTestRunner.now() - startTime);
+        PerfTestRunner.addRunTestEndMarker(); // For tracing metrics
+    }
+    if (!isDone) {
+        PerfTestRunner.addRunTestStartMarker();
+        startTime = PerfTestRunner.now();  // For tracing metrics
+        // runTest will be invoked after the async operation finish
+        runAsyncOperation(runTest);
+    }
+}
+
+PerfTestRunner.startMeasureValuesAsync({
+    unit: 'ms',
+    done: function () {
+        isDone = true;
+    },
+    run: function() {
+        runTest();
+    },
+    iterationCount: 6,
+});</pre>
+<p>In the example above, the call
+<code>PerfTestRunner.measureValueAsync(value)</code> send the metric of a single run to
+the test runner and also let the runner know that it has finished a single run.
+Once the number of run reaches <code>iterationCount</code> (6 in the example above), the
+<code>done</code> callback is invoked, setting the your test state to finished.</p>
+<p><strong>Tracing support</strong></p>
+<p>Like synchronous perf tests, tracing metrics are only available when you run
+your tests with Telemetry.</p>
+<p>Unlike synchronous perf tests which the test runner framework handles test
+scheduling and tracing coverage for you, for most asynchronous tests, you need
+to manually mark when the async test begins
+(<code>PerfTestRunner.addRunTestStartMarker</code>) and ends
+(<code>PerfTestRunner.addRunTestEndMarker</code>). Once those are marked, specifying
+<code>tracingCategories</code> and <code>traceEventsToMeasure</code> will output CPU time metrics
+of trace events that happen during test runs in the fashion similar to the
+example of synchronous tracing test above.</p>
+<p>Example of tracing asynchronous tests:</p>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/perf_tests/test_data/color-changes-measure-frame-time.html">color-changes-measure-frame-time.html</a></p>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/perf_tests/test_data/simple-blob-measure-async.html">simple-blob-measure-async.html</a></p>
+<h3 id="service-worker-perf-tests">Service Worker Perf Tests</h3>
+<p>You can also run perf tests in service workers. You need to trigger the test
+with <code>PerfTestRunner.startMeasureValuesInWorker()</code> in a page. Within the <code>run</code>
+method provided to this function, you can initialize a worker and ask the
+worker to run the workload by using <code>measureRunsPerSecond()</code> defined in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/perf_tests/resources/worker-test-helper.js">worker-test-helper.js</a>.</p>
+<p><code>measureRunsPerSecond()</code> returns a promise which resolves to the test result.
+The worker should send the result back to the page, and the page records the
+result by <code>PerfTestRunner.recordResultFromWorker()</code>. After the result is
+recorded, the test finishes.</p>
+<p>Here is an example for testing Cache Storage API of service workers:</p>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/perf_tests/service_worker/cache-open-add-delete-10K-service-worker.html">cache-open-add-delete-10K-service-worker.html</a></p>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/perf_tests/service_worker/resources/cache-open-add-delete-10K-service-worker.js">cache-open-add-delete-10K-service-worker.js</a></p>
+<h2 id="running-tests">Running Tests</h2>
+<p><strong>Running tests directly in browser</strong></p>
+<p>Most of Blink Performance tests should be runnable by just open the test file
+directly in the browser. However, features like tracing metrics &amp; HTML results
+viewer won&#39;t be supported.</p>
+<p><strong>Running tests with Telemetry</strong></p>
+<p>There are several <code>blink_perf</code> benchmarks. You can see the full list in
+<code>third_party/blink/perf_tests</code> or by running
+<code>tools/perf/run_benchmark list | grep blink_perf</code>. If you want to run the
+<code>blink_perf.paint</code> benchmark and your current directory is <code>chromium/src/</code>, you
+can run tests with:</p>
+<p><code>./tools/perf/run_benchmark run blink_perf.paint [--story-filter=&lt;test_file_name&gt;]</code></p>
+<p>For information about all supported options, run:</p>
+<p><code>./tools/perf/run_benchmark run blink_perf --help</code></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/harnesses/blink_perf.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/harnesses/blink_perf.md</a>
+  </p>
+</div>

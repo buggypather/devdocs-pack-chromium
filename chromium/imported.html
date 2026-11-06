@@ -1,0 +1,33 @@
+<h1>Imported</h1>
+<pre># Imported Documentation Cache</pre>
+<h2 id="what-is-this-directory">What is this directory?</h2>
+<p>This directory contains a local cache of documentation that is sourced from
+external repositories (e.g., the standalone GN repository).</p>
+<p>NOTE: This is a temporary solution so that coding agents can access vital docs
+about GN (until there is consistent access to web fetch for all).</p>
+<h2 id="why-does-it-exist">Why does it exist?</h2>
+<p>The primary purpose of this cache is to provide a stable, in-tree knowledge
+base for development tools and AI assistants. By having a local copy of this
+essential documentation, tools can operate consistently without relying on
+network access, and AI assistants can be instructed to use this high-quality,
+version-controlled information to provide accurate and context-aware help for
+Chromium development.</p>
+<h2 id="how-is-it-updated">How is it updated?</h2>
+<p>The contents of this directory are managed by the script <code>refresh_docs.py</code>
+located in this same directory. This script fetches the documents listed in
+its manifest from their canonical sources.</p>
+<p><strong>Do not edit the files in this directory directly.</strong> Your changes will be
+overwritten the next time the refresh script is run. If you need to update
+or add a document, please modify the <code>DOCUMENT_MANIFEST</code> within
+<code>refresh_docs.py</code>.</p>
+<h2 id="note-on-ai-integration">Note on AI Integration</h2>
+<p>The AI assistant&#39;s instructions for using this documentation are located in
+<code>agents/prompts/chromium_knowledge_base.md</code>. It is recommended to review that
+file for any necessary updates whenever the document manifest in
+<code>refresh_docs.py</code> is changed.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/imported/readme.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/imported/readme.md</a>
+  </p>
+</div>

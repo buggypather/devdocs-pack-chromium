@@ -1,0 +1,480 @@
+<h1>Best practice: ownership</h1>
+<p>In the common case, a <code>View</code> instance lives within a hierarchy of <code>View</code>s, up to
+a <code>RootView</code> object that is owned by a <code>Widget</code>. Calling <code>AddChildView&lt;&gt;()</code>
+typically passes ownership of the child to the parent, while
+<code>RemoveChildView[T&lt;&gt;]()</code> gives ownership back to the caller. While other
+ownership patterns exist, newly-added code should use this one.</p>
+<h2 id="lifetime-basics">Lifetime basics</h2>
+<p>Accordingly, the best practices for ownership and lifetime management in Views
+code are similar to those in the rest of Chromium, but include some details
+specific to the Views APIs.</p>
+<ul>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/styleguide/c++/c++-dos-and-donts.md#use-and-instead-of-bare">Avoid bare new.</a></strong>
+Use <code>std::make_unique&lt;&gt;()</code> when creating objects, and distinguish owning and
+non-owning uses by <a href="https://chromium.googlesource.com/chromium/src/+/main/styleguide/c++/c++.md#object-ownership-and-calling-conventions">using smart and raw pointer types</a>.</li>
+<li><strong>Use <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=404;drc=7cba41605a8489bace83f380760486638a2a8a4a">the unique_ptr&lt;&gt; version of View::AddChildView&lt;&gt;()</a>.</strong>
+This clearly conveys ownership transfer from the caller to the parent <code>View</code>.
+It also <code>DCHECK()</code>s that <code>set_owned_by_client()</code> has not been called,
+preventing double-ownership.</li>
+</ul>
+<p>|||---|||</p>
+<h5 id="section"></h5>
+<p><strong>Avoid</strong></p>
+<p>Typical code from <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/sync/dice_bubble_sync_promo_view.cc;l=49;drc=459f2d16a6592b1290a1c2197231d46f48f49af4"><code>dice_bubble_sync_promo_view.cc</code></a>
+using bare <code>new</code>:</p>
+<h5 id="section-1"></h5>
+<p><strong>Best practice</strong></p>
+<p>Rewriting using the <code>unique_ptr&lt;&gt;</code> version of <code>AddChildView&lt;&gt;()</code> is shorter and
+safer:</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-2"></h5>
+<pre data-language="cpp">...
+views::Label* title =
+    new views::Label(
+        title_text, views::style::CONTEXT_DIALOG_BODY_TEXT,
+        text_style);
+
+title-&gt;SetHorizontalAlignment(
+    gfx::HorizontalAlignment::ALIGN_LEFT);
+title-&gt;SetMultiLine(true);
+AddChildView(title);
+...
+signin_button_view_ =
+    new DiceSigninButtonView(
+        account, account_icon, this,
+        /*use_account_name_as_title=*/true);
+AddChildView(signin_button_view_);
+...</pre>
+<h5 id="section-3"></h5>
+<pre data-language="cpp">...
+auto* title =
+    AddChildView(
+        std::make_unique&lt;views::Label&gt;(
+            title_text, views::style::CONTEXT_DIALOG_BODY_TEXT,
+            text_style));
+title-&gt;SetHorizontalAlignment(
+    gfx::HorizontalAlignment::ALIGN_LEFT);
+title-&gt;SetMultiLine(true);
+
+...
+signin_button_view_ =
+    AddChildView(
+        std::make_unique&lt;DiceSigninButtonView&gt;(
+            account, account_icon, this,
+            /*use_account_name_as_title=*/true));
+...</pre>
+<p>|||---|||</p>
+<h2 id="avoid-viewset_owned_by_client">Avoid View::set_owned_by_client()</h2>
+<p>The <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=390;drc=7cba41605a8489bace83f380760486638a2a8a4a"><code>View::set_owned_by_client()</code></a>
+flag means that a <code>View</code> is owned by something other than its parent <code>View</code>.
+This <strong>method is deprecated</strong> (and will eventually be removed) since it results
+in APIs that are easy to misuse, code where ownership is unclear, and a higher
+likelihood of bugs. Needing this flag may be a signal that the <code>View</code> subclass
+in question is too heavyweight, and refactoring using MVC or a similar paradigm
+would allow a long-lived &quot;model&quot; or &quot;controller&quot; with more-transient &quot;view&quot;s.</p>
+<p>|||---|||</p>
+<h5 id="section-4"></h5>
+<p><strong>Avoid</strong></p>
+<p>Code in <a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/system/time/time_view.h;l=35;drc=7d8bc7f807a433e6a127806e991fe780aa27ce77"><code>time_view.{h,cc}</code></a>
+that uses <code>set_owned_by_client()</code> to have non-parented <code>View</code>s, so it can swap
+layouts without recreating the children:</p>
+<h5 id="section-5"></h5>
+<p><strong>Best practice</strong></p>
+<p>Rewriting using subclasses to encapsulate layout allows the parent to merely
+adjust visibility:</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-6"></h5>
+<pre data-language="cpp">class ASH_EXPORT TimeView : public ActionableView,
+                            public ClockObserver {
+  ...
+ private:
+
+
+
+  std::unique_ptr&lt;views::Label&gt; horizontal_label_;
+  ...
+  std::unique_ptr&lt;views::Label&gt; vertical_label_hours_;
+  std::unique_ptr&lt;views::Label&gt; vertical_label_minutes_;
+  ...
+};
+
+void TimeView::SetupLabels() {
+  horizontal_label_.reset(new views::Label());
+  SetupLabel(horizontal_label_.get());
+  vertical_label_hours_.reset(new views::Label());
+  SetupLabel(vertical_label_hours_.get());
+  vertical_label_minutes_.reset(new views::Label());
+  SetupLabel(vertical_label_minutes_.get());
+  ...
+}
+
+void TimeView::SetupLabel(views::Label* label) {
+  label-&gt;set_owned_by_client(OwnedByClientPassKey());
+  ...
+}
+
+
+
+
+
+
+
+
+
+
+
+void TimeView::UpdateClockLayout(
+    ClockLayout clock_layout) {
+  ...
+  if (clock_layout == ClockLayout::HORIZONTAL_CLOCK) {
+    RemoveChildView(vertical_label_hours_.get());
+    RemoveChildView(vertical_label_minutes_.get());
+    SetLayoutManager(
+        std::make_unique&lt;views::FillLayout&gt;());
+    AddChildView(horizontal_label_.get());
+  } else {
+    RemoveChildView(horizontal_label_.get());
+    // Remove the current layout manager since it could
+    // be the FillLayout which only allows one child.
+    SetLayoutManager(nullptr);
+    // Pre-add the children since ownership is being
+    // retained by this.
+    AddChildView(vertical_label_hours_.get());
+    AddChildView(vertical_label_minutes_.get());
+    views::GridLayout* layout =
+        SetLayoutManager(
+            std::make_unique&lt;views::GridLayout&gt;());
+    ...
+  }
+  DeprecatedLayoutImmediately();
+}</pre>
+<h5 id="section-7"></h5>
+<pre data-language="cpp">class ASH_EXPORT TimeView : public ActionableView,
+                            public ClockObserver {
+  ...
+ private:
+  class HorizontalLabelView;
+  class VerticalLabelView;
+  ...
+  HorizontalLabelView* horizontal_label_;
+  VerticalLabelView* vertical_label_;
+  ...
+};
+
+
+
+TimeView::HorizontalLabelView::HorizontalLabelView() {
+  SetLayoutManager(
+      std::make_unique&lt;views::FillLayout&gt;());
+  ...
+}
+
+TimeView::VerticalLabelView::VerticalLabelView() {
+  views::GridLayout* layout =
+        SetLayoutManager(
+            std::make_unique&lt;views::GridLayout&gt;());
+  ...
+}
+
+void TimeView::TimeView(ClockLayout clock_layout,
+                        ClockModel* model) {
+  ...
+  horizontal_label_ =
+     AddChildView(
+        std::make_unique&lt;HorizontalLabelView&gt;());
+  vertical_label_ =
+     AddChildView(
+        std::make_unique&lt;VerticalLabelView&gt;());
+  ...
+}
+
+void TimeView::UpdateClockLayout(
+    ClockLayout clock_layout) {
+  ...
+  const bool is_horizontal =
+      clock_layout == ClockLayout::HORIZONTAL_CLOCK;
+  horizontal_label_-&gt;SetVisible(is_horizontal);
+  vertical_label_-&gt;SetVisible(!is_horizontal);
+  DeprecatedLayoutImmediately();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+<p>|||---|||</p>
+<h2 id="avoid-refcounting-and-weakptrs">Avoid refcounting and WeakPtrs</h2>
+<p>Refcounting and <code>WeakPtr</code>s may also be indicators that a <code>View</code> is doing more
+than merely displaying UI. Views objects should only handle UI. Refcounting and
+<code>WeakPtr</code> needs should generally be handled by helper objects.</p>
+<p>|||---|||</p>
+<h5 id="section-8"></h5>
+<p><strong>Avoid</strong></p>
+<p>Old code in <code>cast_dialog_no_sinks_view.{h,cc}</code> that used weak pointers to
+<code>PostDelayedTask()</code> to itself:</p>
+<h5 id="section-9"></h5>
+<p><strong>Best practice</strong></p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/media_router/cast_dialog_no_sinks_view.h;l=20;drc=2a147d67e51e67144257d3a405e3aafec3827513">Current version</a>
+eliminates lifetime concerns by using a <code>OneShotTimer</code>, which is canceled when
+destroyed:</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-10"></h5>
+<pre data-language="cpp">class CastDialogNoSinksView ... {
+  ...
+ private:
+  base::WeakPtrFactory&lt;CastDialogNoSinksView&gt;
+      weak_factory_{this};
+  ...
+};
+
+CastDialogNoSinksView::CastDialogNoSinksView(
+    Profile* profile) : profile_(profile) {
+  ...
+  content::GetUIThreadTaskRunner({})-&gt;PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(
+          &amp;CastDialogNoSinksView::ShowHelpIconView,
+          weak_factory_.GetWeakPtr()),
+      kSearchWaitTime);
+}</pre>
+<h5 id="section-11"></h5>
+<pre data-language="cpp">class CastDialogNoSinksView ... {
+  ...
+ private:
+  base::OneShotTimer timer_;
+  ...
+};
+
+
+CastDialogNoSinksView::CastDialogNoSinksView(
+    Profile* profile) : profile_(profile) {
+  ...
+  timer_.Start(
+      FROM_HERE, kSearchWaitTime,
+      base::BindOnce(
+          &amp;CastDialogNoSinksView::SetHelpIconView,
+          base::Unretained(this)));
+}</pre>
+<p>|||---|||</p>
+<h2 id="use-viewremovechildviewt">Use View::RemoveChildViewT&lt;&gt;()</h2>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=443;drc=7cba41605a8489bace83f380760486638a2a8a4a"><code>View::RemoveChildViewT&lt;&gt;()</code></a>
+<strong>clearly conveys ownership transfer</strong> from the parent <code>View</code> to the caller.
+Callers who wish to delete a <code>View</code> can simply ignore the return argument. This
+is preferable to calling <code>RemoveChildView()</code> and deleting the raw pointer
+(cumbersome and error-prone), calling <code>RemoveChildView()</code> without ever deleting
+the pointer (leaks the <code>View</code>), or simply deleting a pointer to a still-parented
+<code>View</code> (will work today, but is semantically incorrect and may be removed in the
+future).</p>
+<p>|||---|||</p>
+<h5 id="section-12"></h5>
+<p><strong>Avoid</strong></p>
+<p>Typical code in <a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/system/network/network_list_view.cc;l=296;drc=4867a6ce87c51024259259baad08b0ba8ae030a5"><code>network_list_view.cc</code></a>
+which manually deletes a child after removing it:</p>
+<h5 id="section-13"></h5>
+<p><strong>Best practice</strong></p>
+<p>Rewriting using <code>RemoveChildViewT&lt;&gt;()</code> is shorter and safer:</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-14"></h5>
+<pre data-language="cpp">  ... if (mobile_header_view_) {
+    scroll_content()-&gt;RemoveChildView(
+        mobile_header_view_);
+    delete mobile_header_view_;
+    mobile_header_view_ = nullptr;
+    needs_relayout_ = true;
+  }
+  ...</pre>
+<h5 id="section-15"></h5>
+<pre data-language="cpp">  ... if (mobile_header_view_) {
+    scroll_content()-&gt;RemoveChildViewT(
+        mobile_header_view_);
+
+    mobile_header_view_ = nullptr;
+    needs_relayout_ = true;
+  }
+  ...</pre>
+<p>|||---|||</p>
+<h2 id="prefer-scoping-objects">Prefer scoping objects</h2>
+<p><strong>Prefer scoping objects to paired Add/Remove-type calls</strong>. For example, use
+a <a href="https://source.chromium.org/chromium/chromium/src/+/main:base/scoped_observation.h;l=49;drc=12993351a415619a445a836ca8a94a6310569dbd"><code>base::ScopedObservation&lt;&gt;</code></a>
+instead of directly calling <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=1346;drc=7cba41605a8489bace83f380760486638a2a8a4a"><code>View::AddObserver()</code></a>
+and <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=1347;drc=7cba41605a8489bace83f380760486638a2a8a4a"><code>RemoveObserver()</code></a>.
+Such objects reduce the likelihood of use-after-free.</p>
+<p>|||---|||</p>
+<h5 id="section-16"></h5>
+<p><strong>Avoid</strong></p>
+<p>Typical code in <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/profiles/avatar_toolbar_button.cc;l=50;drc=f81f0d5d17c037c5866b8808322931f313b796e1"><code>avatar_toolbar_button.cc</code></a>
+that uses paired add/remove calls:</p>
+<h5 id="section-17"></h5>
+<p><strong>Best practice</strong></p>
+<p>Rewriting using <code>base::ScopedObservation&lt;&gt;</code> eliminates the destructor body entirely:</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-18"></h5>
+<pre data-language="cpp">
+
+
+
+
+
+
+
+
+
+AvatarToolbarButton::AvatarToolbarButton(
+    Browser* browser, ToolbarIconContainerView* parent)
+    : browser_(browser), parent_(parent) {
+  ...
+  if (parent_)
+    parent_-&gt;AddObserver(this);
+}
+
+AvatarToolbarButton::~AvatarToolbarButton() {
+  if (parent_)
+    parent_-&gt;RemoveObserver(this);
+}</pre>
+<h5 id="section-19"></h5>
+<pre data-language="cpp">class AvatarToolbarButton
+    : public ToolbarButton,
+      public ToolbarIconContainerView::Observer {
+  ...
+ private:
+  base::ScopedObservation&lt;AvatarToolbarButton,
+                 ToolbarIconContainerView::Observer&gt;
+      observation_{this};
+};
+
+AvatarToolbarButton::AvatarToolbarButton(
+    Browser* browser, ToolbarIconContainerView* parent)
+    : browser_(browser), parent_(parent) {
+  ...
+  if (parent_)
+    observation_.Observe(parent_);
+}
+
+AvatarToolbarButton::~AvatarToolbarButton() = default;
+
+</pre>
+<p>|||---|||</p>
+<h2 id="keep-lifetimes-fully-nested">Keep lifetimes fully nested</h2>
+<p>For objects you own, <strong>destroy in the reverse order you created,</strong> so lifetimes
+are nested rather than partially-overlapping. This can also reduce the
+likelihood of use-after-free, usually by enabling code to make simplifying
+assumptions (e.g. that an observed object always outlives <code>this</code>).</p>
+<p>|||---|||</p>
+<h4 id="section-20"></h4>
+<p><strong>Avoid</strong></p>
+<p>Old code in <code>widget_interactive_uitest.cc</code> that destroys in the same order as
+creation:</p>
+<h5 id="section-21"></h5>
+<p><strong>Best practice</strong></p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/widget_interactive_uitest.cc;l=492;drc=cbe5dca6cb1e1511c82776370a964d99cbf5205d">Current version</a>
+uses scoping objects that are simpler and safer:</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-22"></h5>
+<pre data-language="cpp">TEST_F(WidgetTestInteractive,
+       ViewFocusOnWidgetActivationChanges) {
+  Widget* widget1 = CreateTopLevelPlatformWidget();
+  ...
+
+  Widget* widget2 = CreateTopLevelPlatformWidget();
+  ...
+  widget1-&gt;CloseNow();
+  widget2-&gt;CloseNow();
+}</pre>
+<h5 id="section-23"></h5>
+<pre data-language="cpp">TEST_F(WidgetTestInteractive,
+       ViewFocusOnWidgetActivationChanges) {
+  WidgetAutoclosePtr widget1(
+      CreateTopLevelPlatformWidget());
+  ...
+  WidgetAutoclosePtr widget2(
+      CreateTopLevelPlatformWidget());
+  ...
+}</pre>
+<p>|||---|||</p>
+<h2 id="only-use-views-objects-on-the-ui-thread">Only use Views objects on the UI thread</h2>
+<p><strong>Always use <code>View</code>s on the main (UI) thread.</strong> Like most Chromium code, the
+Views toolkit is <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=170;drc=7cba41605a8489bace83f380760486638a2a8a4a">not thread-safe</a>.</p>
+<h2 id="add-child-views-in-a-views-constructor">Add child Views in a View&#39;s constructor</h2>
+<p>In most cases, <strong>add child <code>View</code>s in a <code>View</code>&#39;s constructor.</strong> From an
+ownership perspective, doing so is safe even though the <code>View</code> is not yet in a
+<code>Widget</code>; if the <code>View</code> is destroyed before ever being placed in a <code>Widget</code>, it
+will still destroy its child <code>View</code>s. Child <code>View</code>s may need to be added at
+other times (e.g. in <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=1439;drc=7cba41605a8489bace83f380760486638a2a8a4a"><code>AddedToWidget()</code></a>
+or <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=1545;drc=7cba41605a8489bace83f380760486638a2a8a4a"><code>OnThemeChanged()</code></a>,
+if constructing the <code>View</code> requires a color; or lazily, if creation is expensive
+or a <code>View</code> is not always needed); however, do not copy any existing code that
+adds child <code>View</code>s in a <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=1422;drc=7cba41605a8489bace83f380760486638a2a8a4a"><code>ViewHierarchyChanged()</code></a>
+override, as such code is usually an artifact of misunderstanding the Views
+ownership model.</p>
+<p>|||---|||</p>
+<h5 id="section-24"></h5>
+<p><strong>Avoid</strong></p>
+<p>Typical code in <a href="https://source.chromium.org/chromium/chromium/src/+/main:extensions/components/native_app_window/native_app_window_views.cc;l=285;drc=d66100ebd950c39b80cfd1c72cec618b33eb3491"><code>native_app_window_views.cc</code></a>
+that sets up a child <code>View</code> in <code>ViewHierarchyChanged()</code>:</p>
+<h5 id="section-25"></h5>
+<p><strong>Best practice</strong></p>
+<p>Rewriting to do this at construction/<code>Init()</code> makes |<code>web_view_</code>|&#39;s lifetime
+easier to reason about:</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-26"></h5>
+<pre data-language="cpp">void NativeAppWindowViews::ViewHierarchyChanged(
+    const views::ViewHierarchyChangedDetails&amp; details) {
+  if (details.is_add &amp;&amp; details.child == this) {
+    DCHECK(!web_view_);
+    web_view_ =
+        AddChildView(
+            std::make_unique&lt;views::WebView&gt;(nullptr));
+
+
+
+
+
+
+
+    web_view_-&gt;SetWebContents(
+        app_window_-&gt;web_contents());
+  }
+}</pre>
+<h5 id="section-27"></h5>
+<pre data-language="cpp">
+
+NativeAppWindowViews::NativeAppWindowViews() {
+  ...
+  web_view_ =
+      AddChildView(
+          std::make_unique&lt;views::WebView&gt;(nullptr));
+}
+
+void NativeAppWindowViews::Init(
+    extensions::AppWindow* app_window,
+    const extensions::AppWindow::CreateParams&amp;
+        create_params) {
+  app_window_ = app_window;
+  web_view_-&gt;SetWebContents(
+      app_window_-&gt;web_contents());
+  ...
+}</pre>
+<p>|||---|||</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/bestpractices/ownership.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/bestpractices/ownership.md</a>
+  </p>
+</div>

@@ -1,0 +1,78 @@
+<h1>GCS objects for chromium dependencies</h1>
+<h2 id="summary">Summary</h2>
+<p>You may add GCS objects as dependencies to the chromium checkout via the <code>deps</code>
+field in the DEPS file. This use-case was previously covered by <code>hooks</code> which
+makes source and dependency management hard to track. Teams that continue to use
+hooks to download from GCS will cause builds to break in certain workflows.</p>
+<p>GCS objects can be tar archives, which will automatically be extracted, or
+single non-archive files. Whether an object is a tar archive is determined by
+<a href="https://docs.python.org/3/library/tarfile.html#tarfile.is_tarfile">tarfile.is_tarfile</a>.</p>
+<p>Interrupted downloads or extractions and outdated versions will be detected with
+<code>gclient sync</code> and trigger re-downlading.</p>
+<p>The downloaded content will be validated against the SHA256 content hash and
+byte size.</p>
+<p>GCS bucket permissions should allow for either allUsers or all googlers to view
+the objects within the bucket.</p>
+<h2 id="adding-uploading-and-updating-gcs-dependencies">Adding, uploading, and updating GCS dependencies</h2>
+<h3 id="upload-a-new-object-to-gcs">Upload a new object to GCS</h3>
+<p>There is a helper script
+(<a href="https://source.chromium.org/chromium/chromium/tools/depot_tools/+/main:upload_to_google_storage_first_class.py">upload_to_google_storage_first_class.py</a>)
+to upload new objects to google storage and return the GCS deps entry that
+should be copied into DEPS.</p>
+<h3 id="addupdate-a-gcs-entry-in-deps">Add/update a GCS entry in DEPS</h3>
+<p>A GCS entry may be added to the <code>deps</code> dict with the following form
+(<a href="https://source.chromium.org/chromium/chromium/tools/depot_tools/+/main:upload_to_google_storage_first_class.py">upload_to_google_storage_first_class.py</a>
+will also spit out an entry that matches this form):</p>
+<pre>deps = {
+  # ...
+
+  # This is the installation directory.
+  'src/third_party/blink/renderer/core/css/perftest_data': {
+      'bucket': 'chromium-style-perftest',
+      'objects': [
+        {
+          'object_name': '031d5599c8a21118754e30dbea141be66104f556',
+          'sha256sum': '031d5599c8a21118754e30dbea141be66104f556',
+          'size_bytes': 3203922,
+          'generation': 1664794206824773,
+          # `output_file` is the name of the file that the downloade object should be
+          # saved as. It is optional and only relevant for objects that are NOT tar
+          # archives. Tar archives get extracted and saved under the same
+          # file/directory names they were archived as.
+          'output_file': 'sports.json',
+        },
+          {
+          'object_name': '8aac3db2a8c9e44babec81e539a3d60aeab4985c',
+          'sha256sum': '8aac3db2a8c9e44babec81e539a3d60aeab4985c',
+          'size_bytes': 5902660,
+          'generation': 1664794209886788,
+          'output_file': 'video.json',
+        },
+      ],
+      'dep_type' = 'gcs',
+  },
+}</pre>
+<p>The source of truth for this format is found
+<a href="https://source.chromium.org/chromium/chromium/tools/depot_tools/+/main:gclient_eval.py;l=135-150?q=gclient_&amp;ss=chromium%2Fchromium%2Ftools%2Fdepot_tools">here</a>.</p>
+<h4 id="size_bytes-and-generation"><code>size_bytes</code> and <code>generation</code></h4>
+<p>If you are not using <code>upload_to_google_storage_first_class.py</code> to upload your
+objects you can get this information from the command line with:</p>
+<pre>gcloud storage objects describe gs://&lt;bucket&gt;/&lt;object&gt;</pre>
+<p>They can also be found in pantheon when viewing the object&#39;s &quot;Object details&quot;.
+<code>Size</code> is found under the <code>Live Object</code> tab and <code>generation</code> is found under the
+<code>Version History</code> tab.</p>
+<h4 id="sha256sum"><code>sha256sum</code></h4>
+<p><code>sha256sum</code> should be the SHA256 content hash of the GCS object (unextracted).
+<code>upload_to_google_storage_first_class.py</code> will compute this for you, but if you
+are not using that helper script you will have to compute it on your own. You
+can test that the hash is correct by running <code>gclient sync</code> on your WIP change
+that adds the new GCS entry.</p>
+<h3 id="update-third_partygitignore">Update <code>//third_party/.gitignore</code></h3>
+<p>Add the new directory to Chromium’s <code>//third_party/.gitignore</code>, so that it won’t
+show up as “untracked files” when you run <code>git status</code> on the main repository.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gcs_dependencies.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gcs_dependencies.md</a>
+  </p>
+</div>

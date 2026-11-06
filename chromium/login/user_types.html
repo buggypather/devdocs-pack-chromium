@@ -1,0 +1,77 @@
+<h1>Consumer User Types</h1>
+<p>This document gives a brief description of consumer user types that can log in
+to a ChromeOS devices.</p>
+<p>This does not include enterprise user types. For more information about
+enterprise user types, see</p>
+<ul>
+<li><a href="../enterprise/kiosk_public_session">kiosk and public sessions</a>,</li>
+<li><a href="../enterprise/saml_authentication">SAML authentication</a></li>
+</ul>
+<h2 id="regular-users">Regular users</h2>
+<p>Regular users that were registered using their GAIA account.</p>
+<h2 id="child-users">Child users</h2>
+<p>Users that logged in using</p>
+<ul>
+<li>a Unicorn account - an account designated for children under the age of
+consent in their jurisdiction.</li>
+<li>a Geller account - an account with parental supervision that has no age
+restrictions.</li>
+<li>a Griffin account - similar to a Geller account, but for compliance with
+European Union laws.</li>
+</ul>
+<p>In order to add a child user to the device, the user has to go through an
+adapted GAIA flow, which also requires their parent to authenticate.</p>
+<p>Child users require a user policy that may, for example, control their device
+usage time limits. If a policy cannot be fetched, either from policy server or
+local cache, user login attempts will fail.</p>
+<p>A child account can be created at
+<a href="https://families.google.com/signupkid/famlink-kc?e=UnicornFamily">https://families.google.com/signupkid/famlink-kc?e=UnicornFamily</a>.</p>
+<p>For internal Google instructions for creating child accounts (including test
+accounts), see go/unicorn-test-account-creation.</p>
+<p>During child login, user session start will be delayed up to 10 seconds until
+the user&#39;s policies have been refreshed (using the user&#39;s OAuth token). This
+might cause issues for tests that include child user login, as it may add
+unnecessary time to the test runtime. To avoid this, tests should:</p>
+<ul>
+<li>Set up <code>LocalPolicyTestServerMixin</code> to serve a policy for the test user.<ul>
+<li>This should be done even if a cached policy is set up using
+<code>UserPolicyMixin</code>.</li>
+<li>Note that <code>UserPolicyMixin</code> propagates policy changes to
+<code>LocalPolicyTestServerMixin</code> optionally provided in its constructor.</li>
+<li>For testing adding child users, directly setting up
+<code>LocalPolicyTestServer</code>, to avoid setting user&#39;s cached policy before
+they ever logged in, might be more appropriate.</li>
+</ul>
+</li>
+<li>Set up <code>FakeGaiaMixin</code> to serve the child user&#39;s auth tokens.<ul>
+<li>This should be done even if the test does not use fake gaia for login,
+as policy fetch will be blocked on OAuth token fetch.</li>
+<li>If the test user is logged in using <code>LoginManagerMixin</code>, the injected
+<code>UserContext</code> has to have the refresh token matching the token passed to
+<code>FakeGaiaMixin</code>.</li>
+</ul>
+</li>
+<li>Note that <code>LoggedInUserMixin</code> is a compound helper mixin that conveniently
+packages the mixins mentioned above into an easy-to-use interface.</li>
+</ul>
+<h2 id="guest">Guest</h2>
+<p>Ephemeral, anonymous users that are logged into an incognito session. The user
+cryptohome is mounted on tmpfs, and none of the data from the user session is
+persisted after the guest session ends.</p>
+<p>To test guest session state, use <code>GuestSessionMixin</code> - this will set up
+appropriate guest session flags.</p>
+<p>Testing guest user login is more complicated, as guest login requires Chrome
+restart. The test will require two parts:</p>
+<ul>
+<li><code>PRE_BrowserTest</code> test that requests login</li>
+<li><code>BrowserTest</code> that can test guest session state</li>
+</ul>
+<p>To properly set up and preserve Chrome flags between sessions runs, use
+<code>LoginManagerMixin</code>, and set it up using
+<code>LoginManagerMixin::set_session_restore_enabled()</code></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/login/user_types.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/login/user_types.md</a>
+  </p>
+</div>

@@ -1,0 +1,21 @@
+<h1>Windows Split DLLs</h1>
+<p>A build mode where chrome.dll is split into two separate DLLs. This was
+undertaken as one possible workaround for toolchain limitations on Windows.</p>
+<p>We removed support for this again after the toolchain limitations were fixed,
+see <a href="https://crbug.com/726150">https://crbug.com/726150</a>.</p>
+<h2 id="how">How</h2>
+<p>Split DLL used to be controlled by the <code>is_multi_dll_chrome</code> gn variable.</p>
+<h2 id="details">Details</h2>
+<p>This forcible split was implemented by putting .lib files in either one DLL or
+the other, and causing unresolved externals that result during linking to be
+forcibly exported from the other DLL. This works relatively cleanly for function
+import/export, however it cannot work for data export.</p>
+<p>Some more details can be found on the initial commit of the <code>split_link</code> script
+<a href="https://src.chromium.org/viewvc/chrome?revision=200049&amp;view=revision">https://src.chromium.org/viewvc/chrome?revision=200049&amp;view=revision</a> and the
+associated bugs: <a href="https://crbug.com/237249">https://crbug.com/237249</a> <a href="https://crbug.com/237267">https://crbug.com/237267</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/windows_split_dll.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/windows_split_dll.md</a>
+  </p>
+</div>

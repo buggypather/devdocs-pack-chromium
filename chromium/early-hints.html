@@ -1,0 +1,45 @@
+<h1>103 Early Hints</h1>
+<p>Contact: <a href="mailto:net-dev@chromium.org">net-dev@chromium.org</a></p>
+<p>As of version 103, Chrome supports
+<a href="https://datatracker.ietf.org/doc/html/rfc8297">Early Hints</a>.
+Early Hints enable browsers to preload subresources or preconnect to servers
+before the main response is served. See the
+<a href="https://github.com/bashi/early-hints-explainer/blob/main/explainer.md">explainer</a>
+how it works.</p>
+<h2 id="whats-supported">What’s supported</h2>
+<p>Chrome supports <a href="https://w3c.github.io/preload/">preload</a> and
+<a href="https://w3c.github.io/resource-hints/#dfn-preconnect">preconnect</a> in
+Early Hints for top-level frame navigation.</p>
+<h2 id="whats-not-supported">What’s not supported</h2>
+<p>To reduce security and privacy implications, the HTML and Fetch living standards
+have some restrictions on when Early Hints can be handled. Chrome ignores Early
+Hints sent in the following situations to comply these specifications.</p>
+<ul>
+<li>Early Hints sent on subresource requests</li>
+<li>Early Hints sent on iframe navigation</li>
+<li>Early Hints sent on HTTP/1.1 or earlier</li>
+</ul>
+<p>Chrome ignores the second and following Early Hints responses. Chrome only
+handles the first Early Hints response so that Chrome doesn&#39;t apply inconsistent
+security policies (e.g. Content-Security-Policy).</p>
+<p>Chrome doesn’t handle
+<a href="https://w3c.github.io/resource-hints/#dfn-dns-prefetch">dns-prefetch</a> and
+<a href="https://w3c.github.io/resource-hints/#dfn-prefetch">prefetch</a> in Early Hints
+yet. We consider supporting them in the future.</p>
+<h2 id="checking-early-hints-preload-is-working">Checking Early Hints preload is working</h2>
+<p>If a resource is preloaded by Early Hints, the corresponding
+<a href="https://w3c.github.io/resource-timing/#sec-performanceresourcetiming">PerformanceResourceTiming</a>
+object reports <code>initiatorType</code> is &quot;early-hints&quot;.</p>
+<pre>performance.getEntriesByName('https://a.test/style.css')[0].initiatorType
+// =&gt; 'early-hints'</pre>
+<h3 id="reliability-of-initiatortype">Reliability of <code>initiatorType</code></h3>
+<p>Due to an implementation limitation, <code>initiatorType</code> may not always set to
+&quot;early-hints&quot;. See
+<a href="https://docs.google.com/document/d/1V7xX2cRNxcsuIrtZk4srdZuqXynnYlPG9fFDnELXC_Y/edit?usp=sharing">the proposal</a>
+for more details.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/early-hints.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/early-hints.md</a>
+  </p>
+</div>

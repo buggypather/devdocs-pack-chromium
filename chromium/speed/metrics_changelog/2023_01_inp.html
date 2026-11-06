@@ -1,0 +1,19 @@
+<h1>Interaction to Next Paint Changes in Chrome 109</h1>
+<h2 id="chrome-prioritizes-compositing-after-input-events">Chrome prioritizes compositing after input events</h2>
+<p>A change in the Chrome scheduler to prioritize rendering after user interaction
+resulted in multiple improvements to user-experienced Interaction to Next Paint.</p>
+<p>Applications with a large amount of typing on desktop saw improvements to their
+slowest interaction times as many keypresses right after another displayed on
+screen more quickly.</p>
+<p>Mobile sites in which users were tapping multiple times due to slow interactions
+saw large improvements to interaction times, as 500ms+ interactions no longer
+&quot;piled up&quot; waiting for the user to stop tapping before the screen began to update.</p>
+<p>Source code of the change is linked <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=853771">in the chromium issue tracker</a></p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 109 was released the week of January 10, 2023.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_01_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_01_inp.md</a>
+  </p>
+</div>

@@ -1,0 +1,221 @@
+<h1>Dangling Pointer Guide</h1>
+<p>A dangling pointer has been found in your patch? This doc will help you fix it.</p>
+<blockquote>
+<p>This document can also be commented upon:
+<a href="https://docs.google.com/document/d/19yyWdCQB5KwYtRE5cwadNf30jNSSWwMbim1KJjc-eZQ/edit#">https://docs.google.com/document/d/19yyWdCQB5KwYtRE5cwadNf30jNSSWwMbim1KJjc-eZQ/edit#</a></p>
+</blockquote>
+<p>See also the general instructions about the dangling pointer detector:
+<a href="dangling_ptr">docs/dangling_ptr.md</a></p>
+<p><strong>Table of contents</strong></p>
+<ul>
+<li><a href="#what-to-do-about-dangling-pointers">What to do about dangling pointers</a><ul>
+<li><a href="#i-don_t-own-the-affected-component"><code>Case 1</code> I don’t own the affected component</a></li>
+<li><a href="#the-dangling-pointer-does-not-own-the-deleted-object"><code>Case 2</code> The dangling pointer does not own the deleted object.</a><ul>
+<li><a href="#incorrect-destruction-order">Incorrect destruction order</a></li>
+<li><a href="#observer-callback">Observer callback</a></li>
+<li><a href="#challenging-lifespan">Challenging lifespan</a></li>
+<li><a href="#cyclic-pointers">Cyclic pointers</a></li>
+<li><a href="#what-to-do-about-dangling-pointers-the-dangling-pointer-does-not-own-the-deleted-object-fallback-solution">Fallback solution</a></li>
+</ul>
+</li>
+<li><a href="#the-pointer-manages-ownership-over-the-object"><code>Case 3</code> The pointer manages ownership over the object</a><ul>
+<li><a href="#smart-pointers">Smart pointers</a></li>
+<li><a href="#object-vended-from-c-api">Object vended from C API</a></li>
+<li><a href="#object-conditionally-owned">Object conditionally owned</a></li>
+<li><a href="#what-to-do-about-dangling-pointers-the-pointer-manages-ownership-over-the-object-fallback-solution">Fallback solution</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="unretained_dangling_ptr_guide">What to do about unretained dangling pointers</a></li>
+<li><a href="#i-can_t-figure-out-which-pointer-is-dangling">I can&#39;t figure out which pointer is dangling</a></li>
+<li><a href="#faq-why-dangling-pointers-matter">FAQ - Why dangling pointers matter</a></li>
+</ul>
+<h2 id="what-to-do-about-dangling-pointers">What to do about dangling pointers</h2>
+<p>There are a few common cases here.</p>
+<h3 id="case-1-i-dont-own-the-affected-component"><code>Case 1</code> I don’t own the affected component</h3>
+<p>If you do not directly own the affected component, you <strong>don&#39;t need</strong> to solve
+the issue yourself… though doing so is a great way to learn about and improve
+the codebase.</p>
+<p>Please annotate the pointer with <code>DanglingUntriaged</code>, and indicate the test case
+that can be used to reproduce.</p>
+<pre data-language="cpp">// Dangling when executing TestSuite.TestCase on Windows:
+raw_ptr&lt;T, DanglingUntriaged&gt; ptr_;</pre>
+<p>Opening and filling a P2 bug is a nice thing to do, but it is not required.</p>
+<p><strong>Rationale:</strong>
+Engineers might uncover new dangling pointers, by testing new code paths.
+Knowing about dangling pointers is a purely positive increment. In some cases,
+the affected component belongs to a different team. We don’t want to disrupt
+engineers achieving their primary goal, if they only “discover” a dangling
+pointer. Annotating the pointer makes the issue visible directly in the code,
+improving our knowledge of Chrome.</p>
+<h3 id="case-2-the-dangling-pointer-does-not-own-the-deleted-object"><code>Case 2</code> The dangling pointer does not own the deleted object</h3>
+<h4 id="incorrect-destruction-order">Incorrect destruction order</h4>
+<p>This represents ~25% of the dangling pointers.</p>
+<p>In the majority of cases, this happens when dependent objects are destroyed in
+the wrong order in a class, causing the dependency to be released first, thus
+creating a dangling pointer in the other.</p>
+<p>Recall that destructors destroy class members in the inverse order of their
+appearance. It is usually possible to resolve destruction order issues by
+re-ordering member declarations so that members which need to live longer come
+first. It is important to order members correctly to prevent pre-existing and
+future UAF in destructors.</p>
+<p>See <a href="https://docs.google.com/document/d/11YYsyPF9rQv_QFf982Khie3YuNPXV0NdhzJPojpZfco/edit?resourcekey=0-h1dr1uDzZGU7YWHth5TRAQ#bookmark=id.jgjtzldk9pvc">Fix member declaration order</a> and <a href="https://docs.google.com/document/d/11YYsyPF9rQv_QFf982Khie3YuNPXV0NdhzJPojpZfco/edit?resourcekey=0-h1dr1uDzZGU7YWHth5TRAQ#bookmark=id.xdam727ioy4q">Fix reset ordering</a> examples.</p>
+<p>One good practice is make owning members (<code>unique_ptr&lt;&gt;</code>, <code>scoped_refptr&lt;&gt;</code>)
+appear before unowned members (<code>raw_ptr&lt;&gt;</code>), and to make the unowned members
+appear last in the class, since the unowned members often refer to resources
+owned by the owning members or the class itself.</p>
+<p>One sub-category of destruction order issues is related to <code>KeyedService</code>s which
+need to correctly
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/keyed_service/core/keyed_service_base_factory.h;l=60-62;drc=8ba1bad80dc22235693a0dd41fe55c0fd2dbdabd">declare their dependencies</a>
+and
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/keyed_service/core/keyed_service.h;l=12-13;drc=8ba1bad80dc22235693a0dd41fe55c0fd2dbdabd">are expected to drop references</a>
+to their dependencies in their
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/keyed_service/core/keyed_service.h;l=36-39;drc=8ba1bad80dc22235693a0dd41fe55c0fd2dbdabd"><code>Shutdown</code></a> method
+(i.e. before their destructor runs).</p>
+<h4 id="observer-callback">Observer callback</h4>
+<p>This represents ~4% of the dangling pointers.</p>
+<p>It is important to clear the pointer when the object is about to be deleted.
+Chrome uses the observer pattern heavily. In some cases, the observer does not
+clear its pointer toward the observed class when notified of its destruction.</p>
+<h4 id="cyclic-pointers">Cyclic pointers</h4>
+<p>Sometimes two (or more) objects can have unowned references between each other,
+with neither one owning the other. This creates a situation where neither can
+be deleted without creating a dangling pointer unless some action is first
+taken to break the cycle. In order to create such a cycle in the first place, a
+call to a &quot;setter&quot; method or equivalent must have occurred handing one object
+a reference to the other. Balance out this call with another call to the same
+setter, but passing nullptr instead, before the destroying the other object.</p>
+<h4 id="challenging-lifespan">Challenging lifespan</h4>
+<p>It can be challenging to deal with an object&#39;s lifespan. Sometimes, the lifetime
+of two objects are completely different.</p>
+<p>Removing the pointer may be a good thing to do. Sometimes, it can be replaced
+by:</p>
+<ul>
+<li>Passing the pointer as a function argument instead of getting access to it
+from a long-lived field.</li>
+<li>A token / ID. For instance
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/common/tokens/tokens.h;drc=898134d0d40dbbcd308e7d51655518ac7c6392b5;l=34">blink::LocalFrameToken</a>,
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/public/browser/global_routing_id.h;drc=898134d0d40dbbcd308e7d51655518ac7c6392b5;l=64">content::GlobalRenderFrameHostId</a></li>
+<li>A <a href="https://docs.google.com/document/d/11YYsyPF9rQv_QFf982Khie3YuNPXV0NdhzJPojpZfco/edit?resourcekey=0-h1dr1uDzZGU7YWHth5TRAQ#bookmark=id.geuhahom0twd">WeakPtr</a></li>
+<li><a href="https://docs.google.com/document/d/11YYsyPF9rQv_QFf982Khie3YuNPXV0NdhzJPojpZfco/edit?resourcekey=0-h1dr1uDzZGU7YWHth5TRAQ#heading=h.wh99ri7bbq23">Calling a function</a></li>
+</ul>
+<h4 id="fallback-solution">Fallback solution</h4>
+<p>As a last resort, when the situation is perfectly understood, and you believe it
+is better to let the pointer dangle, the raw_ptr can be annotated with
+<code>DisableDanglingPtrDetection</code>. A comment explaining why this is safe must be
+added.</p>
+<pre data-language="cpp">// DisableDanglingPtrDetection option for raw_ptr annotates
+// &quot;intentional-and-safe&quot; dangling pointers. It is meant to be used at the
+// margin, only if there is no better way to re-architecture the code.
+//
+// Usage:
+// raw_ptr&lt;T, DisableDanglingPtrDetection&gt; dangling_ptr;
+//
+// When using it, please provide a justification about what guarantees that it
+// will never be dereferenced after becoming dangling.</pre>
+<p><strong>In emergency situations</strong>: <code>DanglingUntriaged</code> can be used similarly, in case
+your patch needs to land as soon as possible.</p>
+<h3 id="case-3-the-pointer-manages-ownership-over-the-object"><code>Case 3</code> The pointer manages ownership over the object</h3>
+<p>raw_ptr, just like raw pointers T*, are not meant to keep an object alive. It is
+preferable not to manage memory manually using them and new/delete. Calling
+delete on a raw_ptr will cause the raw_ptr to become immediately dangling.</p>
+<h4 id="smart-pointers">Smart pointers</h4>
+<p>First, consider replacing the raw_ptr with a smart pointer:</p>
+<ul>
+<li>std::unique_ptr (See
+<a href="https://docs.google.com/document/d/11YYsyPF9rQv_QFf982Khie3YuNPXV0NdhzJPojpZfco/edit?resourcekey=0-h1dr1uDzZGU7YWHth5TRAQ#heading=h.6itq8twigqt3">example</a>)</li>
+<li>scoped_refptr</li>
+</ul>
+<h4 id="object-vended-from-c-api">Object vended from C API</h4>
+<p>In some cases, the object is vended by a C API. It means new/delete are not
+used, but some equivalent API. In this case, it still makes sense to use a
+unique_ptr, but with a custom deleter:
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/3650764">example</a>.</p>
+<p>For most common objects, a wrapper already exists:
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:base/files/scoped_file.h;drc=898134d0d40dbbcd308e7d51655518ac7c6392b5;l=105">base::ScopedFILE</a>,
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:base/files/scoped_temp_dir.h;l=25?q=ScopedTempDir&amp;sq=&amp;ss=chromium%2Fchromium%2Fsrc">base::ScopedTempDir</a>,
+..</p>
+<h4 id="object-conditionally-owned">Object conditionally owned</h4>
+<p>In some cases, the raw_ptr conditionally owns the memory, depending on some
+logic or some <code>is_owned</code> boolean. This can still use a unique_ptr
+(<a href="https://chromium-review.googlesource.com/c/chromium/src/+/3829302">example</a>)</p>
+<pre data-language="cpp">std::unique_ptr&lt;T&gt; t_owned_;
+raw_ptr&lt;T&gt; t_; // Reference `t_owned_` or an external object.</pre>
+<h4 id="fallback-solution-1">Fallback solution</h4>
+<p>If no solution with a smart pointer is found:</p>
+<p>You can use <code>raw_ptr::ClearAndDelete()</code> or <code>raw_ptr::ClearAndDeleteArray()</code> to
+clear the pointer and free the object in a single operation.</p>
+<table>
+<thead>
+<tr>
+<th>Before</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>delete ptr_</code></td>
+<td><code>ptr_.ClearAndDelete();</code></td>
+</tr>
+<tr>
+<td><code>delete array_</code></td>
+<td><code>ptr_.ClearAndDeleteArray();</code></td>
+</tr>
+</tbody></table>
+<p>When delete is not used, but the deletion happens through some C API or some
+external manager, the <code>raw_ptr::ExtractAsDangling()</code> can be used to clear the
+pointer, and return the pointer to be passed to the API. The return value must
+not be saved, thus outliving the line where it was called.</p>
+<p>This method should be used wisely, and only if there is no other way to rework
+the dangling raw_ptr.</p>
+<table>
+<thead>
+<tr>
+<th>Before</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ExternalAPIDelete(ptr_);</code></td>
+<td><code>ExternalAPIDelete(ptr_.ExtractAsDangling());</code></td>
+</tr>
+</tbody></table>
+<h2 id="i-cant-figure-out-which-pointer-is-dangling">I can&#39;t figure out which pointer is dangling</h2>
+<p>Usually this is a matter of straightforward reasoning, but should all else
+fail, another option is to re-build with the alternative dangling pointer
+detector as described in
+<a href="dangling_ptr#alternative-dangling-pointer-detector-experimental">docs/dangling_ptr.md</a>.
+This will show the stacks for object creation, object destruction, and the
+destruction of the object containing the dangling ptr member.</p>
+<h2 id="faq---why-dangling-pointers-matter">FAQ - Why dangling pointers matter</h2>
+<p>Q. Gee, this is a raw pointer. Does destroying it actually do anything?</p>
+<p>A. Yes. On some platforms <code>raw_ptr&lt;T&gt;</code> is a synonym for <code>T*</code>, but on many
+platforms (more every day) <code>raw_ptr&lt;T&gt;</code> is the interface to PartitionAlloc’s
+BackupRefPtr (BRP) Use-after-Free (UaF) protection mechanism. Destroying the
+pointer thus actually performs internal bookkeeping and may also null
+the pointer on destruction to trap use-after-destruct errors.</p>
+<p>Q. So BRP mitigates these dangling pointers. What&#39;s the problem with just
+keeping them if they are not used?</p>
+<p>A. When an object is deleted under BRP, if there are any dangling references
+remaining, the object must be quarantined and overwritten with a “zapped”
+pattern as opposed to being simply freed. This costs cycles and memory
+pressure. Even worse, it is still possible that the raw_ptr is converted to
+<code>T*</code> and used with the zap value, or even used after the quarantine is
+gone. Hence we are inventing mechanisms for finding dangling pointers so we
+may remove the ones we know about. BRP will then make it harder to write
+exploits with the ones we don’t know about in the wild.</p>
+<p>Q. Why do we care if this is “just a test”?</p>
+<p>A. Hitting dangling pointer warnings in tests blocks digging into actual
+cases further in the code.</p>
+<p>Q. Why should I think about lifetimes, anyway?</p>
+<p>A. Holding an address that we aren’t allowed to de-reference is a bad
+practice. It is a security and stability risk, a source of bugs that are
+extremely difficult to diagnose, and a hazard for future coders. Also see
+e.g. <a href="https://discourse.llvm.org/t/rfc-lifetime-annotations-for-c/61377">https://discourse.llvm.org/t/rfc-lifetime-annotations-for-c/61377</a> for
+some ideas about how this might play out in the future.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/dangling_ptr_guide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/dangling_ptr_guide.md</a>
+  </p>
+</div>

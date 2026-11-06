@@ -1,0 +1,76 @@
+<h1>Unstable Rust usage in Chromium</h1>
+<h2 id="policy">Policy</h2>
+<p>Unstable features are <strong>unsupported</strong> by default in Chromium. Any use of an
+unstable language or library feature should be agreed upon by the Rust toolchain
+team before enabling it.</p>
+<p>Since Chromium imports the Rust toolchain at its HEAD and builds it in a
+nightly-like configuration, it is technically possible to depend on unstable
+features. However, unstable features often change in a backwards-incompatible
+way without a warning. If such incompatible changes are introduced, importing a
+new version of toolchain now requires the owner to fix forward, instead of being
+an automated process. This makes toolchain upgrades prohibitively difficult.</p>
+<p>When an exception is required, consider:</p>
+<ul>
+<li>Whether the unstable feature brings significant value that is unattainable
+  in stable alternatives</li>
+<li>The risk of breaking changes to the feature</li>
+<li>Ways to fallback in case a backward-incompatible toolchain change is
+  introduced</li>
+</ul>
+<p>The following directories have a stricter policy toward unstable features:</p>
+<ul>
+<li><code>//build</code> accepts patches for community-maintained support
+for working with a stable version of the Rust compiler.
+See also <code>rustc_nightly_capability</code> and <a href="https://crbug.com/410596442">https://crbug.com/410596442</a></li>
+<li><code>//v8</code> tentatively disallows unstable features to provide
+community-maintained support for building V8 with a stable
+version of the Rust compiler.
+See also <a href="https://crbug.com/450577984">https://crbug.com/450577984</a></li>
+</ul>
+<h2 id="exceptions">Exceptions</h2>
+<p>This section maintains a list of exceptions from the policy above:</p>
+<ul>
+<li><code>#![feature(portable_simd)]</code> needed by the ETC1 encoder (see
+<a href="https://docs.google.com/document/d/1lh9x43gtqXFh5bP1LeYevWj0EcIRgIu0XGahHY08aeY/edit?tab=t.0">the discussion in the doc here</a>)<ul>
+<li><code>//ui/android/texture_compressor</code></li>
+<li><code>//third_party/rust/bytemuck</code></li>
+</ul>
+</li>
+<li><code>#![feature(linkage)]</code> and <code>#![feature(rustc_attrs)]</code> needed to use
+PartitionAlloc from Rust (removal is tracked by <a href="https://crbug.com/410596442">https://crbug.com/410596442</a>)<ul>
+<li><code>//build/rust/allocator</code></li>
+</ul>
+</li>
+<li>Features needed by Crubit - see:<ul>
+<li>Some unstable features are required by <code>crubit/support</code> libraries
+(but IIUC not by the Crubit-generated bindings).</li>
+<li>The justification and exit strategy for each feature is documented at
+<a href="https://github.com/google/crubit/blob/main/docs/overview/unstable_features.md">https://github.com/google/crubit/blob/main/docs/overview/unstable_features.md</a></li>
+<li>The actual features allowed in Chromium builds are listed in the following
+<code>gn</code> <code>config</code>:
+<code>//build/rust/crubit:allow_unstable_features_required_by_crubit</code>.</li>
+</ul>
+</li>
+</ul>
+<h3 id="how-to-allow-unstable-features-in-buildgn">How to allow unstable features in BUILD.gn</h3>
+<p>Example <code>BUILD.gn</code> for first-party code:</p>
+<pre>```
+# BUILD.gn:
+rust_static_library(&quot;some_target_name&quot;) {
+  configs -= [ &quot;//build/config/compiler:disallow_unstable_features&quot; ]
+  rustflags = [ &quot;-Zallow-features=portable_simd&quot; ]
+}
+```</pre>
+<p>Example <code>gnrt_config.toml</code> entry for a third-party crate
+(run <code>tools/crates/run_gnrt.py gen</code> to regenerate the crate&#39;s <code>BUILD.gn</code> file):</p>
+<pre>```
+# gnrt_config.toml:
+[crate.bytemuck.extra_kv]
+allow_unstable_features = [&quot;portable_simd&quot;]
+```</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/unstable_rust_feature_usage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/unstable_rust_feature_usage.md</a>
+  </p>
+</div>

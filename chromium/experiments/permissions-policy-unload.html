@@ -1,0 +1,49 @@
+<h1>Permissions-Policy: Unload</h1>
+<p>Contact: <a href="mailto:bfcache-dev@chromium.org">bfcache-dev@chromium.org</a></p>
+<p>This document describes the status of the current implementation of the
+<a href="https://github.com/w3c/webappsec-permissions-policy/issues/444">Permissions-Policy: unload feature</a>
+in Chrome, and how to enable it.</p>
+<p>Starting from version 107,
+Chrome experimentally supports Permissions-Policy: unload.
+This allows sites to prevent usage of unload event listeners.</p>
+<p>Note that this policy is not available by default.
+Chrome plans to do an origin trial
+to evaluate its effectiveness
+and to allow site authors to give feedback.</p>
+<h2 id="whats-supported">What’s supported</h2>
+<p>A new <a href="https://github.com/w3c/webappsec-permissions-policy/blob/main/permissions-policy-explainer.md">permission</a> is added, <code>unload</code>,
+which defaults to be enabled
+but when disabled makes calls to <code>window.addEventListener(&quot;unload&quot;, callback)</code>
+a no-op.</p>
+<h2 id="whats-not-supported">What’s not supported</h2>
+<h2 id="activation">Activation</h2>
+<p>The policy can be enabled in several ways.</p>
+<h3 id="using-command-line-flag">Using command line flag</h3>
+<p>Pass the <code>--enable-features=PermissionsPolicyUnload</code> command line flag.</p>
+<h3 id="using-the-chromium-ui">Using the Chromium UI</h3>
+<p>Enable the flag chrome://flags/#enable-experimental-web-platform-features .</p>
+<h3 id="using-origin-trial">Using Origin Trial</h3>
+<p>The <a href="https://developer.chrome.com/blog/origin-trials/">Origin Trial</a> feature is named <code>PermissionsPolicyUnload</code>.
+Registration for the trial is <a href="https://developer.chrome.com/origintrials/#/view_trial/1012184016251518977">here</a>.
+See <a href="https://chromestatus.com/feature/5760325231050752">feature status</a> to find out
+if the origin trial is currently running.</p>
+<p>The <a href="https://developer.chrome.com/docs/web-platform/origin-trials/#take-part-in-an-origin-trial">origin trial tutorial</a> describes how to participate.</p>
+<h3 id="verifying-the-api-is-working">Verifying the API is working</h3>
+<p>In devtools, run the following piece of javascript</p>
+<pre data-language="js">document.createElement(&quot;iframe&quot;).allow=&quot;unload&quot;;</pre>
+<p>If it succeeds then the feature is enabled.
+If it gives an error like
+<code>Unrecognized feature: &#39;unload&#39;.</code>
+then the feature is not enabled.</p>
+<h2 id="related-links">Related Links</h2>
+<ul>
+<li><a href="https://chromestatus.com/feature/5760325231050752">Chrome Status</a></li>
+<li><a href="https://github.com/fergald/docs/blob/master/explainers/permissions-policy-unload.md">Permissions-Policy: unload Explainer</a></li>
+<li><a href="https://github.com/w3c/webappsec-permissions-policy/blob/main/permissions-policy-explainer.md">Permissions-Policy: Explainer</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/permissions-policy-unload.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/permissions-policy-unload.md</a>
+  </p>
+</div>

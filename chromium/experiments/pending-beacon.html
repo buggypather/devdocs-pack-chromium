@@ -1,0 +1,102 @@
+<h1>Pending Beacon API</h1>
+<ul>
+<li>Status: <strong>Deprecated</strong> (Replaced by <a href="fetch-later">FetchLater API</a>)</li>
+<li>Contact: <a href="mailto:pending-beacon-experiment@chromium.org">pending-beacon-experiment@chromium.org</a></li>
+<li>API Feedback: <a href="https://github.com/WICG/pending-beacon/issues">https://github.com/WICG/pending-beacon/issues</a></li>
+</ul>
+<p>This document describes the status of the current implementation of the
+<a href="https://wicg.github.io/pending-beacon/"><strong>Pending Beacon API</strong></a>
+(a.k.a. PendingBeacon API) in Chrome, and how to enable it manually.</p>
+<p>Starting from <a href="https://chromestatus.com/feature/5690553554436096">version 107</a>, Chrome experimentally supports the
+Pending Beacon API,
+which allows website authors to specify one or more beacons (HTTP requests) that
+should be sent reliably when the page is being unloaded.</p>
+<p>See the <a href="https://github.com/WICG/pending-beacon#readme">public explainer</a> to
+learn more about how it works.</p>
+<p>Note that this API is not enabled by default. Instead, Chrome plans to run A/B
+testing to evaluate its impact. But Chrome also provides some ways to fully
+opt-in to the API for web developers who what to try the features.</p>
+<h2 id="whats-supported">What’s supported</h2>
+<p>Chrome supports all the JavaScript APIs described in the explainer,
+specifically:</p>
+<ul>
+<li><a href="https://github.com/WICG/pending-beacon#pendingpostbeacon"><code>class PendingPostBeacon</code></a></li>
+<li><a href="https://github.com/WICG/pending-beacon#pendinggetbeacon"><code>class PendingGetBeacon</code></a></li>
+<li>and all of the properties and methods described in
+<a href="https://github.com/WICG/pending-beacon#pendingbeacon">PendingBeacon</a>, with
+some behaviors not supported.</li>
+</ul>
+<h2 id="whats-not-supported">What’s not supported</h2>
+<p>The following features are not yet supported in Chrome:</p>
+<ul>
+<li>When calling <code>setData(data)</code> on a <code>PendingPostBeacon</code>, the <code>data</code> payload
+cannot be<ul>
+<li>A complex body, i.e. for a <code>data</code> of <code>FormData</code> type, it can only have
+single <a href="https://developer.mozilla.org/en-US/docs/Web/API/FormData/entries">entry/part</a>.</li>
+<li>A streaming body, i.e. a <code>data</code> cannot be a <a href="https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream">ReadableStream</a>.</li>
+</ul>
+</li>
+<li>Crash recovery related behaviors and privacy requirements: not yet supported.
+Chrome currently doesn&#39;t store any PendingBeacon on disk.</li>
+<li>Delete pending beacons for a site if a user clears site data: not supported
+yet, as crash recovery from disk is not yet supported.</li>
+<li>Beacon requests are not yet observable in Chrome DevTools.</li>
+</ul>
+<p>The following features work differently than the one described in explainer:</p>
+<ul>
+<li>Beacons must not leak navigation history to the network provider that it
+should not know:
+supported by forcing to send out all beacons on navigating away from a
+document.</li>
+<li>The beacon destination URL should be modifiable: only <code>PendingGetBeacon</code> can
+update its URL via <code>setURL()</code> method.</li>
+<li>Beacon Sending behavior: the Chrome implementation currently queues all
+created instances of Pending*Beacon for sending. But in the explainer, it
+specifies that a <code>PendingPostBeacon</code> is only queued if it has non-undefined
+and non-null data (described in <code>setData()</code> method).</li>
+<li>Beacons must be sent over HTTPS: current implementation doesn&#39;t enforce HTTPS,
+which means if web developer creates a <code>Pending*Beacon</code> with HTTP URL
+property, it will still work.</li>
+<li>Beacons max TTL is bound by Chrome&#39;s back/forward cache TTL, which is
+currently <strong>10 minutes</strong>.</li>
+</ul>
+<h2 id="activation">Activation</h2>
+<p>The API can be enabled by a command line flag, or via
+<a href="https://developer.chrome.com/blog/origin-trials/">Origin Trial</a>.</p>
+<h3 id="using-command-line-flag">Using command line flag</h3>
+<p>Passing the <code>--enable-features=PendingBeaconAPI</code> command line flag
+to Chrome enables PendingBeacon API support.</p>
+<h3 id="using-origin-trial">Using Origin Trial</h3>
+<p><a href="https://developer.chrome.com/origintrials/#/view_trial/1581889369113886721"><strong>Trial for Pending Beacon</strong></a>.</p>
+<p>You can opt any page on your origin into PendingBeacon API Origin Trial by
+<a href="https://developer.chrome.com/docs/web-platform/origin-trials/#take-part-in-an-origin-trial">requesting a token</a> for your origin via the above link. Include
+the token in your page so that Chrome can recognize your page is opted in.</p>
+<p>The simplest way is to include the following line in your page:</p>
+<pre data-language="html">&lt;meta http-equiv=&quot;origin-trial&quot; content=&quot;**your token**&quot;&gt;</pre>
+<p>Or you can also include the token in your HTTP request.</p>
+<p>*** note
+<strong>NOTE</strong>: Even with the Origin Trial token, <strong>NOT all of visits to your page</strong>
+will have the API enabled. It is because as mentioned above, Chrome plan to do
+A/B testing on the API.</p>
+<hr>
+<h3 id="verifying-the-api-is-working">Verifying the API is working</h3>
+<p>Added the following line to a web page, and load the page into a Chrome tab.</p>
+<pre data-language="html">&lt;script&gt;
+new PendingGetBeacon('/test');
+&lt;/script&gt;</pre>
+<p>Close the tab, and you should be able to observe a request sent to <code>/test</code> on
+your web server that hosts the page.</p>
+<h2 id="related-links">Related Links</h2>
+<ul>
+<li><a href="https://chromestatus.com/feature/5690553554436096">Chrome Platform Status - Feature: Declarative PendingBeacon API</a></li>
+<li><a href="https://github.com/WICG/pending-beacon#readme">Pending Beacon Explainer on GitHub</a></li>
+<li><a href="https://wicg.github.io/pending-beacon/">Pending Beacon API Spec (draft)</a></li>
+<li>Ask questions about API &amp; Spec via <a href="https://github.com/WICG/pending-beacon/issues/new">new issue</a></li>
+<li><a href="https://docs.google.com/document/d/1QIFUu6Ne8x0W62RKJSoTtZjSd_bIM2yXZSELxdeuTFo/edit#">Pending Beacon Design Doc in Chromium</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/pending-beacon.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/pending-beacon.md</a>
+  </p>
+</div>

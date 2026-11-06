@@ -1,0 +1,239 @@
+<h1>Automatic Reference Counting</h1>
+<h2 id="what-is">What is ARC?</h2>
+<p>Objective-C memory management is based on reference counting. Historically,
+managing the reference count was a task given to the developer, but starting
+with Mac OS X 10.7/iOS 5, additional language support was added to Objective-C
+to allow the compiler to manage the reference counts given lifetime annotations
+by the developer. That feature is named “automatic reference counting” and is
+abbreviated to “ARC”.</p>
+<p>ARC is enabled via a flag passed to the compiler and thus for Chromium is
+controlled as a
+<a href="https://source.chromium.org/search?q=config\(%22enable_arc%22\)&amp;ss=chromium">config</a>
+for build targets. ARC is enabled by default for Chromium’s Objective-C code,
+with the exception of a handful of targets that opt-out.</p>
+<p>For the rest of this document, the term “Objective-C” will be used to mean both
+pure Objective-C as well as Objective-C++.</p>
+<h3 id="what-isnt">What isn’t handled by ARC</h3>
+<p>Be aware that ARC is only used for Objective-C objects (those objects that are a
+subclass of <code>NSObject</code>, declared with <code>@interface</code> or <code>@class</code>). The ownership
+of Core Foundation objects (with names often starting with <code>CF</code>, with names
+often ending with <code>Ref</code>, and declared using a <code>typedef</code> as a pointer to an
+undefined struct) is not handled by ARC, and <code>ScopedCFTypeRef&lt;&gt;</code> must be used to
+manage their lifetimes. For documentation on how the lifetime of Core Foundation
+objects works, and when you will need to use a scoper to manage it, see the
+<a href="https://developer.apple.com/library/archive/documentation/CoreFoundation/Conceptual/CFMemoryMgmt/CFMemoryMgmt.html#//apple_ref/doc/uid/10000127i">Memory Management Programming Guide for Core
+Foundation</a>.</p>
+<h2 id="basics">The basics of ARC</h2>
+<p>(This is necessarily a simplified explanation; reading ARC
+<a href="#references">documentation</a> outside of this document is highly recommended.)</p>
+<p>Reference counting is a technique of managing the lifetime of objects by keeping
+a count of ownership references (in the conceptual sense of “references”, not
+in the C++ sense of <code>&amp;</code>s). If some code wants an object to remain alive, it can
+“retain” the object by incrementing the reference count, and when it no longer
+needs the object to remain alive, it can “release” the object by decrementing
+the reference count. When the reference count hits zero, that indicates that no
+code needs the object to remain alive, so it is deallocated.</p>
+<p>Objective-C objects are accessed via pointer. The most straightforward way of
+thinking about ARC is that, while in classic manual reference counting, those
+pointers are raw pointers and the programmer is in charge of writing the
+appropriate retain and release messages, with ARC, all pointers to Objective-C
+objects are smart pointers, indicated by the following qualifications:</p>
+<ul>
+<li><code>__strong</code> (default): This pointer maintains a strong reference to the object.
+When an object pointer is assigned to it, that object is sent a retain
+message, and the object pointer that it used to contain is sent a release
+message (possibly causing it to be deallocated it if that caused the retain
+count to hit zero).<ul>
+<li>Chromium usage note: Even though this is the default, please always
+explicitly specify it for class members/ivars so that it is clear which
+pointers are Objective-C object pointers and which are C++ object pointers.</li>
+</ul>
+</li>
+<li><code>__weak</code>: This pointer maintains a weak reference to the object which is kept
+alive by other <code>__strong</code> references. If the last of the strong references is
+released, and the object is deallocated, this pointer will be set to <code>nil</code>.</li>
+<li><code>__unsafe_unretained</code>: This is a raw pointer (as in C/C++) which has no
+automatic capabilities.<ul>
+<li>Chromium usage note: Do not use this, as it is almost certainly the wrong
+choice. The <code>PRESUBMIT</code> will complain.</li>
+</ul>
+</li>
+</ul>
+<p>ARC knows about the standard Objective-C conventions for naming methods on
+objects that return unretained vs retained objects, and will automatically treat
+those functions as such. C++ functions that return retained Objective-C objects
+will need to be explicitly annotated as such with <code>NS_RETURNS_RETAINED</code> if in
+Objective-C code, or <code>__attribute__((ns_returns_retained))</code> if in a shared C++
+header. Note, though, that for header files that interface with both pure C++
+and Objective-C, serious thought will need to be given to that boundary with
+regards to retain count expectations.</p>
+<p>Because ARC handles all the reference counting, direct message sends of
+<code>-retain</code>, <code>-release</code>, and <code>-autorelease</code> are no longer allowed. The compiler
+automatically inserts them as needed, directed by the ownership annotations.
+Incorrect annotations will cause incorrect reference counting; annotate the code
+correctly to fix issues with the compiler-generated reference counting.</p>
+<h2 id="cxx-containers">ARC and C++ standard library containers</h2>
+<p>The most important interaction between ARC and C++ is that when you instantiate
+a template on an Objective-C type, it <a href="https://clang.llvm.org/docs/AutomaticReferenceCounting.html#template-arguments">implicitly
+qualifies</a>
+the Objective-C type with <code>__strong</code>. For example,</p>
+<pre data-language="objectivecpp">  std::vector&lt;NSWindow*&gt;</pre>
+<p>is equivalent to</p>
+<pre data-language="objectivecpp">  std::vector&lt;NSWindow* __strong&gt;</pre>
+<p>and you need to make sure that you understand the implications of taking strong
+references to those <code>NSWindow</code>s, even if <code>__strong</code> was not explicitly written.</p>
+<p>One might therefore want to explicitly qualify with <code>__weak</code>. While that is fine
+for some C++ standard library containers, like <code>std::vector</code>, one must not use
+<code>__weak</code> qualification in any tree or hash-based container, such as <code>std::map</code>
+or <code>std::set</code>.</p>
+<p>First, it&#39;s explicitly undefined behavior (UB). Containers that rely on looking
+up a value by either direct comparison or hash comparison rely on the values
+that are currently in the container not changing out underneath it. The main
+feature of <code>__weak</code> is that it nils itself out when there are no more strong
+references to it, and that behavior will break comparison-based containers.</p>
+<p>Second, at a higher “consider what it means to be a set” level, what would
+happen if you had a set or map where two entries that started out as different
+values now both nilled themselves out? That would break the invariant that there
+be no duplicate entries.</p>
+<p>The only C++ standard library containers in which it is safe to put <code>__weak</code>
+objects are those that merely move and copy them around, but perform no other
+processing or lookup on them. Arrays, vectors, and lists are fine; sets and maps
+are not.</p>
+<h2 id="conventions">ARC in Chromium</h2>
+<h3 id="conventions-when">When to use ARC</h3>
+<p>ARC is enabled by default for Objective-C code in Chromium, and all new
+Objective-C code in Chromium must be written to use ARC. If there is a good
+technical reason to not use ARC, you may disable it for a target, but this is
+expected to be an exceedingly rare situation and you should have a discussion
+with the relevant platform experts before doing so.</p>
+<h3 id="convention-headers">Header files</h3>
+<p>Header files can be:</p>
+<ol>
+<li><em>Shared between C++ and Objective-C.</em> For these headers, avoid having any
+Objective-C object pointers in them. Use the techniques in the <a href="mixing_cpp_and_objc">Mixing C++
+and Objective-C</a> document to accomplish this.</li>
+<li><em>Only included in Objective-C implementation files compiled with ARC.</em>
+Because ARC is the default compilation mode, this will be common. For these
+headers, qualify the ownership of Objective-C object pointers with <code>__strong</code>
+and <code>__weak</code>.</li>
+<li><em>Included in Objective-C implementation files compiled with a mix of ARC and
+non-ARC.</em> Because ARC is the default compilation mode, this situation should
+be rare. For this situation, treat the non-ARC compiled files as if they were
+C++ and use the techniques from point 1.</li>
+</ol>
+<h2 id="dangers">Warning! Dangers!</h2>
+<p>There are some bits of AppKit that are incompatible with ARC. Apple has not
+updated the documentation to call this out, so a heads-up:</p>
+<p>When creating an <code>NSWindow</code>, you <em>must</em> set the <code>.releasedWhenClosed</code> property
+to <code>NO</code>. It’s recommended that you do so immediately after creating it with
+<code>alloc</code>/<code>init</code>. If you fail to do so, then closing the window will cause it to
+release itself, and then when the owning pointer releases it, it will be a
+double-release.</p>
+<h2 id="examples">Examples of ARC code</h2>
+<h3 id="examples-objc-classes">Objective-C Classes</h3>
+<pre data-language="objectivec">@interface KittyARC : NSObject
+@property(nonatomic, weak) id&lt;KittyDelegate&gt; delegate;
+@property(nonatomic, copy) NSArray* childCats;
+@property(nonatomic, strong) NSURL* vetURL;
+- (Meow*)meowForBellyRub:(BellyRub*)rub;
+@end
+
+@implementation KittyARC {
+  id&lt;CatFactory&gt; __weak _catFactory;
+  NSURL* _lastVisitedCatURL;
+}
+
+@synthesize delegate = _delegate;
+@synthesize childCats = _childCats;
+@synthesize vetURL = _vetURL;
+
+- (Meow*)meowForBellyRub:(BellyRub*)rub {
+  return [[MeowImpl alloc] initWithBellyRub:rub];
+}
+@end</pre>
+<h3 id="examples-cpp-classes">C++ classes in Objective-C++ files</h3>
+<pre data-language="objectivec">class Banana : public Fruit {
+  Animal* __strong pet_;
+  Phone* __weak nexus_;
+  Vehicle* __weak car_;  // Do not use __unsafe_unretained.
+}</pre>
+<h3 id="examples-blocks">Blocks</h3>
+<p>Note: Blocks retain all objects referenced in them. This example is of a block
+used in an Objective-C method that uses the “weak <code>self</code>” idiom to avoid a
+retain cycle. For blocks used in C++ functions, a retain cycle is not a concern,
+though the use of a <code>base::WeakPtr&lt;&gt;</code> might be needed to avoid stale pointers.</p>
+<pre data-language="objectivec">typeof(self) __weak weakSelf = self;
+[performer_ showAuthenticationError:error
+                     withCompletion:^{
+                       typeof(self) strongSelf = weakSelf;
+                       if (!strongSelf) {
+                         return;
+                       }
+                       [strongSelf setHandlingError:NO];
+                       [strongSelf continueSignin];
+                     }];</pre>
+<h3 id="examples-gn">GN file changes</h3>
+<p>All targets compile with ARC as default. For targets that must not compile with
+ARC, ARC can be disabled as follows:</p>
+<pre data-language="gn">  # Do not compile with ARC because AncientDeps code is not compatible with
+  # being compiled with ARC.
+  configs -= [ &quot;//build/config/compiler:enable_arc&quot; ]</pre>
+<p>Again, ARC must be used for all new code unless there is a good technical reason
+that the new code cannot use ARC. Please consult with platform experts if you
+believe that you are in this situation.</p>
+<h2 id="changes">Things that should not be used from ARC code</h2>
+<p>There are utility functions and classes that were introduced when Chromium did
+not compile with ARC, but that are no longer needed with ARC code. Because there
+are still parts of Chromium that cannot be compiled with ARC, these utilities
+remain, however they should not (or sometimes cannot) be used from ARC:</p>
+<ul>
+<li><code>scoped_nsobject&lt;&gt;</code>/<code>scoped_nsprotocol&lt;&gt;</code>: These only exists to handle scoping
+of Objective-C objects in non-ARC code. They cannot be used in ARC code; use
+<code>__strong</code> instead.</li>
+<li><code>ScopedNSAutoreleasePool</code>: Use <code>@autoreleasepool</code> instead, and remove any use
+of <code>ScopedNSAutoreleasePool</code> that you encounter, if possible.
+<code>ScopedNSAutoreleasePool</code> was rewritten to be able to work in ARC code, but
+the C++ class-based nature of <code>ScopedNSAutoreleasePool</code> is fundamentally
+incompatible with the stack-based nature of autorelease pools, and thus it is
+in the process of <a href="https://crbug.com/772489">being removed</a>.</li>
+</ul>
+<h2 id="references">Further reading</h2>
+<ul>
+<li>Apple documentation about memory management and how both manual reference
+counting and ARC work: <a href="https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/MemoryMgmt/Articles/MemoryMgmt.html">About Memory
+Management</a></li>
+<li>Apple documentation from when ARC was new; it’s marked as “outdated” but is
+still a good read: <a href="https://developer.apple.com/library/archive/releasenotes/ObjectiveC/RN-TransitioningToARC/Introduction/Introduction.html">Transitioning to ARC Release
+Notes</a></li>
+<li>Wikipedia overview: <a href="https://en.wikipedia.org/wiki/Automatic_Reference_Counting">Automatic Reference
+Counting</a></li>
+<li>Clang documentation (very technical): <a href="https://clang.llvm.org/docs/AutomaticReferenceCounting.html">Objective-C Automatic Reference
+Counting (ARC)</a><ul>
+<li>There’s a specialized tool named <a href="https://clang.llvm.org/docs/AutomaticReferenceCounting.html#precise-lifetime-semantics"><code>NS_VALID_UNTIL_END_OF_SCOPE</code> (the
+preferred spelling and available in <code>.mm</code> files that use Foundation) a.k.a.
+<code>objc_precise_lifetime</code> (for use
+otherwise)</a>
+that might be useful in specific situations where the compiler cannot fully
+deduce what lifetime is needed for a local variable. It’s not usually
+needed, but if you have gotten to this point in this document, you should
+know it exists in case you find yourself in just that situation.</li>
+</ul>
+</li>
+</ul>
+<h2 id="old-docs">Documents from Chromium iOS’s ARC transition</h2>
+<p>Several years ago, Chromium for iOS transitioned to ARC. In the process of doing
+so, they produced the documents (Google-internal):</p>
+<ul>
+<li><a href="https://goto.google.com/chrome-arc">ARC transition</a></li>
+<li><a href="https://goto.google.com/arc-howto">[ARC] How to convert a target</a></li>
+<li><a href="https://goto.google.com/faq-arc">ARC FAQ</a></li>
+</ul>
+<p>They described the ARC process as they intended to do it, not necessarily as it
+ended up being done. All relevant information from them has been moved to this
+document. However, they can be useful reading for historical context.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac/arc.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mac/arc.md</a>
+  </p>
+</div>

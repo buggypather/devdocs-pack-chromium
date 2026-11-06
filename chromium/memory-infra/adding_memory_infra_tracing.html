@@ -1,0 +1,144 @@
+<h1>Adding MemoryInfra Tracing to a Component</h1>
+<p>If you have a component that manages memory allocations, you should be
+registering and tracking those allocations with Chrome&#39;s MemoryInfra system.
+This lets you:</p>
+<ul>
+<li>See an overview of your allocations, giving insight into total size and
+breakdown.</li>
+<li>Understand how your allocations change over time and how they are impacted by
+other parts of Chrome.</li>
+<li>Catch regressions in your component&#39;s allocations size by setting up
+telemetry tests which monitor your allocation sizes under certain
+circumstances.</li>
+</ul>
+<p>Some existing components that use MemoryInfra:</p>
+<ul>
+<li><strong>Discardable Memory</strong>: Tracks usage of discardable memory throughout Chrome.</li>
+<li><strong>GPU</strong>: Tracks OpenGL and other GPU object allocations.</li>
+<li><strong>V8</strong>: Tracks the heap size for JS.</li>
+</ul>
+<h2 id="overview">Overview</h2>
+<p>In order to hook into Chrome&#39;s MemoryInfra system, your component needs to do
+two things:</p>
+<ol>
+<li>Create a <a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/memory_dump_provider.h"><code>MemoryDumpProvider</code></a> for your component.</li>
+<li>Register and unregister you dump provider with the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/memory_dump_manager.h"><code>MemoryDumpManager</code></a>.</li>
+</ol>
+<h2 id="creating-a-memory-dump-provider">Creating a Memory Dump Provider</h2>
+<p>You can implement a <a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/memory_dump_provider.h"><code>MemoryDumpProvider</code></a> as a stand-alone class, or as an
+additional interface on an existing class. For example, this interface is
+frequently implemented on classes which manage a pool of allocations (see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/cc/resources/resource_pool.h"><code>cc::ResourcePool</code></a> for an example).</p>
+<p>A <code>MemoryDumpProvider</code> has one basic job, to implement <code>OnMemoryDump</code>. This
+function is responsible for iterating over the resources allocated or tracked by
+your component, and creating a <a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/memory_allocator_dump.h"><code>MemoryAllocatorDump</code></a> for each
+using <a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/process_memory_dump.h"><code>ProcessMemoryDump::CreateAllocatorDump</code></a>. A simple example:</p>
+<pre data-language="cpp">bool MyComponent::OnMemoryDump(const MemoryDumpArgs&amp; args,
+                               ProcessMemoryDump* process_memory_dump) {
+  for (const auto&amp; allocation : my_allocations_) {
+    auto* dump = process_memory_dump-&gt;CreateAllocatorDump(
+        &quot;path/to/my/component/allocation_&quot; + allocation.id().ToString());
+    dump-&gt;AddScalar(base::trace_event::MemoryAllocatorDump::kNameSize,
+                    base::trace_event::MemoryAllocatorDump::kUnitsBytes,
+                    allocation.size_bytes());
+
+    // While you will typically have a kNameSize entry, you can add additional
+    // entries to your dump with free-form names. In this example we also dump
+    // an object's &quot;free_size&quot;, assuming the object may not be entirely in use.
+    dump-&gt;AddScalar(&quot;free_size&quot;,
+                    base::trace_event::MemoryAllocatorDump::kUnitsBytes,
+                    allocation.free_size_bytes());
+  }
+}</pre>
+<p>For many components, this may be all that is needed. See
+<a href="#Handling-Shared-Memory-Allocations">Handling Shared Memory Allocations</a> and
+<a href="#Suballocations">Suballocations</a> for information on more complex use cases.</p>
+<h2 id="registering-a-memory-dump-provider">Registering a Memory Dump Provider</h2>
+<p>Once you have created a <a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/memory_dump_provider.h"><code>MemoryDumpProvider</code></a>, you need to register it
+with the <a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/memory_dump_manager.h"><code>MemoryDumpManager</code></a> before the system can start polling it for
+memory information. Registration is generally straightforward, and involves
+calling <code>MemoryDumpManager::RegisterDumpProvider</code>:</p>
+<pre data-language="cpp">// Each process uses a singleton |MemoryDumpManager|.
+base::trace_event::MemoryDumpManager::GetInstance()-&gt;RegisterDumpProvider(
+    my_memory_dump_provider_, my_single_thread_task_runner_);</pre>
+<p>In the above code, <code>my_memory_dump_provider_</code> is the <code>MemoryDumpProvider</code>
+outlined in the previous section. <code>my_single_thread_task_runner_</code> is more
+complex and may be a number of things:</p>
+<ul>
+<li>Most commonly, if your component is always used from the main message loop,
+<code>my_single_thread_task_runner_</code> may just be
+[<code>base::SingleThreadTaskRunner::GetCurrentDefault()</code>][task-runner-handle].</li>
+<li>If your component already uses a custom <code>base::SingleThreadTaskRunner</code> for
+executing tasks on a specific thread, you should likely use this runner.</li>
+</ul>
+<h2 id="unregistration">Unregistration</h2>
+<p>Unregistration must happen on the thread belonging to the
+<code>SingleThreadTaskRunner</code> provided at registration time. Unregistering on another
+thread can lead to race conditions if tracing is active when the provider is
+unregistered.</p>
+<pre data-language="cpp">base::trace_event::MemoryDumpManager::GetInstance()-&gt;UnregisterDumpProvider(
+      my_memory_dump_provider_);</pre>
+<h2 id="handling-shared-memory-allocations">Handling Shared Memory Allocations</h2>
+<p>When an allocation is shared between two components, it may be useful to dump
+the allocation in both components, but you also want to avoid double-counting
+the allocation. This can be achieved using the concept of <em>ownership edges</em>.
+An ownership edge represents that the <em>source</em> memory allocator dump owns a
+<em>target</em> memory allocator dump. If multiple source dumps own a single target,
+then the cost of that target allocation will be split between the sources.
+Additionally, importance can be added to a specific ownership edge, allowing
+the highest importance source of that edge to claim the entire cost of the
+target.</p>
+<p>In the typical case, you will use <a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/process_memory_dump.h"><code>ProcessMemoryDump</code></a> to create a shared
+global allocator dump. This dump will act as the target of all
+component-specific dumps of a specific resource:</p>
+<pre data-language="cpp">// Component 1 is going to create a dump, source_mad, for an allocation,
+// alloc_, which may be shared with other components / processes.
+MyAllocationType* alloc_;
+base::trace_event::MemoryAllocatorDump* source_mad;
+
+// Component 1 creates and populates source_mad;
+...
+
+// In addition to creating a source dump, we must create a global shared
+// target dump. This dump should be created with a unique global ID which can be
+// generated any place the allocation is used. I recommend adding a global ID
+// generation function to the allocation type.
+base::trace_event::MemoryAllocatorDumpGUID guid(alloc_-&gt;GetGUIDString());
+
+// From this global ID we can generate the parent allocator dump.
+base::trace_event::MemoryAllocatorDump* target_mad =
+    process_memory_dump-&gt;CreateSharedGlobalAllocatorDump(guid);
+
+// We now create an ownership edge from the source dump to the target dump.
+// When creating an edge, you can assign an importance to this edge. If all
+// edges have the same importance, the size of the allocation will be split
+// between all sources which create a dump for the allocation. If one
+// edge has higher importance than the others, its source will be assigned the
+// full size of the allocation.
+const int kImportance = 1;
+process_memory_dump-&gt;AddOwnershipEdge(
+    source_mad-&gt;guid(), target_mad-&gt;guid(), kImportance);</pre>
+<p>If an allocation is being shared across process boundaries, it may be useful to
+generate a global ID which incorporates the ID of the local process, preventing
+two processes from generating colliding IDs. As it is not recommended to pass a
+process ID between processes for security reasons, a function
+<code>MemoryDumpManager::GetTracingProcessId</code> is provided which generates a unique ID
+per process that can be passed with the resource without security concerns.
+Frequently this ID is used to generate a global ID that is based on the
+allocated resource&#39;s ID combined with the allocating process&#39; tracing ID.</p>
+<h2 id="suballocations">Suballocations</h2>
+<p>Another advanced use case involves tracking sub-allocations of a larger
+allocation. For instance, this is used in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/gpu/command_buffer/service/texture_manager.cc"><code>gpu::gles2::TextureManager</code></a> to dump both the suballocations
+which make up a texture. To create a suballocation, instead of calling
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/process_memory_dump.h"><code>ProcessMemoryDump::CreateAllocatorDump</code></a> to create a
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/memory_allocator_dump.h"><code>MemoryAllocatorDump</code></a>, you call
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/trace_event/process_memory_dump.h"><code>ProcessMemoryDump::AddSubAllocation</code></a>, providing the ID of the parent
+allocation as the first parameter.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/adding_memory_infra_tracing.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/adding_memory_infra_tracing.md</a>
+  </p>
+</div>

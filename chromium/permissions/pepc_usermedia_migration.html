@@ -1,0 +1,108 @@
+<h1>Migration from  to the MVP  Capability Element</h1>
+<h2 id="overview-the-evolution-of-pepc">Overview: The Evolution of PEPC</h2>
+<p>Following extensive real-world validation and collaborative discussions with the web standards community, the Page-Embedded Permission Controls (<a href="https://github.com/WICG/PEPC/blob/main/explainer.md">PEPC</a>) initiative is evolving into a suite of specialized <strong>Capability Elements</strong>.</p>
+<p>While the initial PEPC approach focused on managing permission states, these new <strong>Capability Elements</strong> function as direct controllers for web capabilities. Specialized elements such as <code>&lt;geolocation&gt;</code>, <code>&lt;usermedia&gt;</code>, <code>&lt;camera&gt;</code>, and <code>&lt;microphone&gt;</code> move beyond simply gating the functionality to directly providing functional utility to your applications.</p>
+<p>For requesting camera and microphone access, the <code>&lt;permission&gt;</code> element is transitioning to the <code>&lt;usermedia&gt;</code> element. Targeting launch in M151, the <code>&lt;usermedia&gt;</code> element only supports combined camera and microphone access, with dedicated <code>&lt;camera&gt;</code> and <code>&lt;microphone&gt;</code> elements as fast follows in M152.</p>
+<h2 id="migration-path">Migration Path</h2>
+<p>The transition from the legacy <code>&lt;permission type=&quot;camera microphone&quot;&gt;</code> element (HTMLPermissionElement) to the <code>&lt;usermedia&gt;</code> Capability Element (HTMLUserMediaElement) is structured as a reverse origin trial. This approach preserves current behavior for existing users by setting a header (or meta tag) with the Origin Trial token, where <code>&lt;usermedia&gt;</code> continues to function as it has under the current origin trial.</p>
+<p>The next phase, beginning with the general launch in M151, introduces the standard <code>&lt;usermedia&gt;</code> element as an active functional broker. In this phase (provided no legacy indicators like the Origin Trial token or flag are present), <code>&lt;usermedia&gt;</code> is an active controller that triggers stream acquisition immediately upon user grant. The element functions as a declarative counterpart to the <code>getUserMedia</code> API, and will activate hardware indicators, such as the camera light, which developers must appropriately handle—for instance, by stopping tracks if immediate access is not required.</p>
+<hr>
+<h2 id="legacy-support-usermediaelement-origin-trial">Legacy Support: UserMediaElement Origin Trial</h2>
+<p>The <code>&lt;usermedia&gt;</code> Capability Element is currently available via a dedicated Origin Trial. To activate this functionality, you must <a href="https://developer.chrome.com/origintrials/#/view_trial/3736298840857247745">register your origin</a> and deploy the corresponding token. This trial period is temporary (scheduled to conclude at M152, though an extension to M155 is possible to provide more time for adoption).</p>
+<h2 id="step-1--2-integration-and-detection">Step 1 &amp; 2: Integration and Detection</h2>
+<p>Simply replace instances of the <code>&lt;permission&gt;</code> tag with <code>&lt;usermedia&gt;</code> in your markup.</p>
+<p>Additionally, ensure that any CSS selectors specifically targeting the permission tag are updated to target <code>usermedia</code>. Similarly, any JavaScript queries using <code>document.getElementsByTagName(&quot;permission&quot;)</code> (or similar tag-based lookups) must be updated to reference the new tag name. This update should be applied across all related cases in your codebase.</p>
+<p><strong>Before (Generic Permission Element):</strong></p>
+<pre data-language="css">/* CSS Selector */
+permission { background: #eef; color: #333; border: 2px solid #007bff; }</pre>
+<pre data-language="javascript">/* JavaScript Tag Lookup */
+const legacyElement = document.getElementsByTagName(&quot;permission&quot;);
+
+/* JavaScript Query Selector */
+const btn = document.querySelector(&quot;permission&quot;);</pre>
+<pre data-language="html">&lt;permission type=&quot;camera microphone&quot; id=&quot;media-request-btn&quot;&gt;
+  &lt;button id=&quot;fallback-btn&quot; onclick=&quot;requestMediaLegacy()&quot;&gt;
+    Enable Camera &amp; Microphone
+  &lt;/button&gt;
+&lt;/permission&gt;</pre>
+<p><strong>After (New Capability Element):</strong></p>
+<pre data-language="html">&lt;usermedia type=&quot;camera microphone&quot; id=&quot;media-request-btn&quot;&gt;
+  &lt;button id=&quot;fallback-btn&quot; onclick=&quot;requestMediaLegacy()&quot;&gt;
+    Enable Camera &amp; Microphone
+  &lt;/button&gt;
+&lt;/usermedia&gt;</pre>
+<pre data-language="css">/* CSS Selector Update */
+usermedia { background: #f0f0f0; border: 1px solid #ccc; }
+usermedia:granted { color: green; }</pre>
+<pre data-language="javascript">/* JavaScript Tag Lookup Update */
+const newElement = document.getElementsByTagName(&quot;usermedia&quot;);
+
+/* JavaScript Query Selector Update */
+const btn = document.querySelector(&quot;usermedia&quot;);</pre>
+<h2 id="step-2-update-javascript-feature-detection-if-applicable">Step 2: Update JavaScript Feature Detection (If Applicable)</h2>
+<p>If your JavaScript explicitly checks for the <code>HTMLPermissionElement</code> interface to detect browser support, you simply need to update it to check for <code>HTMLUserMediaElement</code>.</p>
+<p><strong>Before:</strong></p>
+<pre data-language="javascript">function browserSupportsPEPC() {
+  return typeof HTMLPermissionElement === 'function';
+}</pre>
+<p><strong>After:</strong></p>
+<pre data-language="javascript">function browserSupportsUserMediaElement() {
+  return typeof HTMLUserMediaElement === 'function';
+}</pre>
+<h2 id="standard-usermedia-m151">Standard <code>&lt;usermedia&gt;</code> M151+</h2>
+<p>The full power of the <code>&lt;usermedia&gt;</code> Capability Element is unlocked from M151+. Once the element is enabled by default in M151 and the legacy Origin Trial token is removed from the site, it transitions from a simple permission gate to a media provider. Features such as the <code>.stream</code> property and the <code>.setConstraints()</code> method become functional only in this standard mode. Note that the MVP currently supports only combined camera and microphone access; dedicated <code>&lt;camera&gt;</code> and <code>&lt;microphone&gt;</code> elements remain future roadmap items and are not available in the initial launch.</p>
+<pre data-language="javascript">// Check if the new API is supported without creating a DOM element, the site then should remove the OT token to use the new API
+if (typeof window.HTMLUserMediaElement !== 'undefined' &amp;&amp;
+    typeof HTMLUserMediaElement.prototype.setConstraints === 'function') {
+  console.log('Capability Element &lt;usermedia&gt; features are supported!');
+} else {
+  console.log('Falling back to legacy element handling.');
+}</pre>
+<p>In standard <code>&lt;usermedia&gt;</code>, <code>.setConstraints()</code> allows you to define hardware preferences before user interaction (note that for security and predictability, constraints can typically be set once per media request cycle). Upon a successful grant, the <code>.stream</code> property provides a direct <code>MediaStream</code> reference. If your application logic relies on these properties during the current Origin Trial (legacy phase), please be aware they are currently no-ops. You should plan your migration to leverage these APIs once you transition away from the legacy indicators¹ following the general M151 release.</p>
+<p>The <code>.stream</code> property is a read-only attribute in the MVP. It is important to note that once the stream is acquired, it starts immediately, matching the behavior of the <code>getUserMedia</code> API (for instance, triggering the camera&#39;s hardware light). If your site does not intend to use the stream right away, the application is responsible for manually stopping the tracks to release the hardware resources.</p>
+<pre data-language="javascript">const usermedia = document.getElementById('media-request-btn');
+
+// Specify hardware preferences before interaction
+usermedia.setConstraints({
+  video: { width: 1280, height: 720},
+  audio: { echoCancellation: true }
+});
+
+// Handle successful stream acquisition
+usermedia.addEventListener(&quot;stream&quot;, () =&gt; {
+    videoElement.srcObject = usermedia.stream;
+});
+
+// Handle stream acquisition failure
+usermedia.addEventListener(&quot;error&quot;, () =&gt; {
+    console.error(`Access failed: ${usermedia.error?.name}`);
+});
+
+// Handle prompt cancellation or dismissal
+usermedia.addEventListener(&quot;cancel&quot;, () =&gt; {
+    console.log(&quot;Permission prompt was dismissed by the user.&quot;);
+});</pre>
+<hr>
+<h2 id="faq">FAQ</h2>
+<p><strong>Will my existing CSS break?</strong></p>
+<p>No. Any CSS classes or IDs applied to your previous <code>&lt;permission&gt;</code> elements will work flawlessly on <code>&lt;usermedia&gt;</code> elements, provided you update any direct tag-name CSS selectors (e.g., change <code>permission { ... }</code> to <code>usermedia { ... }</code>). The browser-enforced security rules for contrast and overlapping are identical.</p>
+<p><strong>What is the status of events from the permission element like <code>promptaction</code>, and <code>promptdismiss</code>?</strong></p>
+<p>In alignment with ongoing discussion within the web standards community, we are considering streamlining the API, which may involve the removal of these events. Our team will provide further updates regarding these decisions.</p>
+<p><em>Updated decision: these events are now only available when the element is operating in legacy mode¹.</em></p>
+<p><strong>What happens to users on older browser versions?</strong></p>
+<p>Just like the previous iteration of PEPC, the <code>&lt;usermedia&gt;</code> element is designed for graceful deployment. Browsers that do not yet support <code>&lt;usermedia&gt;</code> will treat it as an <code>HTMLUnknownElement</code> and automatically render its child elements (your fallback buttons). Your legacy permission flows will continue to operate without interruption.</p>
+<p><strong>Why are we making this change?</strong></p>
+<p>After discussing closely with WebRTC group and other vendors, splitting all-in-one <code>&lt;permission&gt;</code> into specific Capability Elements (like <code>&lt;usermedia&gt;</code> and <code>&lt;geolocation&gt;</code>, and later with <code>&lt;camera&gt;</code> and <code>&lt;microphone&gt;</code>) allows browsers to offer more tailored user experiences that is not only controlling permission state but also the capability itself, clearer semantic HTML, and better modularity for future APIs.</p>
+<p><strong>When will the type attribute be deprecated?</strong></p>
+<p>The type only works in legacy mode, currently estimated at M152 milestones; however, this remains contingent upon the stabilization of the media constraints pipeline and the element’s adoption. Once these are stable, the type attribute will be entirely deprecated (if necessary, we can set an OT extension, potential M155 which would enable sites to defer the implementation keep the type attribute for an extended period).</p>
+<p><strong>Does Origin Trial (OT) registration automatically enable the element, or is a separate feature flag required (e.g., in M148)?</strong></p>
+<p>Registering for the Origin Trial and deploying the token is sufficient to enable the <code>&lt;usermedia&gt;</code> element on your registered origin. When the element is active via the OT, users visiting your site will not need to manually toggle a separate Chrome flag to access the feature. Upon the general release of <code>&lt;usermedia&gt;</code> in M151, the inclusion of an OT token specifies that the element will operate within its legacy mode¹.</p>
+<hr>
+<p><em>Notes:</em></p>
+<p><em>¹ The element&#39;s legacy behavior is now determined exclusively by the presence of a valid Origin Trial token or the &#39;UserMediaElementLegacy&#39; flag.</em></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/permissions/pepc_usermedia_migration.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/permissions/pepc_usermedia_migration.md</a>
+  </p>
+</div>

@@ -1,0 +1,188 @@
+<h1>Android Debugging Instructions</h1>
+<p>Chrome on Android has java and c/c++ code. Each &quot;side&quot; have its own set of tools
+for debugging. Here&#39;s some tips.</p>
+<h2 id="instructions-for-google-employees">Instructions for Google Employees</h2>
+<p>See also
+<a href="https://goto.google.com/clankium/06-debugging-clank">go/clankium/06-debugging-clank</a>.</p>
+<h2 id="launching">Launching</h2>
+<p>You can run the app by using one of the wrappers.</p>
+<pre data-language="shell"># Installs, launches, and enters logcat.
+out/Default/bin/content_shell_apk run --args='--disable-fre' 'data:text/html;utf-8,&lt;html&gt;Hello World!&lt;/html&gt;'
+# Launches without first installing. Does not show logcat.
+out/Default/bin/chrome_public_apk launch --args='--disable-fre' 'data:text/html;utf-8,&lt;html&gt;Hello World!&lt;/html&gt;'</pre>
+<h2 id="logging">Logging</h2>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_logging.md">Chromium logging from LOG(INFO)</a>
+etc., is directed to the Android logcat logging facility. You can filter the
+messages, e.g. view chromium verbose logging, everything else at warning level
+with:</p>
+<pre data-language="shell"># Shows a coloured &amp; filtered logcat.
+out/Default/bin/chrome_public_apk logcat [-v]  # Use -v to show logs for other processes</pre>
+<p>If this doesn&#39;t display the logs you&#39;re looking for, try <code>adb logcat</code> with your
+system <code>adb</code> or the one in <code>//third_party/android_sdk/</code>.</p>
+<h3 id="warnings-for-blink-developers">Warnings for Blink developers</h3>
+<ul>
+<li><p><strong>Do not use fprintf or printf debugging!</strong> This does not redirect to adb
+logcat. Use <code>LOG(ERROR)</code> etc. instead. See also the &quot;Get Blink code to output
+to the adb log&quot; section.</p>
+</li>
+<li><p>Redirecting stdio to logcat, as documented
+<a href="https://developer.android.com/studio/command-line/logcat.html#viewingStd">here</a>,
+has a bad side-effect in that it breaks <code>adb_install.py</code>. See
+<a href="http://stackoverflow.com/questions/28539676/android-adb-fails-to-install-apk-to-nexus-5-on-windows-8-1">here for details</a>.</p>
+</li>
+</ul>
+<h2 id="take-a-screenshot">Take a Screenshot</h2>
+<pre data-language="shell">build/android/screenshot.py /tmp/screenshot.png</pre>
+<h2 id="inspecting-the-view-hierarchy">Inspecting the View Hierarchy</h2>
+<p>Generate an <a href="android_studio">Android Studio</a> project, and then use
+<a href="https://developer.android.com/studio/debug/layout-inspector">Layout Inspector</a>.</p>
+<h2 id="debugging-java">Debugging Java</h2>
+<p>For both apk and test targets, pass <code>--wait-for-java-debugger</code> to the wrapper
+scripts. Except for junit tests, this requires <code>debuggable_apks = true</code> in your
+GN args (off by default).</p>
+<p>Examples:</p>
+<pre data-language="shell"># Install, launch, and wait:
+out/Default/bin/chrome_public_apk run --wait-for-java-debugger
+
+# Launch, and have GPU process wait rather than Browser process:
+out/Default/bin/chrome_public_apk launch --wait-for-java-debugger --debug-process-name privileged_process0
+
+# Have Renderers wait:
+out/Default/bin/chrome_public_apk launch --args=&quot;--renderer-wait-for-java-debugger&quot;
+
+# Have tests wait:
+out/Default/bin/run_chrome_public_test_apk --wait-for-java-debugger
+out/Default/bin/run_chrome_junit_tests --wait-for-java-debugger  # Specify custom port via --debug-socket=9999</pre>
+<h3 id="android-studio">Android Studio</h3>
+<ul>
+<li>Open Android Studio (<a href="android_studio">instructions</a>)</li>
+<li>Click &quot;Run&quot;-&gt;&quot;Attach debugger to Android process&quot; (see
+<a href="https://developer.android.com/studio/debug/index.html">here</a> for more).</li>
+<li>Click &quot;Run&quot;-&gt;&quot;Attach to Local Process...&quot; for Robolectric junit tests.<ul>
+<li>If this fails, you likely need to follow
+<a href="https://stackoverflow.com/questions/21114066/attach-intellij-idea-debugger-to-a-running-java-process">these instructions</a>.</li>
+</ul>
+</li>
+</ul>
+<h2 id="debugging-cc">Debugging C/C++</h2>
+<p>While the app is running, use the wrapper script&#39;s <code>lldb</code> command to enter into
+a lldb shell. Unless your device is rooted, this requires
+<code>debuggable_apks = true</code> in your GN args (off by default).</p>
+<p>When running with <code>lldb</code> attached, the app runs <strong>extremely slowly</strong>.</p>
+<pre data-language="shell"># Attaches to browser process.
+out/Default/bin/content_shell_apk lldb
+out/Default/bin/chrome_public_apk lldb
+
+# Attaches to gpu process.
+out/Default/bin/chrome_public_apk lldb --debug-process-name privileged_process0
+
+# Attach to other processes (&quot;chrome_public_apk ps&quot; to show pids).
+out/Default/bin/chrome_public_apk lldb --pid $PID</pre>
+<h3 id="using-visual-studio-code">Using Visual Studio Code</h3>
+<p><strong>NOT WORKING</strong></p>
+<p>This used to work with GDB, but the LLDB instructions have not been written. If
+you would like to take this on, please use:
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1266055">crbug/1266055</a>.</p>
+<h3 id="waiting-for-debugger-on-early-startup">Waiting for Debugger on Early Startup</h3>
+<pre data-language="shell"># Install, launch, and wait:
+out/Default/bin/chrome_public_apk run --args=&quot;--wait-for-debugger&quot;
+# Launch, and have GPU process wait rather than Browser process:
+out/Default/bin/chrome_public_apk launch --args=&quot;--wait-for-debugger-children=gpu-process&quot;
+# Or for renderers:
+out/Default/bin/chrome_public_apk launch --args=&quot;--wait-for-debugger-children=renderer&quot;</pre>
+<h4 id="with-command-line-lldb">With Command-line LLDB</h4>
+<p>Once attached, <code>lldb</code> will drop into a prompt. Set your breakpoints and run &quot;c&quot;
+to continue.</p>
+<h2 id="symbolizing-crash-stacks-and-tombstones-c">Symbolizing Crash Stacks and Tombstones (C++)</h2>
+<p>If a crash has generated a tombstone in your device, use:</p>
+<pre data-language="shell">build/android/tombstones.py --output-directory out/Default</pre>
+<p>If you have a stack trace (from <code>adb logcat</code>) that needs to be symbolized, copy
+it into a text file and symbolize with the following command (run from
+<code>${CHROME_SRC}</code>):</p>
+<pre data-language="shell">third_party/android_platform/development/scripts/stack --output-directory out/Default [tombstone file | dump file]</pre>
+<p><code>stack</code> can also take its input from <code>stdin</code>:</p>
+<pre data-language="shell">adb logcat -d | third_party/android_platform/development/scripts/stack --output-directory out/Default</pre>
+<p>Example:</p>
+<pre data-language="shell">third_party/android_platform/development/scripts/stack --output-directory out/Default ~/crashlogs/tombstone_07-build231.txt</pre>
+<h2 id="deobfuscating-stack-traces-java">Deobfuscating Stack Traces (Java)</h2>
+<p>You will need the ProGuard mapping file that was generated when the application
+that crashed was built. When building locally, these are found in:</p>
+<pre data-language="shell">out/Default/apks/ChromePublic.apk.mapping
+etc.</pre>
+<p>When debugging a failing test on the build waterfall, you can find the mapping
+file as follows:</p>
+<ol>
+<li>Open buildbot page for the failing build (e.g.,
+<a href="https://ci.chromium.org/p/chrome/builders/ci/android-go-perf/1234">https://ci.chromium.org/p/chrome/builders/ci/android-go-perf/1234</a>).</li>
+<li>Open the swarming page for the failing shard (e.g., shard #3).</li>
+<li>Click on &quot;Isolated Inputs&quot; to locate the files the shard used to run the
+test.</li>
+<li>Download the <code>.mapping</code> file for the APK used by the test (e.g.,
+<code>ChromePublic.apk.mapping</code>). Note that you may need to use the
+<code>tools/luci-go/isolated</code> to download the mapping file if it&#39;s too big. The
+viewer will provide instructions for this.</li>
+</ol>
+<p><strong>Googlers Only</strong>: For official build mapping files, see
+<a href="https://goto.google.com/chromejavadeobfuscation">go/chromejavadeobfuscation</a>.</p>
+<p>Once you have a .mapping file:</p>
+<pre data-language="shell"># For a file:
+build/android/stacktrace/java_deobfuscate.py PROGUARD_MAPPING_FILE.mapping &lt; FILE
+# For logcat:
+adb logcat | build/android/stacktrace/java_deobfuscate.py PROGUARD_MAPPING_FILE.mapping</pre>
+<h2 id="get-blink-code-to-output-to-the-adb-log">Get Blink code to output to the adb log</h2>
+<p>In your build environment:</p>
+<pre data-language="shell">adb root
+adb shell stop
+adb shell setprop log.redirect-stdio true
+adb shell start</pre>
+<p>In the source itself, use <code>LOG(ERROR),</code> <code>LOG(INFO)</code>, etc. whenever you need to
+output a message, and it will be automatically redirected to adb logcat. Running
+<code>adb logcat chromium:E</code>, for example, will show all log lines from <code>LOG(ERROR)</code>
+(plus others that match &quot;chromium&quot;).</p>
+<h2 id="debug-unit-tests-with-lldb">Debug unit tests with LLDB</h2>
+<p>To run unit tests use the following command:</p>
+<pre data-language="shell">out/Debug/bin/run_test_name -f &lt;test_filter_if_any&gt; --wait-for-debugger -t 6000</pre>
+<p>That command will cause the test process to wait until a debugger is attached.</p>
+<p>To attach a debugger:</p>
+<pre data-language="shell">build/android/connect_lldb.sh --output-directory=out/Default --package-name=org.chromium.native_test</pre>
+<h2 id="examine-app-data-on-a-non-rooted-device">Examine app data on a non-rooted device</h2>
+<p>If you&#39;re developing on a non-rooted device such as a retail phone, security
+restrictions will prevent directly accessing the application&#39;s data. However, as
+long as the app is built with debugging enabled, you can use
+<code>adb shell run-as PACKAGENAME</code> to execute shell commands using the app&#39;s
+authorization, roughly equivalent to <code>su $user</code>.</p>
+<p>This requires <code>android:debuggable=&quot;true&quot;</code> in the app&#39;s manifest, which is off by
+default. To enable it, set <code>debuggable_apks = true</code> in your GN args.</p>
+<p>For exammple, for a Chromium build, run the following:</p>
+<pre>adb shell run-as org.chromium.chrome</pre>
+<p>If successful, this will silently wait for input without printing anything. It
+acts as a simple shell despite not showing the usual <code>$ </code> shell prompt. Just
+type commands and press RETURN to execute them.</p>
+<p>The starting directory is the app&#39;s user data directory where user preferences
+and other profile data are stored.</p>
+<pre>pwd
+/data/user/0/org.chromium.chrome
+
+find -type f
+./files/rList
+./shared_prefs/org.chromium.chrome_preferences.xml</pre>
+<p>If you need to access the app&#39;s application data directory, you need to look up
+the obfuscated installation path since you don&#39;t have read access to the
+<em>/data/app/</em> directory. For example:</p>
+<pre>pm list packages -f org.chromium.chrome
+package:/data/app/~~ybTygSP5u72F9GN-3TMKXA==/org.chromium.chrome-zYY5mcB7YgB5pa3vfS3CBQ==/base.apk=org.chromium.chrome
+
+ls -l /data/app/~~ybTygSP5u72F9GN-3TMKXA==/org.chromium.chrome-zYY5mcB7YgB5pa3vfS3CBQ==/
+total 389079
+-rw-r--r-- 1 system system 369634375 2022-11-05 01:49 base.apk
+drwxr-xr-x 3 system system      3452 2022-11-05 01:49 lib
+-rw-r--r-- 1 system system    786666 2022-11-05 01:49 split_cablev2_authenticator.apk
+-rw-r--r-- 1 system system  21258500 2022-11-05 01:49 split_chrome.apk
+-rw-r--r-- 1 system system   1298934 2022-11-05 01:49 split_config.en.apk
+-rw-r--r-- 1 system system    413913 2022-11-05 01:49 split_dev_ui.apk</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_debugging_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/android_debugging_instructions.md</a>
+  </p>
+</div>

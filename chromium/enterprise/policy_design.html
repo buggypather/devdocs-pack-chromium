@@ -1,0 +1,275 @@
+<h1>How to design an enterprise policy</h1>
+<h2 id="summary">Summary</h2>
+<p>Chrome exposes a different set of configurations to administrators. These
+configurations are called policies and they give administrators more advanced
+controls than the standard users. With different device management tools, an
+administrator can deliver these policies to many users. Here is the
+<a href="https://support.google.com/chrome/a/?p=policy_order">help center article</a> that
+talks about Chrome policy and its deployment.</p>
+<p>This doc focus on how to design a new policy. More details about policy
+development can be found in the <a href="add_new_policy">Chromium doc</a>.</p>
+<h2 id="do-i-need-a-policy">Do I need a policy</h2>
+<p>Not every single Chrome update needs to be guarded with a policy. In some cases,
+enterprise users can accept new features just like consumer users. However,
+consider adding new policy if</p>
+<ul>
+<li>Your feature will break an existing CUJ (Critical User Journey).</li>
+<li>Your feature will introduce changes in some critical areas like security,
+networking.</li>
+<li>Your feature can be configured by end users.</li>
+<li>Your feature has compliance requirements, e.g. upload data to Google owned
+servers.</li>
+<li>You are removing an existing feature from Chrome.</li>
+</ul>
+<p>And if you are not sure, don’t hesitate to contact the
+<a href="mailto:chromium-enterprise@chromium.org">Chrome enterprise team</a>).</p>
+<h2 id="design-a-new-policy">Design a new policy</h2>
+<h3 id="before-starting">Before Starting</h3>
+<p>Similar to the switches on the chrome://settings page, enterprise policies are
+designed to provide options to our users to customize Chrome’s behaviors.</p>
+<p>In some cases, a simple kill switch is a good starting point. It allows admins
+to force a feature they really need or block one that they can’t have due to
+privacy or security concerns. However, a boolean won’t always provide enough
+flexibility and may turn enterprise users away. In other words, providing
+granular control would be a better approach here. It allows enterprise users
+access to a feature while administrators can still meet all compatibility
+requirements. Sometimes, a policy can even be used to provide an enhanced
+version of the feature to enterprise users.</p>
+<p>For example,
+<a href="https://chromeenterprise.google/policies/#ExtensionSettings">ExtensionSettings</a>
+allows admins to block extensions based on their permissions or update URLs
+while still giving users the ability to install extensions that they like and
+admins are comfortable with.</p>
+<p>Another example is
+<a href="https://chromeenterprise.google/policies/#BrowserSignin">BrowserSignin</a> policy
+which provides an additional force-sign-in feature which is not available for
+consumer users.</p>
+<p>Think about CUJ(Critical User Journey), collect information to understand how
+administrators and enterprise users will use this feature. They can help you to
+design a policy.</p>
+<h3 id="define-a-policy">Define a policy</h3>
+<p>Each Chrome policy must be defined in the
+<a href="https://cs.chromium.org/chromium/src/components/policy/resources/templates/policy_definitions/">Chromium code base</a>
+which contains all metadata of a policy.</p>
+<h4 id="name">Name</h4>
+<p>Policy name is a short phrase that briefly describes what the policy does.</p>
+<ul>
+<li>Choose a name that is consistent with the existing naming scheme. Prefer
+&quot;XxxEnabled&quot; over &quot;EnableXxx&quot; because the former is more glanceable and
+sorts better.</li>
+<li>Do <strong>NOT</strong> use negative words like <em>Disabled</em> or <em>Disallowed</em>. It will lead
+to double negatives and confuse people. Instead, prefer a policy name like
+FooEnabled (which can be set to false in cases where a feature should be
+disabled).</li>
+<li><em>Enabled</em> can only used for boolean policies. For Enum, please use
+<em>Settings</em> as suffix.</li>
+<li>Avoid long policy names. Policy names don&#39;t have to cover everything. There
+is a documentation section for all the details.</li>
+<li>Avoid internal keywords and project names. Policy names are public
+information. Make sure keywords can be searched and understood by external
+people.</li>
+<li>Consider the foreseeable future and try to avoid conflicts with possible
+future extensions or use cases.</li>
+<li>If the policy name has an acronym, only the first letter should be upper
+camel case. For example, you should use &quot;Api&quot; and not &quot;API&quot;.</li>
+</ul>
+<p>Searching for a similar pattern from existing
+<a href="https://chromeenterprise.google/policies/">policies list</a> is always a good
+strategy to find a good name. However, be careful about some ancient policies
+that were added a long time ago. We may already abandon those naming patterns,
+but keep the policies only because of backward compatibility. For example,
+<a href="https://chromeenterprise.google/policies/#SyncDisabled">SyncDisabled</a> was added
+in Chrome 8, but we keep its name even though <em>Disabled</em> is banned.</p>
+<h4 id="type">Type</h4>
+<p>There are 6 major types of policies, listed below.</p>
+<h5 id="boolean">Boolean</h5>
+<p>This is the simplest policy type that defines 3 states: enabled, disabled and
+not set. Not-set should have the same behavior as consumer users.</p>
+<blockquote>
+<p>ℹ️️ Avoid using Boolean whenever possible. Enum is always preferred because of
+better extensibility. It&#39;s quite common for policies to have new states over
+time. And boolean policies can not be extended.</p>
+</blockquote>
+<p>Example:
+<a href="https://chromeenterprise.google/policies/#CloudReportingEnabled">CloudReportingEnabled</a></p>
+<h5 id="enum">Enum</h5>
+<p>A policy type provides more than 3 states for the admin to choose from.</p>
+<p>Example:
+<a href="https://chromeenterprise.google/policies/#BrowserSignin">BrowserSignin</a></p>
+<p>If multiple options can be chosen at the same time, use string-enum-list type.</p>
+<p>Example:
+<a href="https://chromeenterprise.google/policies/#ExtensionAllowedTypes">ExtensionAllowedTypes</a></p>
+<h5 id="integer">Integer</h5>
+<p>A policy that accepts any integer as input. It can be used to define a period of
+time or size of a folder. The integer can&#39;t be negative and must be less than
+2^32.</p>
+<p>In most cases, there are two things to consider.</p>
+<ul>
+<li>Choose a proper interval.</li>
+<li>Choose a proper unit.</li>
+</ul>
+<p>Unit:</p>
+<p>The enterprise team used to use the minimum unit for policy to give enterprise
+more flexibility. However, that may require admin to put an unnecessary large
+number for certain policies which is error-prone.</p>
+<p>Now we ask people to choose more proper units. For example, instead of
+milliseconds, hours may be a better choice, if most people won’t care about the
+differences between 1 hour and 59 minutes.</p>
+<p>Example:
+<a href="https://chromeenterprise.google/policies/#CloudReportingUploadFrequency">CloudReportingUploadFrequency</a>
+and <a href="https://chromeenterprise.google/policies/#DiskCacheSize">DiskCacheSize</a></p>
+<h5 id="string">String</h5>
+<p>A policy that accepts any string as input.</p>
+<p>Starting from this type, admin can put anything as policy input and error
+handling become more important.</p>
+<ul>
+<li>If a policy input is partially invalid, can we still process the good part?</li>
+<li>Presenting good error messages to help admins fix the issues.</li>
+</ul>
+<p>Note that setting an empty string <em>must</em> be treated as not setting the policy
+due to the limitation of policy delivery mechanisms on some platforms.</p>
+<p>Example
+<a href="https://chromeenterprise.google/policies/#HomepageLocation">HomepageLocation</a></p>
+<h5 id="list">List</h5>
+<p>A policy that accepts a list of strings as input.</p>
+<p>Similar to string policy</p>
+<ul>
+<li>Empty list <em>must</em> be treated as not set.</li>
+<li>User input validation needs to be handled properly.</li>
+</ul>
+<p>In addition to that, depending on the policy implementation, setting a
+limitation is necessary when having too many list entries could cause
+performance issues. As an example,
+<a href="https://chromeenterprise.google/policies/#URLBlocklist">URLBlocklist</a> policy
+only accepts 1000 URLs because we need to scan the list for every navigation
+request.</p>
+<p>However, sometimes admins may want to set values more than what we can afford.
+In those cases, we will need to redesign the input format. For example,
+supporting wildcard characters is a common solution.</p>
+<p>Example: <a href="https://chromeenterprise.google/policies/#URLBlocklist">URLBlocklist</a>,
+<a href="https://chromeenterprise.google/policies/#ExtensionInstallAllowlist">ExtensionInstallAllowlist</a></p>
+<h6 id="url-list">URL list</h6>
+<p>URL list is a common format of list policy. It allows admins to apply policy
+only to certain websites or URLs.</p>
+<p>Other than normal list policy, a few more considerations:</p>
+<ul>
+<li>In many cases, URL matching is not necessary. Domain or hostname matching
+may be good enough and much easier to maintain.</li>
+<li>Choose URL matching algorithm:<ul>
+<li>Exact match</li>
+<li><a href="https://chromeenterprise.google/policies/url-patterns/">Content settings</a>
+for content settings</li>
+<li><a href="https://support.google.com/chrome/a?p=url_blocklist_filter_format">URLBlocklist</a>
+style with basic wildcard support.</li>
+<li>Define your own. Avoid this option if possible. If you have to, make
+sure all edge cases are addressed.</li>
+</ul>
+</li>
+</ul>
+<h6 id="allowlist-vs-blocklist">Allowlist vs Blocklist</h6>
+<p>Another common format of list policies. It allows the admin to set exceptions
+for certain situations. Usually, we can create them as:</p>
+<ul>
+<li>A standalone allowlist/blocklist policy.</li>
+<li>An on/off boolean policy as default option with another allowlist/blocklist
+policy as exception.</li>
+<li>Allowlist and blocklist policies pair.</li>
+</ul>
+<p>If more than one policy is defined for the same feature, please find a proper
+solution to resolve the conflict cases.</p>
+<h5 id="dictionary">Dictionary</h5>
+<p>A policy that accepts a complex structure as input. Depending on the platforms,
+it could be a JSON string or XML files.</p>
+<p>This is the most powerful and complicated policy format. A complicated
+dictionary policy may be hard for admins to understand and maintain. In many
+cases, splitting a dictionary configuration into multiple simple policies is a
+better approach.</p>
+<p>Same as String and List policy, an empty dictionary <em>must</em> be treated as not
+setting the policy.</p>
+<p>Also, a complicated dictionary policy may also contain conflict configurations.
+Make sure those cases are handled properly.</p>
+<p>Example:
+<a href="https://chromeenterprise.google/policies/#ExtensionSettings">ExtensionSettings</a></p>
+<h4 id="default-value">Default Value</h4>
+<p>The default value defines Chrome’s behavior when policy is not set.</p>
+<h4 id="supported-platforms">Supported Platforms</h4>
+<p>Always support as many platforms as possible. And unless there are good reasons,
+please launch a policy on all platforms at the same time.</p>
+<h4 id="feature">Feature</h4>
+<ul>
+<li><em><strong>Dynamic refresh</strong></em> - When set to true, modifying the policy does not
+require relaunching the browser. Support this feature whenever possible.</li>
+<li><em><strong>Per profile</strong></em> - When set to true, policy value can be applied to only
+one particular profile. Support this feature whenever possible.</li>
+<li><em><strong>Hidden policies</strong></em> - In some cases, you would like to hide the policies
+from most admins. There is no perfect solution as admins can always check
+the source code of Chromium. But we still can hide a policy as much as we
+can. Talk with the Enterprise team for more details.</li>
+<li><em><strong>Recommended vs mandatory</strong></em> - Recommended policies mean the admin only
+sets the initial value of the policy, but allows users to modify them later.
+Most policies are mandatory only, but having a recommended support is
+encouraged. However, make sure the user can actually modify that settings.
+(e.g. Having a UI or an extension API)</li>
+<li><em><strong>Device policy</strong></em> - A special policy that controls ChromeOS hardware or
+sign in page. If a policy needs to control both browser and ChromeOS device,
+split it into two policies. For example,
+<a href="https://chromeenterprise.google/policies/#MetricsReportingEnabled">MetricsReportingEnabled</a>
+vs
+<a href="https://chromeenterprise.google/policies/#DeviceMetricsReportingEnabled">DeviceMetricsReportingEnabled</a>.
+Device policies’ name always begin with the “Device” prefix.</li>
+</ul>
+<h3 id="more-policy-details">More Policy Details</h3>
+<h4 id="chrome-ui">Chrome UI</h4>
+<p>If a setting is controlled by policy and UI at the same time, please make sure
+the UI is disabled when the policy is set with a proper message or UI element
+which tells end users that the option is controlled by their administrator.</p>
+<p>Alert: There might be multiple UI entries, make sure all of them are covered.</p>
+<h4 id="admin-console-ui">Admin Console UI</h4>
+<p>Most of the time, there is no need to worry about the admin console UI. However,
+cover this section if your policy is complicated. Talk with
+<a href="https://docs.google.com/document/d/1QgDTWISgOE8DVwQSSz8x5oKrI3O_qAvOmPryE5DQPcw/edit#heading=h.py10m8dh4kvv">the server team</a>
+for more details. (Internal link, Googlers only)</p>
+<h4 id="a-group-of-policies">A group of policies</h4>
+<p>If multiple policies are added at the same time or there are existing policies
+for the same feature, make sure all those policies won’t break each other.</p>
+<ul>
+<li>One policy may provide conflicting settings with another one.</li>
+<li>One policy may have different behavior depending on another one.</li>
+</ul>
+<p>Also, if multiple policies are created for the same topic, creating a new
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/policy/resources/new_policy_templates/.group.details.yaml">policy group</a>
+can help admins find all related policies.</p>
+<h4 id="migrating-existing-policies">Migrating existing policies</h4>
+<p>In some cases, we would like to replace one policy with a more powerful one. The
+old policy will be deprecated in this case. However, for the sake of backward
+compatibility, we still need to support the old one.</p>
+<p>On the other hand, it’s always nice to think about future expansion when
+designing a policy. For example, if there is a chance we want to add more
+options to a policy, then enum type will be better than boolean.</p>
+<h4 id="privacy--security">Privacy &amp; Security</h4>
+<p>Policy is a very powerful configuration tool that may bring additional security
+and privacy concerns. Talk with the Chrome privacy and Chrome security ahead of
+time if there is any concern.</p>
+<h5 id="security">Security</h5>
+<p>Will bad actors be interested in your policy? The Enterprise team can provide
+additional management checks for the policy by marking it sensitive. But it may
+block admins from small companies which didn’t pay for expensive management
+systems. In other cases, limiting the ability of policy may also help.</p>
+<h5 id="privacy">Privacy</h5>
+<p>We would like to protect end users’ privacy as much as we can while fulfilling
+admins’ requests. Another area that may need careful balance.</p>
+<h3 id="launch-policy">Launch Policy</h3>
+<p>One major difference between policy launching and other features is that rollout
+control via experimental is not always an option. Majority of admins want their
+policies settings to apply to all devices they control.</p>
+<p>Usually, policy must be ready and launched before the feature it controls rolls
+out.</p>
+<p>In other cases, we can use trusted testers to test the policies for a small
+number of enterprise customers first. Talk with the Enterprise team for more
+details.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/policy_design.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/policy_design.md</a>
+  </p>
+</div>

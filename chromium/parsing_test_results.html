@@ -1,0 +1,80 @@
+<h1>Parsing Test Results</h1>
+<p>Chromium runs over 500,000 tests for each CL. There are many layers of UI for
+parsing and interpreting these test results. This doc provides a brief guide
+for navigating these UI layers.</p>
+<h2 id="polygerrit-ui">Polygerrit UI</h2>
+<p>Tests are segmented by build and test configurations. The segments are usually
+referred to as <em>builds</em>. In the example below, each green and red rectangle
+refers to a <em>build</em>.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/parsing_test_results_polygerrit.png" alt="Example polygerrit build status"></p>
+<p>The name of each build usually contains enough information to get a rough idea
+of the configuration. Some examples:</p>
+<ul>
+<li><em>android_compile_dbg</em> is a compile-only [no tests] build of Chromium for
+Android, using the <em>debug</em> configuration.</li>
+<li><em>android-lollipop-arm-rel</em> builds and runs tests for Chromium for Android,
+using the <em>release</em> configuration on a lollipop device.</li>
+<li><em>win7-rel</em> builds and runs tests for Chromium on Windows, using
+the release configuration on a Windows 7 device. <em>ng</em> stands for next
+generation, but this has no meaning as the previous generation was already
+phased out.</li>
+</ul>
+<p>Green boxes refer to builds that passed. Red boxes refer to builds that failed.
+Some failed builds get automatically retried by the CQ. In this example,
+<em>linux-rel</em> and <em>mac-rel</em> were automatically retried [hence the two <strong>X</strong>s], but
+<em>win7-rel</em> was not. The <strong>X</strong> on the left is the first build, and the <strong>X</strong> on the right
+is the second build.</p>
+<p>Each of these boxes is a link that provides more information about the build
+failure.</p>
+<h2 id="build-results-ui">Build Results UI</h2>
+<p>Selecting any of the build results from the previous section will navigate to
+the build results UI. Each build is implemented by a <a href="https://chromium.googlesource.com/external/github.com/luci/recipes-py/+/main/doc/user_guide.md">recipe</a> --
+effectively a Python script. Each recipe is divided into <em>steps</em>. Each <em>step</em>
+represents a well-defined action, such as updating the repository to point to
+tip of tree, or compiling the necessary build artifacts.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/parsing_test_results_build_results_1.png" alt="Example 1 Build Results UI"></p>
+<p>Under the <strong>Steps and Logfiles</strong> heading is a list of numbered <em>steps</em>. Each
+<em>step</em> has a color (red, green or purple) which indicates whether the <em>step</em>
+failed, succeeded, or encountered an unexpected condition. Failing steps are
+also grouped into the <strong>Results</strong> section at the very top for convenience.</p>
+<h2 id="build-results-ui----overview">Build Results UI -- Overview</h2>
+<p>Most builds follow a similar pattern. The key <em>steps</em> are listed here.</p>
+<ul>
+<li><strong>bot_update</strong> Update the repository to point to tip of tree. Apply the CL
+as a patch.</li>
+<li><strong>analyze</strong> Analyze dependencies of test suites to determine which test
+suites are affected by the patch.</li>
+<li><strong>compile (with patch)</strong> Builds test suites and associated artifacts.</li>
+<li><strong>isolate tests</strong> Archives test suite binaries and artifacts.</li>
+<li><strong>test_pre_run.[trigger] blink_web_tests (with patch)</strong> Triggers a test
+suite on swarming [remote execution framework] -- in this case,
+blink_web_tests.</li>
+<li><strong>blink_web_tests (with patch)</strong> Collects the results from swarming for a
+test suite.</li>
+</ul>
+<p>If all test suites pass, then the <em>build</em> is marked as a success and no further
+steps are run. If at least one test suite has failures, then the failing tests
+are rerun with the patch deapplied. This allows the recipe to determine if the
+test failure is due to the CL or due to a problem with tip of tree.</p>
+<ul>
+<li><strong>bot_update [without patch]</strong> Deapplies the CL patch.</li>
+<li><strong>compile [without patch]</strong> Compiles test suites.</li>
+<li><strong>isolate tests (2)</strong> Archives test suite binaries and artifacts.</li>
+<li><strong>test_pre_run.[trigger] blink_web_tests (without patch)</strong> Triggers test
+suite on swarming. Only failing tests are rerun.</li>
+<li><strong>blink_web_tests (without patch)</strong> Collects results from swarming.</li>
+</ul>
+<p><strong>Important safety notice</strong>. When test suites are run with the patch applied,
+each test is run up to N times -- any success will mark the test as a success.
+When test suites are run without the patch, each failing test is run exactly N
+times. Any failure will mark the test as a failure.</p>
+<p>If there are tests that failed with the patch applied, but not with the patch
+deapplied, then that implies that it&#39;s likely that the CL broke a test. Just to
+confirm, the first suite of steps is run again, this time with the suffix
+<strong>(retry with patch)</strong>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/parsing_test_results.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/parsing_test_results.md</a>
+  </p>
+</div>

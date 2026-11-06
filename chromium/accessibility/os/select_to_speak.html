@@ -1,0 +1,278 @@
+<h1>Select to Speak (for developers)</h1>
+<p>Select to Speak is a Chrome OS feature to read text on the screen out loud.</p>
+<p>There are millions of users who greatly benefit from some text-to-speech but
+don’t quite need a full screen reading experience where everything is read
+aloud each step of the way. For these users, whether they are low vision,
+dyslexic, neurologically diverse, or simply prefer to listen to text read
+aloud instead of visually reading it, we have built Select-to-Speak.</p>
+<h2 id="using-select-to-speak">Using Select to Speak</h2>
+<p>Go to Chrome settings, Accessibility settings, “Manage accessibility Features”,
+and enable “Select to Speak”. You can adjust the preferred voice, highlight
+color, and access text-to-speech preferences from the settings page.</p>
+<p>With this feature enabled, you can read text on the screen in one of three ways:</p>
+<ul>
+<li><p>Hold down the Search key, then use the touchpad or external mouse to tap or
+drag a region to be spoken</p>
+</li>
+<li><p>Tap the Select-to-Speak icon in the status tray and use the mouse or
+touchscreen to select a region to be spoken</p>
+</li>
+<li><p>Highlight text and use Search+S to speak only the selected text.</p>
+</li>
+</ul>
+<p>Read more on the
+<a href="https://support.google.com/chromebook/answer/9032490?hl=en">Chrome help page</a>
+under “Listen to part of a page”.</p>
+<h2 id="reporting-bugs">Reporting bugs</h2>
+<p>Use bugs.chromium.org, filing bugs under the component
+<a href="https://bugs.chromium.org/p/chromium/issues/list?sort=-opened&amp;colspec=ID%20Pri%20M%20Stars%20ReleaseBlock%20Component%20Status%20Owner%20Summary%20OS%20Modified&amp;q=component%3AUI%3EAccessibility%3ESelectToSpeak%20&amp;can=2">UI&gt;Accessibility&gt;SelectToSpeak</a>.</p>
+<h2 id="developing">Developing</h2>
+<p><em>Select to Speak will be abbreviated STS in this section.</em></p>
+<h3 id="code-location">Code location</h3>
+<p>STS code lives mainly in three places:</p>
+<ul>
+<li><p>A component extension to do the bulk of the logic and processing,
+chrome/browser/resources/chromeos/accessibility/select_to_speak/</p>
+</li>
+<li><p>An event handler, ash/events/select_to_speak_event_handler.h</p>
+</li>
+<li><p>The status tray button, ash/system/accessibility/select_to_speak/select_to_speak_tray.h</p>
+</li>
+<li><p>Floating panel, system/accessibility/select_to_speak_menu_bubble_controller.h</p>
+</li>
+</ul>
+<p>In addition, there are settings for STS in
+chrome/browser/resources/ash/settings/os_a11y_page/select_to_speak_subpage.*</p>
+<h3 id="tests">Tests</h3>
+<p>Tests are in ash_unittests and in browser_tests:</p>
+<pre>out/Release/ash_unittests --gtest_filter=”SelectToSpeak*”
+out/Release/browser_tests --gtest_filter=”SelectToSpeak*”</pre>
+<h3 id="debugging">Debugging</h3>
+<p>Developers can add log lines to any of the C++ files and see output in the
+console. To debug the STS extension, the easiest way is from an external
+browser. Start Chrome OS on Linux with this command-line flag:</p>
+<pre>out/Release/chrome --remote-debugging-port=9222</pre>
+<p>Now open <a href="http://localhost:9222">http://localhost:9222</a> in a separate instance of the browser, and
+debug the Select to Speak extension background page from there.</p>
+<h2 id="how-it-works">How it works</h2>
+<p>Like <a href="chromevox">Chromevox</a>, STS is implemented mainly as a component
+Chrome extension which is always loaded and running in the background when
+enabled, and unloaded when disabled. The only STS code outside of the
+extension is an EventRewriter which forwards keyboard and mouse events to
+the extension as needed, so that the extension can get events systemwide.</p>
+<p>The STS extension does the following, at a high level:</p>
+<ol>
+<li><p>Tracks key and mouse events to determine when a user has either:</p>
+<p> a. Held down “search” and clicked &amp; dragged a rectangle to specify a
+ selection</p>
+<p> b. Used “search” + “s” to indicate that selected text should be read</p>
+<p> c. Has requested speech to be canceled by tapping ‘control’ or ‘search’
+ alone</p>
+</li>
+<li><p>Determines the Accessibility nodes that make up the selected region</p>
+</li>
+<li><p>Sends utterances to the Chrome Text-to-Speech extension to be spoken</p>
+</li>
+<li><p>Tracks utterance progress and updates the focus ring and highlight as needed.</p>
+</li>
+</ol>
+<h3 id="select-to-speak-extension-structure">Select to Speak extension structure</h3>
+<p>Most STS logic takes place in
+<a href="https://cs.chromium.org/chromium/src/chrome/browser/resources/chromeos/accessibility/select_to_speak/select_to_speak.js">select_to_speak.js</a>.</p>
+<h4 id="user-input">User input</h4>
+<p>Input to the extension is handled by input_handler.js, which handles user
+input from mouse, keyboard, and touchscreen events. Most logic here revolves
+around keeping track of state to see if the user has requested text using
+one of the three ways to activate the feature, search + mouse, tray button</p>
+<ul>
+<li>mouse, or search + s.</li>
+</ul>
+<h4 id="determining-selected-content">Determining selected content</h4>
+<p>Once input_handler determines that the user did request text to be spoken,
+STS must determine which part of the page to read. To do this it requests
+information from the Automation API, and then generates a list of
+AutomationNodes to be read.</p>
+<h5 id="with-mouse-or-touchpad">With mouse or touchpad</h5>
+<p>select_to_speak.js fires a HitTest to the Automation API at the center of
+the rect selected by the user. When the API gets a result it returns via
+SelectToSpeak.onAutomationHitTest_. This function walks up from the hit
+test node to the nearest container to find a root, then back down through
+all the root’s children to find ones that overlap with the selected rect.
+Walking back down through the children occurs in NodeUtils.findAllMatching,
+and results in a list of AutomationNodes that can be sent for speech.</p>
+<p>If the rect size is below a certain threshold, all nodes within overlapped
+block parent are selected.</p>
+<h5 id="with-search--s">With search + s</h5>
+<p>select_to_speak.js requests focus information from the Automation API. The
+focus result is sent to SelectToSpeak.requestSpeakSelectedText_, which
+uses Automation selection to determine which nodes are selected. The
+complexity of logic here is converting between Automation selection and
+its deep equivalent, i.e. from parent nodes and offsets to their leaves.
+This occurs in NodeUtils.getDeepEquivalentForSelection. When the first and
+last nodes in selection are found, SelectToSpeak.readNodesInSelection_ is
+used to determine the entire list of AutomationNodes which should be sent
+for speech.</p>
+<h4 id="speaking-selected-content">Speaking selected content</h4>
+<p>SelectToSpeak.startSpeechQueue_ takes a list of AutomationNodes, determines
+their text content, and sends the result to the Text to Speech API for
+speech. It begins by mapping the text content of the nodes to the nodes
+themselves, so that STS can speak smoothly across node boundaries (i.e.
+across line breaks) and follow speech progress with a highlight. The mapping
+between text and nodes occurs in repeated calls to
+ParagraphUtils.buildNodeGroup to build lists of nodes that should be spoken
+smoothly.</p>
+<p>Each node group is sent to the Text to Speech API, with callbacks to allow
+for speech progress tracking, enabling the highlight to be dynamically
+updated with each word.</p>
+<h4 id="highlighting-content-during-speech">Highlighting content during speech</h4>
+<p>On each word boundary event, the TTS API sends a callback which is handled
+by SelectToSpeak.onTtsWordEvent_. This is used to check against the list of
+nodes being spoken to see which node is currently being spoken, and further
+check against the words in the node to see which word is spoken.</p>
+<h4 id="edge-cases">Edge cases</h4>
+<p>STS must also handle cases where:</p>
+<ul>
+<li><p>Nodes become invalid during speech, i.e. if a page was closed. Speech
+should continue, but highlight stops.</p>
+</li>
+<li><p>Nodes disappear and re-appear during speech (a user may have switched
+tabs and switched back, or scrolled). Highlight should resume.</p>
+</li>
+</ul>
+<p>This occurs in SelectToSpeak.updateFromNodeState_.</p>
+<h3 id="communication-with-selecttospeaktray">Communication with SelectToSpeakTray</h3>
+<p>STS runs in the extension process, but needs to communicate its three states
+(Inactive, Selecting, and Speaking) to the STS button in the status tray.
+It also needs to listen for users requesting state change using the
+SelectToSpeakTray button. The STS extension uses the AccessibitilityPrivate
+method setSelectToSpeakState to inform the SelectToSpeakTray of a
+status change, and listens to onSelectToSpeakStateChangeRequested to know
+when a user wants to change state. The STS extension is the source of truth
+for STS state.</p>
+<h3 id="navigation-features">Navigation features</h3>
+<p>STS will display a floating control panel when activated. The control panel
+hosts controls for pause/resume, updating reading speed, navigating by sentence
+or paragraph, and deactivating STS.</p>
+<h4 id="floating-control-panel">Floating control panel</h4>
+<p>The panel is implemented as a native ASH component
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/system/accessibility/select_to_speak/select_to_speak_menu_bubble_controller.h">select_to_speak_menu_bubble_controller.h</a>.
+Similar to focus rings, the STS component extension communicates with the panel
+via the <code>chrome.accessibilityPrivate</code> API. The
+<code>chrome.accessibilityPrivate.updateSelectToSpeakPanel</code> API controls the
+visibility and button states, and panel actions are communicated back to the
+extension by adding a listener to
+<code>chrome.accessibilityPrivate.onSelectToSpeakPanelAction</code>.</p>
+<p>When the panel is displayed, STS will no longer dismiss itself when TTS
+playback is complete. The user must quit STS either from the panel or
+the tray button.</p>
+<h5 id="keyboard-shortcuts">Keyboard shortcuts</h5>
+<p>When the panel is displayed, it is initially focused and captures keypresses to
+implement keyboard shortcuts:</p>
+<ul>
+<li>Space - activates currently focused button, which is &#39;Pause/Resume&#39;
+initially.</li>
+<li>Left Arrow - Navigate to previous sentence (for RTL languages, this is Right
+Arrow)</li>
+<li>Right Arrow - Navigate to next sentence (for RTL languages, this is Left
+Arrow)</li>
+<li>Up Arrow - Navigate to previous paragraph</li>
+<li>Down Arrow - Navigate to next paragraph</li>
+</ul>
+<p>If the panel loses focus, keyboard shortcuts will no longer work. User can press
+Search+S keyboard shortcut (with no text selection) to restore focus to the
+panel.</p>
+<h5 id="disallowed-nodes">Disallowed nodes</h5>
+<p>The panel is not shown when STS is activated on nodes where navigation features
+do not add value, such as in system UI or top-level windows.</p>
+<ul>
+<li>System UI nodes - any nodes that have a <code>root</code> with role <code>desktop</code></li>
+<li>Root nodes that are children of the root <code>desktop</code> node</li>
+</ul>
+<h4 id="pauseresume">Pause/Resume</h4>
+<p>Since <code>chrome.tts.pause</code> and <code>chrome.tts.resume</code> are not consistently
+implemented across all TTS engines, STS implements pause/resume functionality
+using the <code>chrome.tts.stop</code> and <code>chrome.tts.speak</code> APIs. While TTS is playing,
+STS keeps track of the current word offset, and when TTS is resumed, it will
+call <code>speak</code> with text trimmed to the start of the last spoken word.</p>
+<p>Resuming TTS behaves differently depending on the context:</p>
+<ul>
+<li>If TTS was paused within the user-selected text, resuming will play until
+the end of the selected text.</li>
+<li>If TTS stopped when it reached the end of the selected text, but before the
+end of the paragraph, resuming will continue from that point to the end of
+the paragraph.</li>
+<li>If TTS stopped when it reached the end of a paragraph, resuming will speak
+the next paragraph.</li>
+</ul>
+<h4 id="paragraph-navigation">Paragraph navigation</h4>
+<p>Users can navigate to adjacent paragraphs from the current block parent when
+Select-to-speak is active. A &#39;paragraph&#39; is any block element as defined by
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/chromeos/accessibility/select_to_speak/paragraph_utils.js">ParagraphUtils.isBlock</a>
+and the navigation occurs in DOM-order.</p>
+<h4 id="sentence-navigation">Sentence navigation</h4>
+<p>Paragraphs are split into sentences based on the <code>sentenceStarts</code> property of
+an AutomationNode. Users can skip to previous and next sentences using similar
+technique as pause/resume (<code>stop</code> then <code>speak</code> with trimmed text). See
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/chromeos/accessibility/select_to_speak/sentence_utils.js">sentence_utils.js</a>
+for logic on breaking node groups into sentences.</p>
+<h4 id="reading-speed">Reading speed</h4>
+<p>Users can slow down or speed up TTS speaking rate using the floating control
+panel. The rate the user selects in the panel is multiplied by the system
+default TTS rate. So if the user selects 1.2x reading speed in the panel and
+has a system default of 2.0x, the effective TTS rate will be 2.4x.</p>
+<p>When users adjust reading speed, <code>chrome.tts.stop</code> is called, and
+<code>chrome.tts.speak</code> is then called with text trimmed to the current word
+position, passing in the new effective TTS rate as an option.</p>
+<h3 id="special-case-google-drive-apps">Special case: Google Drive apps</h3>
+<p>Google Drive apps require a few work-arounds to work correctly with STS.</p>
+<ul>
+<li><p>Any time a Google Drive document is loaded (such as a Doc, Sheet or Slides
+document), the script
+<a href="https://cs.chromium.org/chromium/src/chrome/browser/resources/chromeos/accessibility/select_to_speak/select_to_speak_gdocs_script.js?q=select_to_speak_gdocs_script.js+file:%5Esrc/chrome/browser/resources/chromeos/accessibility/select_to_speak/+package:%5Echromium$&amp;dr">select_to_speak_gdocs_script</a>
+must be executed to remove aria-hidden from the content container.</p>
+</li>
+<li><p>Using search+s to read highlighted text uses the clipboard to get text data
+from Google Docs, as selection information may not be available in the
+Automation API. This happens mostly in input_handler.js.</p>
+</li>
+</ul>
+<h3 id="enhanced-network-voices">Enhanced network voices</h3>
+<p>As of M94, Select-to-speak supports natural, server-generated voices. When
+enhanced network voices are enabled, Select-to-speak passes the user&#39;s selected
+natural voice name to <code>chrome.tts.speak</code>. The TTS request is handled by the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/resources/chromeos/accessibility/enhanced_network_tts/">Enhanced Network TTS engine</a>.
+The TTS engine then passes the request to native code
+(<a href="https://source.chromium.org/chromium/chromium/src/+/main:chromeos/ash/components/enhanced_network_tts/enhanced_network_tts_impl.h"> EnhancedNetworkTts</a>),
+which in turn sends a network request to the ReadAloud API, which produces
+synthesized audio.</p>
+<p>For instructions on how to add new voices, see
+<a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/go/chromeos-natural-voices">go/chromeos-natural-voices</a>.</p>
+<h2 id="for-googlers">For Googlers</h2>
+<p>For more, Googlers could check out the Select to Speak feature design docs
+for more details on design as well as UMA.</p>
+<ul>
+<li><p>Overall product design, <a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/go/select-to-speak-design">go/select-to-speak-design</a></p>
+</li>
+<li><p>On-Screen UI for touch and tablet modes,
+<a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/go/chromeos-sts-on-screen-ui">go/chromeos-sts-on-screen-ui</a></p>
+</li>
+<li><p>Reading text at keystroke,
+<a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/go/chromeos-sts-selection-keystroke">go/chromeos-sts-selection-keystroke</a></p>
+</li>
+<li><p>Reading text at keystroke in Google Drive apps, <a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/go/sts-selection-in-drive">go/sts-selection-in-drive</a></p>
+</li>
+<li><p>Per word highlighting,
+<a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/go/chrome-sts-sentences-and-words">go/chrome-sts-sentences-and-words</a> and
+<a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/go/chromeos-sts-highlight">go/chromeos-sts-highlight</a></p>
+</li>
+<li><p>Navigation features, <a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/go/enhanced-sts-dd">go/enhanced-sts-dd</a></p>
+</li>
+<li><p>Enhanced network voices, <a href="https://github.com/chromium/chromium/blob/HEAD/docs/accessibility/os/go/wavenet-chromeos-dd">go/wavenet-chromeos-dd</a></p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/select_to_speak.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/select_to_speak.md</a>
+  </p>
+</div>

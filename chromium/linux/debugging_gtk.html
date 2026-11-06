@@ -1,0 +1,38 @@
+<h1>Linux Debugging GTK</h1>
+<h2 id="making-warnings-fatal">Making warnings fatal</h2>
+<p>See
+<a href="http://developer.gnome.org/glib/stable/glib-running.html">Running GLib Applications</a>
+for notes on how to make GTK warnings fatal.</p>
+<h2 id="using-gtk-debug-packages">Using GTK Debug packages</h2>
+<pre>sudo apt-get install libgtk-3-0-dbg</pre>
+<p>Make sure that you&#39;re building a binary that matches your architecture (e.g.
+64-bit on a 64-bit machine), and there you go.</p>
+<h3 id="source">Source</h3>
+<p>You&#39;ll likely want to get the source for gtk too so that you can step through
+it. You can tell gdb that you&#39;ve downloaded the source to your system&#39;s GTK by
+doing:</p>
+<pre data-language="shell">$ cd /my/dir
+$ apt-get source libgtk-3-0
+$ gdb ...
+(gdb) set substitute-path /build/buildd /my/dir</pre>
+<p>NOTE: I tried debugging pango in a similar manner, but for some reason gdb
+didn&#39;t pick up the symbols from the symbols from the <code>-dbg</code> package. I ended up
+building from source and setting my <code>LD_LIBRARY_PATH</code>.</p>
+<p>See <a href="building_debug_gtk">building_debug_gtk.md</a> for more on how
+to build your own debug version of GTK.</p>
+<h2 id="parasite">Parasite</h2>
+<p><a href="http://chipx86.github.com/gtkparasite/">http://chipx86.github.com/gtkparasite/</a> is great. Go check out the site for more
+about it.</p>
+<p>Install it with</p>
+<pre>sudo apt-get install gtkparasite</pre>
+<p>And then run Chrome with</p>
+<pre>GTK_MODULES=gtkparasite ./out/Debug/chrome</pre>
+<h2 id="gdk_debug">GDK_DEBUG</h2>
+<p>Use <code>GDK_DEBUG=nograbs</code> to run GTK+ without grabs. This is useful for gdb
+sessions.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/debugging_gtk.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/debugging_gtk.md</a>
+  </p>
+</div>

@@ -1,0 +1,78 @@
+<h1>Security Shepherd ClusterFuzz instructions</h1>
+<p>This page has instructions for <a href="shepherd">Security Shepherds</a> in how best to use
+<a href="https://clusterfuzz.com">ClusterFuzz</a> to reproduce and label bugs.</p>
+<h2 id="basics">Basics</h2>
+<p><a href="https://clusterfuzz.com/upload-testcase">https://clusterfuzz.com/upload-testcase</a>
+allows you to upload files to reproduce crashes on various platforms and will
+identify revision ranges when the regression was introduced.</p>
+<p>Prefer using the &quot;Quick upload&quot; flow for simple cases. If you choose to use
+&quot;Upload&quot; instead, you will have to pick which <a href="#useful-jobs">job</a> to run.</p>
+<p>Note that ClusterFuzz only supports running untrusted inputs on Linux. The UI
+will warn you of that.</p>
+<p>If a test case requires multiple files, they can be uploaded together in a zip
+or tar archive: the main file needs to contain the words <code>run</code>, <code>fuzz-</code> <code>index.</code>
+or <code>crash.</code>.</p>
+<p>Please <em>do</em> specify the crbug number when uploading the test case. This allows
+ClusterFuzz to keep the crbug updated with progress.</p>
+<h2 id="useful-jobs">Useful jobs</h2>
+<p>You should chose the right job type depending on the format of file you want to
+test:</p>
+<ul>
+<li>repro.html <a href="https://clusterfuzz.com/upload-testcase?upload=true&amp;job=linux_asan_chrome_mp">linux_asan_chrome_mp</a>
+or <a href="https://clusterfuzz.com/upload-testcase?upload=true&amp;job=windows_asan_chrome">windows_asan_chrome</a></li>
+<li>repro.js <a href="https://clusterfuzz.com/upload-testcase?upload=true&amp;job=linux_asan_d8">linux_asan_d8</a></li>
+<li>repro.pdf <a href="https://clusterfuzz.com/upload-testcase?upload=true&amp;job=libfuzzer_chrome_asan&amp;target=pdfium_xfa_fuzzer">libfuzzer_chrome_asan / pdfium_xfa_fuzzer</a></li>
+<li>repro.js for V8 sandbox bypass / violation: linux_asan_d8_sandbox_testing /
+linux_asan_chrome_v8_sandbox_testing</li>
+</ul>
+<h2 id="mojojs">MojoJS</h2>
+<p><a href="https://github.com/chromium/chromium/blob/HEAD/mojo/public/js/README.md">MojoJS</a> is a means for a renderer process to use
+Mojo IPCs directly from JavaScript. Although it&#39;s not enabled in normal production
+Chrome builds, it&#39;s a great way to simulate how a compromised renderer can attack
+other processes over IPC.</p>
+<p>Because Mojo IPCs change with each version of Chrome, the test case needs to
+use exactly the right MojoJS bindings. MojoJS bugs typically specify to use
+<code>python ./copy_mojo_bindings.py</code> to put such bindings in place, but that does not
+work for ClusterFuzz where it will need to bisect across many versions of Chrome
+with many versions of Mojo.</p>
+<p>Therefore, do this instead:</p>
+<ul>
+<li>In the PoC, replace all paths where it&#39;s loading MojoJS scripts to be prefixed
+with <code>file:///gen</code> instead. For example:</li>
+</ul>
+<pre>  &lt;script src=&quot;file:///gen/mojo/public/js/mojo_bindings_lite.js&quot;&gt;</pre>
+<p>  This works because most of the ClusterFuzz Chrome binaries are <a href="https://chromium-review.googlesource.com/c/chromium/src/+/1119727">now built with</a> <code>enable_ipc_fuzzer=true</code>.</p>
+<ul>
+<li>If you believe the bug will reproduce on Linux, use the <a href="https://clusterfuzz.com/upload-testcase?upload=true&amp;job=linux_asan_chrome_mojo">linux_asan_chrome_mojo</a> job type.</li>
+<li>If you believe the bug will only reproduce on Android, <a href="https://crbug.com/1067103">ClusterFuzz can&#39;t help right now</a>.</li>
+<li>Otherwise, use any job type but specify extra command-line flags <code>--enable-blink-features=MojoJS</code>. In this case, ClusterFuzz might declare that a browser process crash is Critical severity, whereas because of the precondition of a compromised renderer <a href="severity-guidelines">you may wish to adjust it down to High</a>.</li>
+</ul>
+<p><a href="https://crbug.com/1072983">Example bug where these instructions have worked</a>.</p>
+<h2 id="gestures">Gestures</h2>
+<p>Some testcases require UI gestures to reproduce them. ClusterFuzz has a
+&quot;gestures&quot; field where you <em>may</em> be able to specify such UI interactions. The
+language is platform-specific. On Linux, it&#39;s commands for
+<a href="https://manpages.ubuntu.com/manpages/trusty/man1/xdotool.1.html">xdotool</a> in a
+Python-like list. For instance,</p>
+<pre>[ &quot;type,'qx1sqOqB0ZbEFYn'&quot;,&quot;key,F3&quot;,&quot;key,F12&quot; ]</pre>
+<p>As mouse coordinates are subject to change, it probably only makes sense to try
+gestures if the UI actions can be achieved purely using keystrokes. The relevant
+ClusterFuzz <a href="https://github.com/google/clusterfuzz/blob/master/src/clusterfuzz/_internal/fuzzing/gesture_handler.py#L22">code is in
+gesture_handler.py</a>
+to figure out the languages for other platforms.</p>
+<h2 id="https-headers">HTTP(S) headers</h2>
+<p>If you need to reproduce a test case that involves specific HTTP headers, do this:</p>
+<ol>
+<li>Make a copy of <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/test/fuzzing/page_load_in_process_fuzzer_seed_corpus/network.textproto">page_load_in_process_fuzzer_seed_corpus/network.textproto</a></li>
+<li>Edit as necessary to give the headers you need</li>
+<li>Go to the ClusterFuzz <a href="https://clusterfuzz.com/upload-testcase">upload page</a></li>
+<li>Select <code>libfuzzer_chrome_asan</code> for the job</li>
+<li>Select <code>page_load_in_process_fuzzer</code> for the fuzzer</li>
+<li>Upload <code>network.textproto</code> as the test case.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/clusterfuzz-for-shepherds.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/clusterfuzz-for-shepherds.md</a>
+  </p>
+</div>

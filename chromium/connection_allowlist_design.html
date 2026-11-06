@@ -1,0 +1,226 @@
+<h1>Connection Allowlist Design</h1>
+<p>References:</p>
+<ul>
+<li><a href="https://github.com/WICG/connection-allowlists">Explainer</a></li>
+<li><a href="https://wicg.github.io/connection-allowlists/">Spec</a></li>
+<li><a href="https://chromestatus.com/feature/5175745573945344">Chrome Status Entry</a></li>
+<li><a href="https://docs.google.com/document/d/1B3LERUObjVDAKBNLpdIxbk8LC96rWUn1q8vtP9pPIuA/edit?usp=sharing">Design Document</a></li>
+</ul>
+<h2 id="summary">Summary</h2>
+<p>Connection Allowlist restricts network connections in Chromium using a
+URLPattern allowlist returned by the server. The high-level flow is:</p>
+<ul>
+<li>The allowlist is returned in the HTTP response when loading a given
+context (document or worker)</li>
+<li>A <code>network_restrictions_id</code> is assigned to that context, which is used to
+identify requests that originate from it</li>
+<li>Enforcement then focuses on blocking requests containing that ID based on
+the mapped allowlist.</li>
+</ul>
+<p>This document outlines the architectural design and the checks performed
+across different Chromium layers (network service, browser, renderer).</p>
+<p>All security and resource restrictions (CSP, Connection Allowlists, etc.) are
+applied <strong>restrictively and additively</strong>. A request must satisfy <strong>all</strong>
+applicable security policies to proceed; if any policy blocks the request, the
+request is blocked.</p>
+<h2 id="design">Design</h2>
+<h3 id="network-service-integration">Network service integration</h3>
+<p>The network service is the primary layer where network requests are handled and
+dispatched. The majority of Connection Allowlist enforcement occurs here.</p>
+<ul>
+<li><strong>Responsibilities:</strong><ul>
+<li>Intercept and filter outgoing network requests.</li>
+<li>Apply allowlist rules at the URLLoader level (including document-initiated
+prefetches which are associated with the document&#39;s
+<code>network_restrictions_id</code>).</li>
+<li>Enforce allowlists for other networking APIs like WebSockets, DNS Prefetch,
+and WebTransport.</li>
+</ul>
+</li>
+<li><strong>Benefits:</strong><ul>
+<li><strong>Defense-in-Depth:</strong> Since enforcement occurs in the Network Service
+process, compromised renderer processes cannot bypass these checks.</li>
+<li><strong>Centralized Enforcement:</strong> The Network Service handles HTTP/HTTPS
+requests, WebSockets, and WebTransport. Enforcing allowlists at this level
+provides a single, uniform point of control across different network
+protocols.</li>
+<li><strong>Semantic Consistency:</strong> Once registered, allowlist matching happens
+within the Network Service process. This ensures that the same set of
+rules is applied to all requests regardless of where they originated
+(e.g. fetch, fetch redirects, prefetch, worker, etc.).</li>
+<li><strong>Extensibility:</strong> The token-based mapping (<code>network_restrictions_id</code>) is
+highly extensible. Other future security features or JS-based network
+restriction APIs (similar to the dynamic
+<code>window.fence.disableUntrustedNetwork()</code> design previously used for Fenced
+Frames, see <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7709872">CL 7709872</a>) can leverage this same plumbing to dynamically
+register and enforce rules in the Network Service.</li>
+</ul>
+</li>
+</ul>
+<h4 id="network-restrictions-id-network_restrictions_id">Network restrictions ID (<code>network_restrictions_id</code>)</h4>
+<p>To map network requests back to the corresponding context (document or worker)
+and its connection allowlists, each context is associated with a unique token,
+the <code>network_restrictions_id</code> (a <code>base::UnguessableToken</code>).</p>
+<ul>
+<li><strong>Creation &amp; Propagation</strong>:<ul>
+<li>During cross-document navigation, a new <code>network_restrictions_id</code> is
+created on the <code>NavigationRequest</code> in
+<code>NetworkRestrictionsNavigationThrottle</code>.</li>
+<li>Upon navigation commit, this ID is wrapped in a ref-counted handle
+(<code>base::RefCountedData&lt;base::UnguessableToken&gt;</code>) and stored in the
+document&#39;s <code>DocumentAssociatedData</code> (or worker hosts like
+<code>DedicatedWorkerHost</code> and <code>SharedWorkerHost</code>).</li>
+<li>Ref-counting is used because there are edge cases where multiple documents
+can share the same <code>network_restrictions_id</code> (e.g., initial empty documents
+inheriting their creator&#39;s ID).</li>
+</ul>
+</li>
+<li><strong>Updating the Network Service</strong>:<ul>
+<li>If a document has active connection allowlists (enforced or report-only)
+determined from policy container policies, the browser process registers
+them via <code>StoragePartitionImpl::RestrictNetworkForIdsInNetworkContext</code>.</li>
+<li>This sends the ID and allowlisted patterns to the <code>NetworkContext</code> in the
+Network Service using <code>RestrictNetworkForIds()</code>.</li>
+<li>The navigation is deferred during the throttle check
+(<code>WillProcessResponse</code> / <code>WillCommitWithoutUrlLoader</code>) until the Network
+Service confirms the restrictions have been registered, ensuring
+restrictions are applied before resource loading begins.</li>
+</ul>
+</li>
+<li><strong>Backup &amp; Recovery</strong>:<ul>
+<li><code>StoragePartitionImpl</code> stores a copy of the restrictions in
+<code>network_restrictions_ids_</code>. In case of a Network Service crash, this map
+is used to restore the network restrictions on the new <code>NetworkContext</code>.</li>
+</ul>
+</li>
+<li><strong>Lifetime &amp; Cleanup</strong>:<ul>
+<li>When a document&#39;s <code>DocumentAssociatedData</code> or worker is destroyed, if it
+holds the last reference to the ref-counted <code>network_restrictions_id</code>, it
+schedules a cleanup of the restriction mapping from the Network Service
+and <code>StoragePartitionImpl</code> using
+<code>StoragePartitionImpl::ClearNetworkRestrictionsAfterDelay</code>.</li>
+<li><strong>Selecting the ID at Calling Sites</strong>:
+When a calling site initiates a request or creates a connection (e.g.
+WebSocket, WebTransport) that expects a <code>network_restrictions_id</code>, it
+should use:<ul>
+<li><strong>The context&#39;s ID</strong>: If the request/connection is associated with a
+specific context (document, dedicated worker, shared worker, or service
+worker), use that context&#39;s <code>network_restrictions_id</code>.</li>
+<li><strong><code>network::GetNoOpNetworkRestrictionsId()</code></strong>: When no network
+restrictions should be applied, bypassing restrictions entirely. This
+should be used carefully as it bypasses the Connection Allowlist (e.g.,
+for browser-initiated requests that do not have an associated
+frame/context).</li>
+<li><strong><code>network::GetTestNetworkRestrictionsId()</code></strong>: In tests that require a
+valid network restrictions ID but do not test Connection Allowlist
+behavior.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="browser-process-checks-contentbrowser">Browser process checks (content/browser)</h3>
+<p>The browser process coordinates navigation checks and handles security
+policies.</p>
+<ul>
+<li><strong>Responsibilities:</strong><ul>
+<li>Store and manage Connection Allowlists as part of the <code>PolicyContainerHost</code>
+associated with each document.</li>
+<li>Intercept and validate navigations in the browser process before they are
+sent to the network service using the
+<code>NavigationRequest::IsAllowedByConnectionAllowlist</code> function. This function
+enforces allowlist policies during key phases of navigation (such as
+initial request start and handling redirects).</li>
+</ul>
+</li>
+</ul>
+<h3 id="blink-checks">Blink checks</h3>
+<p>Blink is the rendering engine running in the renderer process.</p>
+<ul>
+<li><strong>Responsibilities:</strong><ul>
+<li>Enforce Connection Allowlists in the renderer process for:<ol>
+<li>WebRTC connections. These checks are also validated in the network
+service to handle compromised renderers.</li>
+<li>Requests initiated via <code>fetch()</code> when they will be intercepted by a
+Service Worker. This is done in blink because the renderer directly
+talks to the Service Worker URLLoaderFactory in these cases, not giving
+the document&#39;s URLLoaderFactory checks a chance to run, unless the SW
+decides to fallback on the original fetch. This applies when the
+initiating context is either a document, dedicated worker or shared
+worker.</li>
+</ol>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="integration-with-service-workers">Integration with service workers</h3>
+<p>Service Workers act as network proxies in the renderer process, intercepting
+requests before they reach the network.</p>
+<ul>
+<li><strong>Responsibilities:</strong><ul>
+<li><strong>Main Script Fetches &amp; Update Checks</strong>: Subject Service Worker main script
+fetches and update checks to the Connection Allowlists of the
+<strong>creator/initiator context</strong>(the registering document).<ul>
+<li><strong>Initial Install</strong>: The browser process creates the loader factory via
+<code>GetLoaderFactoryForMainScriptFetch</code> passing the
+<code>creator_network_restrictions_id_</code>.</li>
+<li><strong>Update Checks</strong>: During soft update checks (in
+<code>ServiceWorkerRegisterJob::UpdateAndContinue</code>), the loader factory is
+created via <code>GetLoaderFactoryForUpdateCheck</code> passing the
+<code>creator_network_restrictions_id_</code>.</li>
+</ul>
+</li>
+<li><strong>Intercepted Document Fetches</strong>: Ensure requests initiated by a document
+that are intercepted by a Service Worker are validated in Blink against the
+<strong>document&#39;s</strong> Connection Allowlists before they are forwarded to the
+Service Worker. This prevents documents from bypassing their own
+restrictions, including when the Service Worker attempts to serve
+responses from Cache Storage.</li>
+<li><strong>Service Worker Outgoing Fetches</strong>: Apply the Service Worker&#39;s own
+Connection Allowlists (persisted and restored via the database) to its
+own fetches.<ul>
+<li>Requests initiated directly by the Service Worker context
+(<code>ServiceWorkerGlobalScope</code>) itself (via <code>fetch()</code>) are governed by the
+policies stored in its own <code>PolicyContainerHost</code>. Those are mapped to
+the Service Worker&#39;s own <code>network_restrictions_id</code> in the Network
+Service via the <code>NetworkRestrictionsWorkerThrottle</code>. This throttle also
+does the same for dedicated and shared worker contexts.</li>
+<li>Once a request is inside the Service Worker, any outgoing network
+fetches (e.g., via <code>event.respondWith(fetch(request))</code>) are initiated
+using the Service Worker&#39;s <code>URLLoaderFactory</code> and subjected to the
+<strong>Service Worker&#39;s</strong> Connection Allowlists (associated with the Service
+Worker&#39;s own <code>network_restrictions_id</code>), regardless of the client
+document&#39;s policies. Consequently, redirects of these fetches are
+checked against the Service Worker&#39;s connection allowlist&#39;s redirect
+flag, not the document&#39;s.</li>
+</ul>
+</li>
+<li><strong>Navigation Preload</strong>: Navigation preload requests are subject to the
+<strong>Service Worker&#39;s</strong> Connection-Allowlist. If the navigation itself is
+allowed by the document&#39;s Connection-Allowlist, the associated navigation
+preload request will be executed using the Service Worker&#39;s
+<code>URLLoaderFactory</code> (which is associated with the Service Worker&#39;s
+<code>network_restrictions_id</code>), thereby enforcing the Service Worker&#39;s
+policies.</li>
+<li><strong>clients.navigate() in Service Workers</strong>: Navigation initiated via
+clients.navigate() is subject to both the Service Worker&#39;s and the
+document&#39;s Connection Allowlists. Since the navigation is initiated from
+the Service Worker context, the Service Worker&#39;s Connection Allowlists
+apply to the navigation before it is initiated from the Service Worker.
+In addition, since the navigation is on a window client (which has an
+associated Document), the Document&#39;s Connection Allowlists also apply,
+and if there is a server redirect, the document&#39;s Connection Allowlists&#39;
+redirect bit will be checked.</li>
+<li><strong>clients.openWindow() in Service Workers</strong>: Navigation initiated via
+clients.openWindow() is subject to the Service Worker&#39;s Connection
+Allowlists before it is initiated. There is no check on redirect since
+there is no CA to be checked once the navigation has started.</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/connection_allowlist_design.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/connection_allowlist_design.md</a>
+  </p>
+</div>

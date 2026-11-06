@@ -1,0 +1,209 @@
+<h1>Working With Files</h1>
+<p>Adding, removing, and renaming files in iOS Chromium needs to follow a specific
+procedure that will be unfamiliar to engineers coming from other iOS projects.
+Conceptually, every file is recorded in <em>four</em> locations: the local filesystem,
+git, the <code>BUILD.gn</code> files, and the Xcode projects. Of these, the Xcode project
+is wholly generated from the others.</p>
+<h2 id="overview">Overview</h2>
+<p><strong>Do not use Xcode to manipulate files.</strong> The Xcode project used for iOS
+Chromium is <em>generated</em>; it&#39;s functionally a build artifact. The various
+<code>BUILD.gn</code> files in Chromium define structure of the Xcode project file. Running
+<code>gclient runhooks</code> causes the project files to be regenerated.</p>
+<p>Individual files can have their contents edited within Xcode, and all of the
+regular testing and debugging activities can be done within Xcode. It just can&#39;t
+be used to create files, rename files, delete files, or manipulate the project
+group structure in any way. To do these things, follow the procedures below.</p>
+<h2 id="adding-files">Adding files</h2>
+<p>To add any files (new headers, <code>.mm</code> or <code>.cc</code> implementation files, asset files
+of any kind), the following general steps need to happen:</p>
+<ol>
+<li><p>The file needs to exist in the correct directory of the file system for your
+Chromium checkout. New files need to be created, or assets need to be
+copied to the right location.</p>
+</li>
+<li><p>The new files need to be added to git.</p>
+</li>
+<li><p>The new files need to be added to a target in a <code>BUILD.gn</code> file (usually in
+the same directory as the newly added file).</p>
+</li>
+<li><p>The Xcode project needs to be regenerated.</p>
+</li>
+</ol>
+<p>For adding new header or implementation files, the following procedure is
+recommended:</p>
+<ol>
+<li><p>Generate the new files using <code>tools/boilerplate.py</code>. This will generate
+header guard macros and include the copyright boilerplate. Make sure to run
+this from root (<code>src/</code>) so the header guards include the correct, full
+path.</p>
+</li>
+<li><p>Add the newly created files using <code>git add</code>.</p>
+</li>
+<li><p>Edit the <code>BUILD.gn</code> file for the directory where the files were added. For
+each file, add it to the <code>sources</code> list for the correct <code>source_set</code> in the
+<code>BUILD.gn</code> file. Note that <code>gn format</code> (which is run as part of <code>git cl format</code>) will take care of alphabetizing the lists along with other
+formatting, so there&#39;s no need to manually do these things. (<code>BUILD.gn</code>
+files cand be edited directly in Xcode, or in another editor such as <code>vi</code>).</p>
+</li>
+<li><p>Once all of the files have been created, <code>add</code>ed and all <code>BUILD.gn</code> files
+have been updated, run <code>gclient runhooks</code> to regenerate all Xcode projects.</p>
+</li>
+<li><p>If Xcode is open, it may prompt to &quot;Autocreate Schemes&quot;. If so, click on the
+highlighted &quot;Automatically Create Schemes&quot; button.</p>
+</li>
+</ol>
+<p>In the shell, this procedure would look like this:</p>
+<pre data-language="bash">// Step 1 -- generate new files.
+$ tools/boilerplate.py ios/chrome/browser/some_feature/feature_class.h
+$ tools/boilerplate.py ios/chrome/browser/some_feature/feature_class.mm
+$ tools/boilerplate.py ios/chrome/browser/some_feature/feature_class_unittest.mm
+// Step 2 -- add the new files.
+$ git add ios/chrome/browser/some_feature/feature_class*
+// Step 3 -- edit the BUILD.gn file in the editor of your choice
+$ vi ios/chrome/browser/some_feature/BUILD.gn
+// Step 4 -- regenerate the Xcode Projects
+$ gclient runhooks</pre>
+<p>To add asset files, follow this procedure:</p>
+<ol>
+<li><p>Copy the asset files to the correct directory, with the correct names
+(including <code>@2x</code> and <code>@3x</code> suffixes) Note that images are stored in
+<code>.imageset</code> directories, conventionally inside <code>resources</code> directories for a
+given UI feature. New directories, if needed, are created in the usual way
+(<code>mkdir</code>). Note that there is no equivalent of <code>boilerplate.py</code> for images
+or other asset files.</p>
+</li>
+<li><p>Create or copy <code>Contents.json</code> files for each new <code>.imageset</code> directory,
+with the appropriate contents.</p>
+</li>
+<li><p>Add all image and <code>Contents.json</code> files using <code>git add</code>.</p>
+</li>
+<li><p>Edit the <code>BUILD.gn</code> file in the containing <code>resources</code> directory, adding
+<code>imageset</code> entries for each added <code>.imageset</code> directory, and then grouping
+all assets into a new or existing <code>group()</code> declaration with a <code>public_deps</code>
+list containing all of the <code>imageset</code> targets.</p>
+</li>
+<li><p>Regenerate the Xcode project with <code>gclient runhooks</code>.</p>
+</li>
+</ol>
+<p>To add Markdown documentation files, the procedure is much simpler. These files
+are automatically added to the Xcode project without <code>BUILD.gn</code> entries, and
+they have no required boilerplate. So adding new docs is as simple as:</p>
+<ol>
+<li><p>Create a new <code>.md</code> file in the appropriate directory (<code>docs/ios</code>, for
+example).</p>
+</li>
+<li><p><code>git add</code> the file.</p>
+</li>
+</ol>
+<p>The newly added file will be visible in Xcode after the next <code>gclient runhooks</code>.</p>
+<h2 id="moving-and-renaming-files">Moving and renaming files.</h2>
+<p>Renaming a file involves updating the filename in all of the places where it
+exists: the file names in the filesystem, the file names in git, header guards
+in files, import declarations in files, listings in BUILD.gn files, and
+internally in the Xcode project. As with adding a file, different tools are used
+for each of these. Unlike creating a file, which starts with actually adding a
+file to the filesystem, a rename starts with updating git (via <code>git mv</code>), then
+using the <code>mass-rename</code> tool to update file contents.</p>
+<p><code>tools/git/mass-rename.py</code> works by looking at <em>uncommitted</em> file moves in git,
+and then updating all includes, header guards, and BUILD.gn entries to use the
+new name. It doesn&#39;t update some other files, such as <code>Contents.json</code> files for
+image assets. It also doesn&#39;t change any symbols in code, so class and variable
+names won&#39;t be changed.</p>
+<p>For many file moves, it will be simpler to use another tool,
+<code>tools/git/move_source_file.py</code>, which combines <code>git mv</code> and <code>mass-rename</code> in a
+single action. For example, renaming <code>feature_class</code> to <code>renamed_class</code> would be
+done like this:</p>
+<pre data-language="bash">    $ tools/git/move_source_file.py ios/chrome/browser/some_feature/feature_class.h \
+        ios/chrome/browser/some_feature/renamed_class.h
+    $ tools/git/move_source_file.py ios/chrome/browser/some_feature/feature_class.mm \
+        ios/chrome/browser/some_feature/renamed_class.mm</pre>
+<p>The step-by-step procedure for a rename is:</p>
+<ol>
+<li><p>If there are other uncommitted changes before the move, it&#39;s usually
+cleanest to commit before starting the move.</p>
+</li>
+<li><p><code>move_source_file</code> each file that needs to be renamed. This renames the file
+in both the file system and in git, and in most places where it&#39;s used in
+code.</p>
+</li>
+<li><p>Run <code>gclient runhooks</code> to update the Xcode project. Check that all of the
+needed name changes have been made (for example, by building all targets).
+Make any other needed fixes.</p>
+</li>
+<li><p>If any classes or other symbols need to be renamed (remember that the name
+of the primary interface in each file must match the file name), make those
+changes. Find-and-replace tools like <code>tools/git/mffr.py</code> or Xcode&#39;s
+Find/Replace can help here, but there are no compiler-aware tools that can
+do a &quot;smart&quot; rename.</p>
+</li>
+<li><p>Commit all changes (<code>git commit -a -m &lt;your comment&gt;</code>).</p>
+</li>
+</ol>
+<p>A move—where a file is moved to a different directory—is in most respects
+performed using the same steps as a rename. However, while <code>mass-rename.py</code> (and
+thus <code>move_source_file.py</code>) will update existing file names in <code>BUILD.gn</code> files,
+it won&#39;t move entries from one <code>BUILD.gn</code> file to another. To move files to a
+different directory, the preceding procedure is used, but between steps 2 and 3
+(after moving the files, but before regenerating the Xcode project), the old
+filenames will need to be removed from the <code>BUILD.gn</code> files in the old
+directories and added to the <code>BUILD.gn</code> files in the new directories.</p>
+<p>Also note that while <code>move_source_file</code> must be used separately for each file
+being renamed within a directory, it (just like <code>git mv</code>) can move multiple
+files without renaming to a new directory in a single command:</p>
+<pre data-language="bash">$ tools/git/mass-rename.py ios/chrome/browser/some_feature/feature_class.* \
+    ios/chrome/browser/some_feature/feature_class_unittest.mm \
+    ios/chrome/browser/other_feature/</pre>
+<h2 id="deleting-files">Deleting files.</h2>
+<p>Deleting files follows the same patterns as adding and moving files. As with a
+file move, it&#39;s best to begin with deleting the files from git.</p>
+<p>Typically, before actually removing a file, first all usage of the interface(s)
+in the file(s) will be removed, and the file will no longer be <code>#imported</code>
+anywhere.</p>
+<p>Step-by step:</p>
+<ol>
+<li><p><code>git rm</code> the files you want to remove. This will also remove the files
+from the filesystem.</p>
+</li>
+<li><p>Manually remove the <code>BUILD.gn</code> entries for the files.</p>
+</li>
+<li><p>Regenerate the Xcode project (with <code>gclient runhooks</code>) to remove the files
+from Xcode.</p>
+</li>
+</ol>
+<h2 id="finally">Finally.</h2>
+<p>It&#39;s easy to miss some uses of a file that was renamed or deleted, and fixing
+compilation errors discovered in the commit queue means another
+commit-upload-dry run cycle (at least). To minimize this, after any change that
+adds, renames, moves, or deletes files, be sure to take the following steps:</p>
+<ol>
+<li><p><code>git cl format</code> to update the formatting of all files.</p>
+</li>
+<li><p><code>gn check</code> to make sure that any new or moved files follow the dependency
+rules (for example: <code>gn check -C out/Debug-iphonesimulator/</code>).</p>
+</li>
+<li><p>Build all targets, to make sure that everything has been added, changed, or
+removed correctly. This can be done by selecting the &quot;All&quot; target in Xcode
+and building (<code>⌘-B</code>), or from the command line (for example, <code>autoninja -C out/Debug-iphonesimulator/</code>).</p>
+</li>
+</ol>
+<p>Changes that involve adding or deleting more than a few files, and most renames
+of any size, should be in a single CL with no other changes, for ease of
+reviewing and (if necessary) reverting or cherry-picking.</p>
+<h2 id="recovering-from-accidental-xcode-project-usage">Recovering from accidental Xcode Project usage.</h2>
+<p>If files are accidentally added, renamed, or moved through Xcode, other settings
+in the Xcode project may be changed that will introduce strange local build
+failures. In this case, take the following steps to recover.</p>
+<ol>
+<li><p>Quit Xcode.</p>
+</li>
+<li><p>Delete all generated Xcode projects and associated files: <code>rm -rf out/build</code>.</p>
+</li>
+<li><p>Regenerate all Xcode projects: <code>gclient runhooks</code>.</p>
+</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ios/working_with_files.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ios/working_with_files.md</a>
+  </p>
+</div>

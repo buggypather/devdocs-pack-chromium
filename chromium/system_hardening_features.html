@@ -1,0 +1,863 @@
+<h1>Introduction</h1>
+<p>This is a list of current and planned Chrome OS security features. Each feature is listed together with its rationale and status. This should serve as a checklist and status update on Chrome OS security.</p>
+<h1 id="details">Details</h1>
+<h2 id="general-linux-features">General Linux features</h2>
+<table>
+<thead>
+<tr>
+<th align="left"><strong>Feature</strong></th>
+<th align="left"><strong>Status</strong></th>
+<th align="left"><strong>Rationale</strong></th>
+<th align="left"><strong>Tests</strong></th>
+<th align="left"><strong>Bug</strong></th>
+<th align="left"><strong>More thoughts or work needed?</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">No Open Ports</td>
+<td align="left">implemented</td>
+<td align="left">Reduce attack surface of listening services.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/security_NetworkListeners">security_NetworkListeners</a></td>
+<td align="left"></td>
+<td align="left">Runtime test has to whitelist test-system-only &quot;noise&quot; like sshd. See Issue 22412 (on Google Code) and <a href="http://git.chromium.org/gitweb/?p=chromiumos/platform/vboot_reference.git;a=tree;f=scripts/image_signing">ensure_*</a> for offsetting tests ensuring these aren&#39;t on Release builds.</td>
+</tr>
+<tr>
+<td align="left">Password Hashing</td>
+<td align="left">When there is no TPM, scrypt is used.</td>
+<td align="left">Frustrate brute force attempts at recovering passwords.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">SYN cookies</td>
+<td align="left">needs functional test</td>
+<td align="left">In unlikely event of SYN flood, act sanely.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Filesystem Capabilities</td>
+<td align="left">runtime use only</td>
+<td align="left">allow root privilege segmentation</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/security_Minijail0">security_Minijail0</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Firewall</td>
+<td align="left">needs functional test</td>
+<td align="left">Block unexpected network listeners to frustrate remote access.</td>
+<td align="left"></td>
+<td align="left">Issue 23089 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">PR_SET_SECCOMP</td>
+<td align="left">needs functional test</td>
+<td align="left">Available for extremely restricted sandboxing.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left">Issue 23090 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">AppArmor</td>
+<td align="left">not used</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">SELinux</td>
+<td align="left">not used</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">SMACK</td>
+<td align="left">not used</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Encrypted LVM</td>
+<td align="left">not used</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">eCryptFS</td>
+<td align="left">implemented</td>
+<td align="left">Keep per-user data private.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests">login_Cryptohome*</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">glibc Stack Protector</td>
+<td align="left">needs functional test</td>
+<td align="left">Block string-buffer-on-stack-overflow attacks from rewriting saved IP.</td>
+<td align="left"></td>
+<td align="left">Issue 23101 (on Google Code)</td>
+<td align="left">-fstack-protector-strong is used for almost all packages</td>
+</tr>
+<tr>
+<td align="left">glibc Heap Protector</td>
+<td align="left">needs functional test</td>
+<td align="left">Block heap unlink/double-free/etc corruption attacks.</td>
+<td align="left"></td>
+<td align="left">Issue 23101 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">glibc Pointer Obfuscation</td>
+<td align="left">needs functional test</td>
+<td align="left">Frustrate heap corruption attacks using saved libc func ptrs.</td>
+<td align="left"></td>
+<td align="left">Issue 23101 (on Google Code)</td>
+<td align="left">includes FILE pointer managling</td>
+</tr>
+<tr>
+<td align="left">Stack ASLR</td>
+<td align="left">needs functional test</td>
+<td align="left">Frustrate stack memory attacks that need known locations.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Libs/mmap ASLR</td>
+<td align="left">needs functional test</td>
+<td align="left">Frustrate return-to-library and ROP attacks.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Exec ASLR</td>
+<td align="left">needs functional test</td>
+<td align="left">Needs PIE, used to frustrate ROP attacks.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">brk ASLR</td>
+<td align="left">needs functional test</td>
+<td align="left">Frustrate brk-memory attacks that need known locations.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">VDSO ASLR</td>
+<td align="left">needs functional test</td>
+<td align="left">Frustrate return-to-VDSO attacks.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Built PIE</td>
+<td align="left">needs functional test</td>
+<td align="left">Take advantage of exec ASLR.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/platform_ToolchainOptions">platform_ToolchainOptions</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Built <em>FORTIFY_SOURCE</em></td>
+<td align="left">needs functional test</td>
+<td align="left">Catch overflows and other detectable security problems.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Built RELRO</td>
+<td align="left">needs functional test</td>
+<td align="left">Reduce available locations to gain execution control.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/platform_ToolchainOptions">platform_ToolchainOptions</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Built BIND_NOW</td>
+<td align="left">needs functional test</td>
+<td align="left">With RELRO, really reduce available locations.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/platform_ToolchainOptions">platform_ToolchainOptions</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Non-exec memory</td>
+<td align="left">needs functional test</td>
+<td align="left">Block execution of malicious data regions.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">/proc/PID/maps protection</td>
+<td align="left">needs functional test</td>
+<td align="left">Block access to ASLR locations of other processes.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Symlink restrictions</td>
+<td align="left">implemented</td>
+<td align="left">Block /tmp race attacks.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=blob;f=client/site_tests/security_SymlinkRestrictions/security_SymlinkRestrictions.py">security_SymlinkRestrictions.py</a></td>
+<td align="left">Issue 22137 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Hardlink restrictions</td>
+<td align="left">implemented</td>
+<td align="left">Block hardlink attacks.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=blob;f=client/site_tests/security_HardlinkRestrictions/security_HardlinkRestrictions.py">security_HardlinkRestrictions.py</a></td>
+<td align="left">Issue 22137 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">ptrace scoping</td>
+<td align="left">implemented</td>
+<td align="left">Block access to in-process credentials.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=blob;f=client/site_tests/security_ptraceRestrictions/security_ptraceRestrictions.py">security_ptraceRestrictions.py</a></td>
+<td align="left">Issue 22137 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">0-address protection</td>
+<td align="left">needs functional test</td>
+<td align="left">Block kernel NULL-deref attacks.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">/dev/mem protection</td>
+<td align="left">needs functional test</td>
+<td align="left">Block kernel root kits and privacy loss.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left">Issue 21553 (on Google Code)</td>
+<td align="left">crash_reporter uses ramoops via /dev/mem</td>
+</tr>
+<tr>
+<td align="left">/dev/kmem protection</td>
+<td align="left">needs functional test</td>
+<td align="left">Block kernel root kits and privacy loss.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">disable kernel module loading</td>
+<td align="left">how about module signing instead?</td>
+<td align="left">Block kernel root kits and privacy loss.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">read-only kernel data sections</td>
+<td align="left">needs functional test</td>
+<td align="left">Block malicious manipulation of kernel data structures.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">kernel stack protector</td>
+<td align="left">needs functional test</td>
+<td align="left">Catch character buffer overflow attacks.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">kernel module RO/NX</td>
+<td align="left">needs functional test</td>
+<td align="left">Block malicious manipulation of kernel data structures.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/kernel_ConfigVerify">kernel_ConfigVerify</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">kernel address display restriction</td>
+<td align="left">needs config and functional test</td>
+<td align="left">Frustrate kernel exploits that need memory locations.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">Was disabled by default in 3.x kernels.</td>
+</tr>
+<tr>
+<td align="left">disable debug interfaces for non-root users</td>
+<td align="left">needs config and functional test</td>
+<td align="left">Frustrate kernel exploits that depend on debugfs</td>
+<td align="left"></td>
+<td align="left">Issue 23758 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">disable ACPI custom_method</td>
+<td align="left">needs config and functional test</td>
+<td align="left">Frustrate kernel exploits that depend on root access to physical memory</td>
+<td align="left"></td>
+<td align="left">Issue 23759 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">unreadable kernel files</td>
+<td align="left">needs config and functional test</td>
+<td align="left">Frustrate automated kernel exploits that depend access to various kernel resources</td>
+<td align="left"></td>
+<td align="left">Issue 23761 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">blacklist rare network modules</td>
+<td align="left">needs functional test</td>
+<td align="left">Reduce attack surface of available kernel interfaces.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">syscall filtering</td>
+<td align="left">needs functional testing</td>
+<td align="left">Reduce attack surface of available kernel interfaces.</td>
+<td align="left"></td>
+<td align="left">Issue 23150 (on Google Code)</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">vsyscall ASLR</td>
+<td align="left">medium priority</td>
+<td align="left">Reduce ROP target surface.</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Limited use of suid binaries</td>
+<td align="left">implemented</td>
+<td align="left">Potentially dangerous, so minimize use.</td>
+<td align="left"><a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/security_SuidBinaries">security_SuidBinaries</a></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+</tbody></table>
+<h2 id="chrome-os-specific-features">Chrome OS specific features</h2>
+<ul>
+<li>We use <code>minijail</code> for sandboxing:<ul>
+<li><a href="https://www.chromium.org/chromium-os/chromiumos-design-docs/system-hardening#Detailed_Design_73859539098644_6227793370126997">Design doc</a></li>
+<li>Issue 380 (on Google Code)</li>
+</ul>
+</li>
+<li>Current sandboxing status:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th align="left"></th>
+<th align="left"></th>
+<th align="left"></th>
+<th align="left"></th>
+<th align="left"><strong>Exposure</strong></th>
+<th align="left"></th>
+<th align="left"></th>
+<th align="left"></th>
+<th align="left"></th>
+<th align="left"><strong>Privileges</strong></th>
+<th align="left"></th>
+<th align="left"><strong>Sandbox</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>Service/daemon</strong></td>
+<td align="left"><strong>Overall status</strong></td>
+<td align="left"><strong>Usage</strong></td>
+<td align="left"><strong>Comments</strong></td>
+<td align="left"><strong>Network traffic</strong></td>
+<td align="left"><strong>User input</strong></td>
+<td align="left"><strong>DBus</strong></td>
+<td align="left"><strong>Hardware (udev)</strong></td>
+<td align="left"><strong>FS (config files, etc.)</strong></td>
+<td align="left"><strong>Runs as</strong></td>
+<td align="left"><strong>Privileges needed?</strong></td>
+<td align="left"><strong>uid</strong></td>
+</tr>
+<tr>
+<td align="left">udevd</td>
+<td align="left">Low pri</td>
+<td align="left">Listens to udev events via netfilter socket</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">root</td>
+<td align="left">Probably</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">session-manager</td>
+<td align="left"><font color='yellow'>P2</font></td>
+<td align="left"></td>
+<td align="left">Launched from /sbin/session_manager_setup.sh</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">root</td>
+<td align="left">Probably</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">rsyslogd</td>
+<td align="left">Low pri</td>
+<td align="left">Logging</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">root</td>
+<td align="left">Probably</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">dbus-daemon</td>
+<td align="left">Low pri</td>
+<td align="left">IPC</td>
+<td align="left">Listens on Unix domain socket</td>
+<td align="left">Unix domain socket</td>
+<td align="left"></td>
+<td align="left">Yes</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">messagebus</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">powerm</td>
+<td align="left"><font color='yellow'>P2</font></td>
+<td align="left">Suspend to RAM and system shutdown. Handles input events for hall effect sensor (lid) and power button.</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">root</td>
+<td align="left">Probably</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">wpa_supplicant</td>
+<td align="left">Low pri</td>
+<td align="left">WPA auth</td>
+<td align="left"></td>
+<td align="left">Yes</td>
+<td align="left">Via flimflam</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">Yes, exposes management API through FS</td>
+<td align="left">wpa</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">shill</td>
+<td align="left"><font color='red'>P0</font></td>
+<td align="left">Connection manager</td>
+<td align="left"></td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">root</td>
+<td align="left">Probably</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">X</td>
+<td align="left"><font color='orange'>P1</font></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">No (-nolisten tcp)</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">GPU</td>
+<td align="left">Yes</td>
+<td align="left">root</td>
+<td align="left">x86: no, ARM: yes</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">htpdate</td>
+<td align="left">Low pri</td>
+<td align="left">Setting date and time</td>
+<td align="left"></td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">ntp</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">cashewd</td>
+<td align="left">Low pri</td>
+<td align="left">Network usage tracking</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">cashew</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">chapsd</td>
+<td align="left">Low pri</td>
+<td align="left">PKCS#11 implementation</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">chaps</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">cryptohomed</td>
+<td align="left"><font color='orange'>P1</font></td>
+<td align="left">Encrypted user storage</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">root</td>
+<td align="left">Probably</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">powerd</td>
+<td align="left">Low pri</td>
+<td align="left">Idle or video activity detection. Dimming the backlight or turning off the screen, adjusting backlight intensity. Monitors plug state (on ac or on battery) and battery state-of-charge.</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">powerd</td>
+<td align="left">Probably</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">modem-manager</td>
+<td align="left"><font color='orange'>P1</font></td>
+<td align="left">Manages 3G modems</td>
+<td align="left"></td>
+<td align="left">Indirectly</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">root</td>
+<td align="left">Probably not</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">gavd</td>
+<td align="left"><font color='yellow'>P2</font></td>
+<td align="left">Audio/video events and routing</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">gavd</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">dhcpcd</td>
+<td align="left">Low pri</td>
+<td align="left">DHCP client</td>
+<td align="left"></td>
+<td align="left">Yes</td>
+<td align="left">Indirectly</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">dhcp</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">metrics_daemon</td>
+<td align="left"><font color='yellow'>P2</font></td>
+<td align="left">Metrics collection and uploading</td>
+<td align="left"></td>
+<td align="left">Yes, but shouldn&#39;t listen</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">root</td>
+<td align="left">Probably not</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">cros-disks/disks</td>
+<td align="left"><font color='orange'>P1</font></td>
+<td align="left">Removable media handling</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">root</td>
+<td align="left">Launches minijail</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">avfsd</td>
+<td align="left">Low pri</td>
+<td align="left">Compressed file handling</td>
+<td align="left">Launched from cros-disks, uses minijail</td>
+<td align="left">Not in Chrome OS</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">avfs</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">update_engine</td>
+<td align="left"><font color='red'>P0</font></td>
+<td align="left">System updates</td>
+<td align="left"></td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">root</td>
+<td align="left">Probably</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">cromo</td>
+<td align="left">Low pri</td>
+<td align="left">Supports Gobi 3G modems</td>
+<td align="left"></td>
+<td align="left">Indirectly</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Probably</td>
+<td align="left">cromo</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">bluetoothd</td>
+<td align="left">Low pri</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">bluetooth</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">unclutter</td>
+<td align="left">Low pri</td>
+<td align="left">Hides cursor while typing</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">Yes</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">chronos</td>
+<td align="left">Yes</td>
+<td align="left">Yes (via sudo)</td>
+</tr>
+<tr>
+<td align="left">cras</td>
+<td align="left"><font color='yellow'>P2</font></td>
+<td align="left">Audio server</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">cras</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">tcsd</td>
+<td align="left"><font color='yellow'>P2</font></td>
+<td align="left">Portal to the TPM device driver</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">tss</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">keyboard_touchpad_helper</td>
+<td align="left"><font color='orange'>P1</font></td>
+<td align="left">Disables touchpad when typing</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">Yes</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">root</td>
+<td align="left">Probably not</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">logger</td>
+<td align="left">Low pri</td>
+<td align="left">Redirects stderr for several daemons to syslog</td>
+<td align="left"></td>
+<td align="left">Indirectly</td>
+<td align="left">Indirectly</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">No</td>
+<td align="left">syslog</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left">login</td>
+<td align="left"><font color='yellow'>P2</font></td>
+<td align="left">Helps organize Upstart events</td>
+<td align="left"></td>
+<td align="left">No</td>
+<td align="left">Indirectly</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">root</td>
+<td align="left">Probably</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">wimax-manager</td>
+<td align="left"><font color='orange'>P1</font></td>
+<td align="left"></td>
+<td align="left">Includes third-party library</td>
+<td align="left">Yes</td>
+<td align="left">Indirectly</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">root</td>
+<td align="left">Probably not</td>
+<td align="left">No</td>
+</tr>
+<tr>
+<td align="left">mtpd</td>
+<td align="left"><font color='yellow'>P2</font></td>
+<td align="left">Manages MTP devices</td>
+<td align="left">Includes third-party library</td>
+<td align="left">No</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+<td align="left">No</td>
+<td align="left">mtp</td>
+<td align="left">Yes</td>
+<td align="left">Yes</td>
+</tr>
+<tr>
+<td align="left"><strong>Service/daemon</strong></td>
+<td align="left"><strong>Overall status</strong></td>
+<td align="left"><strong>Usage</strong></td>
+<td align="left"><strong>Comments</strong></td>
+<td align="left"><strong>Network traffic</strong></td>
+<td align="left"><strong>User input</strong></td>
+<td align="left"><strong>DBus</strong></td>
+<td align="left"><strong>Hardware (udev)</strong></td>
+<td align="left"><strong>FS (config files, etc.)</strong></td>
+<td align="left"><strong>Runs as</strong></td>
+<td align="left"><strong>Privileges needed?</strong></td>
+<td align="left"><strong>uid</strong></td>
+</tr>
+<tr>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"><strong>Exposure</strong></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"><strong>Privileges</strong></td>
+<td align="left"></td>
+<td align="left"><strong>Sandbox</strong></td>
+</tr>
+</tbody></table>
+<p>Enforced by <a href="http://git.chromium.org/gitweb/?p=chromiumos/third_party/autotest.git;a=tree;f=client/site_tests/security_SandboxedServices">security_SandboxedServices</a></p>
+<h1 id="references">References</h1>
+<ul>
+<li><a href="https://wiki.ubuntu.com/Security/Features">https://wiki.ubuntu.com/Security/Features</a></li>
+<li><a href="http://wiki.debian.org/Hardening">http://wiki.debian.org/Hardening</a></li>
+<li><a href="http://www.gentoo.org/proj/en/hardened/hardened-toolchain.xml">http://www.gentoo.org/proj/en/hardened/hardened-toolchain.xml</a></li>
+<li><a href="http://www.awe.com/mark/blog/20101130.html">http://www.awe.com/mark/blog/20101130.html</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/system_hardening_features.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/system_hardening_features.md</a>
+  </p>
+</div>

@@ -1,0 +1,82 @@
+<h1>RenderText Overview</h1>
+<p>RenderText’s purpose is to prepare text for text shaping, shape the text using
+the <a href="https://harfbuzz.github.io/what-is-harfbuzz.html">Harfbuzz text shaping
+engine</a>, and then draw the
+text onto the screen using the Skia library. RenderText also has support for
+cursors and selections. This class is the level of abstraction for the complex
+world of unicode. Chrome developers should rely on it or improve it instead of
+developing their own solutions.</p>
+<p>RenderTextHarfbuzz is the implementation of RenderText. We used to have platform
+specific implementations but have since consolidated this into
+RenderTextHarfbuzz.</p>
+<p>A RenderText object can be created in a View that wants to display text. The
+View can set properties on the RenderText object such as the text to be
+displayed, whether or not the text is obscured (such as the case with
+passwords), word wrap behavior etc.</p>
+<p><code>RenderText::Draw</code> starts the process of drawing the text onto the screen.</p>
+<p>We then do the following before passing the results of these steps off to Skia.</p>
+<ol>
+<li>Apply Additional Layout Attributes to the Text.</li>
+<li>Itemization (also known as segmentation)</li>
+<li>Text Shaping</li>
+<li>Eliding</li>
+<li>Multiline Text Layout</li>
+</ol>
+<h2 id="apply-additional-layout-attributes-to-the-text">Apply Additional Layout Attributes to the Text:</h2>
+<ul>
+<li>Before we itemize and shape the text, we may need to apply some additional
+layout attributes.</li>
+<li>This includes:<ul>
+<li>Obscuring the text for passwords</li>
+<li>Applying styles</li>
+<li>Handling control characters</li>
+<li>Applying underlines</li>
+</ul>
+</li>
+<li>Note that currently some parts of the code will still try to rewrite
+codepoints which is incorrect because text can only be broken up by graphemes.</li>
+</ul>
+<h2 id="itemization-also-known-as-segmentation">Itemization (also known as segmentation):</h2>
+<ul>
+<li>This involves breaking up the text into separate runs (TextRunHarfBuzz
+objects). Runs represent sections of text that we can shape with a single
+font.</li>
+<li>We use the ICU library’s bidirectional iterator to break up runs and then
+further break up the runs by script, special characters, and style boundaries.</li>
+</ul>
+<h2 id="text-shaping">Text Shaping:</h2>
+<ul>
+<li>We choose the appropriate font to shape the runs with.</li>
+<li>Then go through the list of runs and try to shape each of the runs by creating
+Harfbuzz structures from the input run.</li>
+<li>We call into the Harfbuzz API to shape the text (hb_shape) and populate the
+output with the glyph data.</li>
+<li>If any runs still have missing glyphs, we add them back to the list of runs
+that still need to be shaped.</li>
+<li>For these remaining runs, we have fallback code to attempt to shape them
+again, but it is possible that some fail to be shaped.</li>
+<li>Since fallback occurs on a per-run basis, we then re-itemize the runs,
+accounting for missing glyphs, and restart the shaping stage. This ensures
+that the number of missing glyphs are minimized, as each glyph will then
+attempt to locate an appropriate font.</li>
+</ul>
+<h2 id="eliding">Eliding:</h2>
+<ul>
+<li>If the text exceeds its constrained dimensions we will need to elide the text.</li>
+<li>We elide based on the elide behavior set on the RenderText object and whether
+the text is multiline.</li>
+</ul>
+<h2 id="multiline-text-layout">Multiline Text Layout:</h2>
+<ul>
+<li>If the text is not multiline we create a single line. If the text is multiline
+we break up the text into lines. (see
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/gfx/render_text_harfbuzz.cc;l=409;drc=adb945c5a0060e6024cb174f6027d13d7ff03058;bpv=1;bpt=1">HarfBuzzLineBreaker</a>)</li>
+<li>Set the shaped text based on these lines.</li>
+<li>Skia will use the lines of the shaped text to draw the text onto the screen.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/text_rendering/render_text_overview.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/text_rendering/render_text_overview.md</a>
+  </p>
+</div>

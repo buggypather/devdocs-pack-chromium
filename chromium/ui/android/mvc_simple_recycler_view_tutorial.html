@@ -1,0 +1,50 @@
+<h1>Simple RecyclerView use in MVC</h1>
+<h3 id="overview">Overview</h3>
+<p>This tutorial briefly describes the use of <code>RecyclerViews</code> in an MVC component. For the
+prerequisites to this tutorial, see <a href="#Additional-Resources">Additional Resources</a>.</p>
+<p>Using <code>RecyclerViews</code> in a basic way in MVC is now very similar to how basic non-recycler
+lists work. The general flow is as follows:</p>
+<ul>
+<li>Build and maintain a <a href="https://codesearch.chromium.org/chromium/src/ui/android/java/src/org/chromium/ui/modelutil/MVCListAdapter.java?rcl=d22c9731463bad77645cb0f1a928dec7da79bff9&amp;l=38"><code>ModelList</code></a>.</li>
+<li>Create a <a href="https://codesearch.chromium.org/chromium/src/ui/android/java/src/org/chromium/ui/modelutil/SimpleRecyclerViewAdapter.java"><code>SimpleRecyclerViewAdapter</code></a>.</li>
+<li>Register each type of view with the adapter.</li>
+<li>Clean up recycled views if necessary.</li>
+</ul>
+<p>Both the <code>ModelListAdapter</code> and the <code>SimpleRecyclerViewAdapter</code>  implement the
+<code>MVCListAdapter</code> interface. That is to say that usage of the two adapters is roughly identical.
+The main reason to use one or the other is dependent on the capabilities needed by the views that
+each adapter is attached to. Changing from using a <code>ListView</code> to a <code>RecyclerView</code> should be
+simple once the adapter is implemented.</p>
+<h3 id="additional-resources">Additional Resources</h3>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/ui/android/mvc_architecture_tutorial.md">Introductory MVC tutorial</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/ui/android/mvc_simple_list_tutorial.md">Simple MVC list tutorial</a></li>
+</ul>
+<h3 id="instantiating-a-simplerecyclerviewadapter">Instantiating a <code>SimpleRecyclerViewAdapter</code></h3>
+<p>A <code>SimpleRecyclerViewAdapter</code> is instantiated the same way a <code>ModelListAdapter</code> is; you
+only need to provide a handle to the <code>ModelList</code> for the data the view will display.</p>
+<h3 id="fast-view-lookup">Fast view lookup</h3>
+<p>Typical usage of <code>RecyclerView</code> requires the creation of a <code>ViewHolder</code> to cache the views
+that frequently have new content bound to them. The <code>SimpleRecyclerViewAdapter</code> does away with
+this concept.</p>
+<p>A generic solution to fast view lookup can be found in
+<a href="https://codesearch.chromium.org/chromium/src/ui/android/java/src/org/chromium/ui/widget/ViewLookupCachingFrameLayout.java"><code>ViewLookupCachingFrameLayout</code></a>. This version of a
+<code>FrameLayout</code> exposes a method: <code>fastFindViewById</code>. The added method attempts to find the
+specified view, and if it exists, it will be cached for faster lookups. See the full documentation
+for this class <a href="https://codesearch.chromium.org/chromium/src/ui/android/java/src/org/chromium/ui/widget/ViewLookupCachingFrameLayout.java">here</a>.</p>
+<h3 id="cleaning-up-a-recycled-view">Cleaning up a recycled view</h3>
+<p>In some cases complex views can hold on to expensive resources; the most common cases is holding a
+reference to a large bitmap. The <code>SimpleRecyclerViewAdapter</code> does not explicitly provide a way
+to do resource cleanup, but this can still be achieved with <code>RecyclerView#RecyclerListener</code>.</p>
+<pre data-language="java">recyclerListener = (holder) -&gt; {
+    // Do cleanup for |holder| here. The root view can be accessed via |holder#itemView|
+};
+
+// Optionally the listener can be defined in-line below.
+mRecyclerView.setRecyclerListener(recyclerListener);</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/mvc_simple_recycler_view_tutorial.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/mvc_simple_recycler_view_tutorial.md</a>
+  </p>
+</div>

@@ -1,0 +1,23 @@
+<h1>Largest Contentful Paint Changes in M86</h1>
+<h2 id="changes-in-chrome-86">Changes in Chrome 86</h2>
+<p>Prior to Chrome 86, there was a <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1092473">bug</a>
+in Largest Contentful Paint on some pages where the largest contentful element
+initially has opacity:0. The bug was fixed in Chrome 86. The source code of the
+change can be seen <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2316788">here</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>This change only affects metrics for a very small amount of sites. Generally
+sites whose largest contentful elements are opacity:0 initially are using A/B
+testing frameworks which initially clear the page before displaying the correct
+content. Sites using this technique will now see a longer LCP, reflecting the
+time until the largest contentful paint is visible to the user, instead of the
+time it is loaded in the DOM but invisible.</p>
+<p>We do not see an impact from this change in our overall metrics, so we believe
+the effect on most sites will be minimal.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Most users were updated to Chrome 86 the week of October 5, 2020.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_08_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_08_lcp.md</a>
+  </p>
+</div>

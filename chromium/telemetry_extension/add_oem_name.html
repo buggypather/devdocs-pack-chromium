@@ -1,0 +1,136 @@
+<h1>Customization Guide - OEM Name</h1>
+<h1 id="objective">Objective</h1>
+<p>Provide the instructions on the OEM name customization on ChromeOS devices.</p>
+<p>For an overview of the Telemetry Extension platform, please visit our
+<a href="telemetry_extension">main documentation</a>.</p>
+<h1 id="overview">Overview</h1>
+<p>We have proposed a hybrid approach &quot;cros_config first, fallback to VPD&quot; for OEM
+name customization. This approach first tries to search for the OEM name in
+cros_config and checks a VPD field if the name is not present. Right now
+(October, 2022) only the cros_config part is implemented; the VPD part is in
+progress. In general the OEM name field is used to differentiate between
+different OEMs on a ChromeOS device. The field is currently used by the
+<a href="telemetry_extension">Telemetry Extension</a> and is a requirement to use the Extension.
+This guide explains how to set the OEM name in cros_config.</p>
+<h2 id="rollout-schedule">Rollout schedule</h2>
+<p>Please note that the changes made here follow the Chrome Release Cycle (actual
+timeline can be found in
+<a href="https://chromiumdash.appspot.com/schedule">Chromium Dashboard</a>), which means
+it will take at least 6 weeks to rollout your changes to the public.</p>
+<h1 id="instructions">Instructions</h1>
+<p>This section provides the instructions on how to check OEM name config, and set
+/verify the OEM name for models with or without Boxster.</p>
+<blockquote>
+<p><strong><em>NOTE:</em></strong> It is your responsibility to make sure the OEM name you fill in is
+correct. Neither cros-config nor Boxster validate that value.</p>
+</blockquote>
+<h2 id="check--set-oem-name">Check &amp; Set OEM name</h2>
+<h3 id="models-with-boxster">Models with Boxster</h3>
+<ol>
+<li>In <code>config.star</code><ol>
+<li>Find a variable initialized with <code>device_brand.create</code> (See
+<a href="#Troubleshooting">Troubleshooting</a> if you cannot find it). Usually named  <code>_DEVICE_BRAND</code>.</li>
+<li>Find the variable (<code>_FAKE_OEM</code> in our example) that is passed to <code>oem_id</code>
+and make sure the value inside it is correct. In case you need to modify
+the existing OEM name, you could follow the sample CL
+<a href="http://crrev.com/c/3627425">crrev.com/c/3627425</a>.</li>
+<li>Add a keyword argument <code>export_oem_info = True</code>.</li>
+</ol>
+</li>
+<li>Reflect your changes in <code>generated/config.jsonproto</code> and
+<code>sw_build_config/platform/chromeos-config/generated/project-config.json</code> by
+running: <code>./config/bin/gen_config config.star</code>.</li>
+<li>Commit your changes. Sample CL:
+<a href="http://crrev.com/c/3385463">crrev.com/c/3385463</a>.</li>
+</ol>
+<p>The configuration in  <code>config.star</code> would look like this:</p>
+<pre data-language="python">// config.star
+_FAKE_OEM = partner.create(&quot;FAKE_OEM&quot;) # Make sure it’s correct
+...
+_DEVICE_BRAND = device_brand.create(
+brand_name = &quot;Fake ChromeOS Device Brandname&quot;,
+design_id = _DESIGN_ID,
+oem_id = _FAKE_OEM.id, # This argument is required
+brand_code = &quot;AAAA&quot;,
+export_oem_info = True, # Add this line
+)</pre>
+<h3 id="models-without-boxster">Models without Boxster</h3>
+<ol>
+<li>in <code>model.yaml</code><ol>
+<li>Make sure inside <code>base-config</code> there’s another dictionary named <code>branding</code>
+containing an entry with key <code>oem-name</code> and value <code>{{$oem-name}}</code>.
+Optionally, you can add another entry <code>$oem-name</code> with value <code>&quot;&quot;</code> (an
+empty string) which will be used as default value.</li>
+<li>Add a new entry <code>$oem-name</code> whose value is the OEM name you would like to
+set in <code>chromeos.devices[].products[]</code>.</li>
+<li>Commit your changes and upload them to the internal Gerrit.</li>
+</ol>
+</li>
+</ol>
+<p>An example <code>model.yaml</code> could look somewhat like this:</p>
+<pre data-language="yaml">base-config: &amp;base_config
+ ...
+ branding:
+   $oem-name: &quot;&quot;
+   oem-name: &quot;{{$oem-name}}&quot;
+ ...
+ devices:
+   ...
+   - $device-name: &quot;foo&quot;
+     $has-smart-battery-info: true
+     products:
+       - $brand-code: &quot;FOO&quot;
+         $marketing-name: &quot;TBD&quot;
+         $oem-name: &quot;OEM_A&quot; # This is what you set.
+     skus:
+       - $sku-id-val: 42
+         config: *foo_config</pre>
+<h2 id="verify-the-oem-name">Verify the OEM name</h2>
+<p>You can verify the OEM name configuration by running the following command:</p>
+<pre>cros-health-tool telem --category=system</pre>
+<p>Check if <code>os_info.oem_name</code> is present and correct.
+A sample output would look somewhat like that:</p>
+<pre>$ cros-health-tool telem --category=system
+{
+  &quot;dmi_info&quot;: {
+     ...
+  },
+  &quot;os_info&quot;: {
+     &quot;boot_mode&quot;: &quot;cros_secure&quot;,
+     &quot;code_name&quot;: &quot;foo&quot;,
+     &quot;marketing_name&quot;: &quot;TBD&quot;,
+     &quot;oem_name&quot;: &quot;OEM_A&quot;,    # check this line
+     ...
+  },
+  &quot;vpd_info&quot;: {
+     ...
+  }</pre>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="no-device_brandcreate-in-configstar">No device_brand.create in config.star?</h3>
+<p>In some projects, you might see <code>_DEVICE_BRAND</code> is initialized with
+<code>program.brand</code>. In this case, you need to:</p>
+<ol>
+<li>Go to <code>program/program.star</code> (note that this file is in a different repo
+<code>chromeos/program/${BOARD}</code> as <code>program/</code> is a soft link) and modify the
+<code>_brand</code> function:</li>
+<li>Go back to <code>config.star</code> and add the parameter <code>export_oem_info = True</code> to
+the <code>program.brand</code> function.</li>
+<li>Regenerate config.</li>
+</ol>
+<p>Sample <code>program/program.star</code>:</p>
+<pre data-language="python">def _brand(design_id, oem_id = None, brand_code = _DEFAULT_BRAND_CODE, brand_name = None, export_oem_info = False):
+   return device_brand.create(
+       brand_name = brand_name,
+       design_id = design_id,
+       oem_id = oem_id,
+       brand_code = brand_code,
+       export_oem_info = export_oem_info,
+   )</pre>
+<p>Sample <code>config.star</code>:</p>
+<pre data-language="python">_DEVICE_BRAND = program.brand(_FOO_DESIGN_ID, ..., export_oem_info = True)</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/add_oem_name.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/add_oem_name.md</a>
+  </p>
+</div>

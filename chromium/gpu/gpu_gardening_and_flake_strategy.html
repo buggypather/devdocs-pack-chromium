@@ -1,0 +1,250 @@
+<h1>Chromium GPU Gardening &amp; Flake Root-Cause Strategy</h1>
+<p>This guide outlines the operational workflow for the <strong>GPU Gardener (Pixel Wrangler)</strong> shift, paired with a deep-dive playbook for <strong>root-causing and resolving flakes</strong> rather than only suppressing them. It is designed to be used both by human wranglers and by automated/AI gardening agents.</p>
+<hr>
+<h2 id="1-waterfalls-shift-overview--decision-flow">1. Waterfalls, Shift Overview &amp; Decision Flow</h2>
+<h3 id="monitored-waterfalls--dashboards">Monitored Waterfalls &amp; Dashboards</h3>
+<ul>
+<li><strong><a href="https://sheriff-o-matic.appspot.com/chromium.gpu">Sheriff-O-Matic (<code>chromium.gpu</code>)</a></strong>: Primary alert view aggregating failures across the GPU waterfalls.</li>
+<li><strong><a href="https://ci.chromium.org/p/chromium/g/chromium.gpu/console"><code>chromium.gpu</code> Console</a></strong>: Core GPU waterfall running on physical GPU hardware (Windows, Mac, Linux, Android, ChromeOS).</li>
+<li><strong><a href="https://ci.chromium.org/p/chromium/g/chromium.gpu.fyi/console"><code>chromium.gpu.fyi</code> Console</a></strong>: Extended hardware/driver matrix and <strong>ToT ANGLE</strong> (<code>got_angle_revision</code> / <code>parent_got_angle_revision</code> rather than <code>DEPS</code> ANGLE). Coordinate with the <a href="https://chromium.googlesource.com/angle/angle/+/main/infra/ANGLEWrangling.md">ANGLE Wrangler</a> for ANGLE-only regressions.</li>
+<li><strong><a href="https://ci.chromium.org/p/chromium/g/chromium.swangle/console"><code>chromium.swangle</code> Console</a></strong>: Secondary waterfall running ANGLE&#39;s GLES implementation on SwiftShader Vulkan. Regressions are mostly handled by the <a href="https://chromium.googlesource.com/angle/angle/+/main/infra/ANGLEWrangling.md">ANGLE Wrangler</a>, except for Chromium/WebGL-side regressions.</li>
+<li><strong>Checking Bot Liveness (Offline / Gray Columns)</strong>: Periodically inspect the console views directly. If a builder&#39;s Swarming pool goes offline for an extended period, the top summary bubble on the console may remain green while the builder&#39;s column turns <strong>gray</strong>. If bots stop processing jobs or fail with deep infrastructure errors (source checkout or isolate failures), file a P1 bug under <code>Infra&gt;Labs</code>, <code>Infra&gt;Troopers</code>, and <code>Internals&gt;GPU&gt;Testing</code> (see <a href="https://chromium.googlesource.com/infra/infra/+doc/HEAD/doc/users/contacting_troopers.md">Contacting Troopers</a> / <a href="https://g.co/bugatrooper">g.co/bugatrooper</a>).</li>
+</ul>
+<h3 id="end-to-end-triage--decision-flow">End-to-End Triage &amp; Decision Flow</h3>
+<pre>Alert on Sheriff-O-Matic (chromium.gpu)
+  |
+  +--&gt; Compile / Deterministic Regression
+  |      +--&gt; Check Blamelist &amp; Trim via trim_culprit_cls.py
+  |      +--&gt; Revert Culprit CL &amp; File P1 Bug (Hotlist 5853370)
+  |
+  +--&gt; Skia Gold Pixel Diff
+  |      +--&gt; Intentional Rendering Change? -&gt; Approve Positive Image in Gold UI
+  |      +--&gt; Corrupted / Unexpected Render? -&gt; Mark Negative in Gold + Investigate / Revert
+  |
+  +--&gt; Purple Bot / Device Unreachable / Offline Column
+  |      +--&gt; Run find_bad_machines.py / Check Swarming Bot
+  |      +--&gt; File Infra&gt;Labs Trooper Bug (Hotlist 5853370)
+  |
+  +--&gt; Intermittent / Flaky Failure
+         +--&gt; Run Phase 2 Flake Root-Cause Pipeline
+                +--&gt; Root Cause Found Quickly -&gt; Land Fix or Revert + Close Bug
+                +--&gt; Needs Deeper Investigation -&gt; Land Narrowest Expectation
+                     (Slow / RetryOnFailure) + Attach Diagnostic Dossier to Bug</pre>
+<blockquote>
+<p><strong>Note on Transient Flakes</strong>: Sheriff-O-Matic automatically clears an alert as soon as a builder&#39;s latest build passes. To proactively scan a builder&#39;s recent history (e.g., the last 200 builds) for recurring test failures or <code>INFRA_FAILURE</code>s that have since turned green:</p>
+<pre data-language="bash">prpc call cr-buildbucket.appspot.com buildbucket.v2.Builds.SearchBuilds &lt;&lt;EOF
+{
+  &quot;predicate&quot;: {
+    &quot;builder&quot;: {
+      &quot;project&quot;: &quot;chromium&quot;,
+      &quot;bucket&quot;: &quot;ci&quot;,
+      &quot;builder&quot;: &quot;&lt;BUILDER_NAME&gt;&quot;
+    }
+  },
+  &quot;pageSize&quot;: 200,
+  &quot;mask&quot;: {
+    &quot;fields&quot;: &quot;id,number,status,summary_markdown,create_time,start_time,end_time&quot;
+  }
+}
+EOF</pre>
+</blockquote>
+<h3 id="cli-quick-reference-for-alert--log-inspection">CLI Quick-Reference for Alert &amp; Log Inspection</h3>
+<p>When triaging from the command line or via an automated agent:</p>
+<ol>
+<li><strong>Fetch active Sheriff-O-Matic alerts as JSON</strong> (since the web UI is a client-side SPA):<pre data-language="bash">prpc call sheriff-o-matic.appspot.com infra.appengine.som.v1.Alerts.ListAlerts &lt;&lt;EOF
+{&quot;parent&quot;: &quot;trees/chromium.gpu&quot;}
+EOF</pre>
+</li>
+<li><strong>Inspect a failing Buildbucket build&#39;s steps, Swarming task links, and ANGLE/Chromium revisions</strong>:<pre data-language="bash">bb get -A -json &lt;build_id&gt;</pre>
+</li>
+<li><strong>Query unexpected test failures and full crash logs (<code>typ_stderr</code>) from ResultDB</strong>:<ul>
+<li>Note that Swarming task links end in <code>0</code> (e.g., <code>7b0c0568c721dc10</code>), whereas the corresponding ResultDB invocation ID replaces the trailing <code>0</code> with <code>1</code> (<code>task-chromium-swarm.appspot.com-7b0c0568c721dc11</code>):</li>
+</ul>
+<pre data-language="bash"># List unexpected test results in the Swarming shard:
+rdb query -json -u -n 50 task-chromium-swarm.appspot.com-&lt;task_id_ending_in_1&gt;
+
+# Get a signed URL to download the full browser log and symbolized Crashpad minidumps:
+rdb rpc luci.resultdb.v1.ResultDB GetArtifact &lt;&lt;EOF
+{&quot;name&quot;: &quot;&lt;testResult.name&gt;/artifacts/typ_stderr&quot;}
+EOF</pre>
+</li>
+</ol>
+<hr>
+<h2 id="2-phase-1-rapid-triage--keeping-the-tree-green">2. Phase 1: Rapid Triage &amp; Keeping the Tree Green</h2>
+<h3 id="a-deterministic-breakages--blamelist-narrowing">A. Deterministic Breakages &amp; Blamelist Narrowing</h3>
+<ol>
+<li><strong>Check <code>chromium.gpu</code> vs. <code>chromium.gpu.fyi</code></strong>:<ul>
+<li>Remember that <code>chromium.gpu.fyi</code> tracks <strong>ToT ANGLE</strong> (<code>got_angle_revision</code> on builders / <code>parent_got_angle_revision</code> on testers), whereas <code>chromium.gpu</code> uses DEPS ANGLE. If only FYI bots fail, compare <code>parent_got_angle_revision</code> between the last green and first red build (<code>git log &lt;old&gt;..&lt;new&gt;</code> in <code>third_party/angle</code>) and coordinate with the ANGLE Wrangler.</li>
+</ul>
+</li>
+<li><strong>Narrow &amp; Trim Large Blamelists</strong>:<ul>
+<li><strong>Intersect across builders</strong>: If the same test starts failing across multiple <code>chromium.gpu</code> or <code>chromium.gpu.fyi</code> bots, intersect their regression ranges (<code>max(start_rev) .. min(end_rev)</code>) to narrow the candidate commits before inspecting individual CLs.</li>
+<li><strong>Trim via CQ trybot history</strong>: When a failure occurs on a configuration covered by an optional GPU trybot (e.g., <code>win_optional_gpu_tests_rel</code>, <code>linux_optional_gpu_tests_rel</code>, <code>mac_optional_gpu_tests_rel</code>), run <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/trim_culprit_cls.py"><code>//content/test/gpu/trim_culprit_cls.py</code></a> to eliminate CLs in the blamelist that already passed that trybot on CQ:<pre data-language="bash">vpython3 content/test/gpu/trim_culprit_cls.py \
+  --start-revision &lt;oldest_rev&gt; \
+  --end-revision &lt;newest_rev&gt; \
+  --trybot win_optional_gpu_tests_rel \
+  --project chrome-unexpected-pass-data</pre>
+</li>
+</ul>
+</li>
+<li><strong>Revert Policy</strong>:<ul>
+<li>Revert culprits immediately on <code>chromium.gpu</code>, and on <code>chromium.gpu.fyi</code> when confident in the culprit CL. Include build links and <strong>copy-pasted log excerpts</strong> in the revert description and P1 bug (since raw Swarming/bot logs expire after a few days).</li>
+<li>Use <code>rubber-stamper@appspot.gserviceaccount.com</code> for clean reverts (if you are not yet a Chromium committer, ask a GPU team committer to help land the revert or review).</li>
+</ul>
+</li>
+</ol>
+<h3 id="b-skia-gold-pixel-failures">B. Skia Gold Pixel Failures</h3>
+<p>For failing <code>pixel_skia_gold_*</code> steps (see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu_pixel_testing_with_gold.md"><code>gpu_pixel_testing_with_gold.md</code></a> for full details):</p>
+<ol>
+<li><strong>Locate the Gold Triage Link</strong> in the failing build step:<ul>
+<li><strong>Fewer than 10 untriaged images</strong>: Follow the individual <code>gold_triage_link for &lt;test name&gt;</code> links (or <code>triage_link_for_entire_cl for &lt;test name&gt;</code> on trybots).</li>
+<li><strong>10 or more untriaged images</strong>: Follow the single <code>Too many artifacts produced to link individually, click for links</code> artifact link (or search <code>https://chrome-gold.skia.org/search?query=name%3D&lt;test_name&gt;</code>).</li>
+</ul>
+</li>
+<li><strong>Triage in Gold UI (Human-in-the-Loop Only — sign in with <code>@google.com</code> or <code>@chromium.org</code>)</strong>:<ul>
+<li><strong>Important for AI / Automated Agents</strong>: Agents must <strong>never</strong> autonomously approve or mark images positive/negative in Skia Gold (via the Gold UI, API, or <code>goldctl</code>), as Gold baseline changes take effect immediately without a CL review. Agents should only report the <code>gold_triage_link</code>, summarize the failure context, and leave image triage to a human wrangler.</li>
+<li><strong>Intentional rendering / baseline change</strong>: Approve the new positive image in Gold.</li>
+<li><strong>Corrupted or unexpected rendering</strong>: Mark the image as <strong>negative</strong> in Gold, file a bug on <code>crbug.com</code> (<code>Internals&gt;GPU&gt;Testing</code> + domain component such as <code>Blink&gt;WebGL</code> or <code>Blink&gt;Canvas</code>), and add a temporary expectation in <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/gpu_tests/test_expectations/pixel_expectations.txt"><code>//content/test/gpu/gpu_tests/test_expectations/pixel_expectations.txt</code></a> (<code>[ RetryOnFailure ]</code> for flakes or <code>[ Failure ]</code> for consistent failures) so the builder turns green while the bug is investigated.</li>
+<li><strong>Subtle Noise vs. Real Bug</strong>: If a test produces minor 1–2 pixel anti-aliasing jitter across runs, use <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/determine_gold_inexact_parameters.py"><code>//content/test/gpu/determine_gold_inexact_parameters.py</code></a> to configure fuzzy/Sobel matching in <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/gpu_tests/pixel_test_pages.py"><code>//content/test/gpu/gpu_tests/pixel_test_pages.py</code></a> rather than approving endless goldens or suppressing the test.</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="3-phase-2-deep-dive-flake-analysis-moving-beyond-blind-suppressions">3. Phase 2: Deep-Dive Flake Analysis (Moving Beyond Blind Suppressions)</h2>
+<p>For flaky tests, the blamelist on the single failed build shown in Sheriff-O-Matic is usually misleading—the underlying bug was introduced in an earlier build, and the test happened to pass for several builds before failing. To <strong>actually resolve flakes</strong>, use a 5-step diagnostic pipeline before (or right after) landing a temporary suppression.</p>
+<h3 id="step-1-find-the-true-temporal-onset-via-bigquery-resultdb">Step 1: Find the True Temporal Onset via BigQuery (ResultDB)</h3>
+<p>Instead of trusting the build where the flake surfaced on SoM, query <code>chrome-luci-data.chromium.gpu_ci_test_results</code> (the same table used by <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/flake_suppressor/gpu_queries.py"><code>//content/test/gpu/flake_suppressor/gpu_queries.py</code></a>) to find the <strong>exact first timestamp, Swarming bots, and build</strong> where the test started flaking across <em>all</em> CI builders:</p>
+<pre data-language="bash">bq query --project_id=chrome-unexpected-pass-data --use_legacy_sql=false '
+SELECT
+  DATE(partition_time) AS day,
+  (SELECT value FROM tr.variant WHERE key = &quot;builder&quot;) AS builder,
+  status,
+  COUNT(*) AS runs,
+  MIN(partition_time) AS first_seen,
+  MAX(partition_time) AS last_seen,
+  STRING_AGG(DISTINCT (SELECT value FROM tr.tags WHERE key = &quot;bot_id&quot; LIMIT 1), &quot;, &quot;) AS bots,
+  ANY_VALUE(failure_reason.primary_error_message) AS sample_error
+FROM `chrome-luci-data.chromium.gpu_ci_test_results` tr
+WHERE test_id LIKE &quot;%&lt;TEST_NAME&gt;%&quot;
+  AND partition_time &gt; TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)
+  AND status != &quot;PASS&quot;
+  AND status != &quot;SKIP&quot;
+  AND NOT expected
+GROUP BY day, builder, status
+ORDER BY first_seen ASC'</pre>
+<ul>
+<li><strong>Why this works</strong>: If a test had 0 failures for 30 days and suddenly started flaking at 5% across 3 builders on Tuesday afternoon, the <strong>earliest failing build across all builders</strong> gives you a tight, actionable blamelist—turning an &quot;un-bisectable flake&quot; into a standard regression range.</li>
+</ul>
+<h3 id="step-2-isolate-bad-hardware-vs-code-flakes">Step 2: Isolate Bad Hardware vs. Code Flakes</h3>
+<p>Because GPU tests run on physical hardware in <code>chromium.tests.gpu</code>, a single degraded GPU, thermal throttling, KVM/EDID glitches, or wedged driver state on one Swarming bot looks identical to a 10% code flake on a builder with 10 machines in its pool.</p>
+<ul>
+<li><strong>Check Swarming Bot Distribution</strong>: Run <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/find_bad_machines.py"><code>//content/test/gpu/find_bad_machines.py</code></a> for the affected mixin (e.g., <code>win10_nvidia_gtx_1660_stable</code>, <code>gpu_pixel_6_stable</code>, <code>mac_arm64_apple_m2_retina_gpu_stable</code>):<pre data-language="bash">vpython3 content/test/gpu/find_bad_machines.py \
+  --mixin &lt;mixin_name&gt; \
+  --sample-period 7</pre>
+</li>
+<li>If failures cluster on 1–2 <code>bot_id</code>s (flagged by <code>DetectViaStdDevOutlier</code> / <code>DetectViaRandomChance</code>), <strong>do not suppress the test</strong>—file an <code>Infra&gt;Labs</code> bug with the specific Swarming bot IDs (<code>https://chromium-swarm.appspot.com/bot?id=&lt;bot_id&gt;</code>) to quarantine/repair the machines.</li>
+</ul>
+<h3 id="step-3-check-shard-position--cross-test-state-pollution">Step 3: Check Shard Position &amp; Cross-Test State Pollution</h3>
+<p>Inspect the failing Swarming shard log (<code>shard #N</code>) for <strong>execution order effects</strong>:</p>
+<ul>
+<li><strong>First-test-in-shard flake</strong>: Browser/GPU process cold-start race, shader disk cache initialization, or DevTools websocket connection timeout on startup.</li>
+<li><strong>Always fails after Test X</strong>: GPU context state leak, uncleaned shared image/mailbox, or VRAM exhaustion from the preceding test in the same shard.</li>
+<li><strong>Parallel <code>--jobs=N</code> contention</strong>: In suites running with <code>--jobs=4</code> (<code>webgl1_conformance</code>, <code>webgl2_conformance</code>), multiple browser instances compete for the physical GPU.</li>
+</ul>
+<h3 id="step-4-match-against-the-5-common-gpu-flake-archetypes">Step 4: Match Against the 5 Common GPU Flake Archetypes</h3>
+<table>
+<thead>
+<tr>
+<th align="left">Failure Signature / Symptom</th>
+<th align="left">Likely Root Cause Archetype</th>
+<th align="left">How to Confirm &amp; Fix</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><code>Timed out waiting for websocket message</code> or 300s global timeout (especially on <code>Debug</code> / <code>ASAN</code>)</td>
+<td align="left"><strong>Heartbeat / Heavy Test Timeout</strong> (not a functional bug)</td>
+<td align="left">First apply <code>[ Slow ]</code> in expectations (multiplies heartbeat timeout in <code>webgl*_conformance</code> and <code>webgpu_cts</code>). If a single test does massive allocations in Debug, split the test.</td>
+</tr>
+<tr>
+<td align="left">Black/old frame captured in <code>pixel_tests</code> or <code>trace_test</code> (<code>expected_colors</code> mismatch)</td>
+<td align="left"><strong>Missing Swap Promise / Premature Screenshot</strong></td>
+<td align="left">Test HTML triggers <code>chrome.gpuBenchmarking</code> or completes before <code>requestAnimationFrame</code> / swap promise / compositor frame submission settles. Fix in <code>content/test/data/gpu/*.html</code> by waiting for frame presentation.</td>
+</tr>
+<tr>
+<td align="left"><code>SyncToken</code> DCHECK, missing texture tile, or intermittent <code>GL_INVALID_OPERATION</code></td>
+<td align="left"><strong>Cross-Process SyncToken / Ordering Race</strong> (see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/sync_token_internals.md"><code>sync_token_internals.md</code></a>)</td>
+<td align="left">Unverified sync token sent across Mojo pipes, or missing <code>WaitSyncTokenCHROMIUM</code> before Skia/Display Compositor reads a SharedImage. Enable <code>--enable-gpu-service-logging</code> to trace command order.</td>
+</tr>
+<tr>
+<td align="left">Flaky <code>ContextLost_*</code> or <code>Pixel_Video_Context_Loss_*</code> timeouts</td>
+<td align="left"><strong>Context Recovery / IPC Race</strong></td>
+<td align="left">Browser/Renderer loses track of GPU channel re-establishment or media decoder reset callback drops during context loss. Check <code>gpu_channel_manager</code> / <code>ContextProvider</code> loss listeners.</td>
+</tr>
+<tr>
+<td align="left">Media / WebCodecs / Hardware Decode sporadic failures on Mac or Android</td>
+<td align="left"><strong>Platform Decoder / ColorSpace / Buffer Pool Edge Case</strong></td>
+<td align="left">Inspect media log in Swarming output; often caused by hardware decoder session resets or surface texture exhaustion when tests run back-to-back.</td>
+</tr>
+</tbody></table>
+<h3 id="step-5-high-iteration-targeted-reproduction-swarming--local">Step 5: High-Iteration Targeted Reproduction (Swarming &amp; Local)</h3>
+<p>When you have a hypothesis or want to add <code>DLOG(ERROR)</code> / <code>--enable-gpu-client-logging</code> / <code>--enable-gpu-service-logging</code> to catch a flake in the act:</p>
+<ol>
+<li><strong>Option A — Trigger Swarming directly from local build via <code>mb.py</code></strong> (see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu_testing.md"><code>gpu_testing.md</code></a>):
+Grab the <code>gpu</code>, <code>os</code>, and <code>pool</code> dimensions from the failing Swarming task and run <code>--repeat=20</code> (or <code>--gtest_repeat=20</code>):<pre data-language="bash">tools/mb/mb.py run -s --no-default-dimensions \
+  -d gpu &lt;pci_id_and_driver&gt; -d os &lt;os_dim&gt; -d pool chromium.tests.gpu \
+  out/Release telemetry_gpu_integration_test -- \
+  --isolated-script-test-output '${ISOLATED_OUTDIR}/output.json' \
+  &lt;suite_name&gt; --show-stdout --browser=release --passthrough -v \
+  --test-filter=&lt;flaky_test_name&gt; --repeat=20</pre>
+</li>
+<li><strong>Option B — Repeat on Trybots via <code>test_suite_exceptions.pyl</code></strong>:
+If you can&#39;t cross-compile locally (e.g., Mac/Win from Linux), edit <a href="https://chromium.googlesource.com/chromium/src/+/main/testing/buildbot/test_suite_exceptions.pyl"><code>//testing/buildbot/test_suite_exceptions.pyl</code></a> to filter to just the flaky test with <code>--repeat=30</code>, run <code>testing/buildbot/generate_buildbot_json.py</code>, upload a draft CL with extra logging, and trigger the specific <code>gpu-fyi-try-*</code> bot.</li>
+<li><strong>Option C — Reproduce Locally</strong>:<ul>
+<li><strong>From a Swarming task</strong>: Open the failed shard&#39;s Swarming task page and copy the command at the bottom of the left panel (&quot;Reproducing the task locally&quot;) to download the isolated build and inputs directly.</li>
+<li><strong>From a local Chromium build</strong>: Run <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/run_gpu_integration_test.py"><code>//content/test/gpu/run_gpu_integration_test.py</code></a> with <code>--browser=exact</code>:<pre data-language="bash">vpython3 content/test/gpu/run_gpu_integration_test.py &lt;suite_name&gt; \
+  --browser=exact --browser-executable=out/Release/chrome \
+  --passthrough -v --test-filter=&lt;flaky_test_name&gt; --repeat=20</pre>
+</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="4-phase-3-expectation-hygiene--buganizer-workflow">4. Phase 3: Expectation Hygiene &amp; Buganizer Workflow</h2>
+<p>When a failure or flake cannot be fixed within the shift&#39;s immediate triage window, suppress it cleanly so the tree stays green while preserving maximum signal for root-causing.</p>
+<h3 id="1-telemetry-based-suites-expectation-hierarchy-least-to-most-destructive">1. Telemetry-Based Suites: Expectation Hierarchy (Least to Most Destructive)</h3>
+<p>Most GPU integration suites (<code>webgl_conformance</code>, <code>pixel</code>, <code>trace_test</code>, <code>context_lost</code>, <code>webcodecs</code>, <code>webgpu_cts</code>, <code>gpu_process</code>, etc.) use Telemetry expectations in <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/gpu_tests/test_expectations/"><code>//content/test/gpu/gpu_tests/test_expectations/</code></a> (see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu_expectation_files.md"><code>gpu_expectation_files.md</code></a>):</p>
+<ol>
+<li><strong><code>[ Slow ]</code></strong>: Always try first for heartbeat websocket timeouts in <code>webgl_conformance</code>, <code>webgl2_conformance</code>, and <code>webgpu_cts</code>.</li>
+<li><strong><code>[ RetryOnFailure ]</code></strong>: Preferred for genuine low/moderate-rate flakes. Keeps running the test and passes if retry succeeds.</li>
+<li><strong><code>[ Failure ]</code></strong>: Use when failing deterministically or flaking &gt;50% of builds so retries still fail the shard. Prefer <code>[ Failure ]</code> over <code>[ Skip ]</code> even for consistent failures because it still executes the test, allowing <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/unexpected_pass_finder.py"><code>//content/test/gpu/unexpected_pass_finder.py</code></a> to detect when the underlying issue is fixed.</li>
+<li><strong><code>[ Skip ]</code></strong>: <strong>Last resort only</strong> (enforced by presubmit)—use only when the test wedges the GPU/device, causes cascading shard timeouts, or is permanently unsupported on that platform.</li>
+</ol>
+<p><strong>Important</strong>:</p>
+<ul>
+<li>Specify the narrowest possible tags from the file header (e.g., <code>[ win10 nvidia-0x2184 release angle-d3d11 ]</code> rather than <code>[ win nvidia ]</code>). You can use <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/suppress_flakes.py"><code>//content/test/gpu/suppress_flakes.py</code></a> to auto-generate non-conflicting tag sets, and run <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/validate_tag_consistency.py"><code>//content/test/gpu/validate_tag_consistency.py</code></a> / <code>git cl presubmit</code> to verify no tag conflicts exist.</li>
+<li>A proper review is preferred, but for urgent expectation suppressions when no reviewer is available, you may add <code>rubber-stamper@appspot.gserviceaccount.com</code> alongside a regular GPU reviewer.</li>
+</ul>
+<h3 id="2-gtest-based-suites--filter-files">2. GTest-Based Suites &amp; Filter Files</h3>
+<p>For C++ GTest suites (<code>gl_tests</code>, <code>gl_unittests</code>, <code>angle_unittests</code>, <code>dawn_end2end_tests</code>, <code>tab_capture_end2end_tests</code>, etc.):</p>
+<ul>
+<li><strong>Source-level suppression</strong>: Prefix the test name with <a href="https://github.com/google/googletest/blob/main/docs/advanced.md#temporarily-disabling-tests"><code>DISABLED_</code></a> (or <code>MAYBE_</code> with <code>#ifdef</code> for platform-specific disabling).</li>
+<li><strong>Builder/Config filter files</strong>: When a GTest suite uses a <code>.filter</code> file for a specific configuration, add <code>-SuiteName.TestName</code> to the relevant file in <a href="https://chromium.googlesource.com/chromium/src/+/main/testing/buildbot/filters/"><code>//testing/buildbot/filters/</code></a>.</li>
+</ul>
+<h3 id="3-filing-high-signal-bugs--hotlist-5853370">3. Filing High-Signal Bugs &amp; Hotlist <code>5853370</code></h3>
+<p>Every expectation <strong>must</strong> reference a <code>crbug.com/</code> ID added to the <strong>Pixel-Wrangler Hotlist (<code>https://issues.chromium.org/hotlists/5853370</code>)</strong>. To make flake bugs actionable for domain owners:</p>
+<ul>
+<li><strong>Component</strong>: <code>Internals&gt;GPU&gt;Testing</code> + domain component (<code>Blink&gt;WebGL</code>, <code>Blink&gt;WebGPU</code>, <code>Internals&gt;GPU&gt;Video</code>, <code>Internals&gt;Skia&gt;Compositing</code>, etc.).</li>
+<li><strong>Diagnostic Dossier in Description</strong>:<ol>
+<li>Exact failing builder(s), step name, and Swarming task dimensions (<code>gpu</code>, <code>os</code>).</li>
+<li><strong>True onset date/revision range</strong> from the Step 1 BigQuery query (even if wide).</li>
+<li><strong>Copy-pasted stack trace / assertion / log snippet</strong> (symbolized if possible).</li>
+<li>Whether <code>find_bad_machines.py</code> ruled out a single bad Swarming host.</li>
+</ol>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu_gardening_and_flake_strategy.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu_gardening_and_flake_strategy.md</a>
+  </p>
+</div>

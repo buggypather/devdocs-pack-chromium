@@ -1,0 +1,54 @@
+<h1>seccomp Sandbox Crash Dumping</h1>
+<p>Currently, Breakpad relies on facilities that are disallowed inside the Linux
+seccomp sandbox.  Specifically, it sets a signal handler to catch faults
+(currently disallowed), forks a new process, and uses ptrace() (also disallowed)
+to read the memory of the faulted process.</p>
+<h2 id="options">Options</h2>
+<p>There are three ways we could do crash dumping of seccomp-sandboxed processes:</p>
+<ul>
+<li>Find a way to permit signal handling safely inside the sandbox (see below).</li>
+<li>Allow the kernel&#39;s core dumper to kick in and write a core file.<ul>
+<li>This seems risky because this code tends not to be well-tested.</li>
+<li>This will not work if the process is chrooted, so it would not work if
+the seccomp sandbox is stacked with the SUID sandbox.</li>
+</ul>
+</li>
+<li>Have an unsandboxed helper process which <code>ptrace()</code>s the sandboxed process
+to catch faults.</li>
+</ul>
+<h2 id="signal-handling-in-the-seccomp-sandbox">Signal handling in the seccomp sandbox</h2>
+<p>In case a trusted thread faults with a SIGSEGV, we must make sure that an
+untrusted thread cannot register a signal handler that will run in the context
+of the trusted thread.</p>
+<p>Here are some mechanisms that could make this safe:</p>
+<ul>
+<li><code>sigaltstack()</code> is per-thread. If we opt not to set a signal stack for
+trusted threads, and set %esp/%rsp to an invalid address, trusted threads
+will die safely if they fault.<ul>
+<li>This means the trusted thread cannot set a signal stack on behalf of the
+untrusted thread once the latter has switched to seccomp mode. The
+signal stack would have to be set up when the thread is created and not
+subsequently changed.</li>
+</ul>
+</li>
+<li><code>clone()</code> has a <code>CLONE_SIGHAND</code> flag. By omitting this flag, trusted and
+untrusted threads can have different sets of signal handlers. This means we
+can opt not to set signal handlers for trusted threads.<ul>
+<li>Again, per-thread signal handler sets would mean the trusted thread
+cannot change signal handlers on behalf of untrusted threads.</li>
+</ul>
+</li>
+<li><code>sigprocmask()/pthread_sigmask()</code>: These can be used to block signal
+handling in trusted threads.</li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="linux/crash_dumping">LinuxCrashDumping</a></li>
+<li><a href="https://crbug.com/37728">Issue 37728</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/seccomp_sandbox_crash_dumping.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/seccomp_sandbox_crash_dumping.md</a>
+  </p>
+</div>

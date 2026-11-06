@@ -1,0 +1,106 @@
+<h1>Documentation Best Practices</h1>
+<p>&quot;Say what you mean, simply and directly.&quot; -
+<a href="http://en.wikipedia.org/wiki/The_Elements_of_Programming_Style">Brian Kernighan</a></p>
+<h2 id="minimum-viable-documentation">Minimum viable documentation</h2>
+<p>A small set of fresh and accurate docs is better than a large
+assembly of &quot;documentation&quot; in various states of disrepair.</p>
+<p>Write short and useful documents. Cut out everything unnecessary, while also
+making a habit of continually massaging and improving every doc to suit your
+changing needs. <strong>Docs work best when they are alive but frequently trimmed,
+like a bonsai tree</strong>.</p>
+<h2 id="update-docs-with-code">Update docs with code</h2>
+<p><strong>Change your documentation in the same CL as the code change</strong>. This keeps your
+docs fresh, and is also a good place to explain to your reviewer what you&#39;re
+doing.</p>
+<h2 id="delete-dead-documentation">Delete dead documentation</h2>
+<p>Dead docs are bad. They misinform, they slow down, they incite despair in
+new community members and laziness in existing ones. They set a precedent
+for leaving behind messes in a code base. If your home is clean, most
+guests will be clean without being asked.</p>
+<p>Just like any big cleaning project, <strong>it&#39;s easy to be overwhelmed</strong>. If your
+docs are in bad shape:</p>
+<ul>
+<li>Take it slow, doc health is a gradual accumulation.</li>
+<li>First delete what you&#39;re certain is wrong, ignore what&#39;s unclear.</li>
+<li>Get the whole community involved. Devote time to quickly scan every doc and
+make a simple decision: Keep or delete?</li>
+<li>Default to delete or leave behind if migrating. Stragglers can always be
+recovered.</li>
+<li>Iterate.</li>
+</ul>
+<h2 id="prefer-the-good-over-the-perfect">Prefer the good over the perfect</h2>
+<p>Documentation is an art. There is no perfect document, there are only proven
+methods and prudent guidelines. See
+<a href="https://github.com/google/styleguide/blob/gh-pages/docguide/philosophy.md#better-is-better-than-perfect">Better is better than perfect</a>.</p>
+<h2 id="documentation-is-the-story-of-your-code">Documentation is the story of your code</h2>
+<p>Writing excellent code doesn&#39;t end when your code compiles or even if your
+test coverage reaches 100%. It&#39;s easy to write something a computer understands,
+it&#39;s much harder to write something both a human and a computer understand. Your
+mission as a Code Health-conscious engineer is to <strong>write for humans first,
+computers second.</strong> Documentation is an important part of this skill.</p>
+<p>There&#39;s a spectrum of engineering documentation that ranges from terse comments
+to detailed prose:</p>
+<ol>
+<li><p><strong>Inline comments</strong>: The primary purpose of inline comments is to provide
+information that the code itself cannot contain, such as why the code is
+there.</p>
+</li>
+<li><p><strong>Method and class comments</strong>:</p>
+<ul>
+<li><p><strong>Method API documentation</strong>: The header / Javadoc / docstring
+comments that say what methods do and how to use them. This
+documentation is <strong>the contract of how your code must behave</strong>. The
+intended audience is future programmers who will use and modify your
+code.</p>
+<p>It is often reasonable to say that any behavior documented here should
+have a test verifying it. This documentation details what arguments the
+method takes, what it returns, any &quot;gotchas&quot; or restrictions, and what
+exceptions it can throw or errors it can return. It does not usually
+explain why code behaves a particular way unless that&#39;s relevant to a
+developer&#39;s understanding of how to use the method. &quot;Why&quot; explanations
+are for inline comments. Think in practical terms when writing method
+documentation: &quot;This is a hammer. You use it to pound nails.&quot;</p>
+</li>
+<li><p><strong>Class / Module API documentation</strong>: The header / Javadoc / docstring
+comments for a class or a whole file. This documentation gives a brief
+overview of what the class / file does and often gives a few short
+examples of how you might use the class / file.</p>
+<p>Examples are particularly relevant when there&#39;s several distinct ways to
+use the class (some advanced, some simple). Always list the simplest
+use case first.</p>
+</li>
+</ul>
+</li>
+<li><p><strong>README.md</strong>: A good README.md orients the new user to the directory and
+points to more detailed explanation and user guides:</p>
+<ul>
+<li>What is this directory intended to hold?</li>
+<li>Which files should the developer look at first? Are some files an API?</li>
+<li>Who maintains this directory and where I can learn more?</li>
+</ul>
+</li>
+<li><p><strong>Design docs, PRDs</strong>: A good design doc or PRD discusses the proposed
+implementation at length for the purpose of collecting feedback on that
+design. However, once the code is implemented, design docs should serve as
+archives of these decisions, not as half-correct docs (they are often
+misused). See
+<a href="#Implementation-state-determines-document-repository">Implementation state</a>
+below.</p>
+</li>
+</ol>
+<h2 id="implementation-state-determines-document-repository">Implementation state determines document repository</h2>
+<p><strong>If the doc is about implemented code, put it in README.md</strong>. If it&#39;s
+pre-implementation discussion, including Design docs, PRDs, and presentations,
+keep it in shared Drive folders.</p>
+<h2 id="duplication-is-evil">Duplication is evil</h2>
+<p>Do not write your own guide to a common technology or process. Link to it
+instead. If the guide doesn&#39;t exist or it&#39;s badly out of date, submit your
+updates to the appropriate docs/ directory or create a package-level
+README.md. <strong>Take ownership and don&#39;t be shy</strong>: Other teams will usually welcome
+your contributions.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/documentation_best_practices.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/documentation_best_practices.md</a>
+  </p>
+</div>

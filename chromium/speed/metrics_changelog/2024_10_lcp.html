@@ -1,0 +1,21 @@
+<h1>Largest Contentful Paint Change in Chrome 130</h1>
+<h2 id="exclude-transparent-text-from-lcp">Exclude transparent text from LCP</h2>
+<p>When texts are transparent, and with no visible decorations like shadows,
+and strokes, they should be not eligible for LCP. But previously they are. We
+fixed this and did experiment to see if the fix would have impact on the LCP
+metric.</p>
+<p>Note: this experiment was first landed in Chrome 126:
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/5498955">Exclude transparent text with decorations from being skipped for LCP</a>,
+and was slowly rolled out.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>We observed that this feature’s impact on ecosystem metrics was minimal and not
+statistically significant.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Launch was the week of Oct 21, 2024, when m130 was in stable, but a limited
+number of early adopters might have seen this change as early as m126.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2024_10_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2024_10_lcp.md</a>
+  </p>
+</div>

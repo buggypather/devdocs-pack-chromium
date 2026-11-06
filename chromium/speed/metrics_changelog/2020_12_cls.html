@@ -1,0 +1,27 @@
+<h1>Cumulative Layout Shift Changes in Chrome 89</h1>
+<h2 id="changes-in-chrome-89">Changes in Chrome 89</h2>
+<h3 id="ignore-layout-shift-under-opacity0">Ignore layout shift under opacity:0</h3>
+<p><a href="https://chromium-review.googlesource.com/c/chromium/src/+/2591907">Source code for this change</a></p>
+<h3 id="clip-layout-shift-rect-by-visual-viewport">Clip layout shift rect by visual viewport</h3>
+<p>On user agents supporting mobile viewport, the actual visual viewport may be
+smaller than the layout viewport. Now layout shifts out of the visual viewport
+are ignored.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2593180">Source code for this change</a></p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>All of these changes only affect sites with specific types of content. Here are
+the specifics for each change:</p>
+<h3 id="ignore-layout-shift-under-opacity0-1">Ignore layout shift under opacity:0</h3>
+<p>Sites using opacity:0 to hide layout changes should see a decrease in their
+Cumulative Layout Shift scores.</p>
+<h3 id="clip-layout-shift-rect-by-visual-viewport-1">Clip layout shift rect by visual viewport</h3>
+<p>Sites may see a decrease in their Cumulative Layout Shift scores on user agents
+supporting mobile viewport when the visual viewport is smaller than the layout
+viewport.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 89 is currently scheduled to be released the week of March 2, 2021.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_12_cls.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_12_cls.md</a>
+  </p>
+</div>

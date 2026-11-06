@@ -1,0 +1,48 @@
+<h1>Unretained dangling pointers.</h1>
+<p><em>See also the main document about <a href="dangling_ptr">dangling pointers</a></em></p>
+<p><strong>Background</strong>
+37.5% of Use-After-Free (UAF) vulnerabilities in Chrome stemmed from callbacks using dangling <code>base::Unretained</code> pointers.</p>
+<p><strong>Mitigation:</strong>
+Runtime checks now help prevent callbacks with dangling pointers. A callback
+invoked with dangling pointers is now turned into a crash.</p>
+<p><strong>Note:</strong> BackupRefPtr mitigates the security impact of accessing those dangling
+pointers. Still, they are the source of crashes and indicate the memory
+ownership is not tracked properly in Chrome. Don&#39;t rely solely on pointer values
+without dereferencing, as addresses might be reused.</p>
+<h2 id="fixing-the-unretained-dangling-pointer">Fixing the Unretained Dangling Pointer</h2>
+<ol>
+<li><strong>Ideal Solution:</strong>  Refactor the code to ensure callbacks cannot be invoked
+after their argument is freed.</li>
+<li><strong>WeakPtr<T></strong> If the argument&#39;s lifetime is not guaranteed to exceed the
+callback, the <code>WeakPtr&lt;T&gt;</code> is a good alternative, provided you can find a
+implement a reasonable fallback when the object is gone.</li>
+<li><strong>Unique Identifiers:</strong> Opt for unique identifiers (e.g., <code>base::IdType</code>)
+instead of pointers when the object is known to be freed. Unique identified
+are better than pointer, as addresses might be reused.</li>
+</ol>
+<h2 id="annotations">Annotations</h2>
+<h3 id="baseunsafedangling"><code>base::UnsafeDangling</code></h3>
+<p>Opt-out of the check. Avoid if at all possible. Only for rare scenarios when you
+are certain the pointer is dangling with no better alternatives.</p>
+<p>When using <code>UnsafeDangling()</code>, the receiver must be of type
+<code>MayBeDangling&lt;&gt;</code>. Example:</p>
+<pre data-language="cpp">void MyCallback(MayBeDangling&lt;int&gt; ptr);
+
+int* may_be_dangling_ptr;
+base::BindOnce(&amp;MyCallback, base::UnsafeDangling(may_be_dangling_ptr));</pre>
+<h3 id="baseunsafedanglinguntriaged"><code>base::UnsafeDanglingUntriaged</code></h3>
+<p>Same as <code>UnsafeDangling()</code>, but with a different meaning:</p>
+<ul>
+<li><strong>Temporary Triage:</strong> Used for flagging pre-existing issues needing migration
+to safer ownership. Chrome engineers still need to investigate the root cause.
+Those pointers might be unsafe.</li>
+<li><strong>Do NOT Use For New Code:</strong> Only acceptable for release-impacting issues.
+Please prefer triaging pointers, as opposed to disabling the whole check
+globally.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/unretained_dangling_ptr_guide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/unretained_dangling_ptr_guide.md</a>
+  </p>
+</div>

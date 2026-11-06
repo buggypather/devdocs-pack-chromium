@@ -1,0 +1,125 @@
+<h1>Chrome OS Debugging Instructions</h1>
+<p>Chrome on Chrome OS is tested using a handful of frameworks, each of which
+you&#39;ll find running on Chrome&#39;s CQ and waterfalls. If you&#39;re investigating
+failures in these tests, below are some tips for debugging and identifying the
+cause.</p>
+<p>*** note</p>
+<p>This doc outlines tests running in true Chrome OS environments (ie: on virtual
+machines or real devices). <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/chromeos_build_instructions.md">linux-chromeos</a> tests, on the other hand, can be
+debugged like any other linux test.</p>
+<hr>
+<h2 id="tast">Tast</h2>
+<p><a href="https://chromium.googlesource.com/chromiumos/platform/tast/+/HEAD/README.md">Tast</a> is Chrome OS&#39;s integration testing framework. Since Chrome itself is
+instrumental to the Chrome OS system, it&#39;s equally important that we run some
+of these integration tests on Chrome&#39;s waterfalls. If you find one of these
+tests failing (likely in the <code>chrome_all_tast_tests</code> step), you can:</p>
+<ul>
+<li><p><strong>Inspect the failed test&#39;s log snippet</strong>: There should be a log snippet for
+each failed test in the <code>Test Results</code> tab in the build UI. eg: For this
+<a href="https://ci.chromium.org/ui/p/chromium/builders/ci/chromeos-kevin-rel/37300/test-results">failed build</a>, clicking on the <code>policy.IncognitoModeAvailability</code> expands to
+include stack traces and error messages.</p>
+</li>
+<li><p><strong>View browser &amp; system logs</strong>: A common cause of failure on Chrome&#39;s builders
+are browser crashes. When this happens, each test&#39;s log snippets will simply
+contain warnings like &quot;<a href="https://luci-milo.appspot.com/ui/inv/build-8835572137562508161/test-results?q=example.ChromeFixture">Chrome probably crashed</a>&quot;. To debug these crashes,
+expand the list of attached artifacts for the test by clicking the <code>Artifacts</code>
+link under the failed test in the <code>Test Results</code> tab. There you&#39;ll find an
+extended log for the test under <code>log.txt</code>. Additionally, you can find system
+logs included in that list. To find a system log for a particular test, match
+the timestamps printed in the test&#39;s log with the timestamps present in the
+system log filename. For instance, the previous <code>example.ChromeFixture</code> failure
+matches the <a href="https://luci-milo.appspot.com/ui/artifact/raw/invocations/task-chromium-swarm.appspot.com-561bed66572a9411/artifacts/chrome%2Fchrome_20210920-051805">chrome/chrome_20210920-051805</a> browser log, which contains the
+culprit Chrome crash and backtrace.</p>
+</li>
+<li><p><strong>Symbolizing a browser crash dump</strong>: See <a href="#symbolizing-a-crash-dump">below</a>.</p>
+</li>
+</ul>
+<h3 id="disabling-a-test">Disabling a test</h3>
+<p>If you are a Chrome Sheriff, please read the sheriff documentation
+<a href="http://go/chrome-sheriff-tast">here</a> before disabling any tests.</p>
+<p>Tast tests are run under both Chrome&#39;s builders and CrOS&#39;s builders. They can be
+disabled either completely (in all builders), or in Chrome&#39;s builders alone. The
+latter should be used only for changes which are not expected to occur on CrOS&#39;s
+builders.</p>
+<ul>
+<li><strong>Disabling in all builders</strong>: If you have a full CrOS checkout, you can add
+the <code>informational</code> <a href="https://chromium.googlesource.com/chromiumos/platform/tast/+/HEAD/docs/test_attributes.md">attribute</a> to the test&#39;s definition. (You may be able to
+bypass the need for a full CrOS checkout by using the <code>Edit code</code> button in
+codesearch UI, but this flow is unverified.) This can take time (ie: many hours)
+to land and propagate onto Chrome&#39;s builders. So if you need the test disabled
+ASAP, consult the next option.</li>
+<li><strong>Disabling in only Chrome&#39;s builders</strong>: You can add the test to the list of
+disabled tests for the step&#39;s GN target. For example, to disable a test in the
+<code>chrome_all_tast_tests</code> step, add it to <a href="https://codesearch.chromium.org/chromium/src/chromeos/tast_control.gni">this list</a>. <strong>Note</strong>: If the test is
+failing consistently, and you only disable it here, it will likely start to fail
+in the next <a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/chrome_commit_pipeline.md#the-chrome-os-commit-pipeline-for-chrome-changes">Chrome uprev</a> on CrOS&#39;s builders, which can lead to further
+problems down the road. So please make sure you pursue the first option as well
+in that case.</li>
+</ul>
+<p>In both cases, please make sure a bug is filed for the test, and route it to
+the appropriate owners.</p>
+<h3 id="symbolizing-a-crash-dump">Symbolizing a crash dump</h3>
+<p>If a test fails due to a browser crash, there should be a Minidump crash report
+present in the test&#39;s isolated out under the prefix <code>crashes/chrome...</code>. These
+reports aren&#39;t very useful by themselves, but with a few commands you can
+symbolize the report locally to get insight into what conditions caused Chrome
+to crash.</p>
+<p>If you are running a locally compiled <a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/simple_chrome_workflow.md">Simple Chrome</a> binary on a device or VM,
+you can can build <code>minidump_stackwalk</code> and download the
+<code>/home/chronos/crash/chrome*.dmp</code> file.</p>
+<pre>autoninja -C out/Release minidump_stackwalk dump_syms
+
+rsync -r -e &quot;ssh -p 9222&quot; root@localhost:/home/chronos/crash /tmp</pre>
+<p>For a crash on a bot, download both the task&#39;s input files (this provides the
+symbols and the symbolizing tools) as well as the task&#39;s output results (this
+provides the crash reports). See the commands listed under the <em>Reproducing the
+task locally</em> section on the task page. For example, to download them for
+<a href="https://chrome-swarming.appspot.com/task?id=5cc272e0a839b311">this task</a>, <code>cd</code>
+into a tmp directory and run:</p>
+<pre>cipd install &quot;infra/tools/luci/cas/\${platform}&quot; -root bar
+./bar/cas login
+./bar/cas download -cas-instance projects/chrome-swarming/instances/default_instance -digest 1ad29e201e4ae7e3056a8b17935edbcd62fb54befdfeba221f2e82e54f150c86/812 -dir foo
+
+cipd install &quot;infra/tools/luci/swarming/\${platform}&quot; -root bar
+./bar/swarming login
+./bar/swarming collect -S chrome-swarming.appspot.com -output-dir=foo 5cc272e0a839b311</pre>
+<p>Generate the breakpad symbols by pointing the <code>generate_breakpad_symbols.py</code> script to
+your local binary, or the downloaded input build dir:</p>
+<pre>cd foo
+vpython3 components/crash/content/tools/generate_breakpad_symbols.py --symbols-dir symbols --build-dir out/Release/ --binary out/Release/chrome --platform chromeos</pre>
+<p>That will generate the symbols in the <code>symbols/</code> dir. Then to symbolize a Chrome
+crash report (either in the tasks&#39;s output, or the <code>/tmp/crash</code> dir):</p>
+<pre>./out/Release/minidump_stackwalk 5cc272e0a839b311/crashes/chrome.20220816.214251.44917.24579.dmp symbols/</pre>
+<h3 id="running-a-test-locally">Running a test locally</h3>
+<p>To run a Tast test the same way it&#39;s ran on Chrome&#39;s builders:</p>
+<ul>
+<li><p>Decide which Chrome OS device type or VM to test on.</p>
+</li>
+<li><p>Build Chrome via the <a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/simple_chrome_workflow.md">Simple Chrome</a> workflow for that board.</p>
+</li>
+<li><p>Deploy your Chrome to the device via the <a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/simple_chrome_workflow.md#Deploying-Chrome-to-the-device">deploy_chrome.py</a> tool.</p>
+</li>
+<li><p>Finally, run the Tast test on the device via the <code>cros_run_test</code> tool under
+<code>//third_party/chromite/bin/</code>. eg:
+<code>cros_run_test --device $DEVICE_IP --tast login.Chrome</code>. See <a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/cros_vm.md#in-simple-chrome">here</a> for more
+info on cros_run_test.</p>
+</li>
+</ul>
+<h2 id="telemetry">Telemetry</h2>
+<blockquote>
+<p>TODO: Add instructions for debugging telemetry failures.</p>
+</blockquote>
+<h2 id="gtest">GTest</h2>
+<blockquote>
+<p>TODO: Add instructions for debugging GTest failures.</p>
+</blockquote>
+<h2 id="rerunning-these-tests-locally">Rerunning these tests locally</h2>
+<blockquote>
+<p>TODO: Add instructions for rerunning these tests locally.</p>
+</blockquote>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/chromeos_debugging_tips.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/chromeos_debugging_tips.md</a>
+  </p>
+</div>

@@ -1,0 +1,67 @@
+<h1>Usage of tools/lldb/lldbinit.py</h1>
+<p>Usage of Chromium&#39;s <a href="https://github.com/chromium/chromium/blob/HEAD/tools/lldb/lldbinit.py">lldbinit.py</a> is recommended when
+debugging with lldb. This is necessary for source-level debugging when
+<code>strip_absolute_paths_from_debug_symbols</code> is enabled [this is the default].</p>
+<p>If you have not installed LLDB yet, run <code>sudo apt-get install lldb</code> to get it.</p>
+<p>To use, add the following to your <code>~/.lldbinit</code>:</p>
+<pre># So that lldbinit.py takes precedence.
+script sys.path[:0] = ['/&lt;your-path&gt;/chromium/src/tools/lldb']
+script import lldbinit</pre>
+<p>Replace <code>&lt;your-path&gt;</code> above with the absolute path containing your Chromium
+repo.</p>
+<p>Make sure the build configuration includes <code>is_debug=true</code>; this will set
+<code>symbol_level=2</code> by default, which is required to view the content of
+frame-level local variables.</p>
+<p>For visualizer support for common pointer, string, and vector types in Chromium,
+add the following:</p>
+<pre>script import chromium_visualizers</pre>
+<h2 id="how-to-attach-to-a-process-with-lldb-and-start-debugging">How to attach to a process with lldb and start debugging</h2>
+<ul>
+<li>Follow the instructions above to create your <code>~/.lldbinit</code> file; don&#39;t forget
+to put the correct absolute path to Chromium source in there.</li>
+<li>In your Chromium checkout, run <code>lldb out/Default/chrome</code> (or
+<code>out/Debug/chrome</code>)<ul>
+<li>On Mac, most likely,
+<code>lldb out/Default/Chromium.app/Contents/MacOS/Chromium</code></li>
+</ul>
+</li>
+<li>Keep lldb running and start Chromium separately with <code>--no-sandbox</code> flag:<ul>
+<li>On Linux, <code>out/Default/chrome --no-sandbox</code></li>
+<li>On Mac, <code>out/Default/Chromium.app/Contents/MacOS/Chromium --no-sandbox</code></li>
+<li>Note: if you start the process from lldb using
+<code>process launch -- --no-sandbox</code>, you will attach to the main browser
+process and will not be able to debug tab processes.</li>
+</ul>
+</li>
+<li>In Chromium, go to the three-dot menu -&gt; <em>More Tools</em> -&gt; <em>Task Manager</em></li>
+<li>Note the process ID for the tab or process you want to debug.</li>
+<li>In the lldb shell:<ul>
+<li>Execute <code>process attach -p PID</code>. PID is the process ID of the process you
+want to debug.<ul>
+<li>Note: it might take a while. Once lldb attaches to the process, you
+will see a message <code>Process PID stopped</code> and some stack traces.</li>
+<li>If you see an error message such as
+<code>attach failed: Operation not permitted</code>, it is probably due to
+<a href="https://wiki.ubuntu.com/SecurityTeam/Roadmap/KernelHardening#ptrace_Protection">ptrace Protection</a>.
+You can disable this feature using
+<code>echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope</code>.</li>
+</ul>
+</li>
+<li>Now you can set breakpoints, e.g.,
+<code>breakpoint set -f inspector_overlay_agent.cc -l 627</code>.</li>
+<li>Execute <code>cont</code> to continue the execution of the process.</li>
+<li>Perform the actions that will trigger the breakpoint. lldb will stop the
+execution for you to inspect.</li>
+<li>You can pause execution at any time by pressing Ctrl-C.</li>
+<li>Type <code>help</code> to learn more about different lldb commands.</li>
+<li>More open-source documentation can be found
+<a href="https://developer.apple.com/library/archive/documentation/IDEs/Conceptual/gdb_to_lldb_transition_guide/document/lldb-basics.html#//apple_ref/doc/uid/TP40012917-CH2-SW1">here</a>.</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/lldbinit.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/lldbinit.md</a>
+  </p>
+</div>

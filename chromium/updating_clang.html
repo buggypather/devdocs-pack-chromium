@@ -1,0 +1,165 @@
+<h1>Updating Clang and Rust</h1>
+<p>We distribute prebuilt packages of LLVM binaries, including clang, rustc, and
+lld, that all developers and bots pull using <code>gclient runhooks</code> (which
+also runs automatically as part of <code>gclient sync</code>). These binaries are
+just regular LLVM binaries built at a fixed upstream revision. This document
+describes how to build a new package, and update Chromium to use it.
+An archive of all packages built so far is at <a href="https://is.gd/chromeclang">https://is.gd/chromeclang</a>.</p>
+<p>It&#39;s recommended that you read our
+<a href="clang_gardening">primer on clang gardening</a> first, to get an overview of
+our infrastructure.</p>
+<ol>
+<li><p>Check that <a href="https://ci.chromium.org/p/chromium/g/chromium.clang/console">https://ci.chromium.org/p/chromium/g/chromium.clang/console</a>
+ looks reasonably green. Red bots with seemingly normal test failures are
+ usually ok, that likely means the test is broken with the stable Clang as
+ well.</p>
+</li>
+<li><p>Find a recent CL that ran the upload bots.</p>
+<ol>
+<li>This will probably be a <a href="clang_gardening#dry-runs">dry run CL</a>, but
+you can also <a href="#making-your-own-roll-cl">create your own</a>.</li>
+</ol>
+</li>
+<li><p>Run <a href="https://goto.google.com/chrome-promote-clang">go/chrome-promote-clang</a>,
+ passing in the revision of the Clang and Rust package version you want to
+ push. This will copy the specified packages from the untrusted staging
+ bucket to the production bucket, allowing them to be pulled by <code>depot_tools</code>.
+ For example:</p>
+<pre>/path/to/copy_staging_to_prod_and_goma.sh --clang-rev llvmorg-21-init-5118-g52cd27e6-1 --rust-rev f7b43542838f0a4a6cfdb17fbeadf45002042a77-1</pre>
+<ol>
+<li>The clang and rust revisions to pass here correspond to the names of the
+packages produced by the upload bots. You can see them by selecting a bot,
+opening the logs for the &quot;package clang/rust&quot; step, and scrolling to the
+bottom where it prints the upload logs.</li>
+<li>For dry run CLs, the old and new revisions also appear in the CL title.</li>
+<li>Writing to the production bucket requires special permissions.
+Then it will push the packages to RBE. If you do not have the necessary
+credentials to do the upload, ask the lexan team to find someone who
+does. You can also email <a href="mailto:clang@chromium.org">clang@chromium.org</a>.</li>
+</ol>
+</li>
+<li><p>Switch to a local branch with the contents of the roll CL. Make sure it&#39;s
+up-to-date before proceeding (pull and sync)!</p>
+<ol>
+<li>The most convenient way to do this is to run <code>git cl patch &lt;gerrit url&gt;</code>,
+which will download the contents of the patch and associate it with the
+existing dry run CL. We prefer to re-use the CL instead of creating a
+new one.</li>
+</ol>
+</li>
+<li><p>Run <code>tools/clang/scripts/sync_deps.py</code> to update the deps entries in DEPS.</p>
+</li>
+<li><p>Run <code>gclient sync</code> to download those packages.</p>
+</li>
+<li><p>Run <code>tools/rust/gnrt_stdlib.py</code> to update the GN files for the Rust standard
+ library.</p>
+</li>
+<li><p>Commit and upload your changes.</p>
+</li>
+<li><p>Run an exhaustive set of try jobs to test the new compiler. The CL
+ description created previously by upload_revision.py includes
+ <code>Cq-Include-Trybots:</code> lines for all needed bots, so it&#39;s sufficient to just
+ run <code>git cl try</code> (or hit &quot;CQ DRY RUN&quot; on gerrit).</p>
+<ol>
+<li>Much like a mega CQ run, it&#39;s common for some of the bots to be red for
+unrelated reasons. You may need to do some digging to determine if a
+problem is due to the roll CL or not.</li>
+<li>A good place to start is to see which issues also occur on a
+ <a href="https://crrev.com/c/7899818">whitespace change</a>, which will forces the bots
+ to recompile everything using pinned clang.</li>
+</ol>
+</li>
+<li><p>Submit the CL! The bots will now pull the new package, and developers will
+ get it the next time they sync.</p>
+</li>
+</ol>
+<h2 id="making-your-own-roll-cl">Making your own roll CL</h2>
+<p>The dry run CLs aren&#39;t magic; you can create one yourself! The main reason for
+doing this is to update the toolchain package without actually rolling forward.
+This is required, for example, after someone has changed one of our <a href="writing_clang_plugins">compiler plugins</a>, or if we want to try building clang with different settings (this is rare).</p>
+<p>To create your own roll CL</p>
+<ol>
+<li>Make sure your workspace is up to date (pull and sync).</li>
+<li>Change the CLANG_REVISION variable in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:tools/clang/scripts/update.py;l=42;drc=6f920cff25ae8852f16c3bb71007b7a9aaebc497">tools/clang/scripts/update.py</a>
+to the new version you want to roll to.</li>
+<li>If you&#39;re not rolling forward (i.e. you didn&#39;t change the CLANG_REVISION),
+then change the SUB_REVISION to a new number. This will ensure the uploaded
+package has a different name [1].</li>
+<li>Repeat the previous steps for Rust in <a href="https://source.chromium.org/chromium/chromium/src/+/main:tools/rust/update_rust.py;drc=8758f776da008edac978399f0d0e703ffd5e33b7">tools/rust/update_rust.py</a>.</li>
+<li>Upload the CL to gerrit.</li>
+<li>Run the upload bots (Choose Tryjobs &gt; filter by <code>upload_</code> &gt; select all).</li>
+</ol>
+<p>You can skip the rust steps if you only want to update the clang package, and
+vice-versa.</p>
+<p>Instead of doing the above steps manually, you can also manually run
+<code>tools/clang/scripts/upload_revision.py</code> and pass it the revisions you want to
+roll to.</p>
+<p>[1] IMPORTANT CAVEAT (<a href="https://crbug.com/496183734">bug</a>): If the commit hash +
+subrevision pair have already been used, the upload bots will fail to upload
+the new package, but they will still consider the run a success. You must always
+make sure to increment the subrevision before a new run, and ideally check the
+output of the upload bots to make sure they didn&#39;t skip an upload. If someone
+else is also working on packaging, make sure to coordinate your subrevision
+numbers. If in doubt, just add an extra digit or something.</p>
+<h2 id="on-local-patches-and-cherry-picks">On local patches and cherry-picks</h2>
+<p>Except for the addition of Clang plugins, which do not affect the compiler
+output, Chromium&#39;s LLVM binaries are vanilla builds of the upstream source code
+at a specific revision, with no alterations.</p>
+<p>We believe this helps when working with upstream: our compiler should behave
+exactly the same as if someone else built LLVM at the same revision, making
+collaboration easier.</p>
+<p>It also creates an incentive for stabilizing the HEAD revision of LLVM: since
+we ship a vanilla build of an upstream revision, we have to ensure that a
+revision can be found which is stable enough to build Chromium and pass all its
+tests. While allowing local cherry-picks, reverts, or other patches, would
+probably allow more regular toolchain releases, we believe we can perform
+toolchain testing and fix issues fast enough that finding a stable revision is
+possible, and that this is the right trade-off for us and for the LLVM
+community.</p>
+<p>For Rust, since the interface between tip-of-tree rustc and LLVM is less
+stable, and since landing fixes in Rust is much slower (even after approval, a
+patch can take more than 24 hours to land), we allow cherry-picks of such fixes
+in our Rust toolchain build.</p>
+<h2 id="performance-regressions">Performance regressions</h2>
+<p>After doing a clang roll, you may get a performance bug assigned to you
+(<a href="https://crbug.com/1094671">example</a>). Some performance noise is expected
+while doing a clang roll.</p>
+<p>You can check all performance data for a clang roll via
+<code>https://chromeperf.appspot.com/group_report?rev=XXXXXX</code>, where <code>XXXXXX</code> is the
+Chromium revision number, e.g. <code>778090</code> for the example bug (look in the first
+message of the performance bug to find this). Click the checkboxes to display
+graphs. Hover over points in the graph to see the value and error.</p>
+<p>Serious regressions require bisecting upstream commits (TODO: how to repro?).
+If the regressions look insignificant and there is green as well as red, you
+can close the bug as &quot;WontFix&quot; with an explanation.</p>
+<h2 id="adding-files-to-the-clang-package">Adding files to the clang package</h2>
+<p>The clang package is downloaded unconditionally by all bots and devs. It&#39;s
+called &quot;clang&quot; for historical reasons, but nowadays also contains other
+mission-critical toolchain pieces besides clang.</p>
+<p>We try to limit the contents of the clang package. They should meet these
+criteria:</p>
+<ul>
+<li>things that are used by most developers use most of the time (e.g. a
+compiler, a linker, sanitizer runtimes)</li>
+<li>things needed for doing official builds</li>
+</ul>
+<h2 id="adding-a-new-package">Adding a New Package</h2>
+<p>If you want to make artifacts available that do not meet the criteria for
+being included in the &quot;clang&quot; package, you can make package.py upload it to
+a separate zip file and then download it on an opt-in basis by using
+update.py&#39;s --package option.  Here is [an example of adding a new package].</p>
+<p>To test changes to <code>package.py</code>, change <code>CLANG_SUB_REVISION</code> in <code>update.py</code> to
+a random number above 2000 and run the <code>*_upload_clang</code> trybots.</p>
+<p>Once the change to <code>package.py</code> is in, file a bug under <code>Tools &gt; LLVM</code>
+requesting that a new package be created ([example bug]).</p>
+<p>Once it&#39;s been uploaded and rolled, you can download it via:</p>
+<pre>tools/clang/scripts/update.py --package your-package-name</pre>
+<p><a href="https://chromium-review.googlesource.com/c/chromium/src/+/5463029">an example of adding a new package</a>
+[example bug]: <a href="https://crbug.com/335730441">https://crbug.com/335730441</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updating_clang.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updating_clang.md</a>
+  </p>
+</div>

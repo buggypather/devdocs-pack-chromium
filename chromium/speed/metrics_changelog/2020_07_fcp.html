@@ -1,0 +1,27 @@
+<h1>First Contentful Paint Changes in M86</h1>
+<h2 id="changes-in-chrome-86">Changes in Chrome 86</h2>
+<p>In Chrome 86, some small changes were made to First Contentful Paint to bring
+its implementation in line with the <a href="https://www.w3.org/TR/paint-timing/">specification</a>.</p>
+<p>The changes are:</p>
+<ul>
+<li>Video elements now trigger FCP when painted. <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2276244">Source code for this change</a>.</li>
+<li>Only SVG elements with content now trigger FCP. Previously empty SVG paints triggered SVG. <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2285532">Source code for this change</a>.</li>
+<li>WebGL2 canvases now trigger FCP when painted. <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2348694">Source code for this change</a>.</li>
+</ul>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>This change affects a small set of sites:</p>
+<ul>
+<li>Sites with a first contentful paint which is only a video element without a <code>poster</code> attribute will have an earlier FCP time.</li>
+<li>Sites with a first contentful paint which is only an empty SVG element will have a later FCP time.</li>
+<li>Sites with a first contentful paint which is only a WebGL canvas will have an earlier FCP time.</li>
+</ul>
+<p>We do not see an impact from this change in our overall metrics, so we believe
+the effect on most sites will be minimal.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Most users were updated to Chrome 86 the week of October 5, 2020.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_07_fcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_07_fcp.md</a>
+  </p>
+</div>

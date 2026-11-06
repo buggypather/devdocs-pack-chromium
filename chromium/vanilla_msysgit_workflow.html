@@ -1,0 +1,130 @@
+<h1>Vanilla msysgit workflow</h1>
+<p>This describes how you can use msysgit on Windows to work on the Chromium git
+repository, without setting up Cygwin or hacking the <code>git cl</code>, <code>git try</code> and
+other scripts to work under a regular Windows shell.</p>
+<p>The basic setup is to set up a regular git checkout on a Linux (or Mac) box, and
+use this exclusively to create your branches and run tools such as <code>git cl</code>, and
+have your Windows box treat this git repository as its upstream.</p>
+<p>The advantage is, you get a pretty clean setup on your Windows box that is
+unlikely to break when the various custom git tools like <code>git cl</code> change. The
+setup is also advantageous if you regularly build code on Windows and then want
+to test it on Linux, since all you need to test on your Linux box is a <code>git push</code> from Windows followed by building and testing under Linux.</p>
+<p>The disadvantage is that it adds an extra layer between the Chromium git repo
+and your Windows checkout.  In my experience (<a href="mailto:joi@chromium.org">joi@chromium.org</a>) this does not
+actually slow you down much, if at all.</p>
+<p>The most frequently used alternative to this workflow on Windows seems to be
+using Cygwin and creating a checkout directly according to the instructions at
+UsingGit. The advantage of that approach is you lose the extra overhead, the
+disadvantage seems to be mostly speed and having to run a Cygwin shell rather
+than just a normal Windows cmd.</p>
+<p>Please note that the instructions below are mostly from memory so they may be
+slightly incorrect and steps may be missing.  Please feel free to update the
+page with corrections and additions based on your experience.</p>
+<h2 id="details">Details</h2>
+<p>Create your checkouts:</p>
+<ol>
+<li>Create a git checkout on your Linux box, with read/write abilities, as per
+UsingGit. The rest of these instructions assume it is located at
+/home/username/chrome</li>
+<li>Install msysgit on your Windows box.</li>
+</ol>
+<p>Starting a new topic branch:</p>
+<ol>
+<li>Linux: <code>git branch mytopic</code>
+(or you may want to use e.g. the LKGR script from UsingGit).</li>
+<li>Windows: <code>git fetch</code> then <code>git checkout mytopic</code></li>
+</ol>
+<p>Normal workflow on Windows:</p>
+<ol>
+<li>...edit/add some files...</li>
+<li><code>git commit -a -m &quot;my awesome change&quot;</code></li>
+<li>...edit more...</li>
+<li><code>git commit -a -m &quot;follow-up awesomeness&quot;</code></li>
+<li><code>git push</code></li>
+</ol>
+<p>Normal workflow on Linux:</p>
+<ul>
+<li>(after <code>git push</code> from windows): <code>git cl upload &amp;&amp; git try</code></li>
+<li>(after LGTM and successful try): <code>git cl commit</code>
+(but note the <code>tot-mytopic</code> trick in the pipelining section below)</li>
+</ul>
+<p>Avoiding excessive file changes (to limit amount of Visual Studio rebuilds when
+switching between branches):</p>
+<ul>
+<li>Base all your different topic branches off of the same base branch; I
+generally create a new LKGR branch once every 2-3 working days and then <code>git merge</code> it to all of my topic branches.</li>
+<li>To track which base branch topic branches are based off, you can use a
+naming convention; I use e.g. lk0426 for an LKGR branch created April 26th,
+then use e.g. lk0426-topic1, lk0426-topic2 for the topic branches that have
+all changes merged from lk0426. I (<a href="mailto:joi@chromium.org">joi@chromium.org</a>) also have a script to
+update the base branch for topic branches and rename them - let me know if
+interested.</li>
+<li>Now that all your branch names are prefixed with the base revision (whether
+you use my naming convention or not), you can know before hand when you
+switch between branches on Windows whether you should expect a major
+rebuild, or a minor rebuild.  If you are able to remember which of your
+topic branches have gn changes and which don&#39;t (or I guess you could use
+<code>git diff</code> to figure this out), then you will also have a good idea whether
+you need to run <code>gclient runhooks</code> or not when you switch branches.  Another
+nice thing is that you should never have to run <code>gclient sync</code> when you
+switch between branches with the same base revision, unless some of your
+branches have changes to DEPS files.</li>
+</ul>
+<p>Pipelining:</p>
+<ol>
+<li>Linux:<ol>
+<li><code>git checkout lk0426-mytopic</code></li>
+<li><code>git checkout -b lk0426-mytopic-nextstep</code></li>
+</ol>
+</li>
+<li>Windows:<ol>
+<li><code>git fetch &amp;&amp; git checkout lk0426-mytopic-nextstep</code></li>
+<li>...work as usual...</li>
+<li><code>git push</code></li>
+</ol>
+</li>
+<li>Later, on Linux:<ol>
+<li><code>make_new_lkgr_branch lk0428</code></li>
+<li><code>git merge lk0428 lk0426-mytopic</code></li>
+<li><code>git branch -m lk0426-mytopic lk0428-mytopic</code> (to rename)</li>
+<li><code>git merge lk0428-mytopic lk0426-mytopic-nextstep</code></li>
+<li><code>git branch -m lk0428-mytopic-nextstep lk0428-mytopic-nextstep</code>
+(to rename)</li>
+</ol>
+</li>
+<li>Later, when you want to commit one of the earlier changes in the pipeline;
+all on Linux.  The reason you may want to create the separate tip-of-tree
+branch is in case the try bots show your change failing on tip-of-tree and
+you need to do significant additional work, this avoids having to roll back
+the tip-of-tree merge:</li>
+</ol>
+<p>Janitorial work on Windows:</p>
+<ul>
+<li>When you rename branches on the Linux side, the Windows repo will not know
+automatically; so if you already had a branch <code>lk0426-mytopic</code> open on
+Windows and then <code>git fetch</code>, you will still have <code>lk0426-mytopic</code> even if
+that was renamed on the Linux side to <code>lk0428-mytopic</code>.</li>
+<li>Dealing with this is straight-forward; you just
+<code>git checkout lk0428-mytopic</code> to switch to the renamed (and likely updated)
+branch. Then <code>git branch -d lk0426-mytopic</code> to get rid of the tracking
+branch for the older name.  Then, occasionally, <code>git remotes prune origin</code>
+to prune remote tracking branches (you don&#39;t normally see these listed
+unless you do <code>git branch -a</code>).</li>
+</ul>
+<p>Gotchas:</p>
+<ul>
+<li>You should normally create your branches on Linux only, so that the Windows
+repo gets tracking branches for them.  Any branches you create in the
+Windows repo would be local to that repository, and so will be non-trivial
+to push to Linux.</li>
+<li><code>git push</code> from Windows will fail if your Linux repo is checked out to the
+same branch. It is easy to switch back manually, but I also have a script I
+call <code>safepush</code> that switches the Linux-side branch for you before pushing;
+let me (<a href="mailto:joi@chromium.org">joi@chromium.org</a>) know if interested.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/vanilla_msysgit_workflow.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/vanilla_msysgit_workflow.md</a>
+  </p>
+</div>

@@ -1,0 +1,105 @@
+<h1>Video Decoder performance tests</h1>
+<p>The video decoder performance tests are a set of tests used to measure the
+performance of various video decoder implementations. These tests run directly
+on top of the video decoder implementation, and don&#39;t require the full Chrome
+browser stack. They are build on top of the
+<a href="https://github.com/google/googletest/blob/main/README.md">GoogleTest</a>
+framework.</p>
+<h2 id="running-from-tast">Running from Tast</h2>
+<p>The Tast framework provides an easy way to run the video decoder performance
+tests from a ChromeOS chroot. Test data is automatically deployed to the device
+being tested. To run all video decoder performance tests use:</p>
+<pre>tast run $HOST video.ChromeStackDecoderPerf*</pre>
+<p>Wildcards can be used to run specific sets of tests:</p>
+<ul>
+<li>Run all VP8 performance tests: <code>tast run $HOST video.ChromeStackDecoderPerf.vp8*</code></li>
+<li>Run all 1080p 60fps performance tests:
+<code>tast run $HOST video.ChromeStackDecoderPerf.*_1080p_60fps*</code></li>
+</ul>
+<p>Check the
+<a href="https://chromium.googlesource.com/chromiumos/platform/tast-tests/+/refs/heads/main/src/go.chromium.org/tast-tests/cros/local/bundles/cros/video/">tast video folder</a>
+for a list of all available tests.
+See the
+<a href="https://chromium.googlesource.com/chromiumos/platform/tast/+/HEAD/docs/quickstart.md">Tast quickstart guide</a>
+for more information about the Tast framework.</p>
+<h2 id="running-manually">Running manually</h2>
+<p>To run the video decoder performance tests manually the
+<em>video_decode_accelerator_perf_tests</em> target needs to be built and deployed to
+the device being tested. Running the video decoder performance tests can be done
+by executing:</p>
+<pre>./video_decode_accelerator_perf_tests [&lt;video path&gt;] [&lt;video metadata path&gt;]</pre>
+<p>e.g.: <code>./video_decode_accelerator_perf_tests test-25fps.h264</code></p>
+<p><strong>Test videos:</strong> Test videos are present for multiple codecs in the
+<a href="https://cs.chromium.org/chromium/src/media/test/data/"><em>media/test/data</em></a>
+folder in Chromium&#39;s source tree (e.g.
+<a href="https://cs.chromium.org/chromium/src/media/test/data/test-25fps.vp8"><em>test-25fps.vp8</em></a>).
+If no video is specified <em>test-25fps.h264</em> will be used.</p>
+<p><strong>Video Metadata:</strong> These videos also have an accompanying metadata <em>.json</em> file
+that needs to be deployed alongside the test video. They can also be found in
+the <em>media/test/data</em> folder (e.g.
+<a href="https://cs.chromium.org/chromium/src/media/test/data/test-25fps.h264.json"><em>test-25fps.h264.json</em></a>).
+If no metadata file is specified <em>&lt;video path&gt;.json</em> will be used. The video
+metadata file contains info about the video such as its codec profile,
+dimensions and number of frames.</p>
+<p><strong>Note:</strong> Various CPU scaling and thermal throttling mechanisms might be active
+on the device (e.g. <em>scaling_governor</em>, <em>intel_pstate</em>). As these can influence
+test results it&#39;s advised to disable them.</p>
+<h2 id="performance-metrics">Performance metrics</h2>
+<p>To measure decoder performance two different test scenarios are used.</p>
+<p><strong>Uncapped decoder performance:</strong> In this scenario the specified test video is
+decoded from start to finish as fast as possible. This test scenario provides an
+estimate of the decoder&#39;s maximum performance (e.g. the maximum FPS).</p>
+<p><strong>Capped decoder performance:</strong> This scenario simulates a more realistic
+environment by decoding a video from start to finish at its actual frame rate,
+while simulating real-time rendering. Frames that are not decoded by the time
+they should be rendered will be dropped.</p>
+<p>Various performance metrics are collected by these tests:</p>
+<ul>
+<li>FPS: The average number of frames the decoder was able to decode per second.</li>
+<li>Frames Dropped: The number of frames that were dropped during playback, only
+relevant for the capped performance test.</li>
+<li>Dropped frame percentage: The percentage of frames dropped, only relevant for
+the capped performance test.</li>
+<li>Frame delivery time: The time between subsequent frame deliveries. The average
+frame delivery time and 25/50/75 percentiles are calculated.</li>
+<li>Frame decode time: The time between scheduling a frame to be decoded and
+getting the decoded frame. This metric provides a measure of the decoder&#39;s
+latency. The average decode time and 25/50/75 percentiles are calculated.</li>
+</ul>
+<p>All performance metrics are written to <em>perf_metrics/&lt;test_name&gt;.json</em>.</p>
+<h2 id="command-line-options">Command line options</h2>
+<p>Multiple command line arguments can be given to the command:</p>
+<pre> -v                   enable verbose mode, e.g. -v=2.
+--vmodule             enable verbose mode for the specified module,
+                      e.g. --vmodule=*media/gpu*=2.
+
+--output_folder       overwrite the output folder used to store
+                      performance metrics, if not specified results
+                      will be stored in the current working directory.
+--use-legacy          use the legacy VDA-based video decoders.
+--use_vd_vda          use the new VD-based video decoders with a
+                      wrapper that translates to the VDA interface,
+                      used to test interaction with older components
+                      expecting the VDA interface.
+--linear_output       use linear buffers as the final output of the
+                      decoder which may require the use of an image
+                      processor internally. This flag only works in
+                      conjunction with --use_vd_vda.
+                      Disabled by default.
+--use-gl              specify which GPU backend to use, possible values
+                      include desktop (GLX), egl (GLES w/ ANGLE), and
+                      swiftshader (software rendering)
+--ozone-platform      specify which Ozone platform to use, possible values
+                      depend on build configuration but normally include
+                      x11, drm, wayland, and headless
+
+--gtest_help          display the gtest help and exit.
+--help                display this help and exit.</pre>
+<h2 id="source-code">Source code</h2>
+<p>See the video decoder performance tests <a href="https://cs.chromium.org/chromium/src/media/gpu/test/video_decode_accelerator_perf_tests.cc">source code</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/media/gpu/video_decoder_perf_test_usage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/media/gpu/video_decoder_perf_test_usage.md</a>
+  </p>
+</div>

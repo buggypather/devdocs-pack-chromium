@@ -1,0 +1,21 @@
+<h1>Graphics</h1>
+<h2 id="why-graphics">Why Graphics?</h2>
+<p>The GPU process is interesting from an attacker perspective for several reasons.</p>
+<ol>
+<li>Many of its features are reachable directly from web content by default,
+which creates an opportunity for malicious websites to attack Chromium users.</li>
+<li>It processes complex data in (mostly) C++ native code, which is difficult to
+do safely.</li>
+<li>It needs the privilege to interact with GPU drivers in the kernel, so our
+ability to sandbox the process is limited.</li>
+<li>It loads third party native code into its address space to interact with
+platform specific graphics features.</li>
+</ol>
+<p>Collectively these properties make the GPU process particularly attractive for
+both remote code execution and privilege escalation.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/research/graphics/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/research/graphics/README.md</a>
+  </p>
+</div>

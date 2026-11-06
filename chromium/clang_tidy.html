@@ -1,0 +1,216 @@
+<h1>Clang Tidy</h1>
+<h2 id="introduction">Introduction</h2>
+<p><a href="http://clang.llvm.org/extra/clang-tidy/">clang-tidy</a> is a clang-based C++
+“linter” tool. Its purpose is to provide an extensible framework for diagnosing
+and fixing typical programming errors, like style violations, interface misuse,
+or bugs that can be deduced via static analysis.</p>
+<h2 id="where-is-it">Where is it?</h2>
+<p>clang-tidy is available in two places in Chromium:</p>
+<ul>
+<li>In Chromium checkouts</li>
+<li>In code review on Gerrit</li>
+</ul>
+<p>Clang-tidy automatically runs on any CL that Chromium committers upload to
+Gerrit, and will leave code review comments there. This is the recommended way
+of using clang-tidy.</p>
+<h2 id="enabled-checks">Enabled checks</h2>
+<p>Chromium globally enables a subset of all of clang-tidy&#39;s checks (see
+<code>${chromium}/src/.clang-tidy</code>). We want these checks to cover as much as we
+reasonably can, but we also strive to strike a reasonable balance between signal
+and noise on code reviews. Hence, a large number of clang-tidy checks are
+disabled.</p>
+<h3 id="adding-a-new-check">Adding a new check</h3>
+<p>New checks require review from <a href="mailto:cxx@chromium.org">cxx@chromium.org</a>. If you propose a check and it
+gets approved, you may turn it on, though please note that this is only
+provisional approval: we get signal from users clicking &quot;Not Useful&quot; on
+comments. If feedback is overwhelmingly &quot;users don&#39;t find this useful,&quot; the
+check may be removed.</p>
+<p>Traditionally, petitions to add checks include <a href="https://docs.google.com/document/d/1i1KmXtDD4j_qjhmAdGlJ6UkYXByVX1Kp952Zusdcl5k/edit?usp=sharing">an
+evaluation</a>
+of the check under review. Crucially, this includes two things:</p>
+<ul>
+<li>a count of how many times this check fires across Chromium</li>
+<li>a random sample (&gt;30) of places where the check fires across Chromium</li>
+</ul>
+<p>It&#39;s expected that the person proposing the check has manually surveyed every
+clang-tidy diagnostic in the sample, noting any bugs, odd behaviors, or
+interesting patterns they&#39;ve noticed. If clang-tidy emits FixIts, these are
+expected to be considered by the evaluation, too.</p>
+<p>An example of a previous proposal email thread is
+<a href="https://groups.google.com/a/chromium.org/g/cxx/c/iZ6-Y9ZhC3Q/m/g-8HzqmbAAAJ">here</a>.</p>
+<h4 id="evaluating-running-clang-tidy-across-chromium">Evaluating: running clang-tidy across Chromium</h4>
+<p>Running clang-tidy requires some setup. First, you&#39;ll need to sync clang-tidy,
+which requires adding <code>checkout_clang_tidy</code> to your <code>.gclient</code> file:</p>
+<pre>solutions = [
+  {
+    'custom_vars': {
+      'checkout_clang_tidy': True,
+    },
+  }
+]</pre>
+<p>Your next run of <code>gclient runhooks</code> should cause clang-tidy to be synced.</p>
+<p>To run clang-tidy across all of Chromium, you&#39;ll need a checkout of Chromium&#39;s
+<a href="https://chromium.googlesource.com/chromium/tools/build">tools/build/</a> repository.
+Once you have that and a Chromium <code>out/</code> dir with an <code>args.gn</code>, running
+clang-tidy across all of Chromium is a single command:</p>
+<pre>$ cd ${chromium}/src
+$ ${chromium_tools_build}/recipes/recipe_modules/tricium_clang_tidy/resources/tricium_clang_tidy_script.py \
+    --base_path $PWD \
+    --out_dir out/Linux \
+    --findings_file all_findings.json \
+    --clang_tidy_binary $PWD/third_party/llvm-build/Release+Asserts/bin/clang-tidy \
+    --all</pre>
+<p>To only run clang-tidy against certain files, replace the <code>--all</code> parameter with
+the individual file paths.</p>
+<p>All clang-tidy checks are run on Linux builds of Chromium, so please set up your
+<code>args.gn</code> to build Linux.</p>
+<p><code>all_findings.json</code> is where all of clang-tidy&#39;s findings will be dumped. The
+format of this file is detailed in <code>tricium_clang_tidy_script.py</code>.</p>
+<p><strong>Note</strong> that the above command will use Chromium&#39;s top-level <code>.clang-tidy</code> file
+(or <code>.clang-tidy</code> files scattered throughout <code>third_party/</code>, depending on the
+files we lint. In order to test a <em>new</em> check, it&#39;s recommended that you use
+<code>tricium_clang_tidy_script.py</code>&#39;s <code>--tidy_checks</code> flag. Usage of this looks like:</p>
+<pre>$ cd ${chromium}/src
+$ ${chromium_build}/recipes/recipe_modules/tricium_clang_tidy/resources/tricium_clang_tidy_script.py \
+    --base_path $PWD \
+    --out_dir out/Linux \
+    --findings_file all_findings.json \
+    --clang_tidy_binary $PWD/third_party/llvm-build/Release+Asserts/bin/clang-tidy \
+    --tidy_checks='-*,YOUR-NEW-CHECK-NAME-HERE'
+    --all</pre>
+<h3 id="ignoring-a-check">Ignoring a check</h3>
+<p>If a check is invalid on a particular piece of code, clang-tidy supports <code>// NOLINT</code> and <code>// NOLINTNEXTLINE</code> for ignoring all lint checks in the current and
+next lines, respectively. To suppress a specific lint, you can put it in
+parenthesis, e.g., <code>// NOLINTNEXTLINE(modernize-use-nullptr)</code>. For more, please
+see <a href="https://clang.llvm.org/extra/clang-tidy/#suppressing-undesired-diagnostics">the documentation</a>.</p>
+<p><strong>Please note</strong> that adding comments that exist only to silence clang-tidy is
+actively discouraged. These comments clutter code, can easily get
+out-of-date, and don&#39;t provide much value to readers. Moreover, clang-tidy only
+complains on Gerrit when lines are touched, and making Chromium clang-tidy clean
+is an explicit non-goal; making code less readable in order to silence a
+rarely-surfaced complaint isn&#39;t a good trade-off.</p>
+<p>If clang-tidy emits a diagnostic that&#39;s incorrect due to a subtlety in the code,
+adding an explanantion of what the code is doing with a trailing <code>NOLINT</code> may be
+fine. Put differently, the comment should be able to stand on its own even if we
+removed the <code>NOLINT</code>. The fact that the comment also silences clang-tidy is a
+convenient side-effect.</p>
+<p>For example:</p>
+<p>Not OK; comment exists just to silence clang-tidy:</p>
+<pre>// NOLINTNEXTLINE
+for (int i = 0; i &lt; arr.size(); i++) {
+  // ...
+}</pre>
+<p>Not OK; comment exists just to verbosely silence clang-tidy:</p>
+<pre>// Clang-tidy doesn't get that we can't range-for-ize this loop. NOLINTNEXTLINE
+for (int i = 0; i &lt; arr.size(); i++) {
+  // ...
+}</pre>
+<p>Not OK; it&#39;s obvious that this loop modifies <code>arr</code>, so the comment doesn&#39;t
+actually clarify anything:</p>
+<pre>// It'd be invalid to make this into a range-for loop, since the body might add
+// elements to `arr`. NOLINTNEXTLINE
+for (int i = 0; i &lt; arr.size(); i++) {
+  if (i % 4) {
+    arr.push_back(4);
+    arr.push_back(2);
+  }
+}</pre>
+<p>OK; comment calls out a non-obvious property of this loop&#39;s body. As an
+afterthought, it silences clang-tidy:</p>
+<pre>// It'd be invalid to make this into a range-for loop, since the call to `foo`
+// here might add elements to `arr`. NOLINTNEXTLINE
+for (int i = 0; i &lt; arr.size(); i++) {
+  foo();
+  bar();
+}</pre>
+<p>In the end, as always, what is and isn&#39;t obvious at some point is highly
+context-dependent. Please use your best judgement.</p>
+<h2 id="but-i-want-to-run-it-locally">But I want to run it locally</h2>
+<p>If you want to sync the officially-supported <code>clang-tidy</code> to your workstation,
+add the following to your .gclient file:</p>
+<pre>solutions = [
+  {
+    'custom_vars': {
+      'checkout_clang_tidy': True,
+    },
+  },
+]</pre>
+<p>If you already have <code>solutions</code> and <code>custom_vars</code>, just add
+<code>checkout_clang_tidy</code> to the existing <code>custom_vars</code> map.</p>
+<p>Once the above update has been made, run <code>gclient runhooks</code>, and clang-tidy
+should appear at <code>src/third_party/llvm-build/Release+Asserts/bin/clang-tidy</code> if
+your Chromium tree is sufficiently up-to-date.</p>
+<h3 id="running-clang-tidy-locally">Running clang-tidy locally</h3>
+<p><strong>Note</strong> that the local flows with clang-tidy are experimental, and require an
+LLVM checkout. Tricium is happy to run on WIP CLs, and we strongly encourage its
+use.</p>
+<p>That said, assuming you have the LLVM sources available, you&#39;ll need to bring
+your own <code>clang-apply-replacements</code> binary if you want to use the <code>-fix</code> option
+noted below.</p>
+<p><strong>Note:</strong> If you&#39;re on a system that offers a clang tools through its package
+manager (e.g., on Debian/Ubuntu, <code>sudo apt-get install clang-tidy clang-tools</code>),
+you might not need an LLVM checkout to make the required binaries and scripts
+(<code>clang-tidy</code>, <code>run-clang-tidy</code> and <code>clang-apply-replacements</code>) available in
+your <code>$PATH</code>. However, the system packaged binaries might be several versions
+behind Chromium&#39;s toolchain, so not all flags are guaranteed to work. If this is
+a problem, consider building clang-tidy from the same revision the current
+toolchain is using, rather than filing a bug against the toolchain component.
+This can be done as follows:</p>
+<pre>tools/clang/scripts/build_clang_tools_extra.py \
+    --fetch out/Release clang-tidy clang-apply-replacements</pre>
+<p>Running clang-tidy is then (hopefully) simple.</p>
+<ol>
+<li>Build chrome normally.</li>
+</ol>
+<pre>ninja -C out/Release chrome</pre>
+<ol start="2">
+<li>Export Chrome&#39;s compile command database</li>
+</ol>
+<pre>gn gen out/Release --export-compile-commands</pre>
+<ol start="3">
+<li>Enter the build directory</li>
+</ol>
+<pre>cd out/Release</pre>
+<ol start="4">
+<li>Run clang-tidy.</li>
+</ol>
+<pre>&lt;PATH_TO_LLVM_SRC&gt;/clang-tools-extra/clang-tidy/tool/run-clang-tidy.py \
+    -p . \# Set the root project directory, where compile_commands.json is.
+    # Set the clang-tidy binary path, if it's not in your $PATH.
+    -clang-tidy-binary &lt;PATH_TO_LLVM_BUILD&gt;/bin/clang-tidy \
+    # Set the clang-apply-replacements binary path, if it's not in your $PATH
+    # and you are using the `fix` behavior of clang-tidy.
+    -clang-apply-replacements-binary \
+        &lt;PATH_TO_LLVM_BUILD&gt;/bin/clang-apply-replacements \
+    # The checks to employ in the build. Use `-*,...` to omit default checks.
+    -checks=&lt;CHECKS&gt; \
+    -header-filter=&lt;FILTER&gt; \# Optional, limit results to only certain files.
+    -fix \# Optional, used if you want to have clang-tidy auto-fix errors.
+    'chrome/browser/.*' # A regex of the files you want to check.
+
+Copy-Paste Friendly (though you'll still need to stub in the variables):
+&lt;PATH_TO_LLVM_SRC&gt;/clang-tools-extra/clang-tidy/tool/run-clang-tidy.py \
+    -p . \
+    -clang-tidy-binary &lt;PATH_TO_LLVM_BUILD&gt;/bin/clang-tidy \
+    -clang-apply-replacements-binary \
+        &lt;PATH_TO_LLVM_BUILD&gt;/bin/clang-apply-replacements \
+    -checks=&lt;CHECKS&gt; \
+    -header-filter=&lt;FILTER&gt; \
+    -fix \
+    'chrome/browser/.*'</pre>
+<p>Note that the source file regex must match how the build specified the file.
+This means that on Windows, you must use (escaped) backslashes even from a bash
+shell.</p>
+<h3 id="questions">Questions</h3>
+<p>Questions about the local flow? Reach out to <a href="mailto:rdevlin.cronin@chromium.org">rdevlin.cronin@chromium.org</a>,
+<a href="mailto:thakis@chromium.org">thakis@chromium.org</a>, or <a href="mailto:gbiv@chromium.org">gbiv@chromium.org</a>.</p>
+<p>Questions about the Gerrit flow? Email <a href="mailto:tricium-dev@google.com">tricium-dev@google.com</a> or
+<a href="mailto:infra-dev+tricium@chromium.org">infra-dev+tricium@chromium.org</a>, or file a bug against <code>Infra&gt;LUCI&gt;BuildService&gt;PreSubmit&gt;Tricium</code>.
+Please CC <a href="mailto:gbiv@chromium.org">gbiv@chromium.org</a> and <a href="mailto:dcheng@chromium.org">dcheng@chromium.org</a> on any of these.</p>
+<p>Discoveries? Update the doc!</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/clang_tidy.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/clang_tidy.md</a>
+  </p>
+</div>

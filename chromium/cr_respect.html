@@ -1,0 +1,35 @@
+<h1>Respectful Code Reviews</h1>
+<h2 id="a-guide-for-code-reviewers">A Guide for Code Reviewers</h2>
+<p>_For the code author counterpart, see
+<strong><a href="cl_respect">Respectful Changes</a></strong>._</p>
+<h2 id="do">Do</h2>
+<h4 id="assume-competence--goodwill">Assume competence &amp; goodwill</h4>
+<p>We attract competent people - and that means even when they&#39;re wrong, it most likely comes from lack of information, not from inability. A &quot;bad&quot; CL usually means one of the parties is in possession of information the other one isn&#39;t aware of.</p>
+<h4 id="discuss-in-person">Discuss in person</h4>
+<p>If there is a disagreement, have a quick in-person/video/IM chat to sort out what is going on - it&#39;s much easier to address all the little &quot;Oh, I didn&#39;t know&quot;s in a single face-to-face, instead of back-and-forth via e-mail with long delays. &quot;In person&quot; doubly applies if you are disagreeing with another reviewer. And please make sure to record the outcomes on the review.</p>
+<h4 id="explain-why">Explain why</h4>
+<p>It might be obvious to you that some code is wrong, but it&#39;s probably not obvious to the author — or they wouldn&#39;t have written it that way. So please don&#39;t say &quot;This is wrong&quot;. Instead, explain at least what the right way looks like. Or even better, explain <em>why</em> they should do things differently. And if you&#39;re the slightest bit uncertain, &quot;Maybe I&#39;m missing something, but…&quot; is a helpful sentence. Remember, assume competence.</p>
+<h4 id="ask-for-the-why">Ask for the why</h4>
+<p>If it is unclear why the author is doing things a certain way, feel free to ask why they made a particular change. Not knowing is OK, and asking &quot;Why&quot; leaves a written record that will help answer this question in the future. (And sometimes, &quot;I&#39;m curious, why did you decide to do it that way?&quot; can help the author to rethink their decision.)</p>
+<h4 id="find-an-end">Find an end</h4>
+<p>If you like things neat, it&#39;s tempting to go over a code review over and over until it&#39;s perfect, dragging it out for longer than necessary. It&#39;s soul-deadening for the recipient, though. Keep in mind that &quot;LGTM&quot; does not mean &quot;I vouch my immortal soul this will never fail&quot;, but &quot;looks good to me&quot;. If it looks good, move on. (That doesn&#39;t mean you shouldn&#39;t be thorough. It&#39;s a judgment call.) And if there are bigger refactorings to be done, move them to a new CL.</p>
+<h4 id="reply-within-a-reasonable-timeframe">Reply within a reasonable timeframe</h4>
+<p>Please don&#39;t leave the reviewee waiting for a long time, keeping in mind timezones and different working hours. If you cannot get to a review within ~24h, please leave a short comment on the CL saying so (and when you can). And if you missed that window, please be courteous if the reviewee IMs you a reminder.</p>
+<p>If you will be on vacation or otherwise OOO for more than a few days, please set your nickname in the Chromium code review tool to indicate this (e.g. adding &#39;(OOO until <date>)&#39;). Remember that not everyone sending you code reviews can see your calendar!</p>
+<h4 id="mention-the-positives">Mention the positives</h4>
+<p>It&#39;s very easy to get into the mindset of &quot;find ALL the flaws&quot;, but acknowledging the positives both helps keep things civil, and brightens the recipient&#39;s day. No need to be all fake smiles, but if there&#39;s a good decision, or if somebody takes on a really grungy task, acknowledging that is a nice thing to do. And on the converse, a &quot;thank you&quot; to the reviewers is occasionally a nice thing, too.</p>
+<h2 id="dont">Don&#39;t</h2>
+<h4 id="dont-shame-people">Don&#39;t shame people</h4>
+<p>&quot;How could you not see this&quot; is a very unhelpful thing to say. Assume that your colleagues do their best, but occasionally make mistakes. That&#39;s why we have code reviews - to spot those mistakes. While flawless CLs are awesome, flawed ones are the norm.</p>
+<h4 id="dont-use-extreme-or-very-negative-language">Don&#39;t use extreme or very negative language</h4>
+<p>Please don&#39;t say things like &quot;no sane person would ever do this&quot; or &quot;this algorithm is terrible&quot;, whether it&#39;s about the change you&#39;re reviewing or about the surrounding code. While it might intimidate the reviewee into doing what you want, it&#39;s not helpful in the long run - they will feel incapable, and there is not much info in there to help them improve. &quot;This is a good start, but it could use some work&quot; or &quot;This needs some cleanup&quot; are nicer ways of saying it. Discuss the code, not the person.</p>
+<h4 id="dont-discourage-tool-use">Don&#39;t discourage tool use</h4>
+<p>If people use the automated formatter, be grateful they&#39;re willing to give up the power of formatting in favor of ensuring a consistent code base. Think carefully before enforcing your own preferences over it. If people use the try bots to find bugs in minor changes, don&#39;t discourage them - be grateful they&#39;re trading machine time to make more room to solve more problems.</p>
+<h4 id="dont-bikeshed">Don&#39;t bikeshed</h4>
+<p>Always ask yourself if this decision <em>really</em> matters in the long run, or if you&#39;re enforcing a subjective preference. It feels good to be right, but only one of the two participants can win that game. If it&#39;s not important, agree to disagree, and move on.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/cr_respect.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/cr_respect.md</a>
+  </p>
+</div>

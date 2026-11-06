@@ -1,0 +1,373 @@
+<h1>Using an Android Emulator</h1>
+<p>Always use x86 emulators (or x86_64 for testing 64-bit APKs). Although arm
+emulators exist, they are so slow that they are not worth your time.</p>
+<h2 id="building-for-emulation">Building for Emulation</h2>
+<p>You need to target the correct architecture via GN args:</p>
+<pre data-language="gn">target_cpu = &quot;x86&quot;  # or &quot;x64&quot; if you have an x86_64 emulator</pre>
+<h2 id="running-an-emulator">Running an Emulator</h2>
+<h3 id="googler-only-emulator-instructions">Googler-only Emulator Instructions</h3>
+<p>See <a href="http://go/clank-emulator/">http://go/clank-emulator/</a></p>
+<h3 id="using-prebuilt-avd-configurations">Using Prebuilt AVD configurations.</h3>
+<p>Chromium has a set of prebuilt AVD configurations stored as CIPD packages.
+These are used by various builders to run tests on the emulator. Their
+configurations are currently stored in <a href="https://github.com/chromium/chromium/blob/HEAD/tools/android/avd/proto/"><code>//tools/android/avd/proto</code></a>.
+You can run this command to list them:</p>
+<pre data-language="sh">tools/android/avd/avd.py list</pre>
+<table>
+<thead>
+<tr>
+<th align="left">Configurations</th>
+<th align="left">Android Version</th>
+<th align="left">Form Factor</th>
+<th align="left">Builder</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><code>generic_android26.textpb</code></td>
+<td align="left">8.0 (O)</td>
+<td align="left">Phone</td>
+<td align="left"><a href="https://ci.chromium.org/p/chromium/builders/ci/android-oreo-x86-rel">android-oreo-x86-rel</a></td>
+</tr>
+<tr>
+<td align="left"><code>generic_android27.textpb</code></td>
+<td align="left">8.1 (O_MR1)</td>
+<td align="left">Phone</td>
+<td align="left">N/A</td>
+</tr>
+<tr>
+<td align="left"><code>android_28_google_apis_x86.textpb</code></td>
+<td align="left">9 (P)</td>
+<td align="left">Phone</td>
+<td align="left"><a href="https://ci.chromium.org/p/chromium/builders/ci/android-pie-x86-rel">android-pie-x86-rel</a></td>
+</tr>
+<tr>
+<td align="left"><code>android_29_google_apis_x86.textpb</code></td>
+<td align="left">10 (Q)</td>
+<td align="left">Phone</td>
+<td align="left">N/A</td>
+</tr>
+<tr>
+<td align="left"><code>android_30_google_apis_x86.textpb</code></td>
+<td align="left">11 (R)</td>
+<td align="left">Phone</td>
+<td align="left"><a href="https://ci.chromium.org/p/chromium/builders/ci/android-11-x86-rel">android-11-x86-rel</a></td>
+</tr>
+<tr>
+<td align="left"><code>android_31_google_apis_x64.textpb</code></td>
+<td align="left">12 (S)</td>
+<td align="left">Phone</td>
+<td align="left"><a href="https://ci.chromium.org/p/chromium/builders/ci/android-12-x64-rel">android-12-x64-rel</a></td>
+</tr>
+<tr>
+<td align="left"><code>android_32_google_apis_x64_foldable.textpb</code></td>
+<td align="left">12L (S_V2)</td>
+<td align="left">Foldable Phone</td>
+<td align="left"><a href="https://ci.chromium.org/p/chromium/builders/ci/android-12l-x64-dbg-tests">android-12l-x64-dbg-tests</a></td>
+</tr>
+<tr>
+<td align="left"><code>android_32_google_apis_x64_foldable_landscape.textpb</code></td>
+<td align="left">12L (S_V2)</td>
+<td align="left">Foldable Phone (Landscape)</td>
+<td align="left"><a href="https://ci.chromium.org/p/chromium/builders/ci/android-12l-landscape-x64-dbg-tests">android-12l-landscape-x64-dbg-tests</a></td>
+</tr>
+<tr>
+<td align="left"><code>android_33_google_apis_x64.textpb</code></td>
+<td align="left">13 (T)</td>
+<td align="left">Phone</td>
+<td align="left"><a href="https://ci.chromium.org/p/chromium/builders/ci/android-13-x64-rel">android-13-x64-rel</a></td>
+</tr>
+<tr>
+<td align="left"><code>android_34_google_apis_x64.textpb</code></td>
+<td align="left">14 (U)</td>
+<td align="left">Phone</td>
+<td align="left"><a href="https://ci.chromium.org/p/chromium/builders/ci/android-14-x64-rel">android-14-x64-rel</a></td>
+</tr>
+<tr>
+<td align="left"><code>android_35_google_apis_x64.textpb</code></td>
+<td align="left">15 (V)</td>
+<td align="left">Phone</td>
+<td align="left"><a href="https://ci.chromium.org/p/chromium/builders/ci/android-15-x64-rel">android-15-x64-rel</a></td>
+</tr>
+<tr>
+<td align="left"><code>android_35_google_apis_x64_tablet.textpb</code></td>
+<td align="left">15 (V)</td>
+<td align="left">Tablet</td>
+<td align="left"><a href="https://ci.chromium.org/ui/p/chromium/builders/ci/android-15-tablet-x64-dbg-tests">android-15-tablet-x64-dbg-tests</a></td>
+</tr>
+<tr>
+<td align="left"><code>android_35_google_apis_x64_tablet_landscape.textpb</code></td>
+<td align="left">15 (V)</td>
+<td align="left">Tablet (Landscape)</td>
+<td align="left"><a href="https://ci.chromium.org/ui/p/chromium/builders/ci/android-15-tablet-landscape-x64-dbg-tests">android-15-tablet-landscape-x64-dbg-tests</a></td>
+</tr>
+</tbody></table>
+<p>You can use these configuration files to run the same emulator images locally.</p>
+<blockquote>
+<p>Note: New AVD configurations for LOCAL development are also available now,
+whose file names end with <code>_local</code>, i.e. <code>*_local.textpb</code>.</p>
+<p>The only difference is that these configs has 12GB storage space instead of
+4GB on the non-local ones. Larger storage space makes it easier for developers
+to install large APKs without hitting the space issue.</p>
+</blockquote>
+<h4 id="prerequisite">Prerequisite</h4>
+<ul>
+<li><p>Make sure KVM (Kernel-based Virtual Machine) is enabled.
+See this
+<a href="https://developer.android.com/studio/run/emulator-acceleration#vm-linux">link</a>
+from android studio for more details and instructions.</p>
+</li>
+<li><p>You need to have the permissions to use KVM.
+Use the following command to see if you are in group <code>kvm</code>:</p>
+<pre>  $ grep kvm /etc/group</pre>
+<p>If your username is not shown in the group, add yourself to the group:</p>
+<pre>  $ sudo adduser $USER kvm
+  $ newgrp kvm</pre>
+<p>You need to log out and log back in so the new groups take effect.</p>
+</li>
+</ul>
+<h4 id="running-via-the-test-runner">Running via the test runner</h4>
+<p>The android test runner can run emulator instances on its own. In doing so, it
+starts the emulator instances, runs tests against them, and then shuts them
+down. This is how builders run the emulator.</p>
+<h5 id="options">Options</h5>
+<ul>
+<li><p><code>--avd-config</code></p>
+<p> To have the test runner run an emulator instance, use <code>--avd-config</code>:</p>
+<pre>  $ out/Debug/bin/run_base_unittests \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb</pre>
+</li>
+<li><p><code>--emulator-count</code></p>
+<p> The test runner will launch one instance by default. To have it run multiple
+ instances, use <code>--emulator-count</code>:</p>
+<pre>  $ out/Debug/bin/run_base_unittests \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+      --emulator-count 4</pre>
+</li>
+<li><p><code>--emulator-enable-network</code></p>
+<p> The test runner runs the emulator without network access by default. To have
+ it run with network access, use <code>--emulator-enable-network</code>:</p>
+<pre>$ out/Debug/bin/run_base_unittests \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+      --emulator-enable-network</pre>
+</li>
+<li><p><code>--emulator-window</code></p>
+<p> The test runner runs the emulator in headless mode by default. To have it run
+ with a window, use <code>--emulator-window</code>:</p>
+<pre>  $ out/Debug/bin/run_base_unittests \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+      --emulator-window</pre>
+</li>
+</ul>
+<h4 id="running-standalone">Running standalone</h4>
+<p>The test runner will set up and tear down the emulator on each invocation.
+To manage emulator lifetime independently, use <code>tools/android/avd/avd.py</code>.</p>
+<h5 id="options-1">Options</h5>
+<ul>
+<li><p><code>--avd-config</code></p>
+<p> This behaves the same as it does for the test runner.</p>
+<pre>  $ tools/android/avd/avd.py start \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb</pre>
+<blockquote>
+<p>Note: <code>avd.py start</code> will start an emulator instance and then terminate.
+To shut down the emulator, use <code>adb emu kill</code>.</p>
+</blockquote>
+</li>
+<li><p><code>--enable-network</code></p>
+<p> Like the test runner, <code>avd.py</code> runs the emulator without network access by
+ default. To enable network access, use <code>--enable-network</code>:</p>
+<pre>  $ tools/android/avd/avd.py start \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+      --enable-network</pre>
+</li>
+<li><p><code>--emulator-window</code></p>
+<p> Like the test runner, <code>avd.py</code> runs the emulator in headless mode by default.
+ To have it run with a window, use <code>--emulator-window</code>:</p>
+<pre>  $ tools/android/avd/avd.py start \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+      --emulator-window</pre>
+</li>
+<li><p><code>--gpu-mode GPU_MODE</code></p>
+<p> Override the mode of hardware OpenGL ES emulation indicated by the AVD.
+ See &quot;emulator -help-gpu&quot; for a full list of modes.</p>
+</li>
+<li><p><code>--no-read-only</code></p>
+<p> <code>avd.py</code> runs the emulator in read-only mode by default. To run a modifiable
+ emulator, use <code>--no-read-only</code>:</p>
+<pre>  $ tools/android/avd/avd.py start \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+      --no-read-only</pre>
+</li>
+<li><p><code>--wipe-data</code></p>
+<p> Reset the /data partition to the factory defaults. This removes all user
+ settings from the AVD.</p>
+<pre>  $ tools/android/avd/avd.py start \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+      --wipe-data</pre>
+</li>
+<li><p><code>--writable-system</code></p>
+<p> Makes system &amp; vendor image writable. It&#39;s necessary to run</p>
+<pre>adb root
+adb remount</pre>
+<p> after the emulator starts.</p>
+</li>
+<li><p><code>--debug-tags</code></p>
+<p> <code>avd.py</code> disables the emulator log by default. When this option is used,
+ emulator log will be enabled. It is useful when the emulator cannot be
+ launched correctly. See <code>emulator -help-debug-tags</code> for a full list of tags.
+ Use <code>--debug-tags=all</code> if you want to output all logs (warning: it is quite
+ verbose).</p>
+<pre>  $ tools/android/avd/avd.py start \
+      --avd-config tools/android/avd/proto/android_33_google_apis_x64.textpb \
+      --debug-tags init,snapshot</pre>
+</li>
+</ul>
+<h3 id="using-your-own-emulator-image">Using Your Own Emulator Image</h3>
+<p>You can also set up emulator images in Android Studio.</p>
+<p>Refer to: <a href="https://developer.android.com/studio/run/managing-avds.html">https://developer.android.com/studio/run/managing-avds.html</a></p>
+<p>Where files live:</p>
+<ul>
+<li>System partition images are stored within the sdk directory.</li>
+<li>Emulator configs and data partition images are stored within
+<code>~/.android/avd/</code>.</li>
+</ul>
+<p>To get started, launch any Android Studio Project. If you don&#39;t have an <a href="android_studio">Android
+Studio project</a> already, you can create a blank one. Go to
+the menu on the right-hand side of the window and click to launch the Device
+Manager. In the Device Manager window, click the &quot;+&quot; icon and <strong>Create Virtual
+Device</strong>.</p>
+<h4 id="creating-an-image">Creating an Image</h4>
+<p>You&#39;ll see a long list of Pixel phone names. You need to 2 decisions here:</p>
+<ol>
+<li>Which form factor (phone/tablet/etc.)? If you&#39;re not sure, a <strong>phone</strong> target
+is usually fine for most development.</li>
+<li>Which device model skin? Any Pixel skin is usually sufficient, but pay
+attention to the &quot;API&quot; column if you need a specific OS version. You can
+refer to
+<a href="https://developer.android.com/guide/topics/manifest/uses-sdk-element.html">https://developer.android.com/guide/topics/manifest/uses-sdk-element.html</a> to
+convert between API numbers and the OS release number (ex. API 34 refers to
+the Android 14 release).</li>
+</ol>
+<h5 id="device-settings">Device settings</h5>
+<p>You need to choose 4 things on the &quot;Device&quot; tab:</p>
+<ol>
+<li>Name: give this emulator a name to help you remember what this emulator is
+for (ex. &quot;Android 15&quot;).</li>
+<li>API: choose an API version (Android operating system version) for the emulator.</li>
+<li>Services: you&#39;ll probably want to choose <strong>Google APIs</strong> for most
+development, since this gives you a <code>userdebug</code> emulator with GMS Core APIs
+installed. See the table below if you need something different.</li>
+<li>System image: select &quot;Google APIs Intel x86_64&quot; (or whichever row has the
+⭐ icon)</li>
+</ol>
+<p>Choosing different <strong>Services</strong> for the emulator:</p>
+<table>
+<thead>
+<tr>
+<th>Services</th>
+<th>GMS?</th>
+<th>Build Properties</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Google Play</td>
+<td>This has GMS and the Play Store</td>
+<td><code>user</code>/<code>release-keys</code></td>
+</tr>
+<tr>
+<td>Google APIs</td>
+<td>This has GMS</td>
+<td><code>userdebug</code>/<code>dev-keys</code></td>
+</tr>
+<tr>
+<td>Android Open Source</td>
+<td>AOSP image, does not have GMS</td>
+<td><code>eng</code>/<code>test-keys</code></td>
+</tr>
+</tbody></table>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/android_device_manager_device_tab.png" alt="Device settings"></p>
+<h5 id="additional-settings">Additional settings</h5>
+<ol>
+<li>Internal storage: this needs to be at least 4000 MB (4 GB)
+(component builds are really big).</li>
+<li>Expanded storage: this needs to be at least 1000 MB (1 GB)
+(our tests push a lot of files to /sdcard).</li>
+</ol>
+<p>After you have configured everything, you can click &quot;Finish&quot; to create the AVD
+(emulator).
+After it&#39;s been created, you can launch the AVD from Device Manager by clicking
+the play button or you can launch it from the commandline (see instructions
+below).</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/android_device_manager_additional_settings_tab.png" alt="Additional settings"></p>
+<h4 id="starting-an-emulator-from-the-command-line">Starting an Emulator from the Command Line</h4>
+<p>Refer to: <a href="https://developer.android.com/studio/run/emulator-commandline.html">https://developer.android.com/studio/run/emulator-commandline.html</a>.</p>
+<p>*** promo
+Ctrl-C will gracefully close an emulator.</p>
+<hr>
+<p>*** promo
+<strong>Tip:</strong> zsh users can add <a href="https://github.com/zsh-users/zsh-completions">https://github.com/zsh-users/zsh-completions</a> to
+provide tab completion for the <code>emulator</code> command line tool.</p>
+<hr>
+<h4 id="basic-command-line-use">Basic Command Line Use</h4>
+<pre data-language="shell">$ # List virtual devices that you've created:
+$ ~/Android/Sdk/emulator/emulator -list-avds
+$ # Start a named device:
+$ ~/Android/Sdk/emulator/emulator @EMULATOR_ID</pre>
+<h4 id="running-a-headless-emulator">Running a Headless Emulator</h4>
+<p>You can run an emulator without creating a window on your desktop (useful for
+<code>ssh</code>):</p>
+<pre data-language="shell">$ ~/Android/Sdk/emulator/emulator -no-window @EMULATOR_ID
+$ # This also works for new enough emulator builds:
+$ ~/Android/Sdk/emulator/emulator-headless @EMULATOR_ID</pre>
+<h4 id="running-multiple-emulators">Running Multiple Emulators</h4>
+<p>Tests are automatically sharded amongst available devices. If you run multiple
+emulators, then running test suites becomes much faster. Refer to the
+&quot;Multiple AVD instances&quot; section of these <a href="https://androidstudio.googleblog.com/2018/11/emulator-28016-stable.html">emulator release notes</a>
+for more about how this works.</p>
+<pre data-language="shell">$ # Start 8 emulators. Press Ctrl-C to stop them all.
+$ ( for i in $(seq 8); do ~/Android/Sdk/emulator/emulator @EMULATOR_ID -read-only &amp; done; wait )
+$ # Start 12 emulators. More than 10 requires disabling audio on some OS's. Reducing cores increases parallelism.
+$ ( for i in $(seq 12); do ~/Android/Sdk/emulator/emulator @EMULATOR_ID -read-only -no-audio -cores 2 &amp; done; wait )</pre>
+<h4 id="writable-system-partition">Writable system partition</h4>
+<p>Unlike physical devices, an emulator&#39;s <code>/system</code> partition cannot be modified by
+default (even on rooted devices). If you need to do so (such as to remove a
+system app), you can start your emulator like so:</p>
+<pre data-language="shell">$ ~/Android/Sdk/emulator/emulator -writable-system @EMULATOR_ID</pre>
+<h2 id="using-an-emulator">Using an Emulator</h2>
+<ul>
+<li>Emulators show up just like devices via <code>adb devices</code><ul>
+<li>Device serials will look like &quot;emulator-5554&quot;, &quot;emulator-5556&quot;, etc.</li>
+</ul>
+</li>
+</ul>
+<h2 id="emulator-pros-and-cons">Emulator pros and cons</h2>
+<h3 id="pros">Pros</h3>
+<ul>
+<li><strong>Compiles are faster.</strong> Many physical devices are arm64, whereas emulators
+are typically x86 (32-bit). 64-bit builds may require 2 copies of the native
+library (32-bit and 64-bit), so compiling for an arm64 phone is ~twice as
+much work as for an emulator (for targets which support WebView).</li>
+<li><strong>APKs install faster.</strong> Since emulators run on your workstation, adb can
+push the APK onto the emulator without being <a href="https://youtu.be/Mzop8bXZI3E">bandwidth-constrained by
+USB</a>.</li>
+<li>Emulators can be nice for working remotely. Physical devices usually require
+<code>scp</code> or ssh port forwarding to copy the APK from your workstation and
+install on a local device. Emulators run on your workstation, so there&#39;s <strong>no
+ssh slow-down</strong>.</li>
+</ul>
+<h3 id="cons">Cons</h3>
+<ul>
+<li>If you&#39;re investigating a hardware-specific bug report, you&#39;ll need a
+physical device with the actual hardware to repro that issue.</li>
+<li>x86 emulators need a separate out directory, so building for both physical
+devices and emulators takes up more disk space (not a problem if you build
+exclusively for the emulator).</li>
+<li><code>userdebug</code>/<code>eng</code> emulators don&#39;t come with the Play Store installed, so you
+can&#39;t install third party applications. Sideloading is tricky, as not all
+third-party apps support x86.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_emulator.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/android_emulator.md</a>
+  </p>
+</div>

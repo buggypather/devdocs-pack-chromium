@@ -1,0 +1,22 @@
+<h1>Interaction to Next Paint Changes in Chrome 128</h1>
+<h2 id="enable-eventtiminghandleorphanpointerup-by-default">Enable EventTimingHandleOrphanPointerup by default</h2>
+<p>Although INP is not intended to measure scrolling performance, there were
+certain sequences of Event dispatch where Event Timing unintentionally would
+sometimes measure what would ultimately be a scroll starting interaction. We&#39;re
+excluding these scroll starting interactions from INP measurement with this
+change.</p>
+<p>Note: this experiment was first landed in Chrome 125: <a href="https://chromium.googlesource.com/chromium/src.git/+/9d3f759094b33ae52dd99e44b182ab03bf0e8073">Treat Orphan Pointerup
+As Non-Interaction</a>, and was slowly rolled out.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>Sites previously affected by scroll starting interactions may observe a drop in
+number of interactions and an improvement on INP score since high outliers
+result from scrolling during early loading are now excluded from INP
+measurement.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 128 will be released the week of August 20, 2024.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2024_08_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2024_08_inp.md</a>
+  </p>
+</div>

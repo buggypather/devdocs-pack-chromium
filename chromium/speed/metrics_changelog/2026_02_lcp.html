@@ -1,0 +1,24 @@
+<h1>Largest Contentful Paint Changes in Chrome 147</h1>
+<h2 id="emit-lcp-candidates-based-on-largest-painted-image-instead-of-largest-pending-image">Emit LCP candidates based on largest painted image instead of largest pending image</h2>
+<p>In Chrome 147, Chrome aligned its web-exposed Largest Contentful Paint (LCP) performance timeline reporting with the W3C specification.</p>
+<p>Previously, Chrome tracked both &quot;painted&quot; images (images whose pixels have been presented to the screen) and &quot;pending&quot; images (images declared in HTML/CSS that are still downloading over the network). When determining whether a newly painted element qualified as an LCP candidate for <code>PerformanceObserver</code>, Chrome checked whether the element was larger than the largest <em>pending</em> image.</p>
+<p>If a page contained a large hero image that was slow to download, Chrome would suppress emitting LCP performance entries for smaller text or image elements that had already painted and were visible to the user.</p>
+<p>Starting in Chrome 147, Chrome emits LCP entries to the <code>PerformanceObserver</code> timeline based on whether the newly rendered element is larger than the largest <em>painted</em> element so far.</p>
+<p>The specification discussion can be found in <a href="https://github.com/w3c/largest-contentful-paint/issues/135">w3c/largest-contentful-paint#135</a> and <a href="https://chromestatus.com/feature/5167930847395840">chromestatus.com/feature/5167930847395840</a>.
+The implementation change can be seen in <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7558997">crrev.com/c/7558997</a>.</p>
+<p>Note: In Chrome 146, a related timing fix ensured that all intermediate LCP candidates are reported in sequence even when newer candidates are already known (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7456180">crrev.com/c/7456180</a>).</p>
+<h3 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h3>
+<ul>
+<li><strong>No change to CrUX / UKM metrics</strong>: Field metrics in CrUX and PageLoad UKM evaluate the largest candidate upon interaction or unload, so aggregate field distributions remain unchanged.</li>
+<li><strong>No increase or decrease in final LCP</strong>: For page loads where images finish rendering before user interaction, the final LCP value reported to Real User Monitoring (RUM) remains identical.</li>
+<li><strong>Improved intermediate candidate visibility in RUM</strong>: JavaScript <code>PerformanceObserver</code>s will now receive intermediate LCP entries as visible content progressively renders on the screen, rather than receiving no entries while waiting for a slow pending image.</li>
+<li><strong>Accurate candidate attribution on early interaction</strong>: If a user interacts with the page while a large pending image is still loading, RUM scripts will now receive the largest candidate that actually painted before the interaction, rather than having candidate emission suppressed.</li>
+</ul>
+<h3 id="when-were-users-affected">When were users affected?</h3>
+<p>Chrome 147 reached stable users in February 2026.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_02_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_02_lcp.md</a>
+  </p>
+</div>

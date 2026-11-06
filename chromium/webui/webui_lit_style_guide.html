@@ -1,0 +1,412 @@
+<h1>WebUI Lit Style Guide</h1>
+<h2 id="overview">Overview</h2>
+<p>This style guide outlines coding standards and best practices for Chromium WebUI
+development with Lit. These guidelines are intended to ensure code quality,
+consistency, and performance across the codebase. They supplement the
+<a href="https://github.com/chromium/chromium/blob/HEAD/styleguide/web/web.md">Chromium Web Development Style Guide</a>.</p>
+<h2 id="crlitelement-subclass-guidelines-ts">CrLitElement Subclass Guidelines (.ts)</h2>
+<p>A Lit element class definition should have the following structure.</p>
+<pre data-language="ts">// my_button.ts example contents
+
+import {getCss} from './my_button.css.js';
+import {getHtml} from './my_button.html.js';
+
+class MyButtonElement extends CrLitElement {
+ static get is() {
+    return 'my-button';
+  }
+
+  static override get styles() {
+    return getCss();
+  }
+
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
+    return {
+      ...
+    };
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'cr-button': MyButtonElement;
+  }
+}
+
+customElements.define(MyButtonElement.is, MyButtonElement);</pre>
+<p>Specifically the following pieces are required:</p>
+<ol>
+<li>The class name should end with the <code>Element</code> suffix, which matches the
+naming of native HTML elements (for example <code>HTMLButtonElement</code>), and
+clearly conveys that a class is a UI component.</li>
+<li><code>static get is() {...}</code> holds the DOM name of the custom element.</li>
+<li><code>interface HTMLElementTagNameMap {...}</code> informs the TypeScript compiler
+ about the association between the DOM name and the class name, allowing it
+ to infer the type in <code>document.createElement</code> or <code>querySelector</code>,
+ <code>querySelectorAll</code> calls. Must be placed after the class definition in the
+ same file.</li>
+<li><code>customElements.define(...)</code> registers the custom element at runtime, so
+ that the browser knows which class to instantiate when encountering the
+ corresponding DOM name. Must be placed after the class definition in the
+ same file.</li>
+<li>The HTML template is imported from the corresponding <code>.html.ts</code> template
+file using <code>getHtml()</code>, and is not defined inline. Exception: dummy test
+elements and low level cr_elements implementing customized rendering
+behavior may use html and render directly.</li>
+</ol>
+<h3 id="method-definition-order">Method definition order</h3>
+<p>Methods (if applicable) must be defined in the following order for consistency:
+<code>is</code>, <code>styles</code>, <code>render</code>, <code>properties</code>, <code>constructor</code>, <code>connectedCallback</code>,
+<code>disconnectedCallback</code>, <code>willUpdate</code>, <code>firstUpdated</code>, <code>updated</code>.</p>
+<h3 id="class-fields-definition-order">Class fields definition order</h3>
+<p>Class fields should be defined after the <code>properties</code> getter and before the
+<code>constructor</code> or, if no constructor exists, before any subsequent methods in the
+method definition order.</p>
+<p>Moreover, separate class fields that have a corresponding Lit reactive property
+from class fields that don&#39;t correspond to any property with a blank
+line. For example:</p>
+<pre data-language="ts">  static override get properties() {
+    return {
+      isActive: {type: Boolean},
+      isDefault: {type: Boolean},
+    };
+  }
+
+  accessor isActive: boolean = false;
+  accessor isDefault: boolean = false;
+
+  private browserProxy_: BrowserProxy = browserProxyFactory.getInstance();</pre>
+<h3 id="leverage-helper-methods-of-the-crlitelement-superclass">Leverage helper methods of the CrLitElement superclass.</h3>
+<h4 id="use-thisfire-for-firing-events-where-possible">Use <code>this.fire(...)</code> for firing events where possible.</h4>
+<p><strong>Do not:</strong></p>
+<pre data-language="ts">this.dispatchEvent(new CustomEvent(
+  'event-one', {bubbles: true, composed: true}));
+
+this.dispatchEvent(new CustomEvent(
+  'event-two', {bubbles: true, composed: true, detail: someValue}));</pre>
+<p><strong>Do:</strong></p>
+<pre data-language="ts">this.fire('event-one');
+this.fire('event-two', someValue);
+
+// OK to use dispatchEvent() when firing non-bubbling or non-composed events.
+this.dispatchEvent(new CustomEvent('event-three', {detail: someValue}));</pre>
+<p><em>Note</em>: When a non-bubbling or non-composed event should be fired use
+<code>dispatchEvent()</code> directly, as <code>fire()</code> creates bubbling and composed events.</p>
+<h2 id="template-guidelines-htmlts">Template Guidelines (.html.ts)</h2>
+<h3 id="logic-free-templates">Logic-free Templates</h3>
+<p>Templates should remain declarative and logic-free. Avoid all of the following
+in the <code>.html.ts</code> file:</p>
+<ul>
+<li>Local variable declarations like <code>let</code> or <code>const</code>.</li>
+<li>Function definitions, other than a single <code>getHtml()</code> function.</li>
+<li>if/for statements and other complex logic.</li>
+</ul>
+<p>Instead:</p>
+<ul>
+<li>Delegate complex logic to helper methods defined in the component&#39;s logic file
+(<code>.ts</code>).</li>
+<li>If the same chunk of HTML template is needed in many places or is logically
+a mostly self-contained &quot;module&quot;, make it a separate custom element.</li>
+</ul>
+<p>The overall goal is to separate the HTML template from the element&#39;s business
+logic as much as possible, and draw a clear boundary between the
+responsibilities of each file. <code>.html.ts</code> files should mostly look like regular
+HTML code with a bit of Lit extras (Lit expressions), and any non-trivial TS
+logic should be delegated to helper methods in the .ts file. Similarly, the
+<code>.ts</code> file should not be responsible for defining any portion of the template
+directly, as this should be done in the <code>.html.ts</code> file.</p>
+<p><strong>Do not:</strong></p>
+<pre data-language="ts">// my_element.html.ts
+export function getHtml(this: MyElement) {
+  const isVisible = this.someCondition &amp;&amp; this.otherCondition;
+  return html`
+    &lt;div ?hidden=&quot;${isVisible}&quot;&gt;...&lt;/div&gt;
+  `;
+}</pre>
+<p><strong>Do:</strong></p>
+<pre data-language="ts">// my_element.ts
+protected accessor isVisible = false;
+
+// my_element.html.ts
+export function getHtml(this: MyElement) {
+  return html`
+    &lt;div ?hidden=&quot;${!this.isVisible}&quot;&gt;...&lt;/div&gt;
+  `;
+}</pre>
+<h4 id="reusing-chunks-of-html">Reusing chunks of HTML</h4>
+<p>In most cases, a chunk of HTML that is needed across multiple locations in
+the DOM should be refactored into a custom element that can be used as needed.
+Custom elements are the canonical way of creating reusable chunks of template,
+just as shared styles are the way to share CSS between elements and mixins or
+helper methods/classes can be used to share TypeScript logic/behavior.</p>
+<p>However, there are some cases where a different solution may be preferred.</p>
+<ol>
+<li>Trivial chunks of HTML can be duplicated. Refactoring to a custom element is
+overkill for very small bits of template.</li>
+</ol>
+<p><strong>Example:</strong></p>
+<pre data-language="ts">// my_element.html.ts
+export function getHtml(this: MyElement) {
+  // Small amount of repeated HTML for the cr-button is okay.
+  return html`
+    ${this.submitButtonFirst ? html`
+      &lt;cr-button id=&quot;submit&quot; @click=&quot;${this.onSubmitClick}&quot;&gt;
+        $i18n{submit}
+      &lt;/cr-button&gt;
+    ` : ''}
+    &lt;cr-button id=&quot;cancel&quot; @click=&quot;${this.onCancelClick}&quot;&gt;
+      $i18n{cancel}
+    &lt;/cr-button&gt;
+    ${!this.submitButtonFirst ? html`
+      &lt;cr-button id=&quot;submit&quot; @click=&quot;${this.onSubmitClick}&quot;&gt;
+        $i18n{submit}
+      &lt;/cr-button&gt;
+    ` : ''}
+  `;
+}</pre>
+<ol start="2">
+<li>Prefer conditional styling to conditional DOM changes for cases of
+modifying appearance. In some cases, it may look like a chunk of HTML
+needs to go in 2 different places in the DOM, but the only reason for
+this is to change its appearance (or the appearance of some DOM around
+it). In this case, conditional CSS styling is a better approach.</li>
+</ol>
+<p><strong>Do not:</strong></p>
+<pre data-language="css">/* my_element.css */
+.fancy-css {
+  border: 4px solid blue;
+}</pre>
+<pre data-language="ts">// my_element.html.ts
+export function getHtml(this: MyElement) {
+  const button = html`
+      &lt;cr-button id=&quot;submit&quot; @click=&quot;${this.onSubmitClick}&quot;&gt;
+        $i18n{submit}
+      &lt;/cr-button&gt;`;
+  return html`
+    ${this.fancyStyleEnabled ? html`
+      &lt;div class=&quot;fancy-css&quot;&gt;${button}&lt;/div&gt;
+    ` : button}
+  `;
+}</pre>
+<p><strong>Do:</strong></p>
+<pre data-language="css">/* my_element.css */
+:host([fancy-style-enabled]) .wrapper {
+  border: 4px solid blue;
+}</pre>
+<pre data-language="ts">// my_element.html.ts
+export function getHtml(this: MyElement) {
+  return html`
+    &lt;div class=&quot;wrapper&quot;&gt;
+      &lt;cr-button id=&quot;submit&quot; @click=&quot;${this.onSubmitClick}&quot;&gt;
+        $i18n{submit}
+      &lt;/cr-button&gt;
+    &lt;/div&gt;
+  `;
+}</pre>
+<ol start="3">
+<li>Long chunks of reused HTML that contain very few elements but a lot of
+bindings can be placed in their own helper .html.ts file, and imported.
+Cases like this would not benefit from refactoring into a custom element,
+because the repeated HTML being refactored is a long list of data bindings
+and event handlers that would simply be re-created for a new custom element.</li>
+</ol>
+<p><strong>Example:</strong></p>
+<pre data-language="ts">// my_element_fancy_button.html.ts
+export function getHtml(this: MyElement) {
+  return html`
+&lt;fancy-button .prop1=&quot;${this.prop1}&quot;
+    .prop2=&quot;${this.prop2}&quot;
+    .prop3=&quot;${this.prop3}&quot;
+    .prop4=&quot;${this.prop4}&quot;
+    .prop5=&quot;${this.prop5}&quot;
+    .prop6=&quot;${this.prop6}&quot;
+    .prop7=&quot;${this.prop7}&quot;
+    .prop8=&quot;${this.prop8}&quot;
+    .prop9=&quot;${this.prop9}&quot;
+    @one=&quot;${this.onButtonOne}&quot;
+    @two=&quot;${this.onButtonTwo}&quot;
+    @three=&quot;${this.onButtonThree}&quot;
+    @four=&quot;${this.onButtonFour}&quot;&gt;
+&lt;/fancy-button&gt;
+`;
+}</pre>
+<pre data-language="ts">// my_element.html.ts
+import {getHtml as getFancyButtonHtml} from './my_element_fancy_button.html.js';
+
+export function getHtml(this: MyElement) {
+  return html`
+${this.compact ? html`
+  &lt;div class=&quot;compact&quot;&gt;
+    ${getFancyButtonHtml.bind(this)()}
+    &lt;cr-input id=&quot;input&gt;&lt;/cr-input&gt;
+  &lt;/div&gt;
+` : html`
+  &lt;div class=&quot;tall&quot;&gt;
+    &lt;cr-textarea id=&quot;input&gt;&lt;/cr-textarea&gt;
+    &lt;fancy-menu&gt;
+      ${getFancyButtonHtml.bind(this)()}
+    &lt;/fancy-menu&gt;
+  &lt;/div&gt;
+`}</pre>
+<h3 id="inline-lambdas">Inline Lambdas</h3>
+<p>Do not use inline arrow functions (lambdas) in templates to pass data to event
+handlers. Creating new functions on every render hurts performance and
+readability.</p>
+<p>A common reason to reach for lambdas is to bind additional data to an event
+handler. Instead, bind a unique identifier, commonly an index, to a <code>data-*</code>
+attribute on the element and retrieve it in the handler.</p>
+<p><strong>Do not:</strong></p>
+<pre data-language="html">${this.items.map(item =&gt; html`
+  &lt;button @click=&quot;${() =&gt; this.onItemClick(item)}&quot;&gt;${item}&lt;/button&gt;
+`)}</pre>
+<p><strong>Do:</strong></p>
+<pre data-language="html">
+${this.items.map((item, index) =&gt; html`
+  &lt;button data-index=&quot;${index}&quot; @click=&quot;${this.onItemClick}&quot;&gt;${item}&lt;/button&gt;
+`)}</pre>
+<pre data-language="ts">protected onItemClick(e: Event) {
+  const currentTarget = e.currentTarget as HTMLElement;
+  const item = items[Number(currentTarget.dataset['index'])];
+}</pre>
+<h3 id="loop-variables">Loop Variables</h3>
+<p>When using <code>map</code> to render lists, prefer using <code>&quot;item&quot;</code> as the loop variable
+name for consistency. Nested loops may use specific names to avoid confusion.</p>
+<pre data-language="ts">${this.items.map(item =&gt; html`...`)}</pre>
+<h3 id="formatting">Formatting</h3>
+<p>A <a href="https://github.com/chromium/chromium/blob/HEAD/ui/webui/resources/tools/lit_template_formatter/README.md">Lit template formatter</a>
+is currently being rolled out on an opt-in basis to format <code>.html.ts</code> template
+files via <code>git cl format</code>. Developers can either opt in for their folders (by
+adding a <code>.style.lit_template_formatter</code> file to the folder) or run the
+formatter manually on individual <code>.html.ts</code> files:</p>
+<pre data-language="bash">./third_party/node/linux/node-linux-x64/bin/node \
+  ui/webui/resources/tools/lit_template_formatter/main.js &lt;path/to/file.html.ts&gt;</pre>
+<h3 id="templatized-ui-elements">Templatized UI elements</h3>
+<p>When binding properties (such as <code>.template</code> or <code>.items</code>) on generic/templatized
+elements (e.g., <code>&lt;cr-lazy-list&gt;</code> or <code>&lt;cr-infinite-list&gt;</code>) in a Lit template file
+(<code>.html.ts</code>), the <code>@webui-eslint/lit-element-expressions</code> ESLint rule checks
+property type compatibility.</p>
+<p>By default, the ESLint rule resolves element tags using <code>HTMLElementTagNameMap</code>,
+which declares generic components with <code>unknown</code> type parameters (e.g.,
+<code>CrLazyListElement&lt;unknown&gt;</code>). If a binding provides a strongly-typed callback (e.g.,
+<code>(item: MyItem, index: number) =&gt; TemplateResult</code>), ESLint will flag a type
+mismatch error because callback parameters of type <code>MyItem</code> are not assignable
+to parameters expecting <code>unknown</code>.</p>
+<p>To provide the more accurate type information to ESLint:</p>
+<ol>
+<li>Ensure the element in the HTML template has an <code>id</code> attribute (e.g.,
+<code>id=&quot;list&quot;</code>).</li>
+<li>Export a <code>TemplatizedDomNodes</code> interface in the <strong><code>.html.ts</code></strong> template file
+(not in the <code>.ts</code> class file) mapping the element&#39;s <code>id</code> to its concrete
+generic type.</li>
+</ol>
+<p><strong>Example:</strong></p>
+<pre data-language="ts">// my_element.html.ts
+import type {CrLazyListElement} from '//resources/cr_elements/cr_lazy_list/cr_lazy_list.js';
+import {html} from '//resources/lit/v3_0/lit.rollup.js';
+
+import type {MyItem} from './my_item.js';
+import type {MyElement} from './my_element.js';
+
+export interface TemplatizedDomNodes {
+  list: CrLazyListElement&lt;MyItem&gt;;
+}
+
+export function getHtml(this: MyElement) {
+  return html`&lt;!--_html_template_start_--&gt;
+&lt;cr-lazy-list id=&quot;list&quot; .items=&quot;${this.items}&quot;
+    .template=&quot;${(item: MyItem, index: number) =&gt; html`
+      &lt;div&gt;${item.name}&lt;/div&gt;
+    `}&quot;&gt;
+&lt;/cr-lazy-list&gt;
+&lt;!--_html_template_end_--&gt;`;
+}</pre>
+<h2 id="naming-conventions">Naming Conventions</h2>
+<h3 id="crlitelement-dom-file-class-names">CrLitElement DOM, file, class names.</h3>
+<ul>
+<li>The DOM name <strong>should not end</strong> with the <code>-element</code> suffix.</li>
+<li>The file name <strong>should not end</strong> with the <code>_element</code> suffix.</li>
+<li>The class name <strong>should end</strong> with the <code>Element</code> suffix.</li>
+<li>The class and file name <strong>should be derived</strong> from the DOM name.</li>
+</ul>
+<p>Where the pattern to derive the class and file names from the DOM name is</p>
+<ul>
+<li>DOM name: <code>foo-bar-baz</code></li>
+<li>Class name candidates: <code>&lt;OptionalPrefix&gt;FooBarBazElement</code>, or <code>BarBazElement</code>,
+or <code>BazElement</code></li>
+<li>File name candidates: <code>foo_bar_baz.{css,html,ts}</code>, <code>bar_baz.{css,html,ts}</code> or
+<code>baz.{css,html,ts}</code>,</li>
+</ul>
+<h3 id="events">Events</h3>
+<p>Event names should be in lower kebab case.</p>
+<p>Event names should state what happened, not what will happen by whoever handles
+the event.</p>
+<ul>
+<li><strong>Good:</strong> <code>close-click</code>, <code>selection-change-click</code></li>
+<li><strong>Bad:</strong> <code>close-dialog</code>, <code>update-selection</code></li>
+</ul>
+<h3 id="event-handlers">Event Handlers</h3>
+<p>Event handlers should be named using the pattern <code>on&lt;OptionalContext&gt;[Event]</code>.</p>
+<ul>
+<li><strong>Good:</strong> <code>onRetryClick</code>, <code>onSelectionChanged</code>, <code>onPointerdown</code></li>
+<li><strong>Bad:</strong> <code>onRetryClicked</code>, <code>handleRetry</code>, <code>selectionHandler</code></li>
+</ul>
+<p>If the DOM node that the event handler is bound to has an ID, the
+<code>&lt;OptionalContext&gt;</code> portion of the handler name should be that ID.</p>
+<p><strong>Do not:</strong></p>
+<pre data-language="html">&lt;button id=&quot;foo&quot; @click=&quot;${this.onBarClick}&quot;&gt;&lt;/button&gt;</pre>
+<p><strong>Do:</strong></p>
+<pre data-language="html">&lt;button id=&quot;foo&quot; @click=&quot;${this.onClick}&quot;&gt;&lt;/button&gt;
+&lt;button id=&quot;foo&quot; @click=&quot;${this.onFooClick}&quot;&gt;&lt;/button&gt;</pre>
+<h2 id="dom-access">DOM Access</h2>
+<h3 id="static-elements">Static Elements</h3>
+<p>For elements that always exist in the Shadow DOM (not part of any conditional
+rendering), prefer <code>this.$.&lt;id&gt;</code> to access them. This provides a strictly typed
+and consistent way to access elements compared to
+<code>this.shadowRoot.querySelector</code>.</p>
+<p>Because elements accessed via <code>this.$</code> are expected to always exist in the DOM,
+member properties on the <code>$</code> interface must not be optional or nullable (e.g.,
+<code>conditionalButton?: CrButtonElement</code> or
+<code>conditionalButton: CrButtonElement|null</code> are disallowed). For conditionally
+rendered elements that may not always be present in the DOM, use
+<code>this.shadowRoot.querySelector</code> instead.</p>
+<p><strong>Do not:</strong></p>
+<p>Don&#39;t add conditional/nullable/undefineable elements via the <code>$</code> interface.</p>
+<pre data-language="html">export function getHtml(this: MyElement) {
+  return html`
+${this.someCondition ? html`
+  &lt;cr-button id=&quot;conditionalButton&quot;&gt;&lt;/cr-button&gt;
+` : ''}
+`;
+}</pre>
+<pre data-language="ts">// Declaring optional or nullable properties on the $ interface:
+export interface MyElement {
+  $: {
+    conditionalButton?: CrButtonElement, // &lt;-- This is incorrect
+  }
+}</pre>
+<p><strong>Do:</strong></p>
+<p>Do add elements that are guaranteed to always exist in the DOM to the <code>$</code>
+interface.</p>
+<pre data-language="html">export function getHtml(this: MyElement) {
+  return html`
+&lt;cr-button id=&quot;submitButton&quot;&gt;Submit&lt;/cr-button&gt;
+`;
+}</pre>
+<pre data-language="ts">export interface MyElement {
+  $: {
+    submitButton: CrButtonElement, // &lt;-- This is correct!
+  }
+}
+
+// Later in your code
+const button = this.$.submitButton;</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_lit_style_guide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_lit_style_guide.md</a>
+  </p>
+</div>

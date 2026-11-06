@@ -1,0 +1,57 @@
+<h1>Chrome OS Demo Mode</h1>
+<p>Demo Mode is Chrome OS device set-up intended to run in retail environment. The
+goal is to let retail customers try out Chrome OS devices, and get a feel of
+their capabilities, including running Android apps.</p>
+<p>Demo Mode is implemented as a Managed Session, by enrolling the device into a
+special demo domain, using &quot;cros-demo-mode&quot; requisition. Enrollment will set up
+policies that control Demo Mode sessions, and specify auto-launched Demo Mode
+device local account. Additionally, Demo Mode setup will install cros-component
+containing assets needed to run Demo Mode. For example:</p>
+<ul>
+<li>demo Android apps</li>
+<li>sample photos
+Using assets from the installed cros-component enables Demo Mode to run offline
+after it&#39;s been set up.</li>
+</ul>
+<h2 id="setup">Setup</h2>
+<p>Demo Mode can be set up on unowned devices only. Demo Mode setup is initiated
+from the Welcome Screen in OOBE by pressing <code>Ctrl + Alt + D</code> key combination, or
+tapping the screen 10 times. This will show a prompt asking the user to confirm
+they want to set up Demo Mode. Accepting the prompt will start off Demo Mode
+setup.</p>
+<p>Demo Mode setup goes through the following steps:</p>
+<ol>
+<li>Demo Preferences screen - configures the language, country, and keyboard
+layout to be used in demo sessions.</li>
+<li>Network Selection screen - selects network to be used during the rest of
+demo mode setup.</li>
+<li>EULA screen, if EULA was not previously accepted.</li>
+<li>ARC Terms of Service - non skippable ARC Terms of Service adjusted for demo
+mode.</li>
+<li>Update Check screen.</li>
+<li>Auto Enrollment Check, and Device Disabled Check, that check whether the
+device should be disabled, or re-enrolled.</li>
+<li>Demo Mode Setup screen - screen that sets up Demo Mode. This step installs
+Demo Mode Resources cros-component, and enrolls the device into the Demo
+Mode domain.</li>
+</ol>
+<p>Demo Mode setup can be cancelled up to the last step.</p>
+<h2 id="offline-enrolled-demo-mode">Offline-Enrolled Demo Mode</h2>
+<p>Provided that they have Offline Demo Mode Resources cros-component installed on
+the device&#39;s stateful partition, demo mode can be set up using offline Demo Mode
+set up. Offline Demo Mode setup does not require communication with the DM
+Server, thus requiring no network connectivity. The device will be enrolled in a
+fake domain, using a signed Demo Mode policy blob loaded from the offline-demo-mode
+enabled device. Offline Demo Mode setup can be started by skipping network
+selection in the Network screen (an option only available on devices that have
+Offline Demo Mode Resources pre-installed).</p>
+<p>Offline Demo Mode Resources cros-component is a pre-installed version of Demo
+Mode Resources cros-component that includes resources that would normally be
+downloaded during online Demo Mode setup - for example, the Highlights App (an
+app that highlights Chrome OS features).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/login/demo_mode.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/login/demo_mode.md</a>
+  </p>
+</div>

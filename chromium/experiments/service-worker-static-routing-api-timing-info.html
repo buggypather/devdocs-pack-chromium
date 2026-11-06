@@ -1,0 +1,45 @@
+<h1>Timing information for ServiceWorker Static Routing API</h1>
+<ul>
+<li>Contact: <a href="mailto:chrome-loading@google.com">chrome-loading@google.com</a></li>
+</ul>
+<p>This document describes the status of the current implementation of the
+<a href="https://github.com/WICG/service-worker-static-routing-api/blob/main/resource-timing-api.md"><strong>Timing Info for ServiceWorker Static Routing API</strong></a>
+in Chrome, and how to enable it.</p>
+<p>Note that this feature is not available by default.
+Chrome plans to do an origin trial starting from M131 to evaluate its
+effectiveness and to allow site authors to give feedback.</p>
+<h2 id="whats-supported">What’s supported</h2>
+<p>The API is implemented according to the
+<a href="https://github.com/WICG/service-worker-static-routing-api/blob/main/resource-timing-api.md">explainer</a>.</p>
+<p>Following new fields are added to the resourceTimingAPI:</p>
+<ul>
+<li>workerMatchedRouterSource</li>
+<li>workerActualRouterSource</li>
+<li>workerCacheLookupStart</li>
+</ul>
+<p>In addition, a new value <code>cache-storage</code> is added to the <code>deliveryType</code> field.
+Please refer to the explainer for details about each field.</p>
+<h2 id="activation">Activation</h2>
+<p>The API can be enabled by participating in the <a href="https://developer.chrome.com/blog/origin-trials/">Origin Trial</a>.</p>
+<p>The feature is named <code>ServiceWorkerStaticRouterTimingInfo</code>.
+Registration for the trial is <a href="https://developer.chrome.com/origintrials/#/view_trial/1689412810217357313">here</a>.
+See <a href="https://chromestatus.com/feature/6309742380318720">feature status</a> to find out
+if the origin trial is currently running.</p>
+<p>The <a href="https://developer.chrome.com/docs/web-platform/origin-trials/#take-part-in-an-origin-trial">origin trial tutorial</a> describes how to participate.</p>
+<h2 id="verifying-the-api-is-working">Verifying the API is working</h2>
+<p>In devtools, run the following piece of javascript after navigating to a page
+which uses ServiceWorker static routing API.</p>
+<pre data-language="js">performance.getEntriesByType('navigation')[0].matchedSourceType;</pre>
+<p>If it gives you a value, it succeeds.
+If it gives <code>undefined</code> then the feature is not enabled.</p>
+<h2 id="related-links">Related Links</h2>
+<ul>
+<li><a href="https://github.com/WICG/service-worker-static-routing-api/blob/main/resource-timing-api.md">Timing Info for ServiceWorker Static Routing API Explinaer on GitHub</a></li>
+<li><a href="https://chromestatus.com/feature/6309742380318720">Chrome Status</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/service-worker-static-routing-api-timing-info.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/experiments/service-worker-static-routing-api-timing-info.md</a>
+  </p>
+</div>

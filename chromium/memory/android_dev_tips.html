@@ -1,0 +1,66 @@
+<h1>Android Dev Tips</h1>
+<p>Just an internal tips page for people working on the memory team.</p>
+<h2 id="building-clank">Building clank</h2>
+<p>See instructions on the official <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_build_instructions.md">android build
+page</a> for the most up to date info.
+However, it will tell you how to build <em>everything</em> which is way way more than
+you need and way way harder.  In short, you mostly need to do 3 (well, 2)
+things:</p>
+<ol>
+<li>Create a gn out directory with <code>target_os=&quot;android&quot;</code> in the GN args</li>
+<li>Disable NaCl. (not strictly necessary, but it makes Albert feel better)</li>
+<li>Build the <code>chrome_public_apk</code></li>
+</ol>
+<h2 id="too-much-text-i-just-want-to-run-my-thing">Too much text! I just want to run my thing!</h2>
+<p>Fine fine.  First, ensure only one phone is attached. If you have multiple,
+you&#39;ll need to pass the device ID everywhere. Also, despite common wisdom, you
+do NOT have to root your phone. Anyways...here&#39;s command lines to copy-🍝.</p>
+<p>Get your environment setup (adb in your path, etc):</p>
+<pre>$ source build/android/envsetup.sh</pre>
+<p>Incremental build/deploy:</p>
+<pre>$ ninja -C out/clank -j1000 chrome_public_apk &amp;&amp; ./build/android/adb_install_apk.py --keep_data out/clank/apks/ChromePublic.apk &amp;&amp; ( ./build/android/adb_kill_chrome_public ; ./build/android/adb_run_chrome_public )</pre>
+<p>Setting flags (<strong>see next part!</strong>):</p>
+<pre>$ ./build/android/adb_chrome_public_command_line --my-happy-flag-here</pre>
+<p>Select chromium as the system debug app to pick up flags!:</p>
+<ul>
+<li>Go to the <code>Developer Options</code> in Android Settings</li>
+<li>Find the <code>Select debug app</code> option.</li>
+<li>Select Chromium (after your first install)</li>
+</ul>
+<p>If you neglect to do this AND you do not have a rooted phone, the
+<code>adb_chrome_public_command_line</code> tool cannot write a command line file into the
+right location for your Chrome binary to read. When in doubt, verify the flags
+in <code>about://version</code>.</p>
+<h2 id="what-is-chrome_public_apk">What is <code>chrome_public_apk</code>?</h2>
+<p>This seems to be the Android moral equivalent of the the <code>chrome</code> target on
+desktop. It builds the APK that you want to install on your phone to run your
+version of chromium.</p>
+<h2 id="running-logcat-without-going-crazy">Running logcat without going crazy.</h2>
+<p>Logcat dumps a lot of system messages on periodic timers which can be noisy.
+Often you just want to look at stack traces and things from chrome logs. This
+can be filtered with a command like the following:</p>
+<pre>adb logcat -s chromium:* ActivityManager:* WindowManager:* libc:* DEBUG:* System.err:*</pre>
+<p>The <code>-s</code> silences everything that&#39;s not explicitly listed by default.
+<code>ActivityManager</code> shows the android life-cycle events for Chrome. <code>WindowManager</code>
+shows window changes. <code>libc</code> and <code>DEBUG</code> show stack traces. <code>System.err</code> is the
+Java interpretation of the C failures. And <code>chromium</code> is obviously the bulk of
+the interesting messages.</p>
+<h2 id="running-telemetry-aka-toolsperfrun_benchmark">Running telemetry (aka <code>./tools/perf/run_benchmark</code>)</h2>
+<p>Passing in <code>--device=</code> with the correct id from <code>adb devices</code> will make the
+script talk to your phone. You will need to go to the <code>Developer Options</code> and
+force the screen to not lock. Then you can select the executable to run with
+one of:</p>
+<pre>--browser=exact --browser-executable=out/clank/apks/ChromePublic.apk</pre>
+<p>or if you want to run something already installed on the phone, there&#39;s a set of
+nifty options to <code>--browser</code> like:</p>
+<pre>--browser=android-chrome-chrome
+--browser=android-chrome-beta
+--browser=android-chrome-dev
+--browser=android-chrome-canary
+--browser=android-chrome-chromium</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/android_dev_tips.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory/android_dev_tips.md</a>
+  </p>
+</div>

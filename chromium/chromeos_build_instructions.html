@@ -1,0 +1,187 @@
+<h1>Chrome OS Build Instructions</h1>
+<p>Chrome for Chromium OS can be built in a couple different ways. After following
+the <a href="#common-setup">initial setup</a>, you&#39;ll need to choose one of the following
+build configurations:</p>
+<ul>
+<li>If you&#39;re interested in testing Chrome OS code in Chrome, but not interactions
+with Chrome OS services, you can build for
+<a href="#Chromium-OS-on-Linux-linux_chromeos">linux-chromeos</a> using just a Linux
+workstation.</li>
+<li>Otherwise, Chrome&#39;s full integration can be covered by building for a real
+Chrome OS device or VM using <a href="#Chromium-OS-Device-Simple-Chrome">Simple Chrome</a>.</li>
+<li>Use <code>is_chromeos_device</code> in GN and <code>BUILDFLAG(IS_CHROMEOS_DEVICE)</code> in C++ code
+to differentiate between these two modes.</li>
+</ul>
+<h2 id="common-setup">Common setup</h2>
+<p>First, follow the <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/build_instructions.md">normal Linux build
+instructions</a>
+as usual to get a Chromium checkout.</p>
+<p>You&#39;ll also need to add <code>&#39;chromeos&#39;</code> to the <code>target_os</code> list in your <code>.gclient</code>
+configuration, which will fetch the additional build dependencies required for
+CrOS. This file is located one level up from your Chromium checkout&#39;s <code>src</code>.</p>
+<p>If you don&#39;t already have a <code>target_os</code> line present, simply add this to the
+end of the <code>.gclient</code> file:</p>
+<pre>target_os = ['chromeos']</pre>
+<p>If you already have a <code>target_os</code> line present in your <code>.gclient file</code>, you can
+simply append <code>&#39;chromeos&#39;</code> to the existing list there. For example:</p>
+<pre>target_os = ['android', 'chromeos']</pre>
+<p>Once your <code>.gclient</code> file is updated, you will need to run <code>gclient sync</code> once
+before proceeding with the rest of these instructions.</p>
+<h2 id="chromium-os-on-linux-linux-chromeos">Chromium OS on Linux (linux-chromeos)</h2>
+<p>Chromium on Chromium OS uses Linux Chromium as a base, but adds a large number
+of Chrome OS-specific features to the code. For example, the login UI, window
+manager and system UI are part of the Chromium code base and built into the
+chrome binary.</p>
+<p>Fortunately, most Chromium changes that affect Chromium OS can be built and
+tested on a Linux workstation. This build is called &quot;linux-chromeos&quot;. In this
+configuration most system services (like the power manager, bluetooth daemon,
+etc.) are stubbed out. The entire system UI runs in a single X11 window on your
+desktop.</p>
+<p>You can test sign-in/sync in this mode by adding the --login-manager flag, see
+the <a href="#Login-notes">Login notes</a> section.</p>
+<h3 id="building-and-running-chromium-with-chromium-os-ui-on-your-local-machine">Building and running Chromium with Chromium OS UI on your local machine</h3>
+<p>Run the following in your chromium checkout:</p>
+<pre>$ gn gen out/Default --args='target_os=&quot;chromeos&quot;'
+$ autoninja -C out/Default chrome
+$ out/Default/chrome --use-system-clipboard</pre>
+<p>(<code>autoninja</code> is a wrapper that automatically provides optimal values for the
+arguments passed to <code>ninja</code>).</p>
+<p>Some additional options you may wish to set by passing in <code>--args</code> to <code>gn gen</code>
+or running <code>gn args out/Default</code>:</p>
+<pre># Remote execution is only available to Googlers and contributors who have
+# access to RBE.
+use_remoteexec = true
+
+is_component_build = true  # Links faster.
+is_debug = false           # Release build, runs faster.
+dcheck_always_on = true    # Enables DCHECK despite release build.
+
+# Builds Chrome instead of Chromium. This requires a src-internal
+# checkout. Adds internal features and branded art assets.
+is_chrome_branded = true
+
+# Enables many optimizations, leading to much slower compiles, links,
+# and no runtime stack traces.
+#
+# Note: not compatible with `is_component_build = true`.
+is_official_build = true</pre>
+<p>NOTE:</p>
+<ul>
+<li><p>You may wish to replace &#39;Default&#39; with something like &#39;Cros&#39; if you switch
+back and forth between Linux and Chromium OS builds, or &#39;Debug&#39; if you want
+to differentiate between Debug and Release builds (see below).</p>
+</li>
+<li><p>See <a href="https://www.chromium.org/developers/gn-build-configuration">GN Build
+Configuration</a>
+for more information about configuring your build.</p>
+</li>
+<li><p>You can also build and run test targets like <code>unit_tests</code>, <code>browser_tests</code>,
+etc.</p>
+</li>
+<li><p>For contributors (Not a Googler) with access to RBE, please follow the
+corresponding <a href="linux/build_instructions#use-remote-execution">Linux build
+instructions</a> to configure
+remote execution.</p>
+</li>
+</ul>
+<h3 id="flags">Flags</h3>
+<p>Some useful flags:</p>
+<ul>
+<li><code>--ash-debug-shortcuts</code>: Enable shortcuts such as Ctl+Alt+Shift+T to toggle
+tablet mode.</li>
+<li><code>--ash-host-window-bounds=&quot;0+0-800x600,800+0-800x600&quot;</code>: Specify one or more
+virtual screens, by display position and size.</li>
+<li><code>--enable-features=Feature1,OtherFeature2</code>: Enable specified features.
+Features are often listed in chrome://flags, or in source files such as
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/common/chrome_features.cc">chrome_features.cc</a>
+or <a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/constants/ash_features.cc">ash_features.cc</a>.
+Note that changing values in chrome://flags does not work for
+linux-chromeos, and this flag must be used.</li>
+<li><code>--enable-ui-devtools[=9223]</code>: Allow debugging of the system UI through
+devtools either within linux-chromeos at chrome://inspect, or from a remote
+browser at
+devtools://devtools/bundled/devtools_app.html?uiDevTools=true&amp;ws=127.0.0.1:9223/0</li>
+<li><code>--remote-debugging-port=9222</code>: Allow debugging through devtools at
+<a href="http://localhost:9222">http://localhost:9222</a></li>
+<li><code>--use-system-clipboard</code>: Integrate clipboard with the host X11 system.</li>
+</ul>
+<h3 id="login-notes">Login notes</h3>
+<p>By default this build signs in with a stub user. To specify a real user:</p>
+<ul>
+<li>For first run, add the following options to chrome&#39;s command line:
+<code>--user-data-dir=/tmp/chrome --login-manager</code></li>
+<li>Go through the out-of-the-box UX and sign in with a real Gmail account.</li>
+<li>For subsequent runs, if you want to skip the login manager page, add:
+<code>--user-data-dir=/tmp/chrome --login-user=username@gmail.com --login-profile=username@gmail.com-hash</code>. It&#39;s also fine to just keep
+--login-manager instead.</li>
+<li>To run in guest mode instantly, add:
+<code>--user-data-dir=/tmp/chrome --bwsi --incognito --login-user=&#39;$guest&#39; --login-profile=user</code></li>
+</ul>
+<p>Signing in as a specific user is useful for debugging features like sync
+that require a logged in user.</p>
+<h3 id="graphics-notes">Graphics notes</h3>
+<p>The Chromium OS build requires a functioning GL so if you plan on
+testing it through Chromium Remote Desktop you might face drawing
+problems (e.g. Aura window not painting anything). Possible remedies:</p>
+<ul>
+<li><code>--ui-enable-software-compositing --ui-disable-threaded-compositing</code></li>
+<li><code>--use-gl=angle --use-angle=swiftshader</code>, but it&#39;s slow.</li>
+</ul>
+<p>To more closely match the UI used on devices, you can install fonts used
+by Chrome OS, such as Roboto, on your Linux distro.</p>
+<h2 id="chromium-os-device-simple-chrome">Chromium OS Device (Simple Chrome)</h2>
+<p>This configuration allows you to build a fully functional Chrome for a real
+Chrome OS device or VM. Since Chrome OS uses a different toolchain for each
+device model, you&#39;ll first need to know the name of the model (or &quot;board&quot;) you
+want to build for. For most boards, <code>amd64-generic</code> and <code>arm-generic</code> will
+produce a functional binary, though it won&#39;t be optimized and may be missing
+functionality.</p>
+<h3 id="additional-gclient-setup">Additional gclient setup</h3>
+<p>Each board has its own toolchain and misc. build dependencies. To fetch these,
+list the board under the <code>&quot;cros_boards&quot;</code> gclient custom var. If you were using
+the <code>amd64-generic</code> board, your <code>.gclient</code> file would look like:</p>
+<pre>solutions = [
+  {
+    &quot;url&quot;: &quot;https://chromium.googlesource.com/chromium/src.git&quot;,
+    &quot;name&quot;: &quot;src&quot;,
+    &quot;custom_deps&quot;: {},
+    &quot;custom_vars&quot; : {
+        &quot;cros_boards&quot;: &quot;amd64-generic&quot;,
+    },
+  },
+]
+target_os = [&quot;chromeos&quot;]</pre>
+<p>Once your .gclient file is updated, you will need to run <code>gclient sync</code> again
+to fetch the toolchain.</p>
+<p>NOTE:</p>
+<ul>
+<li>If you&#39;d like a VM image additionally downloaded for the board, add it to the
+<code>&quot;cros_boards_with_qemu_images&quot;</code> gclient custom var. That var downloads the
+SDK along with a VM image. <code>cros_boards</code> downloads only the SDK.</li>
+<li>If you&#39;d like to fetch multiple boards, add a <code>:</code> between each board in the
+gclient var. For example: <code>&quot;cros_boards&quot;: &quot;amd64-generic:arm-generic&quot;</code>.</li>
+</ul>
+<h3 id="building-for-the-board">Building for the board</h3>
+<p>After the needed toolchain has been downloaded for your ${BOARD}, a build dir
+will have been conveniently created for you at <code>out_$BOARD/Release</code>, which can
+then be used to build Chrome. For the <code>amd64-generic</code> board, this would
+look like:</p>
+<pre>$ gn gen out_amd64-generic/Release
+$ autoninja -C out_$BOARD/Release chrome</pre>
+<p>Or if you prefer to use your own build dir, simply add the following line to the
+top of your GN args: <code>import(&quot;//build/args/chromeos/amd64-generic.gni&quot;)</code>. eg:</p>
+<pre>$ gn gen out/Default --args='import(&quot;//build/args/chromeos/amd64-generic.gni&quot;)'
+$ autoninja -C out/Default chrome</pre>
+<p>That will produce a Chrome OS build of Chrome very similar to what is shipped
+for that device. You can also supply additional args or even overwrite ones
+supplied in the imported .gni file after the <code>import()</code> line.</p>
+<h3 id="additional-notes">Additional notes</h3>
+<p>For more information (like copying the locally-built Chrome to a device, or
+running Tast tests), consult Simple Chrome&#39;s
+<a href="https://chromium.googlesource.com/chromiumos/docs/+/main/simple_chrome_workflow.md">full documentation</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/chromeos_build_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/chromeos_build_instructions.md</a>
+  </p>
+</div>

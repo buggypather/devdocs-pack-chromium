@@ -1,0 +1,190 @@
+<h1>Using ScopedServer in Chromium Updater Integration Tests</h1>
+<p><code>ScopedServer</code> is a mock local HTTP server used in the Chromium Updater&#39;s
+integration tests (<code>chrome/updater/test/integration_tests.cc</code>). It provides a
+means for mocking out the Omaha service during tests. If it receives an
+unmatched request, or it has not seen all the requests it expected by the time
+it is destroyed, it reports a test failure.</p>
+<p>This document serves as a detailed reference on how to set it up, when to use
+it, and what helpers are available to avoid writing manual request matchers.</p>
+<h2 id="what-is-scopedserver">What is <code>ScopedServer</code>?</h2>
+<p>Under the hood, <code>ScopedServer</code> wraps a <code>net::test_server::EmbeddedTestServer</code>.
+When instantiated, it starts serving locally on an available port and configures
+the Updater running in the integration test environment to route its traffic
+(update checks, pings, crash uploads, etc.) there.</p>
+<p><strong>Key characteristics:</strong></p>
+<ol>
+<li><strong>Strict Mocking:</strong> If <code>ScopedServer</code> receives any request it was not
+expecting, it fails the test and serves an HTTP 500 response.</li>
+<li><strong>Sequential Expectations:</strong> <code>ScopedServer</code> maintains an ordered queue of
+pending expectations. Incoming requests are tested only against the front of
+the queue. If requests arrive out-of-order, the test fails.</li>
+<li><strong>Verification upon destruction:</strong> When the <code>ScopedServer</code> goes out of scope
+and is destructed, it verifies that <em>all</em> expected requests were successfully
+received. If there are pending expectations, it fails the test.</li>
+<li><strong>No cleanup:</strong> The updater&#39;s original configuration is not restored; it will
+continue to attempt to use the test server after it has been torn down if it
+is not explicitly reconfigured.</li>
+</ol>
+<h2 id="setup">Setup</h2>
+<p>Instantiating <code>ScopedServer</code> with your test&#39;s <code>IntegrationTestCommands</code> object
+is generally adequate to set it up. Tests using more than one such object will
+need to call <code>IntegrationTestCommands::EnterTestMode</code> on those instances not
+passed to the <code>ScopedServer</code> constructor; see
+<code>IntegrationTestUserInSystem::SetUp</code> for an example of this.</p>
+<h3 id="when-to-set-it-up">When to set it up</h3>
+<p>Instantiate <code>ScopedServer</code> when you wish to verify or respond to messages sent
+between the updater and the Omaha server during a test. A <code>ScopedServer</code> is
+strictly required for test scenarios where the client is required to transact
+with the server -- for example, update checks.</p>
+<p><code>ScopedServer</code> construction can be deferred until partway through a test in some
+cases. Installing the updater, for example, does not require successfully
+reaching the Omaha server. Since <code>ScopedServer</code> reports a test failure if it
+receives any unexpected traffic, deferring setup can save boilerplate.</p>
+<h3 id="test-fixtures-that-already-set-it-up">Test fixtures that already set it up</h3>
+<p><code>IntegrationTestUserInSystem</code>, and its subclass
+<code>IntegrationTestKSAdminFourApps</code>, both set up a <code>ScopedServer</code> during <code>SetUp</code>.
+They handle requests from <em>both</em> <code>IntegrationTestCommands</code> instances in each
+fixture. This isolates the boilerplate required for setting up the second
+updater to talk to the test server.</p>
+<h2 id="omaha-protocol-helpers">Omaha Protocol Helpers</h2>
+<p>Instead of manually using <code>test_server.ExpectOnce()</code> with
+<code>request::GetJSONContentMatcher(…)</code> for every step of the Omaha protocol, prefer
+the helper methods available in <code>integration_tests.cc</code> and
+<code>IntegrationTestCommands</code> when relevant. Business logic for these helpers is
+largely implemented in <code>integration_tests_impl.cc</code>.</p>
+<p>This list may not be complete or up-to-date -- it was last updated on
+2026-05-07.</p>
+<h3 id="comprehensive-sequence-helpers">Comprehensive Sequence Helpers</h3>
+<p>These expect a full series of requests (e.g. an update check, follow-up pings,
+and optionally downloads).</p>
+<ul>
+<li><p><strong><code>ExpectUpdateSequence</code></strong> / <strong><code>ExpectInstallSequence</code></strong></p>
+<pre data-language="cpp">void ExpectUpdateSequence(ScopedServer&amp; test_server,
+                          const std::string&amp; app_id,
+                          const std::string&amp; install_data_index,
+                          UpdateService::Priority priority,
+                          const base::Version&amp; from_version,
+                          const base::Version&amp; to_version);</pre>
+<p>Sets up the expectation for a successful update or install check, serves the
+update metadata, and dynamically generates the mock installer payload.</p>
+</li>
+<li><p><strong><code>ExpectSelfUpdateSequence</code></strong></p>
+<pre data-language="cpp">void ExpectSelfUpdateSequence(ScopedServer&amp; test_server);</pre>
+<p>Configures expectations for the Updater updating <em>itself</em>.</p>
+</li>
+<li><p><strong><code>ExpectUpdateSequenceBadHash</code></strong> Expects an update sequence but serves an
+installer payload whose hash deliberately does not match the manifest to test
+fallback/error scenarios.</p>
+</li>
+</ul>
+<h3 id="single-step-request-helpers">Single-Step Request Helpers</h3>
+<ul>
+<li><p><strong><code>ExpectUpdateCheckRequest(test_server)</code></strong> Expects the updater to send a
+check request, responds with standard protocol JSON saying &quot;no updates
+available&quot;.</p>
+</li>
+<li><p><strong><code>ExpectNoUpdateSequence(test_server, app_id, updater_version, app_version)</code></strong> Expects an update check from a specific app (optionally, of a
+specific version) from a specific version of the updater (defaulting to
+<code>kUpdaterVersion</code>). Provides a &quot;no update&quot; response.</p>
+</li>
+<li><p><strong><code>ExpectPing(test_server, event_type, target_url)</code></strong> A general-purpose helper
+to expect an Omaha event ping of some type.  Event codes are defined in
+<code>components/update_client/protocol_definition.h</code>.</p>
+</li>
+<li><p><strong><code>ExpectPingRequest(test_server, app_id, ping_params, version)</code></strong> Expects an
+ event ping for a specific app, with specified parameters. (If
+ <code>ping_params.extra_code1</code> is 0, it is not checked.) <code>version</code> refers to the
+ version of the updater. Responds with <code>&quot;status&quot;:&quot;ok&quot;</code>.</p>
+</li>
+<li><p><strong><code>ExpectUninstallPing(test_server)</code></strong> Expects a standard uninstaller ping
+(<code>eventtype: 4</code>).</p>
+</li>
+<li><p><strong><code>ExpectUninstallPingPreviousVersion(test_server, previous_version)</code></strong>
+Expects an uninstall ping for a specific prior version of the updater.</p>
+</li>
+<li><p><strong><code>ExpectInstallEvent(test_server, app_id)</code></strong> Expects an event ping where
+<code>eventtype</code> is <code>2</code> (<code>kEventInstall</code>).</p>
+</li>
+<li><p><strong><code>ExpectAppErrorEvent(test_server, app_id, error_code, event_type)</code></strong>
+Windows-only. Expects an event ping reporting a specific installation error.</p>
+</li>
+<li><p><strong><code>ExpectAppCommandPing(test_server, appid, appcommandid, errorcode, eventresult, event_type, ...)</code></strong> Verifies that the updater sent a ping
+detailing the result of launching a specific AppCommand.</p>
+</li>
+<li><p><strong><code>ExpectInstallSource(test_server, install_source)</code></strong> Expects an install ping
+with a specific <code>installsource=&quot;...&quot;</code> tag (e.g. <code>ondemand</code>, <code>offline</code>).</p>
+</li>
+</ul>
+<h2 id="writing-custom-matchers">Writing Custom Matchers</h2>
+<p>If the pre-built helpers don&#39;t cover your scenario, write custom matchers using
+<code>test_server.ExpectOnce()</code>. Core request-matching primitives are defined in
+<code>chrome/updater/test/request_matcher.h</code>.</p>
+<p>The <code>ExpectOnce</code> method requires:</p>
+<ol>
+<li><strong>The Request Matcher Group:</strong> A list of conditions the incoming HTTP request
+must satisfy (e.g., path, headers, regex content matches). The anticipated
+request must satisfy <em>all</em> matchers in this list.</li>
+<li><strong>The Output Response:</strong> The body that the <code>ScopedServer</code> should reply with
+when the request matches. The HTTP status code can be provided (as a
+<code>net::HttpStatusCode</code>) as an optional third argument; it defaults to HTTP<ol start="200">
+<li>(Nonmatching requests always receive an error 500 and a test failure.)</li>
+</ol>
+</li>
+</ol>
+<h3 id="providing-the-response">Providing the Response</h3>
+<p>There are two ways to provide the output response:</p>
+<p><strong>1. As a static string:</strong> If the reply is the same in both Omaha V3.1 and Omaha
+V4, or the test does not need to support both protocols, provide an expectation
+as a string:</p>
+<pre data-language="cpp">test_server.ExpectOnce(
+    {
+      request::GetUpdaterUserAgentMatcher(),
+      request::GetContentMatcher({
+          R&quot;(.*&quot;appid&quot;:&quot;my_custom_app&quot;.*)&quot;,
+          R&quot;(.*&quot;eventtype&quot;:5.*)&quot;
+      })
+    },
+    &quot;)]}'\n{\&quot;response\&quot;:{\&quot;protocol\&quot;:\&quot;4.0\&quot;,\&quot;apps\&quot;:[{\&quot;appid\&quot;:\&quot;&quot;
+    &quot;my_custom_app\&quot;,\&quot;status\&quot;:\&quot;ok\&quot;}]}}&quot;
+);</pre>
+<p><strong>2. As a <code>base::RepeatingCallback&lt;std::string(bool)&gt;</code>:</strong> This form of
+<code>ExpectOnce</code> allows a common implementation to support both Omaha Protocol 4 and
+Omaha Protocol 3.1. <code>ScopedServer</code> invokes this callback with a boolean
+<code>is_protocol_4</code>, indicating the protocol version parsed from the request, if the
+request successfully matches.</p>
+<h4 id="examples">Examples</h4>
+<p>Helpers in  <code>integration_tests_impl.cc</code>  may be useful (via
+<code>IntegrationTestCommands</code> objects), or serve as useful references when
+implementing a new one. Some highlights:</p>
+<ul>
+<li><code>GetUpdateResponse(app_id, ...)</code>: Dynamically generates a valid update check
+response (v3.1 or v4.0 depending on the <code>bool</code> argument passed to it by the
+test server) complete with a specific installation relative path, arguments,
+and manifest hash.</li>
+<li><code>GetUpdateResponseV4(app_responses)</code> / <code>GetUpdateResponseV3(app_responses)</code>:
+Wraps a collection of individual app responses in the standard Omaha envelope.</li>
+<li><code>GetUpdateResponseForAppV4(...)</code>: Returns the specific JSON snippet for a
+single app&#39;s update metadata.</li>
+</ul>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<ul>
+<li><strong>Strict Ordering:</strong> <code>ScopedServer</code> has no &quot;default&quot; responses for any
+requests and no flexibility regarding request order. Anticipate a batch of
+event pings from the setup phase of your test before the primary behavior you
+intended to test. If you delayed <code>ScopedServer</code> setup to skip these, you may
+see a single &quot;ping backlog&quot; message when the updater next wakes.</li>
+<li><strong>Preemptive Expectations:</strong> The various <code>Expect...</code> helpers must be called
+<em>before</em> the action that triggers the network request. Because these helpers
+configure what the server will reply with, they need to be strictly
+established beforehand, which can be surprising if you&#39;re used to
+&quot;verify-after-run&quot; mocking frameworks.</li>
+<li><strong>Commonly Overlooked Pings:</strong> Tests that appear to complete all expectations
+but crash during cleanup are likely missing a call to <code>ExpectUninstallPing</code>
+(or <code>ExpectUninstallPingPreviousVersion</code>).</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updater/scoped-server-guide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updater/scoped-server-guide.md</a>
+  </p>
+</div>

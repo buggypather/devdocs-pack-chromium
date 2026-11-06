@@ -1,0 +1,373 @@
+<h1>Keyboard Shortcuts in Chrome: Guidelines &amp; Lifecycle Process</h1>
+<h2 id="overview">Overview:</h2>
+<p>Chrome&#39;s keyboard shortcut landscape is constrained by a finite set of
+ergonomic, accessible, and collision-free key combinations. Over time, as new
+features and capabilities are added across Desktop (Windows, macOS, Linux,
+ChromeOS), the availability of unassigned keyboard shortcuts has effectively
+become 0.</p>
+<p>Adding a global keyboard shortcut carries substantial long-term technical and
+user-experience costs:</p>
+<ul>
+<li><strong>Internationalization &amp; Keyboard Layouts</strong>: Modifiers and punctuation keys
+behave differently across international keyboards (AZERTY, QWERTZ, Dvorak,
+JIS, etc.), often clashing with <code>AltGr</code> or non-ASCII character generation
+(see <a href="https://devblogs.microsoft.com/oldnewthing/20040329-00/?p=40003">Why Ctrl+Alt shouldn&#39;t be used as a shortcut
+modifier</a>).</li>
+<li><strong>Operating System Collisions</strong>: Each host OS reserves dozens of key
+combinations for window management, assistive tools, and system actions.</li>
+<li><strong>Web Platform &amp; Extension Conflicts</strong>: Shortcuts intercept key events before
+or after web pages, potentially breaking user workflows in web productivity
+apps (Google Docs, Sheets, VS Code Web, Figma) and extensions.</li>
+<li><strong>Accessibility</strong>: Improper shortcut design interferes with screen readers,
+switch navigation, and voice control.</li>
+<li><strong>User Muscle Memory</strong>: Once a shortcut is shipped to hundreds of millions of
+users, changing or removing it causes severe disruption.</li>
+</ul>
+<p>Therefore, <strong>global keyboard shortcuts are treated as a strictly conserved
+browser resource</strong>. New shortcuts must pass strict qualification criteria,
+telemetry validation, and OWNERS approval.</p>
+<hr>
+<h2 id="acceptable-vs-unacceptable-shortcuts">Acceptable vs. Unacceptable Shortcuts</h2>
+<h3 id="permitted-key--modifier-conventions">Permitted Key &amp; Modifier Conventions</h3>
+<table>
+<thead>
+<tr>
+<th align="left">Platform</th>
+<th align="left">Standard Modifier Patterns</th>
+<th align="left">Acceptable Key Range</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>Windows / Linux</strong></td>
+<td align="left"><code>Ctrl + &lt;Key&gt;</code><br><code>Ctrl + Shift + &lt;Key&gt;</code><br><code>Alt + Shift + &lt;Key&gt;</code></td>
+<td align="left"><code>A–Z</code>, <code>0–9</code>, Function keys (<code>F1–F12</code>), Navigation keys (<code>Tab</code>, <code>Esc</code>, <code>Enter</code>, <code>Home</code>, <code>End</code>, <code>PgUp</code>, <code>PgDn</code>, Arrows)</td>
+</tr>
+<tr>
+<td align="left"><strong>macOS</strong></td>
+<td align="left"><code>Cmd + &lt;Key&gt;</code><br><code>Cmd + Shift + &lt;Key&gt;</code><br><code>Cmd + Option + &lt;Key&gt;</code></td>
+<td align="left"><code>A–Z</code>, <code>0–9</code>, Navigation keys (<code>Tab</code>, <code>Esc</code>, <code>Enter</code>, <code>Home</code>, <code>End</code>, <code>PgUp</code>, <code>PgDn</code>, Arrows)</td>
+</tr>
+<tr>
+<td align="left"><strong>ChromeOS</strong></td>
+<td align="left"><code>Ctrl + &lt;Key&gt;</code><br><code>Alt + &lt;Key&gt;</code><br><code>Search/Launcher (Cmd) + &lt;Key&gt;</code></td>
+<td align="left"><code>A–Z</code>, <code>0–9</code>, ChromeOS top-row action keys, Navigation keys</td>
+</tr>
+</tbody></table>
+<hr>
+<h3 id="prohibited--disallowed-key-combinations">Prohibited &amp; Disallowed Key Combinations</h3>
+<h4 id="1-do-not-use-ctrl--alt-as-a-modifier-on-windows-or-linux">1. DO NOT use <code>Ctrl + Alt</code> as a modifier on Windows or Linux</h4>
+<ul>
+<li><strong>Reason</strong>: On Windows and Linux, <code>Ctrl + Alt</code> is identically mapped to
+<code>AltGr</code> (<code>VK_RMENU</code>). International keyboard layouts (e.g. German, French,
+Polish, Spanish, Nordic) require <code>AltGr</code> to type essential characters and
+symbols (such as <code>@</code>, <code>€</code>, <code>\</code>, <code>[</code>, <code>]</code>, <code>~</code>, <code>|</code>, <code>{</code>, <code>}</code>, <code>ł</code>). Binding
+<code>Ctrl + Alt + &lt;key&gt;</code> disables typing those characters for international users
+(see <a href="https://devblogs.microsoft.com/oldnewthing/20040329-00/?p=40003">Why Ctrl+Alt shouldn&#39;t be used as a shortcut
+modifier</a>).</li>
+</ul>
+<h4 id="2-do-not-use-option-or-shift--option-as-modifiers-on-macos">2. DO NOT use <code>Option</code> or <code>Shift + Option</code> as modifiers on macOS</h4>
+<ul>
+<li><strong>Reason</strong>: On macOS, <code>Option</code> (and <code>Shift + Option</code>) by itself without <code>Cmd</code>
+is reserved for text input and language typing to generate accented
+characters, diacritics, and special glyphs (e.g., <code>Option + e</code> for acute
+accent <code>´</code>, <code>Option + u</code> for umlaut <code>¨</code>, <code>Option + c</code> for <code>ç</code>, `Option + Shift<ul>
+<li>/<code>for</code>¿<code>). Binding shortcuts to </code>Option + <key><code>or</code>Shift + Option +
+<key>` intercepts and breaks normal typing for international languages.</li>
+</ul>
+</li>
+</ul>
+<h4 id="3-do-not-use-unstable-punctuation-keys">3. DO NOT use unstable punctuation keys</h4>
+<ul>
+<li><strong>Reason</strong>: Punctuation key positions vary drastically across physical and
+software keyboard layouts (e.g., <code>OEM_1</code> through <code>OEM_8</code>, brackets, slashes,
+backticks, semicolons; AZERTY swaps numbers and symbols; French/German
+keyboards require <code>Shift</code> or <code>AltGr</code> for brackets and slashes).</li>
+<li>This is enforced by an automated unit test
+<code>AcceleratorTableTest.DontUseKeysWithUnstablePositions</code> in
+<code>chrome/browser/ui/accelerator_table_unittest.cc</code>. Only standard alphanumeric
+keys (<code>A–Z</code>, <code>0–9</code>) and navigation/function keys are permitted. (Existing
+exceptions like Zoom In/Out <code>Ctrl + +/-</code> are grandfathered legacy bindings).</li>
+</ul>
+<h4 id="4-do-not-introduce-single-key-shortcuts-in-global-browser-scope">4. DO NOT introduce single-key shortcuts in global browser scope</h4>
+<ul>
+<li><strong>Reason</strong>: Violates Google Accessibility Rating (GAR Web Criterion 1.19 /
+GAR 2027) and WCAG 2.1/2.2 Criterion 2.1.4 (<em>Character Key Shortcuts</em>).
+Single keys (keys without <code>Ctrl</code>/<code>Cmd</code>/<code>Alt</code>) accidentally trigger actions
+during typing, break voice-typing input, and hinder switch-access users.</li>
+<li><strong>Scope</strong>: Single-key shortcuts may only be used when focus is explicitly
+trapped inside a dedicated custom view (such as full-screen media playback
+or PDF viewer), never globally in the browser window.</li>
+</ul>
+<h4 id="5-do-not-conflict-with-os-or-window-manager-reserved-keys">5. DO NOT conflict with OS or Window Manager Reserved Keys</h4>
+<p><em>(Note: The following platform lists are non-exhaustive; always refer to each
+OS&#39;s official keyboard design guidelines).</em></p>
+<ul>
+<li><strong>Windows</strong>: Any Windows key combination (<code>Win + &lt;key&gt;</code>) is strictly reserved
+for the operating system. Common OS-reserved combinations include <code>Win + *</code>,
+<code>Ctrl + Shift + Esc</code> (Windows Task Manager), <code>Alt + Tab</code>, <code>Alt + F4</code>, <code>Alt + Space</code>, <code>Ctrl + Alt + Del</code>, <code>Win + L</code>, <code>Win + D</code>.</li>
+<li><strong>macOS</strong>: <code>Cmd + Tab</code>, <code>Cmd + Space</code>, <code>Cmd + Q</code>, <code>Cmd + H</code>, <code>Cmd + M</code>, `Ctrl<ul>
+<li>Up/Down<code>(Mission Control),</code>Cmd + Option + Esc`.</li>
+</ul>
+</li>
+<li><strong>Linux</strong>: Window manager bindings (<code>Alt + F1–F12</code>, <code>Super + *</code>, workspace
+switching).</li>
+<li><strong>ChromeOS</strong>: OS-specific keys (brightness, volume, power, lock, launcher
+search).</li>
+</ul>
+<h4 id="6-do-not-conflict-with-core-web--editing-standards">6. DO NOT conflict with Core Web &amp; Editing Standards</h4>
+<ul>
+<li><strong>Editing Standards</strong>: <code>Ctrl/Cmd + C</code> (Copy), <code>Ctrl/Cmd + V</code> (Paste),
+<code>Ctrl/Cmd + X</code> (Cut), <code>Ctrl/Cmd + Z</code> (Undo), <code>Ctrl/Cmd + Y</code> / <code>Ctrl/Cmd + Shift + Z</code> (Redo), <code>Ctrl/Cmd + A</code> (Select All).</li>
+<li><strong>Browser Navigation Foundations</strong>: <code>Ctrl/Cmd + T</code> (New Tab), <code>Ctrl/Cmd + W</code>
+(Close Tab), <code>Ctrl/Cmd + N</code> (New Window), <code>Ctrl/Cmd + L</code> (Focus Omnibox),
+<code>Ctrl/Cmd + R</code> (Reload), <code>Ctrl/Cmd + F</code> (Find), <code>Ctrl/Cmd + P</code> (Print),
+<code>Ctrl/Cmd + S</code> (Save Page), <code>Ctrl/Cmd + D</code> (Bookmark), <code>Ctrl/Cmd + Shift + N</code>
+(Incognito), <code>Ctrl/Cmd + Shift + T</code> (Restore Tab).</li>
+</ul>
+<h4 id="7-do-not-implement-shadow-shortcuts">7. DO NOT implement &quot;Shadow Shortcuts&quot;</h4>
+<ul>
+<li><strong>Rule</strong>: Never listen to raw <code>OnKeyPressed</code> / <code>ui::KeyEvent</code> in random views
+to implement a global feature shortcut. All browser shortcuts must be
+registered centrally in the accelerator table or ActionManager to ensure
+conflict detection, documentation, and accessibility remapping.</li>
+</ul>
+<hr>
+<h2 id="shortcut-lifecycle-retiring--swapping-shortcuts">Shortcut Lifecycle: Retiring &amp; Swapping Shortcuts</h2>
+<p>Because shortcut real estate is finite, adding a high-priority shortcut often
+requires <strong>retiring a dormant shortcut</strong> or <strong>swapping key combinations</strong>.</p>
+<h3 id="criteria-for-retiring-or-swapping-a-shortcut">Criteria for Retiring or Swapping a Shortcut</h3>
+<ol>
+<li><strong>Low Telemetry Usage</strong>: The shortcut exhibits consistently low
+invocation frequency across 3 or more Chrome stable milestones via
+<code>Browser.Shortcuts.TriggeredCommandId</code> without qualifying as a critical
+accessibility lifeline, recovery mechanism, or specialized power-user
+workflow. Telemetry should demonstrate that reclaiming the shortcut causes
+minimal user disruption. (Note: Evaluation is case-by-case; standard
+invocation baseline thresholds are TBD).</li>
+<li><strong>High Conflict Friction</strong>: The shortcut collides with web standards or OS
+specific overrides.</li>
+<li><strong>Feature Deprecation or Demotion</strong>: The associated feature is being retired,
+redesigned, or moved to a secondary entry point (such as the 3-dot app menu
+or Omnibox Actions).</li>
+</ol>
+<h3 id="the-retirement--swapping-process">The Retirement &amp; Swapping Process</h3>
+<ol>
+<li><p><strong>Step 1: Baseline Telemetry Audit</strong></p>
+<ul>
+<li>Inspect UMA histogram <code>Browser.Shortcuts.TriggeredCommandId</code> for the
+command&#39;s <code>IDC_*</code> value over at least 3 stable milestones.</li>
+<li>Compare shortcut invocation volume against overall feature usage (e.g.,
+button clicks vs. keyboard triggers).</li>
+</ul>
+</li>
+<li><p><strong>Step 2: Submit an Intent to Implement to UI OWNERS</strong></p>
+<ul>
+<li>File a Chromium bug under component <code>UI&gt;Input&gt;KeyboardShortcuts</code>.</li>
+<li>Email <code>chrome-desktop-ui@google.com</code> outlining:<ul>
+<li>Proposed shortcut to retire or swap.</li>
+<li>Telemetry data and usage rationale.</li>
+<li>Replacement interaction (e.g., menu item, Omnibox action).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><strong>Step 3: Phased Deprecation &amp; User Notification</strong></p>
+<ul>
+<li><strong>ChromeOS</strong>: Add the entry to <code>kDeprecatedAccelerators</code> and
+<code>kDeprecatedAcceleratorsData</code> in <code>ash/accelerators/accelerator_table.h</code>.
+Ash will automatically show in-product notifications guiding users to the
+new shortcut and log <code>Ash.Accelerators.Deprecated.{ActionName}</code>.</li>
+<li><strong>Desktop (Windows / Mac / Linux)</strong>: If swapping a visible shortcut,
+provide a transition phase using a Finch feature flag and contextual User
+Education promos / toasts where appropriate.</li>
+</ul>
+</li>
+<li><p><strong>Step 4: Execute the Code Change</strong></p>
+<ul>
+<li>Update <code>chrome/browser/ui/accelerator_table.cc</code> (or <code>ActionItem</code>).</li>
+<li>Update Mac menu builders (<code>main_menu_builder.mm</code> /
+<code>global_keyboard_shortcuts_mac.mm</code>).</li>
+<li>Update ChromeOS layout tables
+(<code>ash/webui/shortcut_customization_ui/backend/accelerator_layout_table.h</code>).</li>
+<li>Update unit tests in <code>chrome/browser/ui/accelerator_table_unittest.cc</code>.</li>
+<li>Update external documentation (Google Chrome Help Center).</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="how-to-view--measure-shortcut-usage-telemetry">How to View &amp; Measure Shortcut Usage (Telemetry)</h2>
+<p>Chrome automatically logs keyboard shortcut activations to UMA:</p>
+<h3 id="primary-metric-browsershortcutstriggeredcommandid">Primary Metric: <code>Browser.Shortcuts.TriggeredCommandId</code></h3>
+<ul>
+<li><strong>Source Code</strong>: Emitted in <code>BrowserView::UpdateAcceleratorMetrics</code> in
+<code>chrome/browser/ui/views/frame/browser_view.cc</code>:<pre data-language="cpp">if (!accelerator.IsRepeat()) {
+  base::UmaHistogramSparse(&quot;Browser.Shortcuts.TriggeredCommandId&quot;,
+                           command_id);
+}</pre>
+</li>
+<li><strong>Command ID Mapping</strong>: Values correspond to <code>IDC_*</code> constants defined in
+<code>chrome/app/chrome_command_ids.h</code>.</li>
+<li><strong>Enum Definition</strong>: <code>MappedChromeCommandId</code> in
+<code>tools/metrics/histograms/metadata/browser/enums.xml</code>.</li>
+<li><strong>Histogram Metadata</strong>:
+<code>tools/metrics/histograms/metadata/browser/histograms.xml</code>.</li>
+</ul>
+<h3 id="querying-usage-on-dashboards">Querying Usage on Dashboards</h3>
+<ol>
+<li>Navigate to the Chrome UMA Dashboard (internal metric viewers).</li>
+<li>Filter for histogram: <code>Browser.Shortcuts.TriggeredCommandId</code>.</li>
+<li><strong>Filter by Chrome Milestone</strong>: Because <code>IDC_*</code> integer values in
+<code>chrome_command_ids.h</code> can shift between milestones, always slice data by
+specific Chrome release milestones (e.g. M124, M125).</li>
+<li>Identify your feature&#39;s <code>IDC_*</code> numeric value (from
+<code>chrome_command_ids.h</code>) to view absolute trigger count and relative volume.</li>
+</ol>
+<h3 id="feature-specific-user-actions">Feature-Specific User Actions</h3>
+<p>Specific shortcuts also emit dedicated <code>UserMetricsAction</code> events (e.g.,
+<code>Accel_NewTabInGroup</code>, <code>Accel_NewIncognitoWindow</code>, <code>ExitFullscreen_Accelerator</code>,
+<code>Accel_FocusLocation_D</code>). Consult <code>BrowserView::UpdateAcceleratorMetrics</code> for
+existing actions or add one if detailed sequencing analysis is needed.</p>
+<hr>
+<h2 id="governance-who-to-reach-out-to--approval-workflow">Governance: Who to Reach Out to &amp; Approval Workflow</h2>
+<h3 id="approval-gatekeepers">Approval Gatekeepers</h3>
+<table>
+<thead>
+<tr>
+<th align="left">Surface</th>
+<th align="left">Approval Authority / OWNERS</th>
+<th align="left">Contact Channel</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>Chrome Desktop UI (Windows, Mac, Linux, Views)</strong></td>
+<td align="left"><code>//chrome/browser/ui/OWNERS</code></td>
+<td align="left"><code>top-chrome-desktop-ui@google.com</code><br><code>chrome-desktop-ui@google.com</code></td>
+</tr>
+<tr>
+<td align="left"><strong>ChromeOS System Shortcuts</strong></td>
+<td align="left"><code>//ash/accelerators/OWNERS</code></td>
+<td align="left"><code>cros-device-enablement@google.com</code></td>
+</tr>
+<tr>
+<td align="left"><strong>macOS Menu &amp; Cocoa Shortcuts</strong></td>
+<td align="left"><code>//chrome/browser/ui/cocoa/OWNERS</code></td>
+<td align="left"><code>chrome-desktop-ui@google.com</code></td>
+</tr>
+<tr>
+<td align="left"><strong>Android Shortcuts</strong></td>
+<td align="left"><code>//chrome/android/java/src/org/chromium/chrome/browser/OWNERS</code></td>
+<td align="left"><code>clank-dev@google.com</code></td>
+</tr>
+<tr>
+<td align="left"><strong>Accessibility (a11y) Review</strong></td>
+<td align="left">Chrome Accessibility Team</td>
+<td align="left"><code>chrome-accessibility@google.com</code></td>
+</tr>
+</tbody></table>
+<hr>
+<h2 id="technical-implementation-guide-across-platforms">Technical Implementation Guide Across Platforms</h2>
+<h3 id="step-1-define-command-id-and-actionitem">Step 1: Define Command ID and ActionItem</h3>
+<ol>
+<li>Add <code>IDC_&lt;FEATURE_NAME&gt;</code> to <code>chrome/app/chrome_command_ids.h</code>.</li>
+<li>Add <code>kAction&lt;FeatureName&gt;</code> to
+<code>chrome/browser/ui/actions/chrome_action_id.h</code> and register the action in
+<code>chrome/browser/ui/views/browser_actions.cc</code>.</li>
+</ol>
+<h3 id="step-2-register-views-shortcut-windows-linux-chromeos">Step 2: Register Views Shortcut (Windows, Linux, ChromeOS)</h3>
+<ul>
+<li>Edit <code>chrome/browser/ui/accelerator_table.cc</code>:
+Add entry to <code>kAcceleratorMap</code>:<pre data-language="cpp">{ui::VKEY_&lt;KEY&gt;, ui::EF_&lt;MODIFIERS&gt;, IDC_&lt;FEATURE_NAME&gt;},</pre>
+</li>
+</ul>
+<h3 id="step-3-register-macos-shortcut">Step 3: Register macOS Shortcut</h3>
+<ul>
+<li><strong>In Main Menu</strong>: Add item with key equivalent in
+<code>chrome/browser/ui/cocoa/main_menu_builder.mm</code>.</li>
+<li><strong>Not in Main Menu</strong>: Add to <code>GetShortcutsNotPresentInMainMenu()</code> in
+<code>chrome/browser/global_keyboard_shortcuts_mac.mm</code>.</li>
+</ul>
+<h3 id="step-4-register-chromeos-shortcut--shortcuts-app">Step 4: Register ChromeOS Shortcut &amp; Shortcuts App</h3>
+<ul>
+<li>If system-level: Add to <code>ash/public/cpp/accelerator_actions.h</code> and
+<code>ash/accelerators/accelerator_table.h</code>.</li>
+<li>For Key Shortcuts App discovery: Add entry to
+<code>ash/webui/shortcut_customization_ui/backend/accelerator_layout_table.h</code>
+(and <code>kAcceleratorLayouts</code>).</li>
+</ul>
+<h3 id="step-5-register-android-shortcut-if-applicable">Step 5: Register Android Shortcut (if applicable)</h3>
+<ul>
+<li>Add mapping to
+<code>chrome/android/java/src/org/chromium/chrome/browser/KeyboardShortcuts.java</code>.</li>
+</ul>
+<h3 id="step-6-verify-with-automated-tests">Step 6: Verify with Automated Tests</h3>
+<ul>
+<li>Run <code>chrome/browser/ui/accelerator_table_unittest.cc</code>:
+Ensure <code>CheckDuplicatedAccelerators</code> and <code>DontUseKeysWithUnstablePositions</code>
+pass without failures.</li>
+</ul>
+<hr>
+<h2 id="alternatives-to-adding-a-global-keyboard-shortcut">Alternatives to Adding a Global Keyboard Shortcut</h2>
+<p>Before proposing a global keyboard shortcut, consider whether an alternative
+UX surface is more appropriate:</p>
+<ol>
+<li><strong>Omnibox / Chrome Actions (Action Chips)</strong>:<ul>
+<li>Ideal for discoverable, query-based actions (e.g. typing &quot;clear cache&quot;,
+&quot;manage passwords&quot;, &quot;customize chrome&quot;).</li>
+</ul>
+</li>
+<li><strong>3-Dot App Menu &amp; Submenus</strong>:<ul>
+<li>Standard home for secondary features; exposes discoverability without
+consuming global key bindings.</li>
+</ul>
+</li>
+<li><strong>Context Menus (Right-Click)</strong>:<ul>
+<li>Scoped directly to the relevant content (image, link, tab, selected
+text).</li>
+</ul>
+</li>
+<li><strong>View-Scoped Accelerators</strong>:<ul>
+<li>If the shortcut only needs to work when a specific dialog, side panel, or
+view is focused, register it on that <code>views::View</code> or
+<code>views::FocusManager</code> locally rather than adding it to the global
+<code>kAcceleratorMap</code>.</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="frequently-asked-questions">Frequently Asked Questions</h2>
+<h4 id="q1-why-cant-every-new-feature-have-its-own-keyboard-shortcut">Q1: Why can&#39;t every new feature have its own keyboard shortcut?</h4>
+<p><strong>A:</strong> Global keyboard shortcuts are a shared, finite space. Overloading key
+combinations causes internationalization breakage (AltGr), conflicts with web
+applications (e.g. Google Docs, Figma), harms accessibility, and creates
+cognitive overload for users.</p>
+<h4 id="q2-can-i-use-ctrl--alt--letter-on-windows">Q2: Can I use <code>Ctrl + Alt + &lt;Letter&gt;</code> on Windows?</h4>
+<p><strong>A:</strong> <strong>No.</strong> <code>Ctrl + Alt</code> is identical to <code>AltGr</code> on Windows and Linux, which
+is required by international users to type normal characters and symbols (see
+<a href="https://devblogs.microsoft.com/oldnewthing/20040329-00/?p=40003">Why Ctrl+Alt shouldn&#39;t be used as a shortcut
+modifier</a>).
+Using <code>Ctrl + Alt</code> will break basic text typing for millions of users and is
+blocked by automated code checks (<code>DCHECK</code>).</p>
+<h4 id="q3-why-did-acceleratortabletestdontusekeyswithunstablepositions-fail">Q3: Why did <code>AcceleratorTableTest.DontUseKeysWithUnstablePositions</code> fail?</h4>
+<p><strong>A:</strong> Punctuation keys (<code>[</code>, <code>]</code>, <code>/</code>, <code>\</code>, <code>;</code>, <code>&#39;</code>, etc.) shift locations
+across international keyboard layouts (AZERTY, QWERTZ, JIS) and frequently
+require <code>Shift</code> or <code>AltGr</code>. Chrome guidelines restrict new shortcuts to
+alphanumeric characters (<code>A–Z</code>, <code>0–9</code>) and standard navigation/function keys.</p>
+<h4 id="q4-how-does-chrome-prioritize-conflicting-shortcuts-with-web-pages">Q4: How does Chrome prioritize conflicting shortcuts with web pages?</h4>
+<p><strong>A:</strong> Accelerators follow a defined routing hierarchy:</p>
+<ol>
+<li><strong>OS Reserved</strong> (e.g., power, lock on ChromeOS).</li>
+<li><strong>Browser Reserved</strong> (e.g., <code>Ctrl+W</code>, <code>Ctrl+N</code> on certain platforms).</li>
+<li><strong>Web Contents</strong> (focused web page gets the key event).</li>
+<li><strong>Browser Non-Reserved / Post-Target</strong> (if unhandled by the web page,
+browser executes the accelerator).</li>
+</ol>
+<h4 id="q5-can-users-customize-their-keyboard-shortcuts">Q5: Can users customize their keyboard shortcuts?</h4>
+<p><strong>A:</strong> On ChromeOS, users can customize shortcuts using the Key Shortcuts app
+(<code>chrome://shortcut-customization</code>). On Desktop Chrome, this is not possible
+natively at this time.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/keyboard_shortcuts.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/keyboard_shortcuts.md</a>
+  </p>
+</div>

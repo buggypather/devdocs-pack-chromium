@@ -1,0 +1,84 @@
+<h1>Windows Progressive Web App integration</h1>
+<h2 id="desktop-shortcuts">Desktop Shortcuts</h2>
+<p>When a Progressive Web App (PWA) is installed on Windows, Chrome creates a
+desktop shortcut to the PWA, with the PWA icon. The shortcut launches a small
+Chrome binary chrome_proxy.exe with the app id of the PWA, and the Chrome
+profile the PWA is installed in. When chrome_proxy.exe runs, it launches Chrome
+with the same command line options. The shortcut links to chrome_proxy.exe
+instead of chrome.exe because of
+ <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/chrome_proxy/chrome_proxy_main_win.cc;l=23">a bug in Windows 10 start menu pinning</a>.</p>
+<h2 id="file-handling-support">File handling support</h2>
+<p>In order to make Progressive Web Apps (PWA&#39;s) more like traditional apps, PWA&#39;s
+support opening files on the user&#39;s desktop. On Windows, when a PWA is
+installed, if the PWA&#39;s manifest lists one or more file extension types that it
+supports opening, Chrome registers the PWA as a handler for the file
+extension(s), in the Windows registry. When the user right clicks on a file with
+a registered extension, the PWA name and custom icon appears in the list of
+applications that can open the file. The user can also set the PWA as the
+default handler for the file extension.</p>
+<p>Because of a limitation of the Windows shell, Chrome registers a per-PWA install 
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/web_applications/chrome_pwa_launcher/README.md;l=1">launcher app</a> 
+ as a handler for the file extension. Chrome ships with a canonical launcher app
+ called chrome_pwa_launcher.exe, which lives in the version sub-directory of the
+ Chrome install dir. When a PWA is installed, we create a hard link from the
+ PWA install dir <code>&lt;profile_dir&gt;/Web Applications/&lt;app_id&gt;</code> to the canonical launcher
+ app. If the hard link fails (e.g., Chrome install dir is on a different drive
+ than the profile dir), we copy the launcher app to the PWA install dir. In either
+ case, the name of the launcher app in the PWA install dir is a sanitized version
+ of the PWA name.</p>
+<p>Registration starts in <a href="https://source.chromium.org/search?q=RegisterFileHandlersWithOS%20file:_win.cc&amp;sq=">web_app::RegisterFileHandlersWithOS</a>,
+ and works as follows: we create a unique
+ <a href="https://docs.microsoft.com/en-us/windows/win32/com/-progid--key">ProgID</a>
+ for the PWA installation with the following format:
+<code>&lt;BaseAppId&gt;.&lt;hash(Profile + AppID)&gt;</code>
+We use the hash due to 32-character limit for ProgID&#39;s. The registry work is
+done in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/installer/util/shell_util.cc?q=%20ShellUtil::AddFileAssociations">ShellUtil::AddFileAssociations</a>:</p>
+<ul>
+<li>Register the ProgID by adding key <code>HKCU\Software\Classes\&lt;progID&gt;</code> to the registry.</li>
+<li>Set the application name and icon for the PWA with these two keys:<ul>
+<li><code>HKCU\Software\Classes\&lt;progID&gt;\Application::ApplicationIcon = &lt;path to icon in PWA install dir&gt;,0</code></li>
+<li><code>HKCU\Software\Classes\&lt;progID&gt;\Application::ApplicationName = &lt;PWA name&gt;</code></li>
+</ul>
+</li>
+<li>Hook up the command to launch the launcher app<ul>
+<li><code>HKCU\Software\Classes\&lt;progID&gt;\shell\open\command = &lt;launcher_app_path_in_profile&gt; --app-id=&lt;app_id&gt; --profile-directory=&lt;profile_dir&gt;</code></li>
+</ul>
+</li>
+<li>Add a key to keep track of the file extensions registered for a progId,
+for ease of uninstallation:<ul>
+<li><code>HKCU\Software\Classes\&lt;progID&gt;\File Extensions = &lt;semicolon delimited list of extensions&gt;</code></li>
+</ul>
+</li>
+</ul>
+<p>When Chrome is launched, it writes its path into the &quot;Last Browser&quot; file in
+the User Data dir.
+When the launcher app is run, it launches Chrome using the path written into the
+&quot;Last Browser&quot; file. Because the launcher app is in a sub-directory of the profile
+directory, the &quot;Last Browser&quot; file is in its great grandparent directory.</p>
+<p>When a new version of Chrome is installed, we need to update the hard links
+to and copies of the installed launcher apps to use the newly installed canonical
+launcher app. This is done by having the launcher app pass its version to Chrome, when
+launching Chrome. If the launcher app is out of date, Chrome updates all the
+launcher apps in the current user data dir.</p>
+<p>When a PWA is uninstalled, we unregister the PWA as a handler for the file
+extensions it was registered for. When a PWA changes the file extensions it can
+handle, we update the registry.</p>
+<h2 id="miscellaneous">Miscellaneous</h2>
+<ul>
+<li>If the same PWA is registered in multiple profiles, we distinguish them by
+adding the profile name in parentheses to the PWA name, e.g,
+&quot;Example PWA (profile1)&quot;. If a PWA is uninstalled from a  profile, and there is
+one remaining install in another profile, we remove the profile name from the
+application name.</li>
+<li>Windows 7 does not support some of the registry entries needed to set the
+ name and icon for a PWA. So, the file open context menu item for a PWA on
+ Windows 7 gets its name from the launcher app created for the PWA, and uses a
+ generic PWA icon.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/windows_pwa_integration.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/windows_pwa_integration.md</a>
+  </p>
+</div>

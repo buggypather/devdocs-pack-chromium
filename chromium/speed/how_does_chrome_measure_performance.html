@@ -1,0 +1,70 @@
+<h1>How Chrome Measures Performance</h1>
+<p>Chrome collects performance data both in the lab and from end users. There are
+thousands of individual metrics. This is an overview of how to sort through
+them at a high level.</p>
+<h2 id="domain-areas">Domain Areas</h2>
+<p>At a high level, performance work in Chrome is categorized into <strong>domains</strong>,
+like loading, memory, and power. Each domain has critical laboratory and
+end-user metrics associated with it.</p>
+<ul>
+<li><strong><a href="speed_domains">An overview of domains</a></strong>: lists the domains and key contact points.</li>
+<li><strong><a href="https://docs.google.com/document/d/1Ww487ZskJ-xBmJGwPO-XPz_QcJvw-kSNffm0nPhVpj8/edit">Speed Launch Metrics</a></strong>:
+the important high-level end-user metrics we measure for each domain.</li>
+<li>TODO: Link to documentation on critical laboratory measurements for each
+domain.</li>
+</ul>
+<h2 id="laboratory-metrics">Laboratory Metrics</h2>
+<p>Chrome has multiple performance labs in which benchmarks are run on continuous
+builds to pinpoint performance regressions down to individual changelists.</p>
+<h3 id="the-chromeperf-lab">The chrome.perf lab</h3>
+<p>The main lab for performance monitoring is
+<a href="https://ci.chromium.org/p/chrome/g/chrome.perf/console">chrome.perf</a>. It continuously tests
+chromium commits and is monitored by several perf sheriff rotations.</p>
+<ul>
+<li><strong><a href="perf_waterfall">What is the perf waterfall?</a></strong> An overview of the
+waterfall that runs the continuous build.</li>
+<li><strong><a href="https://chromium.googlesource.com/catapult/+/refs/heads/main/telemetry/README.md">How telemetry works</a></strong>:
+An overview of telemetry, our performance testing harness.</li>
+<li><strong><a href="bisects">How perf bisects work</a></strong>: An overview of the bisect bots,
+which narrow down regressions over a CL range to a specific commit.</li>
+<li><strong>Benchmarks</strong><ul>
+<li><strong><a href="https://docs.google.com/document/d/1ni2MIeVnlH4bTj4yvEDMVNxgL73PqK_O9_NUm3NW3BA/edit">Benchmark Policy</a></strong>:
+An overview of the benchmark harnesses available in Chrome, and how to
+find the right place to add a new test case.</li>
+<li><strong><a href="https://docs.google.com/document/d/1BM_6lBrPzpMNMtcyi2NFKGIzmzIQ1oH3OlNG27kDGNU/edit?ts=57e92782">System health benchmarks</a></strong>:
+The system health benchmarks measure the speed launch metrics on
+real-world web use scenarios.</li>
+</ul>
+</li>
+<li><strong><a href="perf_trybots">How to run on perf trybots</a></strong>: Have an unsubmitted
+CL and want to run benchmarks on it? Need to try a variety of hardware and
+operating systems? Use the perf trybots.</li>
+<li><strong><a href="https://chromium.googlesource.com/catapult/+/refs/heads/main/telemetry/docs/run_benchmarks_locally.md">How to run telemetry locally</a></strong>:
+Instructions on running telemetry benchmarks on your local machine.</li>
+<li><strong><a href="perf_lab_platforms">List of platforms in the lab</a></strong>: Devices,
+configurations, and OSes the chromium.perf lab tests on.</li>
+</ul>
+<h3 id="other-performance-labs">Other performance labs</h3>
+<p>There are several other performance labs for specialized use:</p>
+<ul>
+<li><strong><a href="http://goto.google.com/av-analysis-service">Lab Spotlight: AV Lab (Googlers only)</a></strong>:
+Learn all about audio/video quality testing.</li>
+</ul>
+<h2 id="end-user-metrics">End-user metrics</h2>
+<p>The <strong><a href="https://docs.google.com/document/d/1Ww487ZskJ-xBmJGwPO-XPz_QcJvw-kSNffm0nPhVpj8/edit">Speed Launch Metrics</a></strong>
+doc explains metrics available in UMA for end user performance. If you want to
+test how your change impacts these metrics for end users, you&#39;ll probably want
+to <strong><a href="http://goto.google.com/finch101">Run a Finch Trial (Googlers only)</a></strong>. If
+you want to run a trial and are not a Googler, you&#39;ll need a Google-internal partner
+to help you run it.</p>
+<p>The <strong><a href="http://goto.google.com/uma-sampling-profiler-overview">UMA Sampling Profiler (Googlers only)</a></strong>
+measures Chrome execution using statistical profiling, producing aggregate
+execution profiles across the function call tree. The profiler is useful for
+understanding how your code performs for end users, and the precise performance
+impact of code changes.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/how_does_chrome_measure_performance.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/how_does_chrome_measure_performance.md</a>
+  </p>
+</div>

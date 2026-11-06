@@ -1,0 +1,145 @@
+<h1>Closure Compilation</h1>
+<p><strong>Important: Closure Compilation is only supported on ChromeOS Ash. On all
+other platforms, Closure Compiler is deprecated; TypeScript should be used
+for type checking.</strong> See <a href="https://www.crbug.com/1316438">bug</a></p>
+<h2 id="what-is-type-safety">What is type safety?</h2>
+<p><a href="https://en.wikipedia.org/wiki/Type_system#Static_type_checking">Statically-typed languages</a>
+like C++ and Java have the notion of variable types.</p>
+<p>This is typically baked into how you declare variables:</p>
+<pre data-language="c++">const int32 kUniversalAnswer = 42;  // type = 32-bit integer</pre>
+<p>or as <a href="https://en.wikipedia.org/wiki/Template_metaprogramming">templates</a> for
+containers or generics:</p>
+<pre data-language="c++">std::vector&lt;int64&gt; fibonacci_numbers;  // a vector of 64-bit integers</pre>
+<p>When differently-typed variables interact with each other, the compiler can warn
+you if there&#39;s no sane default action to take.</p>
+<p>Typing can also be manually annotated via mechanisms like <code>dynamic_cast</code> and
+<code>static_cast</code> or older C-style casts (i.e. <code>(Type)</code>).</p>
+<p>Using statically-typed languages provides <em>some</em> level of protection against
+accidentally using variables in the wrong context.</p>
+<p>JavaScript is dynamically-typed and doesn&#39;t offer this safety by default. This
+makes writing JavaScript more error prone, and various type errors have resulted
+in real bugs seen by many users.</p>
+<h2 id="chromes-solution-to-typechecking-javascript">Chrome&#39;s solution to typechecking JavaScript</h2>
+<p>Enter <a href="https://developers.google.com/closure/compiler/">Closure Compiler</a>, a
+tool for analyzing JavaScript and checking for syntax errors, variable
+references, and other common JavaScript pitfalls.</p>
+<p>To get the fullest type safety possible, it&#39;s often required to annotate your
+JavaScript explicitly with <a href="https://developers.google.com/closure/compiler/docs/js-for-compiler">Closure-flavored @jsdoc
+tags</a></p>
+<pre data-language="js">/**
+ * @param {string} version A software version number (i.e. &quot;50.0.2661.94&quot;).
+ * @return {!Array&lt;number&gt;} Numbers corresponding to |version| (i.e. [50, 0, 2661, 94]).
+ */
+function versionSplit(version) {
+  return version.split('.').map(Number);
+}</pre>
+<p>See also:
+<a href="https://docs.google.com/a/chromium.org/document/d/1Ee9ggmp6U-lM-w9WmxN5cSLkK9B5YAq14939Woo-JY0/edit">the design doc</a>.</p>
+<h2 id="typechecking-your-javascript">Typechecking Your Javascript</h2>
+<p>Given an example file structure of:</p>
+<ul>
+<li>lib/does_the_hard_stuff.js</li>
+<li>ui/makes_things_pretty.js</li>
+</ul>
+<p><code>lib/does_the_hard_stuff.js</code>:</p>
+<pre data-language="javascript">var wit = 100;
+
+// ... later on, sneakily ...
+
+wit += ' IQ';  // '100 IQ'</pre>
+<p><code>ui/makes_things_pretty.js</code>:</p>
+<pre data-language="javascript">/** @type {number} */ var mensa = wit + 50;
+
+alert(mensa);  // '100 IQ50' instead of 150</pre>
+<p>Closure compiler can notify us if we&#39;re using <code>string</code>s and <code>number</code>s in
+dangerous ways.</p>
+<p>To do this, we can create:</p>
+<ul>
+<li>ui/BUILD.gn</li>
+</ul>
+<p>With these contents:</p>
+<pre># Copyright 2018 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import(&quot;//third_party/closure_compiler/compile_js.gni&quot;)
+
+js_type_check(&quot;closure_compile&quot;) {
+  deps = [
+    &quot;:make_things_pretty&quot;,
+  ]
+}
+
+js_library(&quot;make_things_pretty&quot;) {
+  deps = [
+    &quot;../lib:does_the_hard_stuff&quot;,
+  ]
+
+  externs_list = [
+    &quot;$externs_path/extern_name_goes_here.js&quot;
+  ]
+}</pre>
+<h2 id="running-closure-compiler-locally">Running Closure compiler locally</h2>
+<p>You can locally test that your code compiles on Linux or Mac.  This requires
+<a href="http://www.oracle.com/technetwork/java/javase/downloads/index.html">Java</a> and a
+<a href="https://www.chromium.org/developers/how-tos/get-the-code">Chrome checkout</a> (i.e.
+python, depot_tools). Note: on Ubuntu, you can probably just run <code>sudo apt-get install openjdk-7-jre</code>.</p>
+<p>First, add the following to your GN args:</p>
+<pre>enable_js_type_check = true</pre>
+<p>Then you should be able to run:</p>
+<pre data-language="shell">ninja -C out/Default webui_closure_compile</pre>
+<p>and should see output like this:</p>
+<pre data-language="shell">ninja: Entering directory `out/Default/'
+[0/1] ACTION Compiling ui/makes_things_pretty.js</pre>
+<p>To compile only a specific folder, add an argument after the script name:</p>
+<pre data-language="shell">ninja -C out/Default ui:closure_compile</pre>
+<p>In our example code, this error should appear:</p>
+<pre>(ERROR) Error in: ui/makes_things_pretty.js
+## /my/home/chromium/src/ui/makes_things_pretty.js:1: ERROR - initializing variable
+## found   : string
+## required: number
+## /** @type {number} */ var mensa = wit + 50;
+##                                   ^</pre>
+<p>Hooray! We can catch type errors in JavaScript!</p>
+<h2 id="preferred-buildgn-structure">Preferred BUILD.gn structure</h2>
+<ul>
+<li>Make all individual JS file targets a js_library.</li>
+<li>The top level target should be called “closure_compile”.</li>
+<li>If you have subfolders that need compiling, make “closure_compile” a group(),
+and any files in the current directory a js_type_check() called “<directory>_resources”.</li>
+<li>Otherwise, just make “closure_compile” a js_type_check with all your js_library targets as deps</li>
+<li>Leave all closure targets below other kinds of targets becaure they’re less ‘important’</li>
+</ul>
+<p>See also:
+<a href="https://docs.google.com/a/chromium.org/document/d/1Ee9ggmp6U-lM-w9WmxN5cSLkK9B5YAq14939Woo-JY0/edit">Closure Compilation with GN</a>.</p>
+<h2 id="trying-your-change">Trying your change</h2>
+<p>Closure compilation runs in the compile step of Linux, Android and ChromeOS builds.</p>
+<p>From the command line, you try your change with:</p>
+<pre data-language="shell">git cl try -b linux-rel</pre>
+<h2 id="integrating-with-the-continuous-build">Integrating with the continuous build</h2>
+<p>To compile your code on every commit, add your file to the
+<code>&#39;webui_closure_compile&#39;</code> target in <code>src/BUILD.gn</code>:</p>
+<pre>  group(&quot;webui_closure_compile&quot;) {
+    data_deps = [
+      # Other projects
+      &quot;my/project:closure_compile&quot;,
+    ]
+  }</pre>
+<h2 id="externs">Externs</h2>
+<p><a href="https://github.com/google/closure-compiler/wiki/FAQ#how-do-i-write-an-externs-file">Externs files</a>
+define APIs external to your JavaScript. They provide the compiler with the type
+information needed to check usage of these APIs in your JavaScript, much like
+forward declarations do in C++.</p>
+<p>Third-party libraries like Polymer often provide externs. Chrome must also
+provide externs for its extension APIs. Whenever an extension API&#39;s <code>idl</code> or
+<code>json</code> schema is updated in Chrome, the corresponding externs file must be
+regenerated:</p>
+<pre data-language="shell">./tools/json_schema_compiler/compiler.py -g externs \
+  extensions/common/api/your_api_here.idl \
+  &gt; third_party/closure_compiler/externs/your_api_here.js</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/closure_compilation.md</a>
+  </p>
+</div>

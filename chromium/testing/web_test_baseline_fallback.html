@@ -1,0 +1,122 @@
+<h1>Web Test Baseline Fallback</h1>
+<p>*** promo
+Read <a href="web_test_expectations">Web Test Expectations and Baselines</a> first
+if you have not.</p>
+<hr>
+<p>Baselines can vary by platforms, in which case we need to check in multiple
+versions of a baseline. Meanwhile, we would like to avoid storing identical
+baselines by allowing a platform to fall back to another. This document first
+introduces how platform-specific baselines are structured and how we search for
+a baseline (the fallback mechanism), and then goes into the details of baseline
+optimization and rebaselining.</p>
+<h2 id="terminology">Terminology</h2>
+<ul>
+<li><strong>Root directory</strong>:
+  <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests"><code>//src/third_party/blink/web_tests</code></a>
+  is the root directory (of all the web tests and baselines). All relative
+  paths in this document start from this directory.</li>
+<li><strong>Test name</strong>: the name of a test is its relative path from the root
+  directory (e.g. <code>html/dom/foo/bar.html</code>).</li>
+<li><strong>Baseline name</strong>: replacing the extension of a test name with
+  <code>-expected.{txt,png,wav}</code> gives the corresponding baseline name.</li>
+<li><strong>Virtual tests</strong>: tests can have virtual variants. For example,
+  <code>virtual/gpu/html/dom/foo/bar.html</code> is the virtual variant of
+  <code>html/dom/foo/bar.html</code> in the <code>gpu</code> suite. Only the latter file exists on
+  disk, and is called the base of the virtual test. See
+  <a href="web_tests#testing-runtime-flags">Web Tests#Testing Runtime Flags</a>
+  for more details.</li>
+<li><strong>Platform directory</strong>: each directory under
+  <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/platform"><code>platform/</code></a> is a platform
+  directory that contains baselines (no tests) for that platform. Directory
+  names are in the form of <code>PLATFORM-VERSION</code> (e.g. <code>mac-mac10.12</code>), except
+  for the latest version of a platform which is just <code>PLATFORM</code> (e.g. <code>mac</code>).</li>
+</ul>
+<h2 id="baseline-fallback">Baseline fallback</h2>
+<p>Each platform has a pre-configured fallback when a baseline cannot be found in
+this platform directory. A general rule is to have older versions of an OS
+falling back to newer versions. Besides, Android falls back to Linux, which then
+falls back to Windows. Eventually, all platforms fall back to the root directory
+(i.e. the generic baselines that live alongside tests). The rules are configured
+by <code>FALLBACK_PATHS</code> in each Port class in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/tools/blinkpy/web_tests/port"><code>//src/third_party/blink/tools/blinkpy/web_tests/port</code></a>.</p>
+<p>All platforms can be organized into a tree based on their fallback relations (we
+are not considering virtual test suites yet). See the lower half (the
+non-virtual subtree) of this
+<a href="https://docs.google.com/drawings/d/13l3IUlSE99RoKjDwEWuY1O77simAhhF6Wi0fZdkSaMA/">graph</a>.
+Walking from a platform to the root gives the <strong>search path</strong> of that platform.
+We check each directory on the search path in order and see if &quot;directory +
+baseline name&quot; points to a file on disk (note that baseline names are relative
+paths), and stop at the first one found.</p>
+<h3 id="virtual-test-suites">Virtual test suites</h3>
+<p>Now we add virtual test suites to the picture, using a test named
+<code>virtual/gpu/html/dom/foo/bar.html</code> as an example to demonstrate the process.
+The baseline search process for a virtual test consists of two passes:</p>
+<ol>
+<li>Treat the virtual test name as a regular test name and search for the
+corresponding baseline name using the same search path, which means we are in
+fact searching in directories like <code>platform/*/virtual/gpu/...</code>, and
+eventually <code>virtual/gpu/...</code> (a.k.a. the virtual root).</li>
+<li>If no baseline can be found so far, we retry with the non-virtual (base) test
+name <code>html/dom/foo/bar.html</code> and walk the search path again.</li>
+</ol>
+<p>The <a href="https://docs.google.com/drawings/d/13l3IUlSE99RoKjDwEWuY1O77simAhhF6Wi0fZdkSaMA/">graph</a>
+visualizes the full picture. Note that the two passes are in fact the same with
+different test names, so the virtual subtree is a mirror of the non-virtual
+subtree. The two trees are connected by the virtual root that has different
+ancestors (fallbacks) depending on which platform we start from; this is the
+result of the two-pass baseline search.</p>
+<p>*** promo
+<strong>Note:</strong> there are in fact two more places to be searched before everything
+else: additional directories given via command line arguments and flag-specific
+baseline directories. They are maintained manually and are not discussed in this
+document.</p>
+<hr>
+<h2 id="tooling-implementation">Tooling implementation</h2>
+<p>This section describes the implications the fallback mechanism has on the
+implementation details of tooling, namely <code>blink_tool.py</code>. If you are not
+hacking <code>blinkpy</code>, you can stop here.</p>
+<h3 id="optimization">Optimization</h3>
+<p>We can remove a baseline if it is the same as its fallback. An extreme example
+is that if all platforms have the same result, we can just have a single generic
+baseline. Here is the algorithm used by
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/tools/blinkpy/common/checkout/baseline_optimizer.py"><code>blink_tool.py optimize-baselines</code></a>
+to optimize the duplication away.</p>
+<p>Notice from the previous section that the virtual and non-virtual parts are two
+identically structured subtrees. Trees are easy to work with: we can simply
+traverse the tree from leaves up to the root, and if there are two identical
+baselines on two nodes on the path with no other nodes in between or all nodes
+in between have no baselines, keep the one closer to the root (delete the
+baseline on the node further from the root).</p>
+<p>The virtual root is special because it has multiple parents. Yet if we can cut
+the edges between the two subtrees (i.e. to make the virtual subtree
+self-contained), we can apply the same algorithm to both of them. A subtree is
+self-contained when it does not need to fallback to ancestors, which can be
+guaranteed by placing a baseline on its root. If the virtual root already has a
+baseline, we can simply ignore these edges without doing anything; otherwise, we
+need to make sure all children of the virtual root have baselines by copying
+the non-virtual fallbacks to the ones that do not (we cannot copy the generic
+baseline to the virtual root because virtual platforms may have different
+results).</p>
+<p>In addition, the optimizer also removes redundant all-PASS testharness.js
+results. Such baselines are redundant when there are no other fallbacks later
+on the search path (including if the all-PASS baselines are at root), because
+<code>run_web_tests.py</code> assumes all-PASS testharness.js results when baselines can
+not be found for a platform.</p>
+<h3 id="rebaseline">Rebaseline</h3>
+<p>The fallback mechanism also affects the rebaseline tool (<code>blink_tool.py rebaseline{-cl}</code>). When asked to rebaseline a test on some platforms, the tool
+downloads results from corresponding try bots and put them into the respective
+platform directories. This is potentially problematic. Because of the fallback
+mechanism, the new baselines may affect some other platforms that are not being
+rebaselining but fall back to the rebaselined platforms.</p>
+<p>The solution is to copy the current baselines from the to-be-rebaselined
+platforms to the platforms that may otherwise be affected through fallback
+resolution before downloading new baselines. This is handled internally by
+<code>blink_tool.py rebaseline{,-cl}</code>.</p>
+<p>Finally, <code>blink_tool.py rebaseline{-cl}</code> also does optimization in the end by
+default.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/web_test_baseline_fallback.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/web_test_baseline_fallback.md</a>
+  </p>
+</div>

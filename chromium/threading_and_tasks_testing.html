@@ -1,0 +1,371 @@
+<h1>Testing Components Which Post Tasks</h1>
+<h2 id="overview">Overview</h2>
+<p>So you&#39;ve read  the <a href="threading_and_tasks">Threading and Tasks</a> documentation, surveyed the associated
+<a href="threading_and_tasks_faq">Threading and Tasks FAQ</a> and have implemented a state-of-the-art component. Now
+you want to test it :). This document will explain how to write matching
+state-of-the-art tests.</p>
+<h2 id="task-environments">Task Environments</h2>
+<p>In order to <strong>unit test</strong> a component which post tasks, you&#39;ll need to bring up
+the task environment in the scope of your test (or test fixture). It will need
+to outlive the majority of other members to ensure they have access to the task
+system throughout their lifetime. There are a rare exceptions, like
+<code>base::test::ScopedFeatureList</code>, that need to outlive the task environment. For
+browser tests, see the <a href="#browser-tests">Browser tests</a> section below.</p>
+<p>Task environments come in various forms but share the same fundamental
+characteristics:</p>
+<ul>
+<li>There can be only one per test (if your base fixture already provides one:
+see <a href="#base-fixture-managed-taskenvironment">Base Fixture managed
+TaskEnvironment</a> for the correct
+paradigm to supplement it).</li>
+<li>Tasks cannot be posted outside the lifetime of a task environment.</li>
+<li>Posted tasks will be run or be destroyed before the end of
+~TaskEnvironment().</li>
+<li>They all derive from <code>base::test::TaskEnvironment</code> and support its
+<a href="https://cs.chromium.org/chromium/src/base/test/task_environment.h?type=cs&amp;q=ValidTraits&amp;sq=package:chromium&amp;g=0"><code>ValidTraits</code></a> and sometimes more.</li>
+<li>See usage example in <a href="https://cs.chromium.org/chromium/src/base/test/task_environment.h">task_environment.h</a>.</li>
+<li>For example, a key characteristic is that its <a href="#timesource-trait">TimeSource
+trait</a> can be used to mock time to ease testing of timers,
+timeouts, etc.</li>
+</ul>
+<p>The <code>TaskEnvironment</code> member is typically exposed in the protected section of
+the test fixture to allow tests to drive it directly (there&#39;s no need to expose
+public Run*() methods that merely forward to the private member).</p>
+<h3 id="basetestsinglethreadtaskenvironment">base::test::SingleThreadTaskEnvironment</h3>
+<p>Your component uses <code>base::SingleThreadTaskRunner::GetCurrentDefault()</code> or
+<code>base::SequencedTaskRunner::GetCurrentDefault()</code> to post tasks to the thread it
+was created on? You&#39;ll need at least a <code>base::test::SingleThreadTaskEnvironment</code>
+in order for these APIs to be functional and <code>base::RunLoop</code> to run the posted
+tasks.</p>
+<p>Typically this will look something like this:</p>
+<p>foo.h</p>
+<pre data-language="c++">class Foo {
+ public:
+  Foo() : owning_sequence_(base::SequencedTaskRunner::GetCurrentDefault()) {}
+
+  DoSomethingAndReply(base::OnceClosure on_done) {
+    DCHECK(owning_sequence_-&gt;RunsTasksInCurrentSequence());
+    something_was_done_ = true;
+    owning_sequence_-&gt;PostTask(on_done);
+  }
+
+  bool something_was_done() const { return something_was_done_; }
+
+ private:
+  bool something_was_done_ = false;
+  scoped_refptr&lt;base::SequencedTaskRunner&gt; owning_sequence_;
+};</pre>
+<p>foo_unittest.cc</p>
+<pre data-language="c++">TEST(FooTest, DoSomething) {
+  base::test::SingleThreadTaskEnvironment task_environment;
+
+  Foo foo;
+  RunLoop run_loop;
+  foo.DoSomethingAndReply(run_loop.QuitClosure());
+  run_loop.Run();
+  EXPECT_TRUE(foo.something_was_done());
+}</pre>
+<p>Note that <code>RunLoop().RunUntilIdle()</code> could be used instead of a <code>QuitClosure()</code>
+above but <a href="https://developers.google.com/web/updates/2019/04/chromium-chronicle-1">best
+practices</a>
+favor QuitClosure() over RunUntilIdle() as the latter can lead to flaky tests.</p>
+<h3 id="full-fledged-basetesttaskenvironment">Full fledged base::test::TaskEnvironment</h3>
+<p>If your components depends on <code>base::ThreadPool</code> (that&#39;s a good thing!), you&#39;ll
+need a full <code>base::test::TaskEnvironment</code>. Don&#39;t be afraid to use a full
+<code>TaskEnvironment</code> when appropriate: think of &quot;SingleThread&quot; as being a
+readability term like &quot;const&quot;, it documents that ThreadPool isn&#39;t used when it&#39;s
+not but you shouldn&#39;t be afraid to lift it.</p>
+<p>Task runners are still obtained by the product code through
+<a href="https://cs.chromium.org/chromium/src/base/task/thread_pool.h">base/task/thread_pool.h</a> without necessitating a test-only task runner injection
+seam :).</p>
+<p>Typical use case:</p>
+<p>foo_service.h</p>
+<pre data-language="c++">class FooService {
+ public:
+  FooService()
+      : backend_task_runner_(
+            base::ThreadPool::CreateSequencedTaskRunner(
+                {base::MayBlock(), base::TaskPriority::BEST_EFFORT})),
+        backend_(new FooBackend,
+                 base::OnTaskRunnerDeleter(backend_task_runner_)) {}
+
+  // Flushes state to disk async and replies.
+  FlushAndReply(base::OnceClosure on_done) {
+    DCHECK(owning_sequence_-&gt;RunsTasksInCurrentSequence());
+    backend_task_runner_-&gt;PostTaskAndReply(FROM_HERE,
+        base::BindOnce(&amp;FooBackend::Flush, Unretained(backend_.get()),
+        std::move(on_done)));
+  }
+
+ private:
+  scoped_refptr&lt;base::SequencedTaskRunner&gt; backend_task_runner_;
+
+  // See https://youtu.be/m6Kz6pMaIxc?t=882 for memory management best
+  // practices.
+  std::unique_ptr&lt;FooBackend, base::OnTaskRunnerDeleter&gt; backend_;
+};</pre>
+<p>foo_service_unittest.cc</p>
+<pre data-language="c++">TEST(FooServiceTest, FlushAndReply) {
+  base::test::TaskEnvironment task_environment;
+
+  FooService foo_service;
+  RunLoop run_loop;
+  foo_service.FlushAndReply(run_loop.QuitClosure());
+  run_loop.Run();
+  EXPECT_TRUE(VerifyFooStateOnDisk());
+}</pre>
+<h3 id="contentbrowsertaskenvironment">content::BrowserTaskEnvironment</h3>
+<p>This is the same thing as <code>base::test::TaskEnvironment</code> with the addition of
+<code>content::BrowserThread</code> support. You need this if-and-only-if the code under
+test is using <code>BrowserThread::UI</code> or <code>BrowserThread::IO</code>. For determinism, both
+BrowserThreads will share the main thread and can be driven by RunLoop. By
+default the main thread will use <code>MainThreadType::UI</code> but you can override this
+via the <a href="#mainthreadtype-trait">MainThreadType trait</a> to ask for an IO pump.</p>
+<p><code>BrowserTaskEnvironment::REAL_IO_THREAD</code> can be also used as a construction
+trait for rare instances that desire distinct physical BrowserThreads.</p>
+<h3 id="webwebtaskenvironment">web::WebTaskEnvironment</h3>
+<p>This is the //ios equivalent of <code>content::BrowserTaskEnvironment</code> to simulate
+<code>web::WebThread</code>.</p>
+<h3 id="blinktesttaskenvironment">blink::test::TaskEnvironment</h3>
+<p>This is the same thing as base::test::TaskEnvironment with the addition of
+blink::MainThreadScheduler and blink::MainThreadIsolate support. You need this
+if-and-only-if the code under test is using blink::Thread::Current() or needs
+v8::Isolate::GetCurrent() to be a blink Isolate.</p>
+<h2 id="task-environment-traits-and-abilities">Task Environment Traits and Abilities</h2>
+<h3 id="driving-the-task-environment">Driving the Task Environment</h3>
+<p>All task environments support the following methods to run tasks:</p>
+<ul>
+<li><code>base::RunLoop:Run()</code>: run the main thread until the <code>QuitClosure()</code> is
+invoked (note: other threads also run in parallel by default).</li>
+<li><code>base::RunLoop::RunUntilIdle()</code>: run the main thread until it is idle. This
+is typically not what you want in multi-threaded environments as it may
+resume before <code>ThreadPool</code> is idle.</li>
+<li><code>TaskEnvironment::RunUntilIdle()</code>: Runs everything the TaskEnvironment is
+aware of. This excludes system events and any threads outside of the main
+thread and ThreadPool. It should be used with care when such external factors
+can be involved.</li>
+<li><code>TaskEnvironment::FastForward*()</code>: More on this in the TimeSource section
+below.</li>
+</ul>
+<h3 id="timesource-trait">TimeSource trait</h3>
+<p>By default tests run under <code>TimeSource::SYSTEM_TIME</code> which means delays are
+real-time and <code>base::Time::Now()</code> and <code>base::TimeTicks::Now()</code> return live
+system times
+(<a href="https://chromium-review.googlesource.com/c/chromium/src/+/1742616">context</a>).</p>
+<p>Whenever testing code with delays, you should favor <code>TimeSource::MOCK_TIME</code> as a
+trait. This makes it such that delayed tasks and <code>base::Time::Now()</code> +
+<code>base::TimeTicks::Now()</code> use a mock clock.</p>
+<p>Under this mode, the mock clock will start at the current system time but will
+then only advance when explicitly requested by <code>TaskEnvironment::FastForward*()</code>
+and <code>TaskEnvironment::AdvanceClock()</code> methods <em>or</em> when <code>RunLoop::Run()</code> is
+running and all managed threads become idle (auto-advances to the soonest
+delayed task, if any, amongst all managed threads).</p>
+<p><code>TaskEnvironment::FastForwardBy()</code> repeatedly runs existing immediately
+executable tasks until idle and then advances the mock clock incrementally to
+run the next delayed task within the time delta. It may advance time by more
+than the requested amount if running the tasks causes nested
+time-advancing-method calls.</p>
+<p>This makes it possible to test code with flush intervals, repeating timers,
+timeouts, etc. without any test-specific seams in the product code, e.g.:</p>
+<p>foo_storage.h</p>
+<pre data-language="c++">class FooStorage {
+ public:
+  static constexpr base::TimeDelta::kFlushInterval =
+      base::Seconds(30);
+
+  // Sets |key| to |value|. Flushed to disk on the next flush interval.
+  void Set(std::string_view key, std::string_view value);
+};</pre>
+<p>foo_unittest.cc</p>
+<pre data-language="c++">class FooStorageTest {
+ public:
+  FooStorageTest() = default;
+
+  // Test helper that returns true if |key| is found in the on disk storage.
+  bool FindKeyInOnDiskStorage(std::string_view key);
+
+ protected:
+  base::test::TaskEnvironment task_environment{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  FooStorage foo_storage_;
+};
+
+TEST_F(FooStorageTest, Set) {
+  foo_storage_.Set(&quot;mykey&quot;, &quot;myvalue&quot;);
+  EXPECT_FALSE(FindKeyInOnDiskStorage(&quot;mykey&quot;));
+  task_environment.FastForwardBy(FooStorage::kFlushInterval);
+  EXPECT_TRUE(FindKeyInOnDiskStorage(&quot;mykey&quot;));
+}</pre>
+<p>In contrast, <code>TaskEnvironment::AdvanceClock()</code> simply advances the mock time by
+the requested amount, and does not run tasks. This may be useful in
+cases where <code>TaskEnvironment::FastForwardBy()</code> would result in a livelock. For
+example, if one task is blocked on a <code>WaitableEvent</code> and there is a delayed
+task that would signal the event (e.g., a timeout), then
+<code>TaskEnvironment::FastForwardBy()</code> will never complete. In this case, you could
+advance the clock enough that the delayed task becomes runnable, and then
+<code>TaskEnvironment::RunUntilIdle()</code> would run the delayed task, signalling the
+event.</p>
+<pre data-language="c++">TEST(FooTest, TimeoutExceeded)
+{
+  base::test::TaskEnvironment task_environment{
+      base::test::TaskEnvironment::TimeSource::MOCK_TIME};
+  base::WaitableEvent event;
+  base::RunLoop run_loop;
+  base::ThreadPool::PostTaskAndReply(
+      FROM_HERE, {base::MayBlock()},
+      base::BindOnce(&amp;BlocksOnEvent, base::Unretained(&amp;event)),
+      run_loop.QuitClosure());
+  base::ThreadPool::PostDelayedTask(
+      FROM_HERE, {},
+      base::BindOnce(&amp;WaitableEvent::Signal, base::Unretained(&amp;event)),
+      kTimeout);
+  // Can't use task_environment.FastForwardBy() since BlocksOnEvent blocks
+  // and the task pool will not become idle.
+  // Instead, advance time until the timeout task becomes runnable.
+  task_environment.AdvanceClock(kTimeout);
+  // Now the timeout task is runable.
+  task_environment.RunUntilIdle();
+  // The reply task should already have been executed, but run the run_loop to
+  // verify.
+  run_loop.Run();
+}</pre>
+<h3 id="mainthreadtype-trait">MainThreadType trait</h3>
+<p>The average component only cares about running its tasks and
+<code>MainThreadType::DEFAULT</code> is sufficient. Components that care to interact
+asynchronously with the system will likely need a <code>MainThreadType::UI</code> to be
+able to receive system events (e.g,. UI or clipboard events).</p>
+<p>Some components will prefer a main thread that handles asynchronous IO events
+and will use <code>MainThreadType::IO</code>. Such components are typically the ones living
+on BrowserThread::IO and being tested with a <code>BrowserTaskEnvironment</code>
+initialized with <code>MainThreadType::IO</code>.</p>
+<p>Note: This is strictly about requesting a specific <code>MessagePumpType</code> for the
+main thread. It has nothing to do with <code>BrowserThread::UI</code> or
+<code>BrowserThread::IO</code> which are named threads in the //content/browser code.</p>
+<h3 id="threadpoolexecutionmode-trait">ThreadPoolExecutionMode trait</h3>
+<p>By default non-delayed tasks posted to <code>base::ThreadPool</code> may run at any point.
+Tests that require more determinism can request
+<code>ThreadPoolExecutionMode::QUEUED</code> to enforce that tasks posted to
+<code>base::ThreadPool</code> only run when <code>TaskEnvironment::RunUntilIdle()</code> or
+<code>TaskEnvironment::FastForward*()</code> are invoked. Note that <code>RunLoop::Run()</code> does
+<strong>not</strong> unblock the ThreadPool in this mode and thus strictly runs only the main
+thread.</p>
+<p>When <code>ThreadPoolExecutionMode::QUEUED</code> is mixed with <code>TimeSource::MOCK_TIME</code>,
+time will auto-advance to the soonest task <em>that is allowed to run</em> when
+required (i.e. it will ignore delayed tasks in the thread pool while in
+<code>RunLoop::Run()</code>). See
+<code>TaskEnvironmentTest.MultiThreadedMockTimeAndThreadPoolQueuedMode</code> for an
+example.</p>
+<p>This trait is of course irrelevant under <code>SingleThreadTaskEnvironment</code>.</p>
+<h3 id="threadingmode-trait">ThreadingMode trait</h3>
+<p>Prefer an explicit <code>SingleThreadTaskEnvironment</code> over using
+<code>ThreadingMode::MAIN_THREAD_ONLY</code>. The only reason to use
+<code>ThreadingMode::MAIN_THREAD_ONLY</code> explicitly is if the parent class of your test
+fixture manages the <code>TaskEnvironment</code> but takes <code>TaskEnvironmentTraits</code> to let
+its subclasses customize it and you really need a <code>SingleThreadTaskEnvironment</code>.</p>
+<h2 id="base-fixture-managed-taskenvironment">Base Fixture managed TaskEnvironment</h2>
+<p>In some cases it makes sense to have the base fixture of an entire section of
+the codebase be managing the <code>TaskEnvironment</code> (e.g. <a href="https://cs.chromium.org/chromium/src/ui/views/test/views_test_base.h">ViewsTestBase</a>). It&#39;s
+useful if such base fixture exposes <code>TaskEnvironmentTraits</code> to their subclasses
+so that individual tests within that domain can fine-tune their traits as
+desired.</p>
+<p>This typically looks like this (in this case <code>FooTestBase</code> opts to enforce
+<code>MainThreadType::UI</code> and leaves other traits to be specified as desired):</p>
+<pre data-language="c++">// Constructs a FooTestBase with |traits| being forwarded to its
+// TaskEnvironment. MainThreadType always defaults to UI and must not be
+// specified.
+template &lt;typename... TaskEnvironmentTraits&gt;
+NOINLINE explicit FooTestBase(TaskEnvironmentTraits&amp;&amp;... traits)
+    : task_environment_(base::test::TaskEnvironment::MainThreadType::UI,
+                        std::forward&lt;TaskEnvironmentTraits&gt;(traits)...) {}</pre>
+<p>Note, if you&#39;re not familiar with traits: TaskEnvironment traits use
+<a href="https://cs.chromium.org/chromium/src/base/traits_bag.h">base/traits_bag.h</a> and will automatically complain at compile-time if an
+enum-based trait is specified more than once (i.e. subclasses will not compile
+if re-specifying <code>MainThreadType</code> in the above example).</p>
+<h2 id="browser-tests">Browser tests</h2>
+<p>This is all nice and fancy for unit tests, but what about browser_tests,
+ui_integration_tests, etc? Tests that subclass <code>content::BrowserTestBase</code> bring
+up the entire environment (tasks &amp; more) by default.</p>
+<p>The downside is that you don&#39;t have fine-grained control over it like you would
+with all the <code>TaskEnvironment</code> methods.</p>
+<p>The favored paradigm is <code>RunLoop::Run()</code> + <code>QuitClosure()</code>. The asynchronous
+nature of Chromium code makes this the most reliable way to wait for an event.</p>
+<p>There are fancy versions of this to perform common actions, e.g.
+<a href="https://cs.chromium.org/chromium/src/content/public/test/browser_test_utils.h">content/public/test/browser_test_utils.h</a>
+<a href="https://cs.chromium.org/chromium/src/content/public/test/content_browser_test_utils.h">content/public/test/content_browser_test_utils.h</a> which will let you navigate,
+execute scripts, simulate UI interactions, etc.</p>
+<p>But the idea is always the same :</p>
+<ol>
+<li>Instantiate <code>RunLoop run_loop;</code></li>
+<li>Kick off some work and hand-off <code>run_loop.QuitClosure()</code></li>
+<li><code>run_loop.Run()</code> until the <code>QuitClosure()</code> is called.</li>
+</ol>
+<h3 id="mock_time-in-browser-tests">MOCK_TIME in browser tests</h3>
+<p>So you fell in love with <code>TimeSource::MOCK_TIME</code> but now you&#39;re in a browser
+test... yeah, sorry about that...</p>
+<p>The eventual goal is to make it possible to set up TaskEnvironmentTraits from
+your test fixture just like you can override command-line, etc. but we&#39;re not
+there yet...</p>
+<p>In the mean time you can still use the old
+<code>base::ScopedMockTimeMessageLoopTaskRunner</code> to mock delayed tasks on the main
+thread (you&#39;re out of luck on other threads for now). And you can use
+<code>base::subtle::ScopedTimeClockOverrides</code> if you want to override <code>Now()</code>.</p>
+<p>You think that&#39;s a mess? Just think that it used to be this way in unit tests
+too and you&#39;ll be happy again :).</p>
+<h2 id="old-paradigms">Old paradigms</h2>
+<p>Here are some paradigms you might see throughout the code base and some insight
+on what to do about them (hint: copying them is not one!). Migration help is
+welcome <a href="https://crbug.com/984323">crbug.com/984323</a>!</p>
+<h3 id="basetestmocktimetaskrunner">base::TestMockTimeTaskRunner</h3>
+<p>This is the ancestor of <code>SingleThreadTaskEnvironment</code> + <code>TimeSource::MOCK_TIME</code>.
+It&#39;s sort of equivalent but prefer task environments for consistency.</p>
+<p>The only case where <code>base::TestMockTimeTaskRunner</code> is still the only option is
+when writing regression tests that simulate a specific task execution order
+across multiple sequences. To do so, use two <code>base::TestMockTimeTaskRunner</code> and
+have the racing components post their tasks to separate ones. You can then
+explicitly run tasks posted to each one from the main test thread in a way that
+deterministically exercises the race resolution under test. This only applies to
+task execution order races, data races still require parallel execution and this
+is the main reason <code>TaskEnvironment</code> doesn&#39;t multiplex the <code>ThreadPool</code> tasks
+onto the main thread (i.e. exercise data races, especially in the scope of
+TSAN).</p>
+<h3 id="basetestsimpletaskrunner">base::TestSimpleTaskRunner</h3>
+<p>Prefer using <code>SingleThreadTaskEnvironment</code> over <code>base::TestSimpleTaskRunner</code>.
+<code>TestSimpleTaskRunner</code> isn&#39;t as &quot;simple&quot; as it seems specifically because it
+runs tasks in a surprising order (delays aren&#39;t respected and nesting doesn&#39;t
+behave as usual). Should you prefer to flush all tasks regardless of delays,
+<code>TimeSource::MOCK_TIME</code> and <code>TaskEnvironment::FastForwardUntilNoTasksRemain()</code>
+have you covered.</p>
+<h3 id="basenulltaskrunner">base::NullTaskRunner</h3>
+<p>Prefer <code>SingleThreadTaskEnvironment</code> or <code>TaskEnvironment</code> with
+<code>ThreadPoolExecutionMode::QUEUED</code> over <code>base::NullTaskRunner</code>. A
+<code>NullTaskRunner</code> might seem appealing, but not posting tasks is under-testing
+the potential side-effects of the code under tests. All tests should be okay if
+tasks born from their actions are run or deleted at a later point.</p>
+<h3 id="basescopedmocktimemessagelooptaskrunner">base::ScopedMockTimeMessageLoopTaskRunner</h3>
+<p>This is the ancestor of <code>base::TestMockTimeTaskRunner</code> which is itself mostly
+deprecated. As mentioned above in the <a href="#timesource-trait">TimeSource trait</a>
+section: This should never be used anymore except to mock time when there&#39;s
+already a task system in place, e.g. in browser_tests.</p>
+<h3 id="settaskrunnerfortesting-and-settickclockfortesting">SetTaskRunnerForTesting() and SetTickClockForTesting()</h3>
+<p>Prior to <code>TaskEnvironment::TimeSource::MOCK_TIME</code>, many components had
+<code>SetClockForTesting()</code> in their product code. And before modern <a href="threading_and_tasks">Threading and
+Tasks</a>, some components had SetTaskRunnerForTesting(). Neither of these
+test-only seams are required anymore now that task environments can mock those
+from under-the-hood. Cleanup in favor of modern TaskEnvironment paradigms is
+always appreciated (<a href="https://crbug.com/984323">crbug.com/984323</a>).</p>
+<h3 id="other-helper-task-runners">Other helper task runners</h3>
+<p>Different parts of the codebase have their own helper task runners. Please
+migrate away from them or document them above. Ultimately the goal is for
+<code>TaskEnvironment</code> and its subclasses to rule them all and to have a consistent
+task testing API surface once and for all.</p>
+<p>It is still okay for specific areas to have a base fixture that configures a
+default <code>TaskEnvironment</code> appropriate for that area and use the
+<code>TaskEnvironmentTraits</code> paradigm outlined in the <a href="#base-fixture-managed-taskenvironment">Base Fixture managed
+TaskEnvironment</a> section above to let
+individual tests provide additional traits.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/threading_and_tasks_testing.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/threading_and_tasks_testing.md</a>
+  </p>
+</div>

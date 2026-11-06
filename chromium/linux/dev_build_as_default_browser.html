@@ -1,0 +1,32 @@
+<h1>Linux Dev Build As Default Browser</h1>
+<p>Copy a stable version&#39;s <code>.desktop</code> file and modify it to point to your dev
+build:</p>
+<pre>cp /usr/share/applications/google-chrome.desktop \
+   ~/.local/share/applications/chromium-mybuild-c-release.desktop
+vim ~/.local/share/applications/chromium-mybuild-c-release.desktop
+
+# Change first Exec line in desktop entry: (change path to your dev setup)
+Exec=/usr/local/google/home/scheib/c/src/out/Release/chrome %U</pre>
+<p>Set the default:</p>
+<pre>xdg-settings set default-web-browser chromium-mybuild-c-release.desktop</pre>
+<p>Launch, telling Chrome which config you&#39;re using:</p>
+<ul>
+<li><code>CHROME_DESKTOP=chromium-mybuild-c-release.desktop out/Release/chrome</code></li>
+<li>Verify Chrome thinks it is default in <code>about:settings</code> page.<ul>
+<li>Press the button to make default if not.</li>
+</ul>
+</li>
+</ul>
+<p>Restore the normal default:</p>
+<pre>xdg-settings set default-web-browser google-chrome.desktop</pre>
+<p>Change the default, run, and restore:</p>
+<pre>xdg-settings set default-web-browser chromium-mybuild-c-release.desktop &amp;&amp; \
+    CHROME_DESKTOP=chromium-mybuild-c-release.desktop out/Release/chrome
+xdg-settings set default-web-browser google-chrome.desktop &amp;&amp; \
+    echo Restored default browser.</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/dev_build_as_default_browser.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/dev_build_as_default_browser.md</a>
+  </p>
+</div>

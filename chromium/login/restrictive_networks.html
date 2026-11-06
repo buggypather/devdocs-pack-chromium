@@ -1,0 +1,27 @@
+<h1>Working with Restrictive Networks</h1>
+<p>ChromeOS login supports letting the user connect to a restricted network,
+such as one that has a captive portal (e.g. a terms of service screen).</p>
+<p>Testing on a restricted network can be tricky. The most robust way to test is
+to actually connect your device to a restricted network, but this can greatly
+slow iteration time. An alternative is to run chrome locally with
+<code>--proxy-server</code> and run a proxy HTTP server locally that emulates the
+restricted network.</p>
+<h2 id="go-authproxy">go-authproxy</h2>
+<p><a href="https://github.com/jacobdufault/go-authproxy">go-authproxy</a> is a proxy that
+implements HTTP basic authentication and supports serving a captive portal.</p>
+<p>To require HTTP basic authentication</p>
+<pre data-language="sh"># terminal A
+$ go-authproxy -basic-auth user:pass # interrupt (e.g. &lt;c-c&gt;) to shutdown
+# terminal B
+$ chrome --proxy-server=&quot;127.0.0.1:8080&quot;</pre>
+<p>To show a captive portal</p>
+<pre data-language="sh"># terminal A
+$ go-authproxy -captive-portal # interrupt (e.g. &lt;c-c&gt;) to shutdown
+# terminal B
+$ chrome --proxy-server=&quot;127.0.0.1:8080&quot;</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/login/restrictive_networks.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/login/restrictive_networks.md</a>
+  </p>
+</div>

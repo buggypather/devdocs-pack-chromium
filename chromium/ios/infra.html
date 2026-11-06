@@ -1,0 +1,282 @@
+<h1>Continuous build and test infrastructure for Chromium for iOS</h1>
+<p>See the <a href="build_instructions">instructions</a> for how to check out and build Chromium for iOS.</p>
+<p>The Chromium projects use buildbot for continuous integration. This doc starts
+with an overview of the system, then gives detailed explanations about each
+part.</p>
+<h2 id="overview">Overview</h2>
+<p>Commits are made using the <a href="https://dev.chromium.org/developers/testing/commit-queue">commit queue</a>, which triggers a series of try jobs
+to compile and test the proposed patch against Chromium tip of tree before
+actually making the commit. If the try jobs succeed the patch is committed. A
+newly committed change triggers the builders (or &quot;bots&quot;) to compile and test
+the change again.</p>
+<h2 id="bots">Bots</h2>
+<p>Bots are slaves attached to a buildbot master (or &quot;waterfall&quot;). A buildbot
+master is a server which polls for commits to a repository and triggers workers
+to compile and test new commits whenever they are detected. <a href="https://build.chromium.org/p/chromium.mac">chromium.mac</a> is
+the main waterfall for Mac desktop and iOS. <a href="https://build.chromium.org/p/tryserver.chromium.mac/waterfall">tryserver.chromium.mac</a> serves
+as the try server for Mac desktop and iOS.</p>
+<p>The bots know how to check out a given revision of Chromium, compile, and test.</p>
+<h3 id="code-location">Code location</h3>
+<h4 id="master-configs">Master configs</h4>
+<p>The masters are configured in <a href="https://chromium.googlesource.com/chromium/tools/build">tools/build</a>, a separate repository which
+contains various infra-related scripts.</p>
+<h4 id="pollers">Pollers</h4>
+<p><a href="https://build.chromium.org/p/chromium.mac">chromium.mac</a> uses a <code>GitilesPoller</code> which polls the Chromium repository for
+new commits using the <a href="https://gerrit.googlesource.com/gitiles">gitiles</a> interface. When a new commit is detected, the
+bots are triggered.</p>
+<h4 id="recipes">Recipes</h4>
+<p>The bots run <a href="https://chromium.googlesource.com/infra/infra/+/HEAD/doc/users/recipes.md">recipes</a>, which are scripts that specify their sequence of steps
+located in <a href="https://chromium.googlesource.com/chromium/tools/build">tools/build</a>. An iOS-specific <a href="https://chromium.googlesource.com/chromium/tools/build/+/main/scripts/slave/recipe_modules/ios">recipe module</a> contains common
+functionality that the various <a href="https://chromium.googlesource.com/chromium/tools/build/+/main/scripts/slave/recipes/ios">iOS recipes</a> use.</p>
+<h4 id="configs">Configs</h4>
+<p>Because the recipes live in another repository, changes to the recipes don&#39;t
+go through the Chromium <a href="https://dev.chromium.org/developers/testing/commit-queue">commit queue</a> and aren&#39;t tested on the <a href="https://build.chromium.org/p/tryserver.chromium.mac/waterfall">try server</a>.
+In order to allow bot changes to be tested by the commit queue, the recipes
+for iOS are generic instead of bot-specific, and rely on configuration files
+which live in master-specific JSON config files located in <a href="https://github.com/chromium/chromium/blob/HEAD/ios/build/bots">src/ios/build/bots</a>.
+These configs define the <code>gn_args</code> to use during compilation as well as the
+tests to run.</p>
+<h4 id="scripts">Scripts</h4>
+<p>The <a href="https://github.com/chromium/chromium/blob/HEAD/ios/build/bots/scripts/test_runner.py">test runner</a> is the script which installs and runs the tests, interprets
+the results, and collects any files emitted by the test (&quot;test data&quot;). It can
+be found in <a href="https://github.com/chromium/chromium/blob/HEAD/ios/build/bots/scripts">src/ios/build/bots/scripts</a>, which means changes to the test runner
+can be tested on the <a href="https://build.chromium.org/p/tryserver.chromium.mac/waterfall">try server</a>.</p>
+<h3 id="compiling-with-remote-execution">Compiling with remote execution</h3>
+<p>Remote execution (via Siso and RBE) is the distributed build system used by
+Chromium. It reduces compilation time by avoiding recompilation of objects
+which have already been compiled elsewhere.</p>
+<h3 id="testing-with-swarming">Testing with swarming</h3>
+<p>Tests run on <a href="https://chromium.googlesource.com/infra/luci/luci-py/+/main/appengine/swarming/">swarming</a>, a distributed test system used by Chromium. After
+compilation, configured tests will be zipped up along with their necessary
+dependencies (&quot;isolated&quot;) and sent to the <a href="https://chromium-swarm.appspot.com">swarming server</a> for execution. The
+server issues tasks to its attached workers for execution. The bots themselves
+don&#39;t run any tests, they trigger tests to be run remotely on the swarming
+server, then wait and display the results. This allows multiple tests to be
+executed in parallel.</p>
+<h2 id="try-bots">Try bots</h2>
+<p>Try bots are bots which test proposed patches which are not yet committed.</p>
+<p>Request <a href="https://www.chromium.org/getting-involved/become-a-committer#TOC-Try-job-access">try job access</a> in order to trigger try jobs against your patch. The
+relevant try bots for an iOS patch are <code>ios-device</code> and <code>ios-simulator</code>. These
+bots can be found on the Mac-specific <a href="https://build.chromium.org/p/tryserver.chromium.mac/waterfall">try server</a>. A try job is said to succeed
+when the build passes (i.e. when the bot successfully compiles and tests the
+patch).</p>
+<p><code>ios-device</code> compiles for the iOS device architecture (arm64) and runs no tests.
+A build is considered successful so long as compilation is successful.</p>
+<p><code>ios-simulator</code> compiles for the iOS simulator architecture (x86_64), and runs
+tests in the iOS <a href="https://developer.apple.com/library/content/documentation/IDEs/Conceptual/iOS_Simulator_Guide/Introduction/Introduction.html">simulator</a>. A build is considered successful when both
+compilation and all configured tests succeed.</p>
+<p><code>ios-device</code> and <code>ios-simulator</code> both compile using the version of <a href="https://github.com/chromium/chromium/blob/HEAD/tools/clang">clang</a>
+defined by the <code>CLANG_REVISION</code> in the Chromium tree.</p>
+<h3 id="scheduling-try-jobs-using-buildbucket">Scheduling try jobs using buildbucket</h3>
+<p>Triggering a try job and collecting its results is accomplished using
+<a href="https://cr-buildbucket.appspot.com">buildbucket</a>. The service allows for build requests to be put into buckets. A
+request in this context is a set of properties indicating things such as where
+to get the patch. The try bots are set up to poll a particular bucket for build
+requests which they execute and post the results of.</p>
+<h3 id="compiling-with-the-analyzer">Compiling with the analyzer</h3>
+<p>In addition to remote execution, the try bots use another time-saving mechanism
+called
+the <a href="https://github.com/chromium/chromium/blob/HEAD/tools/mb">analyzer</a> to determine the subset of compilation targets affected by the
+patch that need to be compiled in order to run the affected tests. If a patch is
+determined not to affect a certain test target, compilation and execution of the
+test target will be skipped.</p>
+<h2 id="configuring-the-bots">Configuring the bots</h2>
+<p>See the <a href="#Configs">configs code location</a> for where to find the config files for
+the bots. The config files are JSON which describe how the bot should compile
+and which tests it should run. The config files are located in the configs
+directory. The configs directory contains a named directory for each master. For
+example:</p>
+<pre data-language="shell">$ ls ios/build/bots
+OWNERS  scripts  tests  chromium.fyi  chromium.mac</pre>
+<p>In this case, configs are defined for iOS bots on <a href="https://build.chromium.org/p/chromium.fyi/waterfall">chromium.fyi</a> and
+<a href="https://build.chromium.org/p/chromium.mac">chromium.mac</a>. Inside each master-specific directory are JSON config files
+named after each bot. For example:</p>
+<pre data-language="shell">$ ls ios/build/bots/chromium.mac
+ios-device.json ios-simulator.json</pre>
+<p>The <code>ios-device</code> bot on <a href="https://build.chromium.org/p/chromium.mac">chromium.mac</a> will read its configuration from
+<code>chromium.mac/ios-device.json</code> in the configs directory.</p>
+<h3 id="example">Example</h3>
+<pre data-language="json">{
+  &quot;comments&quot;: [
+    &quot;Sample config for a bot.&quot;
+  ],
+  &quot;gn_args&quot;: [
+    &quot;is_debug=true&quot;,
+    &quot;target_cpu=\&quot;x64\&quot;&quot;,
+    &quot;target_environment=\&quot;simulator\&quot;&quot;
+  ],
+  &quot;tests&quot;: [
+    {
+      &quot;app&quot;: &quot;ios_chrome_unittests&quot;,
+      &quot;device type&quot;: &quot;iPhone 5s&quot;,
+      &quot;os&quot;: &quot;11.0&quot;,
+      &quot;xcode build version&quot;: &quot;9A235&quot;
+    }
+  ]
+}</pre>
+<p>The <code>comments</code> key is optional and defines a list of strings which can be used
+to annotate the config. You may want to explain why the bot exists and what it&#39;s
+doing, particularly if there are extensive and atypical <code>gn_args</code>.</p>
+<p>The <code>gn_args</code> key is a required list of arguments to pass to <a href="https://github.com/chromium/chromium/blob/HEAD/tools/gn">GN</a> to generate
+the build files. Two GN args are required, <code>is_debug</code> and <code>target_cpu</code>. Use
+<code>is_debug</code> to define whether to compile for Debug or Release, and <code>target_cpu</code>
+to define whether to compile for x64 or arm64. <code>target_environment</code> is used to
+define whether to compile for simulator or device (as it cannot be deduced from
+the cpu architecture as there exists both x64 and arm64 macOS devices). The iOS
+bots typically perform Debug builds for the same architecture as the machine
+running the tests (usually x64), and Release builds for arm64.</p>
+<p>The <code>tests</code> key is an optional list of dictionaries defining tests to run. There
+are two types of test dictionary, <code>app</code> and <code>include</code>. An <code>app</code> dict defines a
+specific compiled app to run, for example:</p>
+<pre data-language="json">&quot;tests&quot;: [
+  {
+    &quot;app&quot;: &quot;ios_chrome_unittests&quot;,
+    &quot;device type&quot;: &quot;iPhone 5s&quot;,
+    &quot;os&quot;: &quot;11.0&quot;,
+    &quot;xcode build version&quot;: &quot;9A235&quot;
+  }
+]</pre>
+<p>This dict says to run <code>ios_chrome_unittests</code> on an <code>iPhone 5s</code> running iOS
+<code>11.0</code> using Xcode build version <code>9A235</code>. A test dict may optionally define a
+list of <code>test args</code>, which are arguments to pass directly to the test on the
+command line, and it may define a boolean value <code>xctest</code> to indicate whether the
+test is an <a href="https://developer.apple.com/reference/xctest">xctest</a> (default if unspecified is <code>false</code>). For example:</p>
+<pre data-language="json">&quot;tests&quot;: [
+  {
+    &quot;app&quot;: &quot;ios_chrome_unittests&quot;,
+    &quot;device type&quot;: &quot;iPhone 5s&quot;,
+    &quot;os&quot;: &quot;11.0&quot;,
+    &quot;test args&quot;: [
+      &quot;--foo&quot;,
+      &quot;--bar&quot;
+    ],
+    &quot;xcode build version&quot;: &quot;9A235&quot;
+  },
+  {
+    &quot;app&quot;: &quot;ios_chrome_integration_egtests&quot;,
+    &quot;device type&quot;: &quot;iPhone 5s&quot;,
+    &quot;os&quot;: &quot;11.0&quot;,
+    &quot;xcode build version&quot;: &quot;9A235&quot;,
+    &quot;xctest&quot;: true
+  }
+]</pre>
+<p>This defines two tests to run, first <code>ios_chrome_unittests</code> will be run with
+<code>--foo</code> and <code>--bar</code> passed directly to the test on the command line. Next,
+<code>ios_chrome_integration_egtests</code> will be run as an xctest. <code>&quot;xctest&quot;: true</code>
+must be specified for all xctests, it is an error to try and launch an xctest as
+a regular test.</p>
+<p>An <code>include</code> dict defines a list of tests to import from the <code>tests</code>
+subdirectory in the configs directory. For example:</p>
+<pre data-language="json">&quot;tests&quot;: [
+  {
+    &quot;include&quot;: &quot;common_tests.json&quot;,
+    &quot;device type&quot;: &quot;iPhone 5s&quot;,
+    &quot;os&quot;: &quot;11.0&quot;,
+    &quot;xcode build version&quot;: &quot;9A235&quot;
+  }
+]</pre>
+<p>This dict says to import the list of tests from the <code>tests</code> subdirectory and run
+each one on an <code>iPhone 5s</code> running iOS <code>11.0</code> using Xcode <code>9A235</code>. Here&#39;s what
+<code>common_tests.json</code> might look like:</p>
+<pre data-language="json">&quot;tests&quot;: [
+  {
+    &quot;app&quot;: &quot;ios_chrome_unittests&quot;
+  },
+  {
+    &quot;app&quot;: &quot;ios_net_unittests&quot;
+  },
+  {
+    &quot;app&quot;: &quot;ios_web_unittests&quot;
+  },
+]</pre>
+<p>Includes may contain other keys besides <code>app</code> which can then be omitted in the
+bot config. For example if <code>common_tests.json</code> specifies:</p>
+<pre data-language="json">&quot;tests&quot;: [
+  {
+    &quot;app&quot;: &quot;ios_chrome_integration_egtests&quot;,
+    &quot;xctest&quot;: true,
+    &quot;xcode build version&quot;: &quot;9A235&quot;
+  }
+]</pre>
+<p>Then the bot config may omit the <code>xctest</code> or <code>xcode build version</code> keys, for
+example:</p>
+<pre data-language="json">{
+  &quot;comments&quot;: [
+    &quot;Sample config for a bot.&quot;
+  ],
+  &quot;gn_args&quot;: [
+    &quot;is_debug=true&quot;,
+    &quot;target_cpu=\&quot;x64\&quot;&quot;,
+    &quot;target_environment=\&quot;simulator\&quot;&quot;
+  ],
+  &quot;tests&quot;: [
+    {
+      &quot;include&quot;: &quot;common_tests.json&quot;,
+      &quot;device type&quot;: &quot;iPhone 5s&quot;,
+      &quot;os&quot;: &quot;11.0&quot;
+    }
+  ]
+}</pre>
+<p>Includes are not recursive, so <code>common_tests.json</code> may not itself include any
+<code>include</code> dicts.</p>
+<p>Some keywords such as <code>xcode build version</code> can also be set globally per build:</p>
+<pre data-language="json">{
+  &quot;comments&quot;: [
+    &quot;Sample config for a bot.&quot;
+  ],
+  &quot;gn_args&quot;: [
+    &quot;is_debug=true&quot;,
+    &quot;target_cpu=\&quot;x64\&quot;&quot;,
+    &quot;target_environment=\&quot;simulator\&quot;&quot;
+  ],
+  &quot;xcode build version&quot;: &quot;9A235&quot;,
+  &quot;tests&quot;: [
+    {
+      &quot;app&quot;: &quot;ios_chrome_integration_egtests&quot;,
+      &quot;device type&quot;: &quot;iPhone 5s&quot;,
+      &quot;os&quot;: &quot;11.0&quot;
+    }
+  ]
+}</pre>
+<h3 id="uploading-compiled-artifacts-from-a-bot">Uploading compiled artifacts from a bot</h3>
+<p>A bot may be configured to upload compiled artifacts. This is defined by the
+<code>upload</code> key. For example:</p>
+<pre data-language="json">{
+  &quot;comments&quot;: [
+    &quot;Sample config for a bot which uploads artifacts.&quot;
+  ],
+  &quot;gn_args&quot;: [
+    &quot;is_debug=true&quot;,
+    &quot;target_cpu=\&quot;x64\&quot;&quot;,
+    &quot;target_environment=\&quot;simulator\&quot;&quot;
+  ],
+  &quot;upload&quot;: [
+    {
+      &quot;artifact&quot;: &quot;Chromium.breakpad&quot;,
+      &quot;bucket&quot;: &quot;my-gcs-bucket&quot;,
+    },
+    {
+      &quot;artifact&quot;: &quot;Chromium.app&quot;,
+      &quot;bucket&quot;: &quot;my-gcs-bucket&quot;,
+      &quot;compress&quot;: true,
+    },
+    {
+      &quot;artifact&quot;: &quot;Chromium.breakpad&quot;,
+      &quot;symupload&quot;: &quot;https://clients2.google.com/cr/symbol&quot;,
+    }
+  ]
+}</pre>
+<p>After compilation, the bot will upload three artifacts. First the
+<code>Chromium.breakpad</code> symbols will be uploaded to
+<code>gs://my-gcs-bucket/&lt;buildername&gt;/&lt;buildnumber&gt;/Chromium.breakpad</code>. Next
+<code>Chromium.app</code> will be tarred, gzipped, and uploaded to
+<code>gs://my-gcs-bucket/&lt;buildername&gt;/&lt;buildnumber&gt;/Chromium.tar.gz</code>. Finally
+the <code>Chromium.breakpad</code> symbols will be uploaded to the <a href="https://chromium.googlesource.com/breakpad/breakpad">breakpad</a> crash
+reporting server where they can be used to symbolicate stack traces.</p>
+<p>If <code>artifact</code> is a directory, you must specify <code>&quot;compress&quot;: true</code>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ios/infra.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ios/infra.md</a>
+  </p>
+</div>

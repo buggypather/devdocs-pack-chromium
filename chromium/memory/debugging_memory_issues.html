@@ -1,0 +1,271 @@
+<h1>Debugging Memory Issues</h1>
+<p>This page is designed to help Chromium developers debug memory issues.</p>
+<p>When in doubt, reach out to <a href="mailto:memory-dev@chromium.org">memory-dev@chromium.org</a>.</p>
+<h2 id="investigating-reproducible-memory-regression">Investigating Reproducible Memory Regression</h2>
+<p>Let&#39;s say that there&#39;s a CL or feature that reproducibly increases memory usage
+when it&#39;s landed/enabled, given a particular set of repro steps.</p>
+<ul>
+<li>Take a look at <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/README.md">the documentation</a> for both
+taking and navigating memory-infra traces.</li>
+<li>Take two memory-infra traces. One with the reproducible memory regression, and
+one without.</li>
+<li>Load the memory-infra traces into two tabs.</li>
+<li>Compare the memory dump providers and look for the one that shows the
+regression. Follow the relevant link.<ul>
+<li><a href="#Investigating-Reproducible-Memory-Issues">The regression is in the Malloc MemoryDumpProvider.</a></li>
+<li><a href="#Regression-in-Non-Malloc-MemoryDumpProvider">The regression is in a non-Malloc
+MemoryDumpProvider.</a></li>
+<li><a href="#Regression-only-in-Private-Footprint">The regression is only observed in <strong>private
+footprint</strong>.</a></li>
+<li><a href="#No-observed-regression">No regression is observed.</a></li>
+</ul>
+</li>
+</ul>
+<h3 id="regression-in-malloc-memorydumpprovider">Regression in Malloc MemoryDumpProvider</h3>
+<p>Repeat the above steps, but this time also <a href="#Taking-a-Heap-Dump">take a heap
+dump</a>. Confirm that the regression is also visible in the
+heap dump, and then compare the two heap dumps to find the difference. You can
+also use
+<a href="https://cs.chromium.org/chromium/src/third_party/catapult/experimental/tracing/bin/diff_heap_profiler.py">diff_heap_profiler.py</a>
+to perform the diff.</p>
+<h3 id="regression-in-non-malloc-memorydumpprovider">Regression in Non-Malloc MemoryDumpProvider</h3>
+<p>Hopefully the MemoryDumpProvider has sufficient information to help diagnose the
+leak. Depending on the whether the leaked object is allocated via malloc or new</p>
+<ul>
+<li>it usually should be, you can also use the steps for debugging a Malloc
+MemoryDumpProvider regression.</li>
+</ul>
+<h3 id="regression-only-in-private-footprint">Regression only in Private Footprint</h3>
+<ul>
+<li>Repeat the repro steps, but instead of taking a memory-infra trace, use
+the following tools to map the process&#39;s virtual space:<ul>
+<li>On macOS, use vmmap</li>
+<li>On Windows, use SysInternal VMMap</li>
+<li>On other OSes, use /proc/&lt;pid&gt;/smaps.</li>
+</ul>
+</li>
+<li>The results should help diagnose what&#39;s happening. Contact the
+<a href="mailto:memory-dev@chromium.org">memory-dev@chromium.org</a> mailing list for more help.</li>
+</ul>
+<h3 id="no-observed-regression">No observed regression</h3>
+<ul>
+<li>If there isn&#39;t a regression in PrivateMemoryFootprint, then this might become
+a question of semantics for what constitutes a memory regression. Common
+problems include:<ul>
+<li>Shared Memory, which is hard to attribute, but is mostly accounted for in
+the memory-infra trace.</li>
+<li>Binary size, which is currently not accounted for anywhere.</li>
+</ul>
+</li>
+</ul>
+<h2 id="investigating-heap-dumps-from-the-wild">Investigating Heap Dumps From the Wild</h2>
+<p>For a small set of Chrome users in the wild, Chrome will record and upload
+anonymized heap dumps. This has the benefit of wider coverage for real code
+paths, at the expense of reproducibility.</p>
+<p>These heap dumps can take some time to grok, but frequently yield valuable
+insight. At the time of this writing, heap dumps from the wild have resulted in
+real, high impact bugs being found in Chrome code ~90% of the time.</p>
+<p>For an example investigation of a real heap dump, see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/investigating_heap_dump_example.md">this
+link</a>.</p>
+<ul>
+<li>Raw heap dumps can be viewed in the trace viewer. <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/heap_profiler.md#how-to-manually-browse-a-heap-dump">See detailed
+instructions.</a>.
+This interface surfaces all available information, but can be overwhelming and
+is usually unnecessary for investigating heap dumps.<ul>
+<li>Important note: Heap profiling in the field uses
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=810748">Poisson process sampling</a>
+with a rate parameter of 10000. This means that for large/frequent allocations
+[e.g. &gt;100 MB], the noise will be quite small [much less than 1%]. But
+there is noise so counts will not be exact.</li>
+</ul>
+</li>
+<li>The heap dump summary typically contains all information necessary to diagnose
+a memory issue.<ul>
+<li>The stack trace of the potential memory leak is almost always sufficient to
+tell the type of object being leaked, since most functions in Chrome
+have a limited number of calls to new and malloc.</li>
+</ul>
+</li>
+<li>The next thing to do is to determine whether the memory usage is intentional.
+Very rarely, components in Chrome legitimately need to use many 100s of MBs of
+memory. In this case, it&#39;s important to create a
+<a href="https://cs.chromium.org/chromium/src/base/trace_event/memory_dump_provider.h">MemoryDumpProvider</a>
+to report this memory usage, so that we have a better understanding of which
+components are using a lot of memory. For an example, see
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=813046">Issue 813046</a>.</li>
+<li>Assuming the memory usage is not intentional, the next thing to do is to
+figure out what is causing the memory leak.<ul>
+<li>The most common cause is adding elements to a container with no limit.
+Usually the code makes assumptions about how frequently it will be called
+in the wild, and something breaks those assumptions. Or sometimes the code
+to clear the container is not called as frequently as expected [or at
+all]. <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=798012">Example
+1</a>. <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=804440">Example
+2</a>.</li>
+<li>Retain cycles for ref-counted objects.
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=814334#c23">Example</a></li>
+<li>Straight up leaks resulting from incorrect use of APIs. <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=801702#c31">Example
+1</a>.
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=814444#c17">Example
+2</a>.</li>
+</ul>
+</li>
+</ul>
+<h2 id="taking-a-heap-dump">Taking a Heap Dump</h2>
+<p>Navigate to chrome://flags and search for <strong>memlog</strong>. There are several options
+that can be used to configure heap dumps. All of these options are also
+available as command line flags, for automated test runs [e.g. telemetry].</p>
+<ul>
+<li><code>#memlog</code> controls which processes are profiled. It&#39;s also possible to
+manually specify the process via the interface at <code>chrome://memory-internals</code>.</li>
+<li><code>#memlog-in-process</code> makes the profiling service to be run within the
+Chrome browser process. Defaults to run the service as a separate dedicated
+process.</li>
+<li><code>#memlog-sampling-rate</code> specifies the sampling interval in bytes. The lower
+the interval, the more precise is the profile. However it comes at the cost of
+performance. Default value is 100KB, that is enough to observe allocation
+sites that make allocations &gt;500KB total, where total equals to a single
+allocation size times the number of such allocations at the same call site.</li>
+<li><code>#memlog-stack-mode</code> describes the type of metadata recorded for each
+allocation. <code>native</code> stacks provide the most utility. The only time the other
+options should be considered is for Android official builds, most of which do
+not support <code>native</code> stacks.</li>
+</ul>
+<p>Once the flags have been set appropriately, restart Chrome and take a
+memory-infra trace. The results will have a heap dump.</p>
+<h2 id="investigating-memory-corruption">Investigating Memory Corruption</h2>
+<p>In case you can reproduce the corruption locally,
+you are advised to run sanitizers (e.g.
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/asan.md">ASan</a>)
+to locate and fix UB.</p>
+<p>Otherwise, you can look into
+<a href="https://sites.google.com/a/google.com/crash/users/how-to/manually-debug-a-minidump">minidump</a>
+(link Googlers-only) if available.</p>
+<h3 id="known-memory-poisoning-patterns">Known Memory Poisoning Patterns</h3>
+<p>Memory allocation goes through multiple states,
+and its payload sometimes has a distinctive pattern.
+You may also see some variance on lower bits, introduced by
+e.g. an offset within <code>struct</code>.</p>
+<h4 id="memory-held-by-the-os">Memory held by the OS</h4>
+<ul>
+<li>All memory comes from the OS and returns back to the OS at some point.</li>
+<li>Access to memory that is already returned to the OS is likely a crash.</li>
+<li>Large allocations (&gt;= ~1 MiB) tend to go back to the OS quickly when
+freed, while smaller allocations are mostly reused.</li>
+</ul>
+<h4 id="memory-held-by-the-allocator">Memory held by the allocator</h4>
+<ul>
+<li>The allocator holds the memory region borrowed from the OS in a free-list.</li>
+<li>Payload and behavior are implementation-specific.</li>
+<li>In Chrome, we use
+<a href="https://chromium.googlesource.com/chromium/src/+/main/base/allocator/partition_allocator/PartitionAlloc.md">PartitionAlloc</a> as the
+main allocator.<ul>
+<li>We embed some data on payload and the original payload before <code>free()</code> may
+or may not be overwritten.</li>
+<li>Writes to <code>free()</code>d memory may be caught as &quot;free-list corruption&quot;.</li>
+</ul>
+</li>
+<li>Following patterns can be written at this stage:<ul>
+<li><code>0xCDCDCDCDCDCDCDCD</code>: when allocation gets returned to PartitionAlloc.<ul>
+<li>Shows up only in <code>PA_BUILDFLAG(EXPENSIVE_DCHECKS_ARE_ON)</code> builds.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="quarantined-memory">Quarantined Memory</h4>
+<ul>
+<li>Optionally, the allocator may keep <code>free()</code>d memory in quarantine
+for a while before returning it into a free-list to detect and mitigate
+UaF bugs.</li>
+<li>Following patterns can be written at this stage:<ul>
+<li><code>0xCDCDCDCDCDCDCDCD</code>: PartitionAlloc&#39;s <code>FreeFlags::kZap</code>.<ul>
+<li>As of Aug. 2024 this is used by only <a href="https://docs.google.com/document/d/12OM0CSKgKv6NhM9YylSqAAXiV_f4uMgYgaH8KABUe-o/edit?usp=sharing">AMSC</a>.</li>
+</ul>
+</li>
+<li><code>0xEFEFEFEFEFEFEFEF</code>: In <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/base/memory/raw_ptr.md">BRP</a> quarantine.<ul>
+<li>You are using a dangling pointer to access invalidated memory region.</li>
+</ul>
+</li>
+<li><code>0xEFED????????8000</code>: In <a href="https://docs.google.com/document/d/1xfGa_IMtFZiQ3beOmkncEafODwn4U90ZyL4NfPaAtDY/edit?usp=sharing&amp;resourcekey=0-89BZl1SVILB6ylOHula0IA">LUD</a> quarantine.<ul>
+<li>(Googlers-only) You may have an access to <code>free()</code> stack trace on crashpad.</li>
+</ul>
+</li>
+<li><code>0xECEC????????8000</code>: In <a href="https://docs.google.com/document/d/1_9TSOtQuPR3NjorLDjAkuloi8lYqblb6Ykt5nbVnh9I/edit?usp=sharing">E-LUD</a> quarantine.</li>
+</ul>
+</li>
+</ul>
+<h4 id="memory-allocation-you-officially-own">Memory allocation you officially own</h4>
+<p>In principle, once initialized you should only see values written
+by your code while your allocation is alive.
+However, in rare case, you may see values from Write-after-Free.</p>
+<pre data-language="txt">void YourFunc() {              | void TheirFunc() {
+                               |   int* p1 = new int;
+                               |   delete p1;
+  // The allocator may         |
+  // redistribute `p1` to `p2` |
+  int* p2 = new int;           |
+  *p2 = 123;                   |
+                               |   // Write-after-Free
+                               |   *p1 = 456;
+  // 456 may show up           |
+  printf(&quot;%d\n&quot;, *p2);         |
+}                              | }</pre>
+<p>...or values from Double-Free.</p>
+<pre>void YourFunc() {              | void TheirFunc() {
+                               |   int* p1 = new int;
+                               |   delete p1;
+  // The allocator may         |
+  // redistribute `p1` to `p2` |
+  int* p2 = new int;           |
+  *p2 = 123;                   |
+                               |   // Double-Free
+                               |   delete p1;
+                               |
+                               |   // The allocator may
+                               |   // redistribute `p2` to `p3`
+                               |   int* p3 = new int;
+                               |   *p3 = 456;
+  // 456 may show up           |
+  printf(&quot;%d\n&quot;, *p2);         |
+}                              | }</pre>
+<ul>
+<li>Following patterns can be written at this stage:<ul>
+<li><code>0x0000000000000000</code>: <a href="https://en.cppreference.com/w/cpp/language/zero_initialization">zero initialization</a>.</li>
+<li><code>0x0000000000000000</code>: PartitionAlloc&#39;s <code>AllocFlags::kZeroFill</code>.<ul>
+<li>This payload is written as a part of memory allocation but requires
+explicit opt-in e.g. <code>calloc()</code>.</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li><code>0xABABABABABABABAB</code>: PartitionAlloc&#39;s newly allocated memory.<ul>
+<li>Shows up only in <code>PA_BUILDFLAG(EXPENSIVE_DCHECKS_ARE_ON)</code> builds.</li>
+<li>MSan should be capable of catching this kind of reads to uninitialized
+regions.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h4 id="memory-allocation-owned-by-someone-else">Memory allocation owned by someone else</h4>
+<p>You may see random values written by someone else
+if you keep using pointers to <code>free()</code>d region.</p>
+<pre>void YourFunc() {              | void TheirFunc() {
+  int* p1 = new int;           |
+  *p1 = 123;                   |
+  delete p1;                   |
+                               |   // The allocator may
+                               |   // redistribute `p1` to `p2`
+                               |   int* p2 = new int;
+                               |   *p2 = 456;
+  // Use-after-Free;           |
+  // 456 may show up           |
+  printf(&quot;%d\n&quot;, *p1);         |
+}                              | }</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/debugging_memory_issues.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory/debugging_memory_issues.md</a>
+  </p>
+</div>

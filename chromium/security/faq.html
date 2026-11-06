@@ -1,0 +1,1231 @@
+<h1>Chrome Security FAQ</h1>
+<h2 id="process">Process</h2>
+<p><a name="TOC-How-do-i-report-a-security-vulnerability"></a></p>
+<h3 id="how-do-i-report-a-security-vulnerability">How do I report a security vulnerability?</h3>
+<p>Please report all Chromium security bugs via
+<a href="https://bughunters.google.com/report/vrp">Google Bughunters</a> and select
+Chrome VRP. (Direct intake to the Chromium issuetracker is deprecated.)</p>
+<p><a name="TOC-Which-bugs-are-valid-for-rewards-under-the-Chrome-Vulnerability-Rewards-program-"></a></p>
+<h3 id="which-bugs-are-valid-for-rewards-under-the-chrome-vulnerability-rewards-program">Which bugs are valid for rewards under the Chrome Vulnerability Rewards program?</h3>
+<p>Please see <a href="vrp-faq">the VRP FAQ page</a>.</p>
+<p><a name="TOC-Why-are-security-bugs-hidden-in-the-Chromium-issue-tracker-"></a></p>
+<h3 id="why-are-security-bugs-hidden-in-the-chromium-issue-tracker">Why are security bugs hidden in the Chromium issue tracker?</h3>
+<p>We must balance a commitment to openness with a commitment to avoiding
+unnecessary risk for users of widely-used open source libraries. All critical,
+high, and medium severity bugs are visible only to the security team and to the
+engineers directly involved in fixing them. Low-severity security bugs may be
+visible to all project contributors after an initial triage phase. Low severity
+bugs that are not being actively worked on may be made public after four weeks.</p>
+<p><a name="TOC-Can-you-please-un-hide-old-security-bugs-"></a></p>
+<h3 id="can-you-please-un-hide-old-security-bugs">Can you please un-hide old security bugs?</h3>
+<p>Our goal is to open security bugs to the public once the bug is fixed and the
+fix has been shipped to a majority of users. However, many vulnerabilities
+affect products besides Chromium, and we don’t want to put users of those
+products unnecessarily at risk by opening the bug before fixes for the other
+affected products have shipped.</p>
+<p>Therefore, we make all security bugs public within approximately 30 days of the
+fix landing in the Chromium repository. The exception to this is in the event of
+the bug reporter or some other responsible party explicitly requesting anonymity
+or protection against disclosing other particularly sensitive data included in
+the vulnerability report (e.g. username and password pairs).</p>
+<p><a name="TOC-Can-I-get-advance-notice-about-security-bugs-"></a></p>
+<h3 id="can-i-get-advance-notice-about-security-bugs">Can I get advance notice about security bugs?</h3>
+<p>Vendors of products based on Chromium, distributors of operating systems that
+bundle Chromium, and individuals and organizations that significantly contribute
+to fixing security bugs can be added to a list for earlier access to these bugs.
+You can email us at <a href="mailto:security@chromium.org">security@chromium.org</a> to request to join the list if you
+meet the above criteria. In particular, vendors of anti-malware, IDS/IPS,
+vulnerability risk assessment, and similar products or services do not meet this
+bar.</p>
+<p>Please note that the safest version of Chrome/Chromium is always the latest
+stable version — there is no good reason to wait to upgrade, so enterprise
+deployments should always track the latest stable release. When you do this,
+there is no need to further assess the risk of Chromium vulnerabilities: we
+strive to fix vulnerabilities quickly and release often.</p>
+<p><a name="TOC-How-can-I-know-which-fixes-to-include-in-my-downstream-project-"></a></p>
+<h3 id="how-can-i-know-which-fixes-to-include-in-my-downstream-project">How can I know which fixes to include in my downstream project?</h3>
+<p>Chrome is built with mitigations and hardening which aim to prevent or reduce
+the impact of security issues. We classify bugs as security issues if they are
+known to affect a version and configuration of Chrome that we ship to the
+public. Some classes of bug might present as security issues if Chrome was
+compiled with different flags, or linked against a different C++ standard
+library, but do not with the toolchain and configuration that we use to build
+Chrome. We discuss some of these cases elsewhere in this FAQ.</p>
+<p>If we become aware of them, these issues may be triaged as <code>Type=Vulnerability, Security_Impact-None</code> or as <code>Type=Bug</code> because they do not affect the production
+version of Chrome. They may or may not be immediately visible to the public in
+the bug tracker, and may or may not be identified as security issues. If fixes
+are landed, they may or may not be merged from HEAD to a release branch. Chrome
+will only label, fix and merge security issues in Chrome, but attackers can
+still analyze public issues, or commits in the Chromium project to identify bugs
+that might be exploitable in other contexts.</p>
+<p>Chromium embedders and other downstream projects may build with different
+compilers, compile options, target operating systems, standard library, or
+additional software components. It is possible that some issues Chrome
+classifies as functional issues will manifest as security issues in a product
+embedding Chromium - it is the responsibility of any such project to understand
+what code they are shipping, and how it is compiled. We recommend using Chrome&#39;s
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:build/config/">configuration</a>
+whenever possible.</p>
+<p><a name="TOC-Can-I-see-these-security-bugs-so-that-I-can-back-port-the-fixes-to-my-downstream-project-"></a></p>
+<h3 id="can-i-see-these-security-bugs-so-that-i-can-back-port-the-fixes-to-my-downstream-project">Can I see these security bugs so that I can back-port the fixes to my downstream project?</h3>
+<p>Many developers of other projects use V8, Chromium, and sub-components of
+Chromium in their own projects. This is great! We are glad that Chromium and V8
+suit your needs.</p>
+<p>We want to open up fixed security bugs (as described in the previous answer),
+and will generally give downstream developers access sooner. <strong>However, please
+be aware that backporting security patches from recent versions to old versions
+cannot always work.</strong> (There are several reasons for this: The patch won&#39;t apply
+to old versions; the solution was to add or remove a feature or change an API;
+the issue may seem minor until it&#39;s too late; and so on.) We believe the latest
+stable versions of Chromium and V8 are the most stable and secure. We also
+believe that tracking the latest stable upstream is usually less work for
+greater benefit in the long run than backporting. We strongly recommend that you
+track the latest stable branches, and we support only the latest stable branch.</p>
+<p><a name="TOC-Severity-Guidelines"></a></p>
+<h3 id="how-does-the-chrome-team-determine-severity-of-security-bugs">How does the Chrome team determine severity of security bugs?</h3>
+<p>See the <a href="severity-guidelines">severity guidelines</a> for more information.
+Only security issues are considered under the security vulnerability rewards
+program. Other types of bugs, which we call &quot;functional bugs&quot;, are not.</p>
+<h2 id="threat-model">Threat Model</h2>
+<p><a name="TOC-Timing-Attacks"></a></p>
+<h3 id="are-timing-attacks-considered-security-vulnerabilities">Are timing attacks considered security vulnerabilities?</h3>
+<p>Some timing attacks are considered security vulnerabilities, and some are
+considered privacy vulnerabilities. Timing attacks vary significantly in terms
+of impact, reliability, and exploitability.</p>
+<p>Some timing attacks weaken mitigations like ASLR (e.g.
+<a href="https://crbug.com/665930">Issue 665930</a>). Others attempt to circumvent the same
+origin policy, for instance, by using SVG filters to read pixels
+cross-origin (e.g. <a href="https://crbug.com/686253">Issue 686253</a> and
+<a href="https://crbug.com/615851">Issue 615851</a>).</p>
+<p>Many timing attacks rely upon the availability of high-resolution timing
+information <a href="https://crbug.com/508166">Issue 508166</a>; such timing data often has
+legitimate usefulness in non-attack scenarios making it unappealing to remove.</p>
+<p>Timing attacks against the browser&#39;s HTTP Cache (like
+<a href="https://crbug.com/74987">Issue 74987</a>) can potentially leak information about
+which sites the user has previously loaded. The browser could attempt to protect
+against such attacks (e.g. by bypassing the cache) at the cost of performance
+and thus user-experience. To mitigate against such timing attacks, end-users can
+delete browsing history and/or browse sensitive sites using Chrome&#39;s Incognito
+or Guest browsing modes.</p>
+<p>Other timing attacks can be mitigated via clever design changes. For instance,
+<a href="https://crbug.com/544765">Issue 544765</a> describes an attack whereby an attacker
+can probe for the presence of HSTS rules (set by prior site visits) by timing
+the load of resources with URLs &quot;fixed-up&quot; by HSTS. Prior to Chrome 64, HSTS
+rules <a href="https://crbug.com/774643">were shared</a> between regular browsing and
+Incognito mode, making the attack more interesting. The attack was mitigated by
+changing Content-Security-Policy such that secure URLs will match rules
+demanding non-secure HTTP urls, a fix that has also proven useful to help to
+unblock migrations to HTTPS. Similarly, <a href="https://crbug.com/707071">Issue 707071</a>
+describes a timing attack in which an attacker could determine what Android
+applications are installed; the attack was mitigated by introducing randomness
+in the execution time of the affected API.</p>
+<p><a name="TOC-What-if-a-Chrome-component-breaks-an-OS-security-boundary-"></a></p>
+<h3 id="what-if-a-chrome-component-breaks-an-os-security-boundary">What if a Chrome component breaks an OS security boundary?</h3>
+<p>If Chrome or any of its components (e.g. updater) can be abused to
+perform a local privilege escalation, then it may be treated as a
+valid security vulnerability.</p>
+<p>Running any Chrome component with higher privileges than intended is
+not a security bug and we do not recommend running Chrome as an
+Administrator on Windows, or as root on POSIX.</p>
+<p><a name="TOC-Why-isn-t-passive-browser-fingerprinting-including-passive-cookies-in-Chrome-s-threat-model-"></a>
+<a name="TOC-What-is-Chrome-s-threat-model-for-fingerprinting-"></a></p>
+<h3 id="what-is-chromes-threat-model-for-fingerprinting">What is Chrome&#39;s threat model for fingerprinting?</h3>
+<blockquote>
+<p><strong>Update, August 2019:</strong> Please note that this answer has changed. We have
+updated our threat model to include fingerprinting.</p>
+</blockquote>
+<p>Although <a href="#TOC-Are-privacy-issues-considered-security-bugs-">we do not consider fingerprinting issues to be <em>security
+vulnerabilities</em></a>, we do now
+consider them to be privacy bugs that we will try to resolve. We distinguish two
+forms of fingerprinting.</p>
+<ul>
+<li><strong>Passive fingerprinting</strong> refers to fingerprinting techniques that do not
+require a JavaScript API call to achieve. This includes (but is not limited to)
+mechanisms like <a href="https://en.wikipedia.org/wiki/HTTP_ETag#Tracking_using_ETags">ETag
+cookies</a> and <a href="https://security.stackexchange.com/questions/79518/what-are-hsts-super-cookies">HSTS
+cookies</a>.</li>
+<li><strong>Active fingerprinting</strong> refers to fingerprinting techniques that do require
+a JavaScript API call to achieve. Examples include most of the techniques in
+<a href="https://panopticlick.eff.org">EFF&#39;s Panopticlick proof of concept</a>.</li>
+</ul>
+<p>For passive fingerprinting, our ultimate goal is (to the extent possible) to
+reduce the information content available to below the threshold for usefulness.</p>
+<p>For active fingerprinting, our ultimate goal is to establish a <a href="https://github.com/bslassey/privacy-budget">privacy
+budget</a> and to keep web origins
+below the budget (such as by rejecting some API calls when the origin exceeds
+its budget). To avoid breaking rich web applications that people want to use,
+Chrome may increase an origin&#39;s budget when it detects that a person is using
+the origin heavily. As with passive fingerprinting, our goal is to set the
+default budget below the threshold of usefulness for fingerprinting.</p>
+<p>These are both long-term goals. As of this writing (August 2019) we do not
+expect that Chrome will immediately achieve them.</p>
+<p>For background on fingerprinting and the difficulty of stopping it, see <a href="https://33bits.wordpress.com/about/">Arvind
+Narayanan&#39;s site</a> and <a href="https://www.eff.org/deeplinks/2010/01/primer-information-theory-and-privacy">Peter Eckersley&#39;s
+discussion of the information theory behind
+Panopticlick</a>.
+There is also <a href="https://dev.chromium.org/Home/chromium-security/client-identification-mechanisms">a pretty good analysis of in-browser fingerprinting
+vectors</a>.</p>
+<p><a name="TOC-I-found-a-phishing-or-malware-site-not-blocked-by-Safe-Browsing.-Is-this-a-security-vulnerability-"></a></p>
+<h3 id="i-found-a-phishing-or-malware-site-not-blocked-by-safe-browsing-is-this-a-security-vulnerability">I found a phishing or malware site not blocked by Safe Browsing. Is this a security vulnerability?</h3>
+<p>Malicious sites not yet blocked by Safe Browsing can be reported via
+<a href="https://www.google.com/safebrowsing/report_phish/">https://www.google.com/safebrowsing/report_phish/</a>.
+Safe Browsing is primarily a blocklist of known-unsafe sites; the feature warns
+the user if they attempt to navigate to a site known to deliver phishing or
+malware content. You can learn more about this feature in these references:</p>
+<ul>
+<li><a href="https://developers.google.com/safe-browsing/">https://developers.google.com/safe-browsing/</a></li>
+<li><a href="https://www.google.com/transparencyreport/safebrowsing/">https://www.google.com/transparencyreport/safebrowsing/</a></li>
+</ul>
+<p>In general, it is not considered a security bug if a given malicious site is not
+blocked by the Safe Browsing feature, unless the site is on the blocklist but is
+allowed to load anyway. For instance, if a site found a way to navigate through
+the blocking red warning page without user interaction, that would be a security
+bug. A malicious site may exploit a security vulnerability (for instance,
+spoofing the URL in the <strong>Location Bar</strong>). This would be tracked as a security
+vulnerability in the relevant feature, not Safe Browsing itself.</p>
+<p><a name="TOC-I-can-download-a-file-with-an-unsafe-extension-and-it-is-not-classified-as-dangerous-"></a></p>
+<h3 id="i-can-download-a-file-with-an-unsafe-extension-and-it-is-not-classified-as-dangerous---is-this-a-security-bug">I can download a file with an unsafe extension and it is not classified as dangerous - is this a security bug?</h3>
+<p>Chrome tries to warn users before they open files that might modify their
+system. What counts as a dangerous file will vary depending on the operating
+system Chrome is running on, the default set of file handlers, Chrome settings,
+Enterprise policy and verdicts on both the site and the file from <a href="https://code.google.com/apis/safebrowsing/">Safe
+Browsing</a>. Because of this it will
+often be okay for a user to download and run a file. However, if you can clearly
+demonstrate how to bypass one of these protections then we’d like to hear about
+it. You can see if a Safe Browsing check happened by opening
+chrome://safe-browsing before starting the download.</p>
+<p><a name="TOC-what-about-dangerous-file-types-not-listed-in-the-file-type-policy-"></a></p>
+<h3 id="what-about-dangerous-file-types-not-listed-in-the-file-type-policy">What about dangerous file types not listed in the file type policy?</h3>
+<p>The <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/safe_browsing/content/resources/download_file_types/download_file_types.asciipb?q=download_file_types.asciipb%20-f:%2Fgen%2F&amp;ss=chromium">file type
+policy</a>
+controls some details of which security checks to enable for a given file
+extension. Most importantly, it controls whether we contact Safe Browsing about
+a download, and whether we show a warning for all downloads of that file type.
+Starting in M74, the default for unknown file types has been to contact Safe
+Browsing. This prevents large-scale abuse from a previously unknown file type.
+Starting in M105, showing a warning for all downloads of an extension became
+reserved for exceptionally dangerous file types that can compromise a user
+without any user interaction with the file (e.g. DLL hijacking). If you discover
+a new file type that meets that condition, we’d like to hear about it.</p>
+<p><a name="TOC-i-found-a-local-file-or-directory-that-may-be-security-sensitive-and-is-not-blocked-by-file-system-access-api-"></a></p>
+<h3 id="i-found-a-local-file-or-directory-that-may-be-security-sensitive-and-is-not-blocked-by-file-system-access-api---is-this-a-security-bug">I found a local file or directory that may be security-sensitive and is not blocked by File System Access API - is this a security bug?</h3>
+<p>The File System Access API maintains a <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/file_system_access/chrome_file_system_access_permission_context.cc;l=368-493;drc=bbf74ad62c20afa8b0e51efbced167d0b91be8a1">blocklist</a>
+of directories and files that may be sensitive, such as systems files, and if user
+chooses a file or a directory matching the list on a site using File System
+Access API, the access is blocked.</p>
+<p>The blocklist is designed to prevent users from <em>accidentally</em> granting access
+to sensitive files, by listing well-known, security-sensitive locations, as a
+defense in-depth strategy. Therefore, evading the blocklist in some manner is
+not deemed as a security bug, especially as it requires user&#39;s explicit
+selection on a file or a directory from the file picker.</p>
+<p>In particular, the blocklist cannot exhaustively enumerate every third-party
+application, shell, editor, package manager, or build tool configuration file,
+dotfile, or project script that another local program might read or execute
+when run by the user. Once a user explicitly selects a file or directory in the
+file picker, the site is granted access to the user-selected location; finding
+an unblocked application configuration file or project file is not considered a
+security bug.</p>
+<p><a name="TOC-I-can-download-a-file-with-an-unsafe-extension-but-a-different-extension-or-file-type-is-shown-to-the-user-"></a></p>
+<h3 id="i-can-download-a-file-with-an-unsafe-extension-but-a-different-extension-or-file-type-is-shown-to-the-user---is-this-a-security-bug">I can download a file with an unsafe extension but a different extension or file type is shown to the user - is this a security bug?</h3>
+<p>See <a href="#TOC-The-wrong-description-for-a-file-type-is-added-by-Chrome-">file types</a>.</p>
+<p><a name="TOC-Extensions-for-downloaded-files-are-not-shown-in-a-file-dialog-"></a></p>
+<h3 id="extensions-for-downloaded-files-are-not-shown-in-a-file-dialog---is-this-a-security-bug">Extensions for downloaded files are not shown in a file dialog - is this a security bug?</h3>
+<p>See <a href="#TOC-The-wrong-description-for-a-file-type-is-added-by-Chrome-">file types</a>.</p>
+<p><a name="TOC-The-wrong-description-for-a-file-type-is-added-by-Chrome-"></a></p>
+<h3 id="the-wrong-description-for-a-file-type-is-added-by-chrome---is-this-a-security-bug">The wrong description for a file type is added by Chrome - is this a security bug?</h3>
+<p>Chrome tries to let users know what they will be saving and downloading before
+they do so. Often operating systems will obscure a file’s type or extension and
+there is little we can do about that. Chrome shows information to help users
+make these decisions, both in Chrome-owned UI and in information that Chrome
+passes to OS-owned UI. If this information can be manipulated from a web site to
+mislead a user, then we’d like to hear about it.
+<a href="https://crbug.com/1137247">Example</a>.</p>
+<p><a name="TOC-I-can-download-a-file-and-OS-indicators-for-its-provenance-are-not-applied-"></a></p>
+<h3 id="i-can-download-a-file-and-os-indicators-for-its-provenance-are-not-applied---is-this-a-security-bug">I can download a file and OS indicators for its provenance are not applied - is this a security bug?</h3>
+<p>Chrome attempts to label files downloaded from the internet with metadata using
+operating system APIs where these are available – for instance applying the Mark
+of the Web on Windows. This is often not possible (for instance on non-NTFS file
+systems on Windows, or for files inside downloaded archives) or disabled by
+policy. If a web site can cause Chrome to download a file without Chrome then
+adding this metadata as usual, we’d like to hear about it.</p>
+<p><a name="TOC-I-can-cause-a-hard-or-soft-link-to-be-written-to-a-directory-bypassing-normal-OS-blocks-"></a></p>
+<h3 id="i-can-cause-a-hard-or-soft-link-to-be-written-to-a-directory-bypassing-normal-os-blocks---is-this-a-security-bug">I can cause a hard or soft link to be written to a directory bypassing normal OS blocks - is this a security bug?</h3>
+<p>Chrome should not allow filesystem links to be created by initiating a download.
+<a href="https://crbug.com/1140417">Example</a>. <a href="https://crbug.com/1137247#c12">Example</a>.</p>
+<p><a name="TOC-I-can-hijack-a-user-gesture-and-trick-a-user-into-accepting-a-permission-or-downloading-a-file-"></a></p>
+<h3 id="i-can-hijack-a-user-gesture-and-trick-a-user-into-accepting-a-permission-or-downloading-a-file---is-this-a-security-bug">I can hijack a user gesture and trick a user into accepting a permission or downloading a file - is this a security bug?</h3>
+<p>Chrome tries to design its prompts to select safe defaults. If a prompt can
+accidentally be accepted without the user having an opportunity to make a
+decision about the prompt then we’d like to know. Examples might include poor
+defaults so that a user holding down an enter key might accept a dialog they
+would want to dismiss. <a href="https://crbug.com/854455#c11">Example</a>.</p>
+<p>Note that a user navigating to a download will cause a file to be
+<a href="https://crbug.com/1114592">downloaded</a>.</p>
+<p><a name="TOC-security-properties-not-inherited-using-contextual-menu-"></a></p>
+<h3 id="sandboxcspetc-security-properties-are-not-inherited-when-navigating-using-the-middle-clickcontextual-menu---is-this-a-security-bug">Sandbox/CSP/etc... security properties are not inherited when navigating using the middle-click/contextual-menu - is this a security bug?</h3>
+<p>The security properties of the document providing the URL are not used/inherited
+when the user deliberately opens a link in a popup using one of:</p>
+<ul>
+<li>Ctrl + left-click (Open link in new tab)</li>
+<li>Shift + left-click (Open link in new window)</li>
+<li>Middle-click (Open a link in a new tab)</li>
+<li>Right-click &gt; &quot;Open link in ...&quot;</li>
+</ul>
+<p>These methods of following a link have more or less the same implications as the
+user copying the link&#39;s URL and pasting it into a newly-opened window. We treat
+them as user-initiated top-level navigations, and as such will not apply or
+inherit policy restrictions into the new context</p>
+<p>Example of security related properties:</p>
+<ul>
+<li>Content-Security-Policy</li>
+<li>Cross-Origin-Embedder-Policy</li>
+<li>Cross-Origin-Opener-Policy</li>
+<li>Origin</li>
+<li>Referrer</li>
+<li>Sandbox</li>
+<li>etc...</li>
+</ul>
+<p>These browser&#39;s actions/shortcuts are specific to Chrome. They are different
+from the behavior specified by the web-platform, such as using executing
+<code>window.open()</code> or opening a link with the <code>target=_blank</code> attribute.</p>
+<p><a name="TOC-What-is-the-threat-model-for-Chrome-for-Testing"></a></p>
+<h3 id="what-is-the-threat-model-for-chrome-for-testing">What is the threat model for Chrome for Testing?</h3>
+<p><a href="https://developer.chrome.com/blog/chrome-for-testing">Chrome for Testing</a> is a
+distribution of current and older versions of Chrome. It does not auto-update.
+Therefore, it may lack recent fixes for security bugs. Security bugs can more
+easily be exploited once their fixes are <a href="updates">published in the main Chromium source
+code repository</a> and so it is unsafe to use Chrome for Testing to
+access any untrusted website.  You should use Chrome for Testing only for
+browser automation and testing purposes, consuming only trustworthy content.
+<code>chrome-headless-shell</code> also lacks auto-updates and so, for the same reason,
+should only be used to consume trusted content.</p>
+<p><a name="TOC-What-makes-a-ui-spoof-interesting-to-report"></a></p>
+<h3 id="what-makes-a-ui-spoof-interesting-to-report">What makes a UI spoof interesting to report?</h3>
+<p>As a general rule, a UI spoof is only a security bug if <em>either</em>:</p>
+<ul>
+<li>There is evidence that it is actually being exploited to trick users in the
+field, or</li>
+<li>You can make a convincing case that it would mislead a user into making a
+<em>security decision</em> incorrectly, or otherwise taking an action with actual
+security consequences for that user</li>
+</ul>
+<p>That means that for example these are interesting security bugs:</p>
+<ul>
+<li>A spoof that convinces the user they are currently on origin A when in fact
+they are on origin B</li>
+<li>A spoof that convinces the user that a permission request is from origin A
+when in fact it is from origin B</li>
+<li>A spoof that convinces the user they are installing extension A when in fact
+they are installing extension B</li>
+</ul>
+<p>and so on, but for example these are <strong>not</strong> interesting security bugs:</p>
+<ul>
+<li>A spoof that convinces the user to copy text they didn&#39;t expect to their
+clipboard</li>
+<li>A spoof that convinces the user to download a file they didn&#39;t expect (simply
+downloading a file is not a security decision - running it is though!)</li>
+<li>A spoof that convinces the user to navigate to a link they didn&#39;t expect</li>
+<li>A spoof that convinces the user to click a browser UI element they weren&#39;t
+intending to <em>unless you can show security consequences for them doing so</em>.</li>
+</ul>
+<p>We often tend to look at what a &quot;reasonable and prudent&quot; user would do in a
+situation, meaning a user who is taking basic security precautions like paying
+attention to security cues given in the product UI and who is, while not a
+security expert or even particularly security-minded, trying to take basic
+precautions to stay safe online. That doesn&#39;t mean bugs that require user error
+are always out of scope, but it does mean that spoofs which would not deceive
+a user being reasonable and prudent are out of scope.</p>
+<p><a name="TOC-As-a-user_I-can-bypass-an-enterprise-policy-is-this-a-security-bug_"></a></p>
+<h3 id="as-a-user-i-can-bypass-an-enterprise-policy---is-this-a-security-bug">As a user, I can bypass an enterprise policy - is this a security bug?</h3>
+<p>In general, no. Enterprise policies applying to running, enterprise-enrolled
+Chrome instances are not by default a security boundary. It may be a functional
+bug in the implementation of the enterprise policy, or it may be intended
+behavior, but either way actions by the local user are generally considered to
+be &quot;local attacks&quot; and outside our threat model.</p>
+<p>ChromeOS is an exception to this. On ChromeOS, Chrome integrates more deeply
+with the host operating system and is able to provide stronger guarantees about
+policies.  Therefore, an enterprise policy bypass by a local user of a ChromeOS
+device may still be a security bug.</p>
+<h2 id="areas-outside-chromes-threat-model">Areas outside Chrome&#39;s Threat Model</h2>
+<p><a name="TOC-Are-privacy-issues-considered-security-bugs-"></a></p>
+<h3 id="are-privacy-issues-considered-security-bugs">Are privacy issues considered security bugs?</h3>
+<p>No. The Chrome Privacy team treats privacy issues, such as leaking information
+from Incognito, fingerprinting, and bugs related to deleting browsing data as
+functional bugs.</p>
+<p>Privacy issues are not considered under the security vulnerability rewards
+program; the <a href="severity-guidelines">severity guidelines</a> outline the types of
+bugs that are considered security vulnerabilities in more detail.</p>
+<p><a name="TOC-What-are-the-security-and-privacy-guarantees-of-Incognito-mode-"></a></p>
+<h3 id="what-are-the-security-and-privacy-guarantees-of-incognito-mode">What are the security and privacy guarantees of Incognito mode?</h3>
+<p>Bugs in Incognito mode are tracked as privacy bugs, not security bugs.</p>
+<p>The <a href="https://support.google.com/chrome/?p=cpn_incognito">Help Center</a> explains
+what privacy protections Incognito mode attempts to enforce. In particular,
+please note that Incognito is not a “do not track” mode, and it does not hide
+aspects of your identity from web sites. Chrome does offer a way to send Do Not
+Track request to servers; see chrome://settings/?search=do+not+track</p>
+<p>When in Incognito mode, Chrome does not store any new history, cookies, or other
+state in non-volatile storage. However, Incognito windows will be able to access
+some previously-stored state, such as browsing history.</p>
+<p><a name="TOC-Are-XSS-filter-bypasses-considered-security-bugs-"></a></p>
+<h3 id="are-xss-filter-bypasses-considered-security-bugs">Are XSS filter bypasses considered security bugs?</h3>
+<p>No. Chromium once contained a reflected XSS filter called the <a href="https://www.chromium.org/developers/design-documents/xss-auditor">XSSAuditor</a>
+that was a best-effort second line of defense against reflected XSS flaws found
+in web sites. The XSS Auditor was <a href="https://groups.google.com/a/chromium.org/forum/#!msg/blink-dev/TuYw-EZhO9g/blGViehIAwAJ">removed in Chrome 78</a>.
+Consequently, Chromium no longer takes any special action in response to an
+X-XSS-Protection header.</p>
+<p><a name="TOC-Are-denial-of-service-issues-considered-security-bugs-"></a></p>
+<h3 id="are-denial-of-service-issues-considered-security-bugs">Are denial of service issues considered security bugs?</h3>
+<p>No. Denial of Service (DoS) issues are treated as <strong>abuse</strong> or <strong>stability</strong>
+issues rather than security vulnerabilities.</p>
+<ul>
+<li>If you find a reproducible crash (e.g. a way to hit a <code>CHECK</code>),
+we encourage you to <a href="https://issues.chromium.org/new">report it</a>.</li>
+<li>If you find a site that is abusing the user experience (e.g. preventing you
+from leaving a site), we encourage you to <a href="https://issues.chromium.org/new">report
+it</a>.</li>
+</ul>
+<p>DoS issues are not considered under the security vulnerability rewards program;
+the <a href="severity-guidelines">severity guidelines</a> outline the types of bugs that
+are considered security vulnerabilities in more detail.</p>
+<p><a name="TOC-Why-aren-t-physically-local-attacks-in-Chrome-s-threat-model-"></a></p>
+<h3 id="why-arent-physically-local-attacks-in-chromes-threat-model">Why aren&#39;t physically-local attacks in Chrome&#39;s threat model?</h3>
+<p>People sometimes report that they can compromise Chrome by installing a
+malicious DLL in a place where Chrome will load it, by hooking APIs (e.g. <a href="https://crbug.com/130284">Issue
+130284</a>), or by otherwise altering the configuration
+of the device.</p>
+<p>We consider these attacks outside Chrome&#39;s threat model, because there is no way
+for Chrome (or any application) to defend against a malicious user who has
+managed to log into your device as you, or who can run software with the
+privileges of your operating system user account. Such an attacker can modify
+executables and DLLs, change environment variables like <code>PATH</code>, change
+configuration files, read any data your user account owns, email it to
+themselves, and so on. Such an attacker has total control over your device,
+and nothing Chrome can do would provide a serious guarantee of defense. This
+problem is not special to Chrome ­— all applications must trust the
+physically-local user.</p>
+<p>There are a few things you can do to mitigate risks from people who have
+physical control over <strong>your</strong> computer, in certain circumstances.</p>
+<ul>
+<li>To stop people from reading your data in cases of device theft or loss, use
+full disk encryption (FDE). FDE is a standard feature of most operating
+systems, including Windows Vista and later, Mac OS X Lion and later, and
+some distributions of Linux. (Some older versions of Mac OS X had partial
+disk encryption: they could encrypt the user’s home folder, which contains
+the bulk of a user’s sensitive data.) Some FDE systems allow you to use
+multiple sources of key material, such as the combination of both a
+password and a key file on a USB token. When available, you should use
+multiple sources of key material to achieve the strongest defense. Chrome
+OS encrypts users’ home directories.</li>
+<li>If you share your computer with other people, take advantage of your
+operating system’s ability to manage multiple login accounts, and use a
+distinct account for each person. For guests, Chrome OS has a built-in
+Guest account for this purpose.</li>
+<li>Take advantage of your operating system’s screen lock feature.</li>
+<li>You can reduce the amount of information (including credentials like
+cookies and passwords) that Chrome will store locally by using Chrome&#39;s
+Content Settings (chrome://settings/content) and turning off the form
+auto-fill and password storage features
+(<a href="chrome://settings/search#password">chrome://settings/search#password</a>).</li>
+</ul>
+<p>There is almost nothing you can do to mitigate risks when using a <strong>public</strong>
+computer.</p>
+<ul>
+<li>Assume everything you do on a public computer will become, well, public.
+You have no control over the operating system or other software on the
+machine, and there is no reason to trust the integrity of it.</li>
+<li>If you must use such a computer, use Incognito mode and close all Incognito
+windows when you are done browsing to limit the amount of data you leave
+behind. Note that Incognito mode <strong>provides no protection</strong> if the system has
+already been compromised as described above.</li>
+</ul>
+<p><a name="TOC-Why-aren-t-compromised-infected-machines-in-Chrome-s-threat-model-"></a></p>
+<h3 id="why-arent-compromisedinfected-machines-in-chromes-threat-model">Why aren&#39;t compromised/infected machines in Chrome&#39;s threat model?</h3>
+<p>Although the attacker may now be remote, the consequences are essentially the
+same as with physically-local attacks. The attacker&#39;s code, when it runs as
+your user account on your machine, can do anything you can do. (See also
+<a href="https://web.archive.org/web/20160311224620/https://technet.microsoft.com/en-us/library/hh278941.aspx">Microsoft&#39;s Ten Immutable Laws Of
+Security</a>.)</p>
+<p>Other cases covered by this section include leaving a debugger port open to
+the world, remote shells, and so forth.</p>
+<p><a name="TOC-A-compromised-GPU-process-can-attack-the-browser-via-X11-"></a></p>
+<h3 id="a-compromised-gpu-process-can-attack-the-browser-via-x11-is-this-a-security-bug">A compromised GPU process can attack the browser via X11. Is this a security bug?</h3>
+<p>No. The X11 protocol does not isolate clients from each other. Any process with
+an X11 connection can already inject input, log keystrokes, capture the screen,
+and change desktop configuration (e.g. XSETTINGS) for every application on the
+display. Attacks that require an X11 connection, such as getting the browser
+process to load a GTK module via XSETTINGS, therefore grant nothing beyond what
+the attacker already has. See the <a href="x11-threat-model">X11 threat model</a> for
+details.</p>
+<p><a name="TOC-If-a-website-can-open-an-android-app-via-an-intent"></a></p>
+<h3 id="if-a-website-can-open-an-android-app-via-an-intent-is-this-a-security-bug">If a website can open an Android app via an intent is this a security bug?</h3>
+<p>No - websites can link to external handlers or applications - but there are
+restrictions around requiring a user gesture and the type of intent that can
+be launched. Full details are available in the
+<a href="https://github.com/chromium/chromium/blob/HEAD/components/external_intents/README.md">external_intents</a> documentation.</p>
+<p><a name="TOC-Does-entering-JavaScript:-URLs-in-the-URL-bar-or-running-script-in-the-developer-tools-mean-there-s-an-XSS-vulnerability-"></a></p>
+<h3 id="does-entering-javascript-urls-in-the-url-bar-or-running-script-in-the-developer-tools-mean-theres-an-xss-vulnerability">Does entering JavaScript: URLs in the URL bar or running script in the developer tools mean there&#39;s an XSS vulnerability?</h3>
+<p><a href="https://crbug.com/81697">No</a>. Chrome does not attempt to prevent the user from
+knowingly running script against loaded documents, either by entering script in
+the Developer Tools console or by typing a JavaScript: URI into the URL bar.
+Chrome and other browsers do undertake some efforts to prevent <em>paste</em> of script
+URLs in the URL bar (to limit
+<a href="https://blogs.msdn.microsoft.com/ieinternals/2011/05/19/socially-engineered-xss-attacks/">social-engineering</a>)
+but users are otherwise free to invoke script against pages using either the URL
+bar or the DevTools console.</p>
+<p><a name="TOC-Does-executing-JavaScript-from-a-bookmark-mean-there-s-an-XSS-vulnerability-"></a></p>
+<h3 id="does-executing-javascript-from-a-bookmark-or-the-home-button-mean-theres-an-xss-vulnerability">Does executing JavaScript from a bookmark or the Home button mean there&#39;s an XSS vulnerability?</h3>
+<p>No. Chromium allows users to create bookmarks to JavaScript URLs that will run
+on the currently-loaded page when the user clicks the bookmark; these are called
+<a href="https://en.wikipedia.org/wiki/Bookmarklet">bookmarklets</a>.</p>
+<p>Similarly, the Home button may be configured to invoke a JavaScript URL when clicked.</p>
+<p><a name="TOC-Does-executing-JavaScript-in-a-PDF-file-mean-there-s-an-XSS-vulnerability-"></a></p>
+<h3 id="does-executing-javascript-in-a-pdf-file-mean-theres-an-xss-vulnerability">Does executing JavaScript in a PDF file mean there&#39;s an XSS vulnerability?</h3>
+<p>No. PDF files have the ability to run JavaScript, usually to facilitate field
+validation during form fill-out. Note that the set of bindings provided to
+the PDF are more limited than those provided by the DOM to HTML documents, nor
+do PDFs get any ambient authority based upon the domain from which they are
+served (e.g. no document.cookie).</p>
+<p><a name="TOC-Are-PDF-files-static-content-in-Chromium-"></a></p>
+<h3 id="are-pdf-files-static-content-in-chromium">Are PDF files static content in Chromium?</h3>
+<p>No. PDF files have some powerful capabilities including invoking printing or
+posting form data. To mitigate abuse of these capabilities, such as beaconing
+upon document open, we require interaction with the document (a &quot;user gesture&quot;)
+before allowing their use.</p>
+<p><a name="TOC-Are-non_committed-URLs-entered-by-the-user-considered-URL-spoofs-"></a></p>
+<h3 id="are-non-committed-urls-entered-by-the-user-considered-url-spoofs">Are non-committed URLs entered by the user considered URL spoofs?</h3>
+<p>No. When a user enters a URL into the address bar (whether by typing,
+copy/pasting, drag and drop, or otherwise), Chrome intentionally displays
+it instead of the last committed URL of the currently active page, until
+both the navigation begins and the new page commits. During this time, the
+currently active page can change its appearance to mimic the new URL while
+its own URL is not shown. However, the active page does not have control
+over which URL the user entered into the address bar, limiting the
+effectiveness of a spoof attempt. The new
+<a href="https://blog.chromium.org/2023/05/an-update-on-lock-icon.html">lock-replacement icon</a>
+is also not present in this state, and in many cases (i.e., once the new
+navigation has started), the loading indicators are present.</p>
+<p>The confusion between the non-committed URL and the active page&#39;s
+appearance is a consequence of the address bar needing to serve two roles:
+showing both where you are and where you are going. In general, we don&#39;t think
+this technique can deceive a <a href="#TOC-What-makes-a-ui-spoof-interesting-to-report">reasonable and prudent
+user</a>.</p>
+<p>See also <a href="https://crbug.com/378932942">https://crbug.com/378932942</a> for context.</p>
+<p><a name="TOC-What-about-URL-spoofs-using-Internationalized-Domain-Names-IDN-"></a></p>
+<h3 id="what-about-url-spoofs-using-internationalized-domain-names-idn">What about URL spoofs using Internationalized Domain Names (IDN)?</h3>
+<p>We try to balance the needs of our international userbase while protecting users
+against confusable homograph attacks. Despite this, there are a list of known
+IDN display issues we are still working on.</p>
+<ul>
+<li>Please see <a href="https://docs.google.com/document/d/1_xJz3J9kkAPwk3pma6K3X12SyPTyyaJDSCxTfF8Y5sU">this document</a></li>
+</ul>
+<p>for a list of known issues and how we handle them.</p>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/idn.md">This document</a></li>
+</ul>
+<p>describes Chrome&#39;s IDN policy in detail.</p>
+<p><a name="TOC-Chrome-silently-syncs-extensions-across-devices.-Is-this-a-security-vulnerability-"></a></p>
+<h3 id="chrome-silently-syncs-extensions-across-devices-is-this-a-security-vulnerability">Chrome silently syncs extensions across devices. Is this a security vulnerability?</h3>
+<p>This topic has been moved to the <a href="https://chromium.googlesource.com/chromium/src/+/main/extensions/docs/security_faq.md">Extensions Security FAQ</a>.</p>
+<p><a name="TOC-Why-arent-null-pointer-dereferences-considered-security-bugs-"></a></p>
+<h3 id="why-arent-null-pointer-dereferences-considered-security-bugs">Why aren&#39;t null pointer dereferences considered security bugs?</h3>
+<p>Null pointer dereferences with consistent, small, fixed offsets are not considered
+security bugs. A read or write to the NULL page results in a non-exploitable crash.
+If the offset is larger than 32KB, or if there&#39;s uncertainty about whether the
+offset is controllable, it is considered a security bug.</p>
+<p>All supported Chrome platforms do not allow mapping memory in at least the first
+32KB of address space:</p>
+<ul>
+<li>Windows: Windows 8 and later disable mapping the first 64k of address space;
+see page 33 of <a href="https://media.blackhat.com/bh-us-12/Briefings/M_Miller/BH_US_12_Miller_Exploit_Mitigation_Slides.pdf">Exploit Mitigation Improvements in Windows
+8</a> <a href="https://web.archive.org/web/20230608131033/https://media.blackhat.com/bh-us-12/Briefings/M_Miller/BH_US_12_Miller_Exploit_Mitigation_Slides.pdf">[archived]</a>.</li>
+<li>Mac and iOS: by default, the linker reserves the first 4GB of address space
+with the <code>__PAGEZERO</code> segment for 64-bit binaries.</li>
+<li>Linux: the default <code>mmap_min_addr</code> value for supported distributions is at
+least 64KB.</li>
+<li>Android: <a href="https://android.googlesource.com/platform/cts/+/496152a250d10e629d31ac90b2e828ad77b8d70a/tests/tests/security/src/android/security/cts/KernelSettingsTest.java#43">CTS</a> enforces that <code>mmap_min_addr</code> is set to
+exactly 32KB.</li>
+<li>ChromeOS: the <a href="https://source.chromium.org/search?q=%22CONFIG_DEFAULT_MMAP_MIN_ADDR%3D%22%20path:chromeos%2F&amp;ss=chromiumos%2Fchromiumos%2Fcodesearch:src%2Fthird_party%2Fkernel%2F">ChromeOS kernels</a> set the default
+<code>mmap_min_addr</code> value to at least 32KB.</li>
+<li>Fuchsia: the <a href="https://cs.opensource.google/fuchsia/fuchsia/+/main:zircon/kernel/arch/arm64/include/arch/kernel_aspace.h;l=20;drc=eeceea01eee2615de74b1339bcf6e6c2c6f72769">userspace base address</a> begins at 2MB;
+this is configured per-platform but set to the same value on all platforms.</li>
+</ul>
+<p><a name="TOC-Indexing-a-container-out-of-bounds-hits-a-libcpp-verbose-abort--is-this-a-security-bug-"></a></p>
+<h3 id="indexing-a-container-out-of-bounds-hits-a-__libcpp_verbose_abort-is-this-a-security-bug">Indexing a container out of bounds hits a __libcpp_verbose_abort, is this a security bug?</h3>
+<p><code>std::vector</code> and other containers are now protected by libc++ hardening on all
+platforms <a href="https://crbug.com/1335422">crbug.com/1335422</a>. Indexing these
+containers out of bounds is now a safe crash - if a proof-of-concept reliably
+causes a crash in production builds we consider these to be functional rather than
+security issues.</p>
+<p><a name="TOC-Are-stack-overflows-considered-security-bugs-"></a></p>
+<h3 id="are-stack-overflows-considered-security-bugs">Are stack overflows considered security bugs?</h3>
+<p>No. Guard pages mean that stack overflows are considered unexploitable, and
+are regarded as <a href="#TOC-Are-denial-of-service-issues-considered-security-bugs-">denial of service bugs</a>.
+The only exception is if an attacker can jump over the guard pages allocated by
+the operating system and avoid accessing them, e.g.:</p>
+<ul>
+<li>A frame with a very large stack allocation.</li>
+<li>C variable length array with an attacker-controlled size.</li>
+<li>A call to <code>alloca()</code> with an attacker-controlled size.</li>
+</ul>
+<p><a name="TOC-Are-tint-ICE-considered-security-bugs-"></a></p>
+<h3 id="are-tint-shader-compiler-internal-compiler-errors-considered-security-bugs">Are tint shader compiler Internal Compiler Errors considered security bugs?</h3>
+<p>No. When tint fails and throws an ICE (Internal Compiler Error), it will
+terminate the process in an intentional manner and produce no shader output.
+Thus there is not security bug that follows from it.</p>
+<p><a name="TOC-Are-enterprise-admins-considered-privileged-"></a></p>
+<h3 id="are-enterprise-admins-considered-privileged">Are enterprise admins considered privileged?</h3>
+<p>Chrome <a href="#TOC-Why-aren-t-physically-local-attacks-in-Chrome-s-threat-model-">can&#39;t guard against local
+attacks</a>.
+Enterprise administrators often have full control over the device. Does Chrome
+assume that enterprise administrators are as privileged and powerful as other
+local users? It depends:</p>
+<ul>
+<li>On a fully managed machine, for example a <a href="https://docs.microsoft.com/en-us/windows-server/identity/ad-fs/deployment/join-a-computer-to-a-domain">domain-joined Windows
+machine</a>,
+a device managed via a Mobile Device Management product, or a device with
+Chrome managed via machine-level <a href="https://support.google.com/chrome/?p=cloud_management">Chrome Browser Cloud
+Management</a>,
+the administrator effectively has privileges to view and mutate any state on
+the device. Chrome <a href="../enterprise/add_new_policy">policy implementations</a>
+should still guide enterprise admins to the most user-respectful defaults
+and policy description text should clearly describe the nature of the
+capabilities and the user impact of them being granted.</li>
+<li>On an unmanaged machine, Chrome profiles <a href="https://support.google.com/chrome/?p=manage_profiles">can be managed via cloud
+policy</a>
+if users sign into Chrome using a managed account. These policies are called
+<em>user policies</em>. In this scenario, the Chrome enterprise administrator should
+have privileges only to <em>view and mutate state within the profile that they
+administer</em>. Any access outside that profile requires end-user consent.</li>
+</ul>
+<p>Chrome administrators can force-install Chrome extensions without permissions
+prompts, so the same restrictions must apply to the Chrome extension APIs.</p>
+<p>Chrome has a long history of policy support with many hundreds of policies. We
+recognize that there may exist policies or policy combinations that can provide
+capabilities outside of the guidance provided here. In cases of clear violation
+of user expectations, we will attempt to remedy these policies and we will apply
+the guidance laid out in this document to any newly added policies.</p>
+<p>See the <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/web-platform-security-guidelines.md#enterprise-policies">Web Platform Security
+guidelines</a>
+for more information on how enterprise policies should interact with Web
+Platform APIs.</p>
+<p><a name="TOC-Can-I-use-EMET-to-help-protect-Chrome-against-attack-on-Microsoft-Windows-"></a></p>
+<h3 id="can-i-use-emet-to-help-protect-chrome-against-attack-on-microsoft-windows">Can I use EMET to help protect Chrome against attack on Microsoft Windows?</h3>
+<p>There are <a href="https://sites.google.com/a/chromium.org/dev/Home/chromium-security/chromium-and-emet">known compatibility
+problems</a>
+between Microsoft&#39;s EMET anti-exploit toolkit and some versions of Chrome. These
+can prevent Chrome from running in some configurations. Moreover, the Chrome
+security team does not recommend the use of EMET with Chrome because its most
+important security benefits are redundant with or superseded by built-in attack
+mitigations within the browser. For users, the very marginal security benefit is
+not usually a good trade-off for the compatibility issues and performance
+degradation the toolkit can cause.</p>
+<p><a name="TOC-Are-MiraclePtr-protected-use-after-frees-security-bugs-"></a></p>
+<h3 id="are-miracleptr-protected-use-after-frees-security-bugs">Are MiraclePtr protected use-after-frees security bugs?</h3>
+<p>No. <a href="https://chromium.googlesource.com/chromium/src/+/main/base/memory/raw_ptr.md">&quot;MiraclePtr&quot;</a>
+is a technology designed to deterministically prevent exploitation of
+use-after-free bugs. Address sanitizer is aware of MiraclePtr and will report
+on whether a given use-after-free bug is protected or not:</p>
+<pre>
+MiraclePtr Status: PROTECTED
+The crash occurred while a raw_ptr&lt;T&gt; object containing a dangling pointer was being dereferenced.
+MiraclePtr should make this crash non-exploitable in regular builds.</pre>
+<p>or</p>
+<pre>
+MiraclePtr Status: NOT PROTECTED
+No raw_ptr&lt;T&gt; access to this region was detected prior to the crash.</pre>
+<p>Only the NOT PROTECTED case indicates an actual security bug, hence reports
+need to include this section of the ASAN trace showing the MiraclePtr status.</p>
+<p>Note that we are interested in the PROTECTED case as well, but these will be
+treated as functional bugs.</p>
+<p><a name="TOC-Are-detected-dangling-pointers-security-bugs-"></a></p>
+<h3 id="are-detected-dangling-pointers-security-bugs">Are detected dangling pointers security bugs?</h3>
+<p>No. Chromium can be instrumented to detect <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/dangling_ptr.md">dangling
+pointers</a>:</p>
+<p>Notable build flags are:</p>
+<ul>
+<li><code>enable_dangling_raw_ptr_checks=true</code></li>
+<li><code>use_raw_ptr_asan_unowned_impl=true</code></li>
+</ul>
+<p>Notable runtime flags are:</p>
+<ul>
+<li><code>--enable-features=PartitionAllocDanglingPtr</code></li>
+</ul>
+<p>It is important to note that detecting a dangling pointer alone does not
+indicate a security vulnerability. A dangling pointer becomes a security
+vulnerability only when it is dereferenced and used after it becomes dangling.
+Reports are considered vulnerabilities only when there is a demonstrable way
+to show a memory corruption. e.g. a POC causing a crash with ASAN
+<strong>without the flags above</strong>.</p>
+<p>Note that we are interested in dangling pointer findings as well, but these
+will be treated as functional bugs and assigned to feature teams to be fixed
+in the same manner as other functional bugs.</p>
+<p><a name="TOC-hard-coded-lists"></a></p>
+<h3 id="my-domain-is-on-the-public-suffix-list--hsts-preload-list--etc-upstream-but-this-is-not-yet-reflected-in-chrome-is-this-a-security-bug">My domain is on the [Public Suffix List / HSTS preload list / etc.] upstream but this is not yet reflected in Chrome! Is this a security bug?</h3>
+<p>Chrome does not make any guarantees about how soon additions to or removals from
+external lists like the <a href="https://hstspreload.org">HSTS preload list</a> or the
+<a href="https://publicsuffix.org/">Public Suffix List (PSL)</a> will be incorporated into Chrome.
+If you believe Chrome&#39;s copies of these lists are notably out-of-date, we are
+happy to field bug reports but we do not consider this to be a vulnerability.</p>
+<h3 id="i-can-demonstrate-memory-corruption-in-a-test-binary">I can demonstrate memory corruption in a test binary!</h3>
+<p>Test binaries (<code>unit_tests</code>, <code>browser_tests</code>, etc) do not have the same security
+scrutiny as <code>chrome</code> or <code>d8</code>. Memory corruption in these binaries does not harm
+Chrome&#39;s users, and are not valid reports. Please ensure all of your PoCs
+demonstrate an issue in <code>chrome</code> or <code>d8</code>.</p>
+<h3 id="i-can-make-chrome-perform-potentially-insecure-ntlm-requests-to-an-attacker-controlled-server-is-this-a-security-bug">I can make Chrome perform potentially insecure NTLM requests to an attacker controlled server. Is this a security bug?</h3>
+<p>Chrome generally does not treat the observation or capture of an NTLMv2
+authentication response, by itself, as a Chrome security vulnerability. NTLM is
+a Windows authentication mechanism provided by the operating system, and NTLM
+authentication responses are protocol messages intended to be sent to an
+authentication peer.</p>
+<p>Microsoft has deprecated all versions of NTLM, including NTLMv2, and recommends
+migrating applications to Negotiate/Kerberos. NTLMv1 has already been removed
+from Windows 11 version 24H2 and Windows Server 2025, and Microsoft has
+announced plans to disable NTLM by default in future major Windows releases.</p>
+<p>For this reason, reports whose only result is obtaining an NTLMv2
+challenge-response through expected Windows authentication behavior are
+generally considered an operating-system/network-authentication configuration
+issue rather than a Chrome vulnerability. We recommend using a current, fully
+patched version of Windows and following Microsoft&#39;s guidance for reducing or
+disabling NTLM and migrating to Kerberos where possible.</p>
+<p>We may still investigate cases where Chrome causes authentication in
+circumstances where it should not—for example, a demonstrated bypass of Chrome&#39;s
+authentication allowlisting, origin/security boundaries, or another Chrome
+security control. Chrome provides enterprise controls such as
+<code>AuthServerAllowlist</code> governing servers permitted to use integrated
+authentication.</p>
+<p>Reports should therefore demonstrate a Chrome-specific security-boundary bypass
+rather than only the ability to capture an NTLMv2 authentication response.</p>
+<h2 id="ai-features">AI Features</h2>
+<p>Chrome deeply integrates AI both in user-facing features like <a href="https://gemini.google/overview/gemini-in-chrome">Gemini Live
+in Chrome</a> , “Help me write”
+and Devtools assistants and in internal models that help block unwanted
+notifications or improve page loading.</p>
+<p>Chrome does not treat misleading, misaligned or unsafe model output as a
+vulnerability. Please report such safety violations using in-product feedback
+mechanisms.</p>
+<p><a name="TOC-AI-prompt-innappropriate-output"></a></p>
+<h3 id="entering-a-prompt-into-an-ai-features-input-surface-causes-inappropriate-output">Entering a prompt into an AI feature’s input surface causes inappropriate output?</h3>
+<p>Chrome AI features include guardrails to ensure that their output is safe and
+reasonable but these guidelines do not form a security boundary. Any prompt that
+causes these guidelines to be violated is not a security issue in Chrome. Use
+in-product mechanisms to thumbs up / thumbs down results, or click on
+‘send feedback’ to report other inappropriate content.</p>
+<p><a name="TOC-AI-prompt-leaks-system-prompt"></a></p>
+<h3 id="entering-a-prompt-into-an-ai-features-input-surface-leaks-the-system-prompt-or-provides-access-to-backend-services">Entering a prompt into an AI feature’s input surface leaks the system prompt, or provides access to backend services?</h3>
+<p>For AI features implemented using a Google backend it is possible that some
+prompted output could be a valid abuse report, but will not be considered to be
+bugs in Chrome. These should be reported via the <a href="https://bughunters.google.com/about/rules/google-friends/5238081279623168/abuse-vulnerability-reward-program-rules">Google Abuse
+VRP</a>
+or <a href="https://bughunters.google.com/">Google VRP</a> depending on the severity of the
+issue.</p>
+<p><a name="TOC-AI-prompt-can-be-copy-pasted"></a></p>
+<h3 id="entering-a-prompt-into-an-ai-features-input-surface-causes-information-to-leak-or-actions-to-happen">Entering a prompt into an AI feature’s input surface causes information to leak, or actions to happen?</h3>
+<p>Chrome AI features trust what people using Chrome supply in input fields, audio
+inputs, or other Chrome input surfaces. Tricking a user into entering a
+malicious prompt (e.g. by copy/pasting from a site) is not considered to be a
+security boundary as many people copy &amp; paste text and urls as they use features
+in Chrome.</p>
+<p><a name="TOC-AI-public-urls-are-not-leaks"></a></p>
+<h3 id="url-paths-parameters-or-fragments-can-influence-the-output-of-chrome-ai-features">Url paths, parameters or fragments can influence the output of Chrome AI features?</h3>
+<p>AI features may use urls when generating their output so it is expected that
+page content will influence the output. Chrome AI features include mitigations
+and filters to prevent harmful actions that result from operating on page
+content. Controlling the AI output is, by itself, not a security issue, unless
+some further harm to a user can be demonstrated.</p>
+<p><a name="TOC-AI-page-content-influences-model-output"></a></p>
+<h3 id="page-content-can-influence-the-output-of-chrome-ai-features">Page content can influence the output of Chrome AI features?</h3>
+<p>AI features may use page content (including images and subframes) when
+generating their output so it is expected that page content will influence the
+output. Chrome AI features include mitigations and filters to prevent harmful
+actions that result from operating on page content. Controlling the AI output
+is, by itself, not a security issue, unless some further harm to a user can be
+demonstrated.</p>
+<p><a name="TOC-AI-invisible-page-content"></a></p>
+<h3 id="invisible-page-content-can-influence-the-output-of-chrome-ai-features">Invisible page content can influence the output of Chrome AI features?</h3>
+<p>AI features may use page content including invisible content when generating
+their output so it is expected that page content will influence the output.
+Chrome AI features may detect, scrub, or deprioritize invisible content, but
+failing to do so is not considered a security vulnerability as it is impossible
+to do so in all cases.</p>
+<p><a name="TOC-AI-leaky-urls-can-be-reported"></a></p>
+<h3 id="i-have-an-example-of-page-content-that-results-in-chrome-ai-features-creating-links-that-leak-information-if-followed">I have an example of page content that results in Chrome AI features creating links that leak information if followed?</h3>
+<p>Chrome AI features take actions to limit what navigations are possible, and
+require user action before following links that could leak information to
+prevent scalable or targeted attacks. Web pages can already supply links or
+cause redirections and navigation and causing a user to follow these, via an AI
+feature, does not add a new attack surface.</p>
+<p><a name="TOC-AI-page-content-harmful-actions"></a></p>
+<h3 id="i-have-an-example-of-page-content-that-results-in-chrome-ai-features-performing-harmful-actions">I have an example of page content that results in Chrome AI features performing harmful actions?</h3>
+<p>Indirect prompt injections that result in unintended actions or leak information
+may be considered security issues and should be reported through the Chrome
+security tracker. Please create a recording from a fresh session that
+demonstrates the issue, and upload all files used as part of the demonstration.
+If a Gemini session is associated with your report, it will help us if you are
+able to share the session from your activity page, and the version of the model
+you are using.</p>
+<p><a name="TOC-AI-xss-in-glic-window"></a></p>
+<h3 id="i-have-an-example-of-page-content-that-results-in-xss-in-the-context-of-a-chrome-ai-feature">I have an example of page content that results in XSS in the context of a Chrome AI feature?</h3>
+<p>Output surfaces should sanitize inputs and transformed outputs. Please create a
+recording from a fresh session that demonstrates the issue, and upload all files
+used as part of the demonstration. If a Gemini session is associated with your
+report, it will help us if you are able to share the session from your activity
+page, and the version of the model you are using. Note that directly injecting
+code into a trusted surface via devtools does not demonstrate a vulnerability.</p>
+<h2 id="ai-generated-vulnerability-reports">AI Generated Vulnerability reports</h2>
+<p><a name="TOC-should-i-ask-an-ai-to-generate-a-vulnerability-report-for-chrome"></a></p>
+<h3 id="should-i-ask-an-ai-to-generate-a-vulnerability-report-for-chrome">Should I ask an AI to Generate a Vulnerability Report for Chrome?</h3>
+<p>Simply asking an AI to identify a bug report in Chrome is unlikely to yield a
+valid report. Before submitting a report generated by AI please ensure you have
+done enough human work to validate that any issue is (a) in our threat model,
+and (b) reachable in Chrome by constructing a POC, generating an ASAN trace,
+recording the bug reproducing, or performing your own debugging.</p>
+<p>AI is prone to hallucinations when asked to find security bugs and can generate
+reports that repeat previously fixed issues, or describe general classes of bugs
+without discovering a specific actionable issue. As the reports can be lengthy,
+they take a lot of time for our security experts to process and understand
+before closing. Submitting reports without doing some work yourself to validate
+that an issue is actually present in Chrome harms our users by wasting the time
+and resources of the Chrome security team.</p>
+<p>Submitting multiple low-quality AI generated reports will be treated as spamming
+and has lead to accounts being banned from our reporting systems.</p>
+<p>AI can be used to accelerate developer workflows and may be useful when
+understanding code or translating from one language to another. AI tools can be
+helpful when searching for security vulnerabilities in Chrome, but remember that
+additional work must be done to ensure that vulnerability reports are brief,
+actionable, and reproducible. These must meet the prerequisites of a <a href="https://g.co/chrome/vrp#report-quality">baseline
+security bug report</a> before we can pass
+them to teams to be fixed.</p>
+<h2 id="certificates--connection-indicators">Certificates &amp; Connection Indicators</h2>
+<p><a name="TOC-Where-are-the-security-indicators-located-in-the-browser-window-"></a></p>
+<h3 id="where-are-the-security-indicators-located-in-the-browser-window">Where are the security indicators located in the browser window?</h3>
+<p>The topmost portion of the browser window, consisting of the <strong>Omnibox</strong> (or
+<strong>Location Bar</strong>), navigation icons, menu icon, and other indicator icons, is
+sometimes called the browser <strong>chrome</strong> (not to be confused with the Chrome
+Browser itself). Actual security indicators can only appear in this section of
+the window. There can be no trustworthy security indicators elsewhere.</p>
+<p>Furthermore, Chrome can only guarantee that it is correctly representing URLs
+and their origins at the end of all navigation. Quirks of URL parsing, HTTP
+redirection, and so on are not security concerns unless Chrome is
+misrepresenting a URL or origin after navigation has completed.</p>
+<p>Browsers present a dilemma to the user since the output is a combination of
+information coming from both trustworthy sources (the browser itself) and
+untrustworthy sources (the web page), and the untrustworthy sources are allowed
+virtually unlimited control over graphical presentation. The only restriction on
+the page&#39;s presentation is that it is confined to the large rectangular area
+directly underneath the chrome, called the <strong>viewport</strong>. Things like hover text
+and URL preview(s), shown in the viewport, are entirely under the control of the
+web page itself. They have no guaranteed meaning, and function only as the page
+desires. This can be even more confusing when pages load content that looks like
+chrome. For example, many pages load images of locks, which look similar to the
+meaningful HTTPS lock in the Omnibox, but in fact do not convey any meaningful
+information about the transport security of that page.</p>
+<p>When the browser needs to show trustworthy information, such as the bubble
+resulting from a click on the lock icon, it does so by making the bubble overlap
+chrome. This visual detail can&#39;t be imitated by the page itself since the page
+is confined to the viewport.</p>
+<p><a name="TOC-Why-does-Chrome-show-a-lock-even-if-my-HTTPS-connection-is-being-proxied-"></a></p>
+<h3 id="why-does-chrome-show-a-lock-even-if-my-https-connection-is-being-proxied">Why does Chrome show a lock, even if my HTTPS connection is being proxied?</h3>
+<p>Some types of software intercept HTTPS connections. Examples include anti-virus
+software, corporate network monitoring tools, and school censorship software. In
+order for the interception to work, you need to install a private trust anchor
+(root certificate) onto your computer. This may have happened when you installed
+your anti-virus software, or when your company&#39;s network administrator set up
+your computer. If that has occurred, your HTTPS connections can be viewed or
+modified by the software.</p>
+<p>Since you have allowed the trust anchor to be installed onto your computer,
+Chrome assumes that you have consented to HTTPS interception. Anyone who can add
+a trust anchor to your computer can make other changes to your computer, too,
+including changing Chrome. (See also <a href="#TOC-Why-aren-t-physically-local-attacks-in-Chrome-s-threat-model-">Why aren&#39;t physically-local attacks in
+Chrome&#39;s threat model?</a>.)</p>
+<p><a name="TOC-Why-can-t-I-select-Proceed-Anyway-on-some-HTTPS-error-screens-"></a></p>
+<h3 id="why-cant-i-select-proceed-anyway-on-some-https-error-screens">Why can’t I select Proceed Anyway on some HTTPS error screens?</h3>
+<p>A key guarantee of HTTPS is that Chrome can be relatively certain that it is
+connecting to the true web server and not an impostor. Some sites request an
+even higher degree of protection for their users (i.e. you): they assert to
+Chrome (via Strict Transport Security —
+<a href="https://tools.ietf.org/html/rfc6797">HSTS</a> — or by other means) that any
+server authentication error should be fatal, and that Chrome must close the
+connection. If you encounter such a fatal error, it is likely that your network
+is under attack, or that there is a network misconfiguration that is
+indistinguishable from an attack.</p>
+<p>The best thing you can do in this situation is to raise the issue to your
+network provider (or corporate IT department).</p>
+<p>Chrome shows non-recoverable HTTPS errors only in cases where the true server
+has previously asked for this treatment, and when it can be relatively certain
+that the current server is not the true server.</p>
+<p><a name="TOC-How-does-key-pinning-interact-with-local-proxies-and-filters-"></a></p>
+<h3 id="how-does-key-pinning-interact-with-local-proxies-and-filters">How does key pinning interact with local proxies and filters?</h3>
+<p>To enable certificate chain validation, Chrome has access to two stores of trust
+anchors (i.e., certificates that are empowered as issuers). One trust anchor
+store is for authenticating public internet servers, and depending on the
+version of Chrome being used and the platform it is running on, the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/net/data/ssl/chrome_root_store/faq.md#what-is-the-chrome-root-store">Chrome Root Store</a>
+might be in use. The private store contains certificates installed by the user
+or the administrator of the client machine. Private intranet servers should
+authenticate themselves with certificates issued by a private trust anchor.</p>
+<p>Chrome’s key pinning feature is a strong form of web site authentication that
+requires a web server’s certificate chain not only to be valid and to chain to a
+known-good trust anchor, but also that at least one of the public keys in the
+certificate chain is known to be valid for the particular site the user is
+visiting. This is a good defense against the risk that any trust anchor can
+authenticate any web site, even if not intended by the site owner: if an
+otherwise-valid chain does not include a known pinned key (“pin”), Chrome will
+reject it because it was not issued in accordance with the site operator’s
+expectations.</p>
+<p>Chrome does not perform pin validation when the certificate chain chains up to a
+private trust anchor. A key result of this policy is that private trust anchors
+can be used to proxy (or
+<a href="https://en.wikipedia.org/wiki/Man-in-the-middle_attack">MITM</a>) connections,
+even to pinned sites. “Data loss prevention” appliances, firewalls, content
+filters, and malware can use this feature to defeat the protections of key
+pinning.</p>
+<p>We deem this acceptable because the proxy or MITM can only be effective if the
+client machine has already been configured to trust the proxy’s issuing
+certificate — that is, the client is already under the control of the person who
+controls the proxy (e.g. the enterprise’s IT administrator). If the client does
+not trust the private trust anchor, the proxy’s attempt to mediate the
+connection will fail as it should.</p>
+<p><a name="TOC-When-is-key-pinning-enabled-"></a></p>
+<h3 id="when-is-key-pinning-enabled">When is key pinning enabled?</h3>
+<p>Key pinning is enabled for Chrome-branded non-iOS builds when the local
+clock is within ten weeks of the embedded build timestamp. Key pinning is a
+useful security measure but it tightly couples client and server configurations
+and completely breaks when those configurations are out of sync. In order to
+manage that risk we need to ensure that we can promptly update pinning clients
+in an emergency and ensure that non-emergency changes can be deployed in a
+reasonable timeframe.</p>
+<p>Each of the conditions listed above helps ensure those properties:
+Chrome-branded builds are those that Google provides and they all have an
+auto-update mechanism that can be used in an emergency. Even in cases where
+auto-update is generally effective, there are still non-trivial populations
+of stragglers for various reasons. The ten-week timeout prevents those
+stragglers from causing problems for regular, non-emergency changes and
+allows stuck users to still, for example, conduct searches and access Chrome&#39;s
+homepage to hopefully get unstuck.</p>
+<p>In order to determine whether key pinning is active, try loading
+<a href="https://pinning-test.badssl.com/">https://pinning-test.badssl.com/</a>. If key
+pinning is active the load will <em>fail</em> with a pinning error.</p>
+<p><a name="TOC-How-does-certificate-transparency-interact-with-local-proxies-and-filters-"></a></p>
+<h3 id="how-does-certificate-transparency-interact-with-local-proxies-and-filters">How does Certificate Transparency interact with local proxies and filters?</h3>
+<p>Just as <a href="#TOC-How-does-key-pinning-interact-with-local-proxies-and-filters-">pinning only applies to publicly-trusted trust
+anchors</a>,
+Chrome only evaluates Certificate Transparency (CT) for publicly-trusted trust
+anchors. Thus private trust anchors, such as for enterprise middle-boxes and AV
+proxies, do not need to be publicly logged in a CT log.</p>
+<p><a name="TOC-Why-are-some-web-platform-features-only-available-in-HTTPS-page-loads-"></a></p>
+<h3 id="why-are-some-web-platform-features-only-available-in-https-page-loads">Why are some web platform features only available in HTTPS page-loads?</h3>
+<p>The full answer is here: we <a href="https://www.chromium.org/Home/chromium-security/prefer-secure-origins-for-powerful-new-features">Prefer Secure Origins For Powerful New
+Features</a>.
+In short, many web platform features give web origins access to sensitive new
+sources of information, or significant power over a user&#39;s experience with their
+computer/phone/watch/etc., or over their experience with it. We would therefore
+like to have some basis to believe the origin meets a minimum bar for security,
+that the sensitive information is transported over the Internet in an
+authenticated and confidential way, and that users can make meaningful choices
+to trust or not trust a web origin.</p>
+<p>Note that the reason we require secure origins for WebCrypto is slightly
+different: An application that uses WebCrypto is almost certainly using it to
+provide some kind of security guarantee (e.g. encrypted instant messages or
+email). However, unless the JavaScript was itself transported to the client
+securely, it cannot actually provide any guarantee. (After all, a MITM attacker
+could have modified the code, if it was not transported securely.)</p>
+<p>See the <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/web-platform-security-guidelines.md#encryption">Web Platform Security
+guidelines</a>
+for more information on security guidelines applicable to web platform APIs.</p>
+<p><a name="TOC-Which-origins-are-secure-"></a></p>
+<h3 id="which-origins-are-secure">Which origins are &quot;secure&quot;?</h3>
+<p>Secure origins are those that match at least one of the following (scheme, host,
+port) patterns:</p>
+<ul>
+<li>(https, *, *)</li>
+<li>(wss, *, *)</li>
+<li>(*, localhost, *)</li>
+<li>(*, 127/8, *)</li>
+<li>(*, ::1/128, *)</li>
+<li>(file, *, —)</li>
+<li>(chrome-extension, *, —)</li>
+</ul>
+<p>That is, secure origins are those that load resources either from the local
+machine (necessarily trusted) or over the network from a
+cryptographically-authenticated server. See <a href="https://sites.google.com/a/chromium.org/dev/Home/chromium-security/prefer-secure-origins-for-powerful-new-features">Prefer Secure Origins For Powerful
+New
+Features</a>
+for more details.</p>
+<p><a name="TOC-What-s-the-story-with-certificate-revocation-"></a></p>
+<h3 id="whats-the-story-with-certificate-revocation">What&#39;s the story with certificate revocation?</h3>
+<p>Chrome&#39;s primary mechanism for checking certificate revocation status is
+<a href="https://dev.chromium.org/Home/chromium-security/crlsets">CRLSets</a>.
+Additionally, by default, <a href="https://en.wikipedia.org/wiki/OCSP_stapling">stapled Online Certificate Status Protocol (OCSP)
+responses</a> are honored.</p>
+<p>As of 2024, Chrome enforces most security-relevant certificate revocations that
+are visible via Certificate Revocation Lists (CRLs) published to the
+<a href="https://www.ccadb.org/">CCADB</a> via CRLSets. There is some inherent delay in
+getting revocation information to Chrome clients, but most revocations should
+reach most users within a few days of appearing on a CA&#39;s CRL.</p>
+<p>In addition to certificates revoked by their issuing CA, Chrome also blocks
+the use of some certificates identified by Chrome Security as
+being misissued or compromised, and at risk of being used to attack Chrome
+users. This may include certificates proactively identified by Google as likely
+compromised based on issuance timeline, CA, domain name, or other certificate
+properties. While Chrome Security works hard to minimize collateral damage, if
+you believe that your certificate has been erroneously blocked in Chrome, you
+may contact Chrome Security at <a href="mailto:security@chromium.org">security@chromium.org</a> and we will investigate.</p>
+<p>Chrome clients do not, by default, perform &quot;online&quot; certificate revocation
+status checks using CRLs directly or via OCSP URLs included in certificates.
+This is because online checks offer limited security value unless a client, like
+Chrome, refuses to connect to a website if it cannot get a valid response,</p>
+<p>Unfortunately, there are many widely-prevalent causes for why a client
+might be unable to get a valid certificate revocation status response to
+include:</p>
+<ul>
+<li>timeouts (e.g., an OCSP responder is online but does not respond within an
+acceptable time limit),</li>
+<li>availability issues (e.g., the OCSP responder is offline),</li>
+<li>invalid responses (e.g., a &quot;stale&quot; or malformed status response), and</li>
+<li>local network attacks misrouting traffic or blocking responses.</li>
+</ul>
+<p>Additional concern with OCSP checks are related to privacy. OCSP
+requests reveal details of individuals&#39; browsing history to the operator of the
+OCSP responder (i.e., a third party). These details can be exposed accidentally
+(e.g., via data breach of logs) or intentionally (e.g., via subpoena). Chrome
+used to perform revocation checks for Extended Validation certificates, but that
+behavior was disabled in 2022 for <a href="https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/S6A14e_X-T0/m/T4WxWgajAAAJ">privacy reasons</a>.</p>
+<p>The following enterprise policies can be used to change the default revocation
+checking behavior in Chrome, though these may be removed in the future:</p>
+<ul>
+<li><a href="https://chromeenterprise.google/policies/#EnableOnlineRevocationChecks">enable soft-fail OCSP</a></li>
+<li><a href="https://chromeenterprise.google/policies/#RequireOnlineRevocationChecksForLocalAnchors">hard-fail for local trust anchors</a>.</li>
+</ul>
+<h2 id="passwords--local-data">Passwords &amp; Local Data</h2>
+<p><a name="TOC-What-about-unmasking-of-passwords-with-the-developer-tools-"></a></p>
+<h3 id="what-about-unmasking-of-passwords-with-the-developer-tools">What about unmasking of passwords with the developer tools?</h3>
+<p>One of the most frequent reports we receive is password disclosure using the
+Inspect Element feature (see <a href="https://crbug.com/126398">Issue 126398</a> for an
+example). People reason that &quot;If I can see the password, it must be a bug.&quot;
+However, this is just one of the <a href="#TOC-Why-aren-t-physically-local-attacks-in-Chrome-s-threat-model-">physically-local attacks described in the
+previous
+section</a>,
+and all of those points apply here as well.</p>
+<p>The reason the password is masked is only to prevent disclosure via
+&quot;shoulder-surfing&quot; (i.e. the passive viewing of your screen by nearby persons),
+not because it is a secret unknown to the browser. The browser knows the
+password at many layers, including JavaScript, developer tools, process memory,
+and so on. When you are physically local to the computer, and only when you are
+physically local to the computer, there are, and always will be, tools for
+extracting the password from any of these places.</p>
+<p><a name="TOC-Is-Chrome-s-support-for-userinfo-in-HTTP-URLs-e.g.-http:-user:password-example.com-considered-a-vulnerability-"></a></p>
+<h3 id="is-chromes-support-for-userinfo-in-http-urls-eg-httpuserpasswordexamplecom-considered-a-vulnerability">Is Chrome&#39;s support for userinfo in HTTP URLs (e.g. <a href="http://user:password@example.com">http://user:password@example.com</a>) considered a vulnerability?</h3>
+<p><a href="https://crbug.com/626951">Not at this time</a>. Chrome supports HTTP and HTTPS
+URIs with username and password information embedded within them for
+compatibility with sites that require this feature. Notably, Chrome will
+suppress display of the username and password information after navigation in
+the URL box to limit the effectiveness of spoofing attacks that may try to
+mislead the user. For instance, navigating to
+<code>http://trustedsite.com@evil.example.com</code> will show an address of
+<code>http://evil.example.com</code> after the page loads.</p>
+<p>Note: We often receive reports calling this an &quot;open redirect&quot;. However, it has
+nothing to do with redirection; rather the format of URLs is complex and the
+userinfo may be misread as a host.</p>
+<p><a name="TOC-Why-does-the-Password-Manager-ignore-autocomplete-off-for-password-fields-"></a></p>
+<h3 id="why-does-the-password-manager-ignore-autocompleteoff-for-password-fields">Why does the Password Manager ignore <code>autocomplete=&#39;off&#39;</code> for password fields?</h3>
+<p>Ignoring <code>autocomplete=&#39;off&#39;</code> for password fields allows the password manager to
+give more power to users to manage their credentials on websites. It is the
+security team&#39;s view that this is very important for user security by allowing
+users to have unique and more complex passwords for websites. As it was
+originally implemented, autocomplete=&#39;off&#39; for password fields took control away
+from the user and gave control to the web site developer, which was also a
+violation of the <a href="https://www.schemehostport.com/2011/10/priority-of-constituencies.html">priority of
+constituencies</a>.
+For a longer discussion on this, see the <a href="https://groups.google.com/a/chromium.org/forum/#!topic/chromium-dev/zhhj7hCip5c">mailing list
+announcement</a>.</p>
+<p><a name="TOC-Signout-of-Chrome"></a></p>
+<h3 id="signing-out-of-chrome-does-not-delete-previously-synced-data">Signing out of Chrome does not delete previously-synced data?</h3>
+<p>If you have signed into Chrome and subsequently sign out of Chrome, previously
+saved passwords and other data are not deleted from your device unless you
+select that option when signing out of Chrome.</p>
+<p>If you change your Google password, synced data will no longer be updated in
+Chrome instances until you provide the new password to Chrome on each device
+configured to sync. However, previously synced data <a href="https://crbug.com/792967">remains available</a>
+on each previously-syncing device unless manually removed.</p>
+<p><a name="TOC-Why-doesn-t-the-Password-Manager-save-my-Google-password-if-I-am-using-Chrome-Sync-"></a></p>
+<h3 id="why-doesnt-the-password-manager-save-my-google-password-if-i-am-using-chrome-sync">Why doesn&#39;t the Password Manager save my Google password if I am using Chrome Sync?</h3>
+<p>In its default mode, Chrome Sync uses your Google password to protect all the
+other passwords in the Chrome Password Manager.</p>
+<p>In general, it is a bad idea to store the credential that protects an asset in
+the same place as the asset itself. An attacker who could temporarily compromise
+the Chrome Password Manager could, by stealing your Google password, obtain
+continuing access to all your passwords. Imagine you store your valuables in a
+safe, and you accidentally forget to close the safe. If a thief comes along,
+they might steal all of your valuables. That’s bad, but imagine if you had also
+left the combination to the safe inside as well. Now the bad guy has access to
+all of your valuables and all of your future valuables, too. The password
+manager is similar, except you probably would not even know if a bad guy
+accessed it.</p>
+<p>To prevent this type of attack, Chrome Password Manager does not save the Google
+password for the account you sync with Chrome. If you have multiple Google
+accounts, the Chrome Password Manager will save the passwords for accounts other
+than the one you are syncing with.</p>
+<p><a name="TOC-Does-the-Password-Manager-store-my-passwords-encrypted-on-disk-"></a></p>
+<h3 id="does-the-password-manager-store-my-passwords-encrypted-on-disk">Does the Password Manager store my passwords encrypted on disk?</h3>
+<p>Chrome generally tries to use the operating system&#39;s user storage mechanism
+wherever possible and stores them encrypted on disk, but it is platform
+specific:</p>
+<ul>
+<li>On Windows, Chrome uses <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/os_crypt/async/">App-Bound encryption</a>
+to store them on disk encrypted with a key only accessible to the Chrome
+process as well as admin processes.</li>
+<li>On macOS and iOS, Chrome previously stored credentials directly in the user&#39;s
+Keychain, but for technical reasons, it has switched to storing the
+credentials in &quot;Login Data&quot; in the Chrome users profile directory, but
+encrypted on disk with a key that is then stored in the user&#39;s Keychain.
+See <a href="https://crbug.com/466638">Issue 466638</a> and <a href="https://crbug.com/520437">Issue 520437</a> for further explanation.</li>
+<li>On Linux, Chrome previously stored credentials directly in the user&#39;s
+Gnome Secret Service or KWallet, but for technical reasons, it has switched to
+storing the credentials in &quot;Login Data&quot; in the Chrome user&#39;s profile directory,
+but encrypted on disk with a key that is then stored in the user&#39;s Gnome
+Secret Service or KWallet. If there is no available Secret Service or KWallet,
+the data is not encrypted when stored.</li>
+<li>On Android, Chrome doesn&#39;t store in the profile anymore, instead it uses Google
+Play Services to access passwords stored on a device.</li>
+<li>On ChromeOS passwords are only obfuscated since all profile data is encrypted
+by the OS.</li>
+</ul>
+<p><a name="TOC-If-theres-a-way-to-see-stored-passwords-without-entering-a-password--is-this-a-security-bug-"></a></p>
+<h3 id="if-theres-a-way-to-see-stored-passwords-without-entering-a-password-is-this-a-security-bug">If there&#39;s a way to see stored passwords without entering a password, is this a security bug?</h3>
+<p>No. If an attacker has control of your login on your device, they can get to
+your passwords by inspecting Chrome disk files or memory. (See
+<a href="#TOC-Why-aren-t-physically-local-attacks-in-Chrome-s-threat-model-">why aren&#39;t physically-local attacks in Chrome&#39;s threat
+model</a>).</p>
+<p>On some platforms we ask for a password before revealing stored passwords,
+but this is not considered a robust defense. It’s historically to stop
+users inadvertently revealing their passwords on screen, for example if
+they’re screen sharing. We don’t do this on all platforms because we consider
+such risks greater on some than on others.</p>
+<p><a name="TOC-On-some-websites-I-can-use-a-passkey-without-passing-a-lock-screen-or-biometric-challenge-is-this-a-security-bug"></a></p>
+<h3 id="on-some-websites-i-can-use-passkeys-without-passing-a-lock-screen-or-biometric-challenge-is-this-a-security-bug">On some websites, I can use passkeys without passing a lock screen or biometric challenge. Is this a security bug?</h3>
+<p>Probably not. When a website requests a passkeys signature, it can choose
+whether the authenticator should perform user verification (e.g. with a local
+user lock screen challenge). Unless the website sets user verification parameter
+in the request to &#39;required&#39;, the passkey authenticator can choose to skip the
+lock screen challenge. Authenticators commonly skip an optional challenge if
+biometrics are unavailable (e.g. on a laptop with a closed lid).</p>
+<p>If you can demonstrate bypassing the user verification challenge where the
+request user verification parameter is set to &#39;required&#39;, please
+<a href="https://bughunters.google.com/report/vrp">report it</a>.</p>
+<h2 id="other">Other</h2>
+<p><a name="TOC-What-is-the-security-story-for-Service-Workers-"></a></p>
+<h3 id="what-is-the-security-story-for-service-workers">What is the security story for Service Workers?</h3>
+<p>See our dedicated <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/service-worker-security-faq.md">Service Worker Security
+FAQ</a>.</p>
+<p><a name="TOC-What-is-the-security-story-for-Extensions-"></a></p>
+<h3 id="what-is-the-security-story-for-extensions">What is the security story for Extensions?</h3>
+<p>See our dedicated <a href="https://chromium.googlesource.com/chromium/src/+/main/extensions/docs/security_faq.md">Extensions Security FAQ</a>.</p>
+<p><a name="TOC-What-is-the-security-model-for-Chrome-Custom-Tabs-"></a></p>
+<h3 id="whats-the-security-model-for-chrome-custom-tabs">What&#39;s the security model for Chrome Custom Tabs?</h3>
+<p>See our <a href="custom-tabs-faq">Chrome Custom Tabs security FAQ</a>.</p>
+<p><a name="TOC-What-is-the-security-story-for-Fullscreen-"></a></p>
+<h3 id="what-is-the-security-story-for-fullscreen">What is the security story for Fullscreen?</h3>
+<p>See our dedicated <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/fullscreen.md">Fullscreen Security FAQ</a>.</p>
+<p><a name="TOC-How-is-security-different-in-Chrome-for-iOS--"></a></p>
+<h3 id="how-is-security-different-in-chrome-for-ios">How is security different in Chrome for iOS?</h3>
+<p>Chrome for iOS does not use Chrome&#39;s standard rendering engine. Due to Apple&#39;s
+iOS platform restrictions, it instead uses Apple&#39;s WebKit engine and a more
+restricted process isolation model. This means its security properties are
+different from Chrome on all other platforms.</p>
+<p>The differences in security are far too extensive to list exhaustively, but some
+notable points are:</p>
+<ul>
+<li>Chromium&#39;s <a href="https://www.chromium.org/Home/chromium-security/site-isolation/">site
+isolation</a>
+isn&#39;t used; WebKit has its own alternative implementation with different costs
+and benefits.</li>
+<li>WebKit has <a href="https://googleprojectzero.blogspot.com/2022/02/a-walk-through-project-zero-metrics.html">historically been slower at shipping security
+fixes</a>.</li>
+<li>Chrome&#39;s network stack, <a href="https://www.chromium.org/Home/chromium-security/root-ca-policy/">root
+store</a> and
+associated technology are not used, so
+the platform will make different decisions about what web servers to trust.</li>
+<li>Sandboxing APIs are not available for native code.</li>
+</ul>
+<p>Given that the fundamentals of the browser are so different, and given these
+limitations, Chrome for iOS has historically not consistently implemented some
+of Chrome&#39;s <a href="rules">standard security guidelines</a>. This includes the
+important <a href="rule-of-2">Rule of Two</a>. Future Chrome for iOS features should
+meet all guidelines except in cases where the lack of platform APIs make it
+unrealistic. (The use of WebAssembly-based sandboxing is currently considered
+unrealistic though this could change in future.)</p>
+<p>If the Rule of Two cannot be followed, features for Chrome for iOS should
+nevertheless follow it as closely as possible, and adopt additional mitigations
+where they cannot:</p>
+<ul>
+<li>First consider adding a validation layer between unsafe code and web contents,
+or adopting memory-safe parsers at the boundary between the renderer and the
+browser process. Consider changing the design of the feature so the riskiest
+parsing can happen in javascript injected in the renderer process.</li>
+<li>Any unsafe unsandboxed code that is exposed to web contents or other
+untrustworthy data sources must be extensively tested and fuzzed.</li>
+</ul>
+<p>The Chrome team is enthusiastic about the future possibility of making a version
+of Chrome for iOS that meets our usual security standards if richer platform
+facilities become widely available: this will require revisiting existing
+features to see if adjustment is required.</p>
+<p><a name="TOC-Are-all-Chrome-updates-important--"></a></p>
+<h3 id="are-all-chrome-updates-important">Are all Chrome updates important?</h3>
+<p>Yes - see <a href="updates">our updates FAQ</a>.</p>
+<p><a name="TOC-What-older-Chrome-versions-are-supported--"></a></p>
+<h3 id="what-older-chrome-versions-are-supported">What older Chrome versions are supported?</h3>
+<p>We always recommend being on the most recent Chrome stable version - see
+<a href="updates">our updates FAQ</a>.</p>
+<p><a name="TOC-Im-making-a-Chromium-based-browser-how-should-I-secure-it-"></a></p>
+<h3 id="im-making-a-chromium-based-browser-how-should-i-secure-it">I&#39;m making a Chromium-based browser. How should I secure it?</h3>
+<p>If you want to make a browser based on Chromium, you should stay up to date
+with Chromium&#39;s security fixes. There are adversaries who weaponize fixed
+Chromium bugs (&quot;n-day vulnerabilities&quot;) to target browsers which haven’t yet
+absorbed those fixes.</p>
+<p>Decide whether your approach is to stay constantly up to date with Chromium
+releases, or to backport security fixes onto some older version, upgrading
+Chromium versions less frequently.</p>
+<p>Backporting security fixes sounds easier than forward-porting features, but in
+our experience, this is false. Chromium releases 400+ security bug fixes per
+year (<a href="https://bugs.chromium.org/p/chromium/issues/list?q=type%3DBug-Security%20has%3Arelease%20closed%3Etoday-730%20closed%3Ctoday-365%20allpublic&amp;can=1">example
+query</a>).
+Some downstream browsers take risks by backporting only Medium+ severity fixes,
+but that&#39;s still over 300 (<a href="https://bugs.chromium.org/p/chromium/issues/list?q=type%3DBug-Security%20has%3Arelease%20closed%3Etoday-730%20closed%3Ctoday-365%20allpublic%20Security_Severity%3DMedium%2CHigh%2CCritical&amp;can=1">example
+query</a>).
+Most are trivial cherry-picks; but others require rework and require versatile
+engineers who can make good decisions about any part of a large codebase.</p>
+<p>Our recommendation is to stay up-to-date with Chrome&#39;s released versions. You
+should aim to release a version of your browser within just a few days of each
+Chrome <a href="https://chromereleases.googleblog.com/search/label/Stable%20updates">stable
+release</a>.
+If your browser is sufficiently widely-used, you can <a href="https://www.chromium.org/Home/chromium-security/">apply for advance notice
+of fixed vulnerabilities</a> to
+make this a little easier.</p>
+<p>Finally, if you choose the backporting approach, please explain the security
+properties to your users. Some fraction of security improvements cannot be
+backported. This can happen for several reasons, for example: because they
+depend upon architectural changes (e.g. breaking API changes); because the
+security improvement is a significant new feature; or because the security
+improvement is the removal of a broken feature.</p>
+<p><a name="TOC-How-can-I-appeal-a-Safe-Browsing-warning-"></a></p>
+<h3 id="how-can-i-appeal-a-safe-browsing-warning">How can I appeal a Safe Browsing warning?</h3>
+<p>To request a review of warnings relating to your own website, use the
+<a href="https://support.google.com/webmasters/answer/9044101">Security Issues report</a>
+page in your Google Search Console. If the warning applies to another site, you
+may be able to use
+<a href="https://safebrowsing.google.com/safebrowsing/report_error/">https://safebrowsing.google.com/safebrowsing/report_error/</a>,
+though you are likely better off contacting the site owner.</p>
+<p>If your concern relates to malware warnings, you may find the warning in your
+Security Issues report and request a review from there. There is no separate
+appeal form or process at this time. Please follow these
+<a href="https://developers.google.com/search/docs/monitor-debug/security/malware#guidelines">guidelines</a>
+to avoid having your binary show warnings from Safe Browsing.</p>
+<p><a name="TOC-What-is-the-security-model-for-Split-View-"></a></p>
+<h3 id="whats-the-security-model-for-split-view">What&#39;s the security model for Split View?</h3>
+<p>See our <a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/ui/tabs/docs/split_view_security_faq.md">Split View Security FAQ</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/faq.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/faq.md</a>
+  </p>
+</div>

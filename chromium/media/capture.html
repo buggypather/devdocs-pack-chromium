@@ -1,0 +1,289 @@
+<h1>Media Capture</h1>
+<p>In Chrome, &quot;Media capture&quot; refers to the features and user interfaces that
+enable the browser to capture pixels and audio from itself or the underlying OS.
+It also covers the Web APIs that allow Web applications to obtain captured
+media.</p>
+<p>This is an index of media capture related documentation elsewhere, organized by
+component/feature.  This list is incomplete; additional documentation can be
+found in code comments and/or Monorail issue threads in the components listed
+below.</p>
+<h1 id="features">Features</h1>
+<h2 id="webcam-capture">Webcam capture</h2>
+<ul>
+<li>Code<ul>
+<li><code>//media/capture/video</code></li>
+<li><code>//services/video_capture</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><code>Internals&gt;Media&gt;CameraCapture</code></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/services/video_capture/README.md">//services/video_capture/README.md</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="microphone-capture">Microphone capture</h2>
+<ul>
+<li>Code<ul>
+<li><code>//media/audio</code></li>
+<li><code>//services/audio</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><code>Internals&gt;Media&gt;AudioCapture</code></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/services/audio/README.md">//services/audio/README.md</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="system-desktopwindow-capture">System (desktop/window) capture</h2>
+<ul>
+<li>Code<ul>
+<li>Windows/Linux: <code>//third_party/webrtc/modules/desktop_capture</code></li>
+<li>Mac: <code>//content/browser/media/capture/desktop_capture_device_mac.cc</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><code>Internals&gt;Media&gt;ScreenCapture</code></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li>To be added later.</li>
+</ul>
+</li>
+</ul>
+<h2 id="system-audio-capture">System audio capture</h2>
+<ul>
+<li>Code<ul>
+<li>Windows: <code>//media/audio/win/audio_low_latency_input_win.cc</code></li>
+<li>ChromeOS: <code>//media/audio/cras/cras_input.cc</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><code>Internals&gt;Media&gt;Audio</code></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li>To be added later.</li>
+</ul>
+</li>
+</ul>
+<h2 id="tab-audio-capture">Tab audio capture</h2>
+<ul>
+<li>Code<ul>
+<li><code>//services/audio/loopback_stream.cc</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><code>Internals&gt;Media&gt;Audio</code></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li>To be added later.</li>
+</ul>
+</li>
+</ul>
+<h2 id="viz-compositor-surface-capture">Viz compositor surface capture</h2>
+<p>Viz supports capture of Chrome tabs and windows on all platforms, and capture
+of the desktop on ChromeOS.</p>
+<p>Familiarity with <a href="https://github.com/chromium/chromium/blob/HEAD/components/viz/README.md">Viz</a>, the Chrome compositor,
+is a prerequisite to understanding how surface capture works.</p>
+<ul>
+<li>Code<ul>
+<li><code>//content/browser/media/capture/web_contents_video_capture_device.cc</code></li>
+<li><code>//components/viz/service/frame_sinks/video_capture</code></li>
+<li><code>//components/viz/common/frame_sinks/copy_output_request.cc</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><code>Internals&gt;Media&gt;SurfaceCapture</code></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/components/viz/common/frame_sinks/README.md">//components/viz/common/frame_sinks/README.md</a></li>
+</ul>
+</li>
+</ul>
+<h1 id="user-interfaces">User interfaces</h1>
+<h2 id="screen-capture-target-chooser">Screen capture target chooser</h2>
+<p>Allows the user to select a tab/window/desktop in response to a getDisplayMedia
+request.</p>
+<ul>
+<li>Code<ul>
+<li><code>//chrome/browser/media/webrtc</code></li>
+<li><code>//chrome/browser/ui/views/desktop_capture</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/list?q=component%3AUI%3EBrowser%3EMediaCapture&amp;can=2"><code>UI&gt;Browser&gt;MediaCapture</code></a></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li><a href="https://docs.google.com/document/d/e/2PACX-1vQi8P2f493UgVNCJzcdxLUqqSlIdixlybO0mEPAvqnea_8l5bcUWSSZCi4M4EzSTCrFGQodmDX4LZ_u/pub">Enterprise policies to restrict available sources in chooser</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="conditional-focus">Conditional Focus</h2>
+<p>Not a UI surface, but an API that allows a web application using
+<code>getDisplayMedia()</code> to control whether or not the captured tab/window is focused
+(activated) or not when tab/window capture begins.</p>
+<ul>
+<li>Code<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/media/webrtc/media_stream_focus_delegate.cc"><code>//chrome/browser/media/webrtc/media_stream_focus_delegate.cc</code></a></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/list?q=component%3AUI%3EBrowser%3EMediaCapture&amp;can=2"><code>UI&gt;Browser&gt;MediaCapture</code></a></li>
+</ul>
+</li>
+<li>Design doc: <a href="https://docs.google.com/document/d/e/2PACX-1vQIlFPntWbJaA9prNfxt5SXoCJCiBONPjj9VJVuOLqrYoHOArsvQahO6WhjP8DflF1YL6FXIt524NFA/pub">Conditional Focus</a></li>
+</ul>
+<h2 id="screen-capture-indicator">Screen capture indicator</h2>
+<p>Widget that tells the user when the desktop is being captured.</p>
+<ul>
+<li>Code<ul>
+<li><code>//chrome/browser/ui/screen_capture_notification_ui.cc</code></li>
+<li><code>//chrome/browser/ui/views/screen_capture_notification_ui_views.cc</code></li>
+<li>ChromeOS: <code>//chrome/browser/chromeos/ui/screen_capture_notification_ui_chromeos.cc</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/list?q=component%3AUI%3EBrowser%3EMediaCapture&amp;can=2"><code>UI&gt;Browser&gt;MediaCapture</code></a></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li>To be added later.</li>
+</ul>
+</li>
+</ul>
+<h2 id="tab-capture-indicatorswitcher">Tab capture indicator/switcher</h2>
+<p>Shows the user what tab is being captured and allows them to stop or switch tabs.</p>
+<ul>
+<li>Code<ul>
+<li><code>//chrome/browser/media/webrtc/media_stream_capture_indicator.cc</code></li>
+<li><code>//chrome/browser/ui/tab_sharing</code></li>
+<li><code>//chrome/browser/ui/views/tab_sharing.cc</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/list?q=component%3AUI%3EBrowser%3EMediaCapture&amp;can=2"><code>UI&gt;Browser&gt;MediaCapture</code></a></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li>To be added later.</li>
+</ul>
+</li>
+</ul>
+<h2 id="capture-device-chooser">Capture device chooser</h2>
+<p>Allows the user to switch the camera/microphone used for capture via an icon in the omnibox.</p>
+<ul>
+<li>Code<ul>
+<li><code>//chrome/browser/ui/content_settings/content_settings_bubble_model.cc</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/list?q=component%3AUI%3EBrowser%3EMediaCapture&amp;can=2"><code>UI&gt;Browser&gt;MediaCapture</code></a></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li>To be added later.</li>
+</ul>
+</li>
+</ul>
+<h1 id="apis">APIs</h1>
+<h2 id="getusermedia"><a href="https://rawgit.com/w3c/mediacapture-main/master/getusermedia.html">getUserMedia()</a></h2>
+<p>Web API for Web applications to capture camera and microphone input.</p>
+<ul>
+<li>Code<ul>
+<li><code>//third_party/blink/renderer/modules/mediastream/</code></li>
+<li><code>//third_party/blink/renderer/platform/webrtc/</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/list?q=component%3ABlink%3EGetUserMedia&amp;can=2"><code>Blink&gt;GetUserMedia</code></a></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li>To be added later.</li>
+</ul>
+</li>
+</ul>
+<h2 id="getdisplaymedia"><a href="https://w3c.github.io/mediacapture-screen-share/">getDisplayMedia()</a></h2>
+<p>Web API for Web applications to capture screen contents and system/tab audio.</p>
+<ul>
+<li>Code<ul>
+<li><code>//third_party/blink/renderer/modules/mediastream/</code></li>
+</ul>
+</li>
+<li>Issues<ul>
+<li><a href="https://bugs.chromium.org/p/chromium/issues/list?q=component%3ABlink%3EGetDisplayMedia&amp;can=2"><code>Blink&gt;GetDisplayMedia</code></a></li>
+</ul>
+</li>
+<li>Docs<ul>
+<li>To be added later.</li>
+</ul>
+</li>
+</ul>
+<h1 id="logs">Logs</h1>
+<p>Usage of the APIs above involves several media layers in Chrome and can contain
+both audio and video streams. Logs from the most essential classes are
+centralized and all pass through:</p>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/renderer_host/media/media_stream_manager.cc"><code>content/browser/renderer_host/media/media_stream_manager.cc</code></a>, and</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/platform/webrtc/webrtc_logging.cc"><code>third_party/blink/renderer/platform/webrtc/webrtc_logging.cc</code></a></li>
+</ul>
+<p>It is possible to view these logs by adding special log filters (using a local
+Chromium build in this example):</p>
+<pre>./out/Default/chrome --enable-logging --vmodule=*/content/browser/renderer_host/media/*=1,*/third_party/blink/renderer/platform/webrtc/*=1</pre>
+<p>Each log line is prepended with a tag corresponding to an abbreviation of the
+class which generated the log. E.g. <code>UMP::</code> for <code>UserMediaProcessor</code>, <code>PLAS::</code>
+for <code>ProcessedLocalAudioSource</code>, <code>AIC::</code> for <code>AudioInputController</code>, <code>AMB::</code> for
+<code>AudioManagerBase</code> etc. The tags enable post processing of the captured logs to
+analyze how a web client uses specified classes or modules in Chrome.</p>
+<p>The example below is from a <a href="https://webrtc.github.io/samples/src/content/getusermedia/audio/">WebRTC demo client</a> which uses <code>getUserMedia</code> to captures audio and then render it locally:</p>
+<pre>less ./out/Default/chrome_debug.log | grep 'UMP'
+
+[11460:25180:0817/133550.056:VERBOSE1:webrtc_logging.cc(35)] UMP::ProcessRequest({request_id=0}, {audio=1}, {video=0})
+[11460:25180:0817/133550.056:VERBOSE1:webrtc_logging.cc(35)] UMP::SetupAudioInput({request_id=0}, {constraints=})
+[11460:25180:0817/133550.056:VERBOSE1:webrtc_logging.cc(35)] UMP::SetupAudioInput({request_id=0}) =&gt; (Requesting device capabilities)
+[11460:25180:0817/133550.843:VERBOSE1:webrtc_logging.cc(35)] UMP::SelectAudioSettings({request_id=0})
+[11460:25180:0817/133550.853:VERBOSE1:webrtc_logging.cc(35)] UMP::GenerateStreamForCurrentRequestInfo({request_id=0}, {audio.device_id=default}, {video.device_id=})
+[11460:25180:0817/133550.911:VERBOSE1:webrtc_logging.cc(35)] UMP::OnStreamsGenerated({request_id=0}, {label=b24a1017-a129-4465-b1fa-f4d9c553d956}, {device=[id: default, name: Default - Microphone (Realtek(R) Audio)]})
+[11460:25180:0817/133550.911:VERBOSE1:webrtc_logging.cc(35)] UMP::StartTracks({request_id=0}, {label=b24a1017-a129-4465-b1fa-f4d9c553d956})
+[11460:25180:0817/133550.913:VERBOSE1:webrtc_logging.cc(35)] UMP::CreateAudioTrack({render_to_associated_sink=0})
+[11460:25180:0817/133550.913:VERBOSE1:webrtc_logging.cc(35)] UMP::InitializeAudioSourceObject({session_id=4FF8214D8180F02B8A9206564C59C03D})
+[11460:25180:0817/133550.914:VERBOSE1:webrtc_logging.cc(35)] UMP::CreateAudioSource =&gt; (audiprocessing is required)
+[11460:25180:0817/133550.922:VERBOSE1:webrtc_logging.cc(35)] UMP::StartAudioTrack({track=[id: 9803bb62-5cdc-4279-b58e-fd1193d7ecd8, enabled: 1]}, {is_pending=1})
+[11460:25180:0817/133550.922:VERBOSE1:webrtc_logging.cc(35)] UMP::StartAudioTrack(source: {session_id=4FF8214D8180F02B8A9206564C59C03D}, {is_local_source=1}, {device=[id: default, group_id: def1842e91c7bc3d9c2be5618262afa5413975edb13d4a33c266224daed0a478, name: Default - Microphone (Realtek(R) Audio)]})
+[11460:25180:0817/133551.330:VERBOSE1:webrtc_logging.cc(35)] UMP::OnTrackStarted({session_id=4FF8214D8180F02B8A9206564C59C03D}, {result=OK})
+[11460:25180:0817/133551.330:VERBOSE1:webrtc_logging.cc(35)] UMP::OnCreateNativeTracksCompleted({request_id=0}, {label=b24a1017-a129-4465-b1fa-f4d9c553d956})
+[11460:25180:0817/133551.330:VERBOSE1:webrtc_logging.cc(35)] UMP::GetUserMediaRequestSucceeded({request_id=0})
+[11460:25180:0817/133551.331:VERBOSE1:webrtc_logging.cc(35)] UMP::DelayedGetUserMediaRequestSucceeded({request_id=0}, {result=OK})
+[11460:25180:0817/133553.114:VERBOSE1:webrtc_logging.cc(35)] UMP::OnDeviceStopped({session_id=4FF8214D8180F02B8A9206564C59C03D}, {device_id=default})
+[11460:25180:0817/133553.115:VERBOSE1:webrtc_logging.cc(35)] UMP::StopLocalSource({session_id=4FF8214D8180F02B8A9206564C59C03D})
+[11460:25180:0817/133553.123:VERBOSE1:webrtc_logging.cc(35)] UMP::RemoveLocalSource({id=default}, {name=Default - Microphone (Realtek(R) Audio)}, {group_id=def1842e91c7bc3d9c2be5618262afa5413975edb13d4a33c266224daed0a478})</pre>
+<h1 id="additional-features">Additional features</h1>
+<p>Not all media capture features are listed above; here are some additional
+capture features in Chrome.  For more information about these, contact
+developers at the address below.</p>
+<ul>
+<li><a href="https://w3c.github.io/mediacapture-handle/identity/">Capture Handle API</a></li>
+<li>Tab casting to Chromecast</li>
+<li>Screen casting from the ChromeOS system tray</li>
+<li>Presentation API 1-UA mode</li>
+<li>MediaStream capture from HTML elements (<code>&lt;video&gt;</code>, <code>&lt;canvas&gt;</code>)</li>
+<li>Extension APIs for capture</li>
+</ul>
+<h1 id="contact-information">Contact information</h1>
+<p>Questions about media capture features, APIs, or user interfaces can be sent to
+<a href="mailto:media-capture-dev@chromium.org">media-capture-dev@chromium.org</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/media/capture/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/media/capture/README.md</a>
+  </p>
+</div>

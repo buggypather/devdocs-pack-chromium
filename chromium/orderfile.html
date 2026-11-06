@@ -1,0 +1,143 @@
+<h1>Orderfile</h1>
+<h2 id="background">Background</h2>
+<p>An orderfile is a list of symbols that defines an ordering of functions. One can
+make a static linker, such as LLD, respect this ordering when generating a
+binary.</p>
+<p>Reordering code this way can improve startup performance by fetching machine
+code to memory more efficiently, since it requires fetching fewer pages from
+disk, and a big part of the I/O work is done sequentially by the readahead.</p>
+<p>Code reordering can also improve memory usage by keeping the used code in a
+smaller number of memory pages. It can also reduce TLB and L1i cache misses by
+placing functions commonly called together closely in memory.</p>
+<h2 id="generating-orderfiles-manually">Generating Orderfiles Manually</h2>
+<p>To generate an orderfile you can run the <code>generate_orderfile_full.py</code>
+script. You will need an Android device connected with
+<a href="https://developer.android.com/tools/adb">adb</a> to generate the orderfile as the
+generation pipeline will need to run benchmarks on a device. The script will
+automatically verify the generated orderfile at the end of the process.</p>
+<p>Example:</p>
+<pre>tools/cygprofile/generate_orderfile_full.py --target-arch=arm64 --use-remoteexec</pre>
+<p>You can specify the architecture (arm or arm64) with <code>--target-arch</code>. For quick
+local testing you can use <code>--streamline-for-debugging</code>. To build using remote
+execution, use <code>--use-remoteexec</code> (Googlers only). There are several other
+options you can
+use to configure/debug the orderfile generation. Use the <code>-h</code> option to view the
+various options.</p>
+<p>NB: If your checkout is non-internal you must use the <code>--public</code> option.</p>
+<p>To build Chrome with a locally generated orderfile, use the
+<code>chrome_orderfile_path=&lt;path_to_orderfile&gt;</code> GN arg.</p>
+<p>To verify that an orderfile is valid for a given build, you can use the
+<code>check_orderfile.py</code> script. This is useful to ensure that the orderfile
+is compatible with the version of the library you are building.</p>
+<p>Example:</p>
+<pre>tools/cygprofile/check_orderfile.py \
+  -C out/Release --orderfile-path=clank/orderfiles/orderfile.arm64.out</pre>
+<p>Alternatively, you can use the <code>--verify</code> flag with <code>generate_orderfile_full.py</code>
+to build and verify in one step.</p>
+<h2 id="orderfile-performance-testing">Orderfile Performance Testing</h2>
+<p>Orderfiles can be tested using
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/perf_trybots.md">Pinpoint</a>.
+To do this, please create and upload a Gerrit change overriding the value of
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:build/config/compiler/BUILD.gn;l=217-223;drc=3a829695d83990141babd25dee7f2f94c005cae4"><code>chrome_orderfile_path</code></a>
+to, for instance, <code>//path/to/my_orderfile</code> (relative to <code>src</code>), where
+<code>my_orderfile</code> is the orderfile that needs to be evaluated. The orderfile should
+be added to the local branch and uploaded to Gerrit along with
+<code>build/config/compiler/BUILD.gn</code>. This Gerrit change can then be used as an
+&quot;experiment patch&quot; for a Pinpoint try job.</p>
+<h2 id="triaging-performance-regressions">Triaging Performance Regressions</h2>
+<p>Occasionally, an orderfile roll will cause performance problems on perfbots.
+This typically triggers an alert in the form of a bug report, which contains a
+group of related regressions like the one shown
+<a href="https://crbug.com/344654892">here</a>.</p>
+<p>In such cases it is important to keep in mind that effectiveness of the
+orderfile is coupled with using a recent PGO profile when building the native
+code. As a result some orderfile improvements (or effective no-ops) register as
+regressions on perfbots using non-PGO builds, which is the most common perfbot
+configuration.</p>
+<p>If a new regression does not include alerts from the
+<a href="https://ci.chromium.org/ui/p/chrome/builders/luci.chrome.ci/android-pixel6-perf-pgo">android-pixel6-perf-pgo</a>
+(the only Android PGO perfbot as of 2024-06) then the first thing to check is to
+query the same benchmark+metric combinations for the PGO bot. If the graphs
+demonstrate no regression, feel free to close the issue as WontFix(Intended
+Behavior). However, not all benchmarks are exercised on the PGO bot
+continuously. If there is no PGO coverage for a particular benchmark+metric
+combination, this combination can be checked on Pinpoint with the right perfbot
+choice (<a href="https://crbug.com/344665295">example</a>).</p>
+<p>Finally, the PGO+orderfile coupling exists only on arm64. Most speed
+optimization efforts on Android are focused on this configuration. On arm32 the
+most important orderfile optimization is for reducing memory used by machine
+code. Only one benchmark measures it: <code>system_health.memory_mobile</code>.</p>
+<h2 id="orderfile-pipeline">Orderfile Pipeline</h2>
+<p>The <code>generate_orderfile_full.py</code> script runs several key steps:</p>
+<ol>
+<li><p><strong>Build and install Chrome with orderfile instrumentation.</strong> This uses the
+<a href="https://clang.llvm.org/docs/ClangCommandLineReference.html#cmdoption-clang-finstrument-function-entry-bare"><code>-finstrument-function-entry-bare</code></a>
+Clang command line option to insert instrumentation for function entry. The
+build will be generated in <code>out/arm_instrumented_out/</code> or
+<code>out/arm64_instrumented_out</code>, depending on the CPU architecture (instruction
+set).</p>
+</li>
+<li><p><strong>Run the benchmarks and collect profiles.</strong> These benchmarks can be found in
+<a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/contrib/orderfile/orderfile.py">orderfile.py</a>. These profiles
+are a list of function offsets into the binary that were called during
+execution of the benchmarks.</p>
+</li>
+<li><p><strong>Cluster the symbols from the profiles to generate the orderfile.</strong> The
+offsets are processed and merged using a
+<a href="https://github.com/chromium/chromium/blob/HEAD/tools/cygprofile/cluster.py">clustering</a> algorithm to produce an
+orderfile.</p>
+</li>
+<li><p><strong>Run benchmarks on the final orderfile.</strong> We run some benchmarks to compare
+the performance with/without the orderfile. You can supply the
+<code>--no-benchmark</code> flag to skip this step.</p>
+</li>
+</ol>
+<h2 id="official-orderfile-generation">Official Orderfile Generation</h2>
+<p>The official orderfiles are generated on CI by dedicated builders. These
+builders ensure that the orderfiles used in release builds of Chrome are always
+fresh and based on a recent PGO profile. These builders also ensure that the
+orderfile and PGO profile are generated at the same Chromium commit and used
+together. See <a href="https://crbug.com/372686816">https://crbug.com/372686816</a> for more context.</p>
+<h3 id="the-orderfile-bots">The Orderfile Bots</h3>
+<p>The generation is handled by two builders for Android:</p>
+<ul>
+<li><code>android-arm32-orderfile</code></li>
+<li><code>android-arm64-orderfile</code></li>
+</ul>
+<p>These builders can be found on the
+<a href="https://ci.chromium.org/p/chrome/g/chrome.orderfile/builders">chrome.orderfile console</a>.
+They include builders for trunk and the various release branches/milestones.</p>
+<h3 id="triggering-and-dependencies">Triggering and Dependencies</h3>
+<p>The orderfile generation process is tightly coupled with
+<a href="pgo">Profile-Guided Optimization (PGO)</a>. The orderfile builders are
+automatically triggered by their corresponding PGO profile generation builders.
+This is configured for the orderfile builders in the <code>triggered_by</code> parameter in
+the orderfile builder configuration. For example:</p>
+<ul>
+<li><code>ci/android-arm32-pgo</code> triggers <code>android-arm32-orderfile</code>.</li>
+<li><code>ci/android-arm64-pgo</code> triggers <code>android-arm64-orderfile</code>.</li>
+</ul>
+<p>This ensures that the orderfile is always generated using the most recent PGO
+profile and at the same Chromium commit, which is crucial for its effectiveness.
+The PGO profile provides the necessary data to determine which functions are
+used most frequently and in what order, forming the basis for the clustering
+algorithm that generates the final orderfile. The PGO builder passes the GCS
+file path and name of the new profile to the orderfile builder so that the
+orderfile builder can download it, as it has not yet been rolled into trunk at
+this point.</p>
+<h3 id="builder-configuration">Builder Configuration</h3>
+<p>The configuration for these builders is defined in
+<a href="https://source.corp.google.com/h/chromium/chromium/src/+/main:internal/infra/config/subprojects/chrome/ci/chrome.orderfile.star"><code>//internal/infra/config/subprojects/chrome/ci/chrome.orderfile.star</code></a>.
+This configuration specifies the build steps, target architecture, and other
+parameters. The builders run the
+<a href="https://github.com/chromium/chromium/blob/HEAD/tools/cygprofile/generate_orderfile.py"><code>generate_orderfile.py</code></a> script,
+which orchestrates the process described in the &quot;Orderfile Pipeline&quot; section
+above.</p>
+<p>For questions or issues with the orderfile builders, the point of contact is
+<code>orderfile-discuss@google.com</code>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/orderfile.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/orderfile.md</a>
+  </p>
+</div>

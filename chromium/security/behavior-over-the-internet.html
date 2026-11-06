@@ -1,0 +1,48 @@
+<h1>Guidelines for delivery of Chrome behavior over the Internet</h1>
+<p><strong>Summary</strong>: It&#39;s OK to deliver <em>content</em> to Chrome dynamically over the internet,
+but Chrome behavior should be a part of the Chrome binary or delivered via
+Component Updater.</p>
+<p>There are several reasons for this:</p>
+<ul>
+<li>TLS is insufficient to prove categorically that the behavior comes from the
+Chrome organization (due primarily to the risk that malware, enterprise
+security software, or governments have arranged to install extra TLS root
+certificates). So you&#39;d need to build a custom signature verification scheme.
+This is hard (per the mantra &quot;don&#39;t roll your own crypto&quot;). The code is
+fiddly; you&#39;d need to sustain processes for key rotations, revocation,
+detecting private key compromise etc.</li>
+<li>Even if the transport is secure, a compromised server could show fake Chrome
+UI and spoof websites.</li>
+<li>Users expect Chrome behavior to be part of the Chrome download, and are
+surprised when it dynamically changes. Chrome does support dynamically
+changing behavior in several ways, such as the Variations framework. But
+these mechanisms are well-documented and controlled by e.g. enterprise
+policies, so it&#39;s better to use one of them than re-inventing the wheel
+-- and they conveniently support out-of-band signing. Dynamic behavior
+also adds a combinatorial factor which makes it harder to test or fuzz
+Chrome, or to put in place simple reliable security defenses which apply
+universally.</li>
+</ul>
+<p>What do we mean by &#39;behavior&#39;? &#39;Behavior&#39; is anything that a reasonable user
+would consider to be &#39;part of Chrome&#39; as opposed to content displayed by
+Chrome. So, the feed of articles is definitely &#39;content&#39; whereas the settings
+pages are &#39;behavior&#39;. Web pages themselves are &#39;content&#39; but any action which
+the browser applies to those pages is &#39;behavior&#39;. Generally speaking, code
+which runs in the browser process is likely to be &#39;behavior&#39;. Configuration
+information is likely to be &#39;behavior&#39; too if it meaningfully alters Chrome&#39;s
+functionality.</p>
+<p>A solution is available for fairly-dynamic Chrome behavior:
+<a href="https://chromium.googlesource.com/chromium/src/+/main/components/component_updater/README.md">Component Updater</a>.
+Components can be updated without an update to Chrome itself, which allows
+them to have faster or desynchronized release cadences. (The same <a href="https://g3doc.corp.google.com/company/teams/chrome/intelligence/serving_on_device_models.md?cl=head">signing
+technology</a>
+can be used elsewhere, but this should be avoided if possible
+because component updater has documentation and controls such as enterprise
+policies that might need to be replicated for per-feature signing and code
+delivery schemes).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/behavior-over-the-internet.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/behavior-over-the-internet.md</a>
+  </p>
+</div>

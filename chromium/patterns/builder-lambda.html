@@ -1,0 +1,34 @@
+<h1>The Builder Lambda Pattern</h1>
+<p>The builder lambda pattern allows you to do multi-stage construction for objects
+that can&#39;t be copy-assigned without putting temporaries needed during that
+construction at function scope.</p>
+<p>Suppose you have a class <code>C</code> with some deps, which you construct like this:</p>
+<pre>C foo;
+{
+  A a;
+  a.set_property(value);
+  foo = MakeC(a);
+}</pre>
+<p>This requires that <code>C</code> has an &quot;empty state&quot; and is mutable. If you want to make
+<code>C</code> immutable, that won&#39;t work, but you can use the builder lambda pattern like
+this:</p>
+<pre>C foo = [&amp;]() -&gt; auto {
+  A a;
+  a.set_property(value);
+  return MakeC(a);
+}();</pre>
+<p>The anonymous lambda provides a block scope to constrain the temporary variable,
+and having the lambda default capture-by-reference provides the same ability to
+reference enclosing variables as a normal lexical block. Returning the result of
+<code>MakeC()</code> directly into <code>foo</code> allows avoiding mutating <code>C</code>.</p>
+<p>Note that normally, default capture by reference is
+<a href="https://google.github.io/styleguide/cppguide.html#Lambda_expressions">discouraged</a>
+because it can create difficult lifetime problems. In this case, because the
+lambda can never escape the current scope and obviously is shorter-lived than
+any of the captured variables, default capture by reference is fine.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/builder-lambda.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/builder-lambda.md</a>
+  </p>
+</div>

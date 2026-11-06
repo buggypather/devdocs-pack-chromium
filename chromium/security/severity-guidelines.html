@@ -1,0 +1,307 @@
+<h1>Severity Guidelines for Security Issues</h1>
+<p>Vendors shipping products based on Chromium might wish to rate the severity of
+security issues in the products they release. This document contains guidelines
+for how to rate these issues. Check out our
+<a href="https://www.chromium.org/Home/chromium-security/security-release-management">security release management page</a>
+for guidance on how to release fixes based on severity.</p>
+<p>Any significant mitigating factors will generally reduce an issue&#39;s severity by
+one or more levels:</p>
+<ul>
+<li>Not web accessible, reliant solely on direct UI interaction to trigger.</li>
+<li>Unusual or unlikely user interaction will normally reduce severity by one
+level. This means interaction which may sometimes occur, but would not be
+typical of an average user engaging with Chrome or a particular feature in
+Chrome, nor could a user be easily convinced to perform by a persuasive web
+page.</li>
+<li>Requiring profile destruction or browser shutdown will normally reduce
+severity by one level.</li>
+<li><a href="#TOC-MiraclePtr">MiraclePtr protection</a></li>
+</ul>
+<p>Bugs that require implausible interaction, interactions a user would not
+realistically be convinced to perform, will generally be downgraded to a
+functional bug and not considered a security bug.</p>
+<p>Conversely, we do not consider it a mitigating factor if a vulnerability applies
+only to a particular group of users. For instance, a Critical vulnerability is
+still considered Critical even if it applies only to Linux or to those users
+running with accessibility features enabled.</p>
+<p>Also note that most crashes do not indicate vulnerabilities. Chromium is
+designed to crash in a controlled manner (e.g., with a <code>__debugBreak</code>) when
+memory is exhausted or in other exceptional circumstances.</p>
+<h2 id="TOC-Critical-severity">Critical severity (S0)</h2>
+<p>Critical severity (S0) issues allow an attacker to read or write arbitrary
+resources (including but not limited to the file system, registry, network,
+etc.) on the underlying platform, with the user&#39;s full privileges.</p>
+<p>Example bugs:</p>
+<ul>
+<li>Memory corruption in the browser process
+(<a href="https://crbug.com/319125#c10">319125</a>) which is directly or indirectly
+reachable from web content.</li>
+<li>Memory corruption in an unsandboxed GPU process when it is reachable directly
+from web content without compromising the renderer
+(<a href="https://crbug.com/1420130">1420130</a>, <a href="https://crbug.com/1427865">1427865</a>).
+(<a href="process-sandboxes-by-platform">On some platforms we consider the GPU process &#39;sandboxed&#39;</a>.)</li>
+<li>Exploit chains made up of multiple bugs that can lead to code execution
+outside of the sandbox (<a href="https://crbug.com/416449">416449</a>).</li>
+<li>A bug that enables web content to read arbitrary local files
+(<a href="https://crbug.com/962500">962500</a>).</li>
+</ul>
+<p>Note that the individual bugs that make up the chain will have lower severity
+ratings.</p>
+<h2 id="TOC-High-severity">High severity (S1)</h2>
+<p>High severity (S1) vulnerabilities allow an attacker to execute code in the
+context of, or otherwise impersonate other origins or read cross-origin data.</p>
+<p>Bugs which would normally be critical severity with unusual mitigating factors
+may be rated as high severity. For example, renderer sandbox escapes fall into
+this category as their impact is that of a critical severity bug, but they
+require the precondition of a compromised renderer. (Bugs which involve using
+<a href="https://github.com/chromium/chromium/blob/HEAD/mojo/public/js/README.md">MojoJS</a> to trigger an exploitable browser
+process crash usually fall into this category). Another example are bugs that
+result in memory corruption in the browser process, which would normally be
+critical severity, but require browser shutdown or profile destruction, which
+would lower these issues to high severity. A bug with the precondition of
+browser shutdown or profile destruction should be considered to have a maximum
+severity of high and could potentially be reduced by other mitigating factors.</p>
+<h3 id="memory-safety">Memory Safety</h3>
+<ul>
+<li>A bug that allows arbitrary code execution within the confines of the sandbox.<ul>
+<li>memory corruption in the renderer process (<a href="https://crbug.com/570427">570427</a>).</li>
+<li>memory corruption in v8.</li>
+<li>DCHECK correctness failures in v8.</li>
+<li>memory corruption in the gpu process where it is sandboxed (<a href="https://crbug.com/468936">468936</a>).</li>
+</ul>
+</li>
+<li>Memory corruption in the browser or another high privileged process (e.g. a
+GPU or network process on a <a href="process-sandboxes-by-platform">platform where they&#39;re not sandboxed</a>),
+that can only be triggered from a compromised renderer,
+leading to a sandbox escape (<a href="https://crbug.com/1393177">1393177</a>,
+<a href="https://crbug.com/1421268">1421268</a>).</li>
+<li>Controlled read of 16 or more bytes of data from the browser, gpu or network
+process by a compromised renderer.</li>
+<li>Memory corruption in the browser or another high privileged process (e.g.
+GPU or network process on a <a href="process-sandboxes-by-platform">platform where they&#39;re not sandboxed</a>)
+that requires specific, but common, user interaction, such as granting a
+permission (<a href="https://crbug.com/455735">455735</a>).</li>
+<li>Kernel memory corruption that could be used as a sandbox escape from a
+compromised renderer (<a href="https://crbug.com/377392">377392</a>).</li>
+</ul>
+<h3 id="web-platform--ux">Web Platform &amp; UX</h3>
+<ul>
+<li>A bug that allows full circumvention of the same origin policy. Universal XSS
+bugs fall into this category, as they allow script execution in the context of
+an arbitrary origin (<a href="https://crbug.com/534923">534923</a>).<ul>
+<li>A universal XSS bypass is either a universal CSP bypass, a universal Strict
+CSP bypass or a universal TrustedTypes bypass.</li>
+<li>A universal XSS bypass means that it allows arbitrary script execution: i.e.
+from arbitrary URLS, or from any HTTP/HTTPS URL, or from any data:/ URL, or
+any inline script.</li>
+<li>A universal bypass does not require pre-conditions beyond the attacker have
+the ability to parser-insert elements or iframes (threat model for CSP).</li>
+</ul>
+</li>
+<li>Site Isolation bypasses:<ul>
+<li>Cross-site execution contexts unexpectedly sharing a renderer process
+  (<a href="https://crbug.com/863069">863069</a>, <a href="https://crbug.com/886976">886976</a>).</li>
+<li>Cross-site data disclosure
+  (<a href="https://crbug.com/917668">917668</a>, <a href="https://crbug.com/927849">927849</a>).</li>
+</ul>
+</li>
+<li>Complete control over the apparent origin in the omnibox (<a href="https://crbug.com/76666">76666</a>).</li>
+</ul>
+<h3 id="other">Other</h3>
+<ul>
+<li>A bug in a standard install that allows a user to system privilege escalation
+with no preconditions.</li>
+</ul>
+<h2 id="TOC-Medium-severity">Medium severity (S2)</h2>
+<p>Medium severity (S2) bugs allow attackers to read or modify limited amounts of
+information, or are not harmful on their own but potentially harmful when
+combined with other bugs. This includes information leaks that could be useful
+in potential memory corruption exploits, or exposure of sensitive user
+information that an attacker can exfiltrate. Bugs that would normally be rated
+at a higher severity level with unusual mitigating factors may be rated as
+medium severity.</p>
+<p>Certain vulnerabilities in <a href="#TOC-Sandboxed-shader-compilers">sandboxed GPU shader compilers</a>
+should be marked as medium severity.</p>
+<h3 id="memory-safety-1">Memory Safety</h3>
+<ul>
+<li>V8 correctness issues where different compiler tiers return different results.</li>
+<li>Memory corruption that requires a specific extension to be installed
+(<a href="https://crbug.com/313743">313743</a>).</li>
+<li>Memory corruption in the browser process, requiring a non-standard flag and
+user interaction (<a href="https://crbug.com/1255332">1255332</a>).</li>
+</ul>
+<h3 id="web-platform--ux-1">Web Platform &amp; UX</h3>
+<ul>
+<li>An HSTS bypass (<a href="https://crbug.com/461481">461481</a>).</li>
+<li>A bypass of the same origin policy for pages that meet several preconditions
+(<a href="https://crbug.com/419383">419383</a>).</li>
+<li>A bug that allows arbitrary pages to bypass security interstitials
+(<a href="https://crbug.com/540949">540949</a>).</li>
+<li>A bug that allows an attacker to reliably read or infer complete browsing history
+(<a href="https://crbug.com/381808">381808</a>).</li>
+<li>An XSS bypass that has one the following mitigating factors that makes it less
+severe than a universal XSS bypass:<ul>
+<li>The policy being bypassed is more lax than strict CSP, but does still
+provide some amount of mitigation (i.e. it does not use * or unsafe-inline).</li>
+<li>The attacker script being allowed to execute is not arbitrary.</li>
+<li>The bypass requires uncommon preconditions to happen beyond the threat model
+of CSP (i.e. more than the ability to parser insert elements).</li>
+</ul>
+</li>
+</ul>
+<h3 id="other-1">Other</h3>
+<ul>
+<li>A bug in a standard install that allows breaking the user/user boundary on an
+OS where this is enforced, with no preconditions.</li>
+</ul>
+<h2 id="TOC-Low-severity">Low severity (S3)</h2>
+<p>Low severity (S3) vulnerabilities are usually bugs that would normally be a
+higher severity, but which have extreme mitigating factors or highly limited
+scope.</p>
+<h3 id="memory-safety-2">Memory Safety</h3>
+<ul>
+<li>An uncontrolled single-byte out-of-bounds read in any process
+(<a href="https://crbug.com/128163">128163</a>).</li>
+<li>Any out-of-bounds read in a renderer process
+(<a href="https://crbug.com/281480">281480</a>). Note that ASAN READs
+are treated as WRITEs unless they are small-sized reads.</li>
+<li>Memory corruption in a renderer process that requires specific user
+interaction, such as dragging an object (<a href="https://crbug.com/303772">303772</a>).</li>
+<li>Memory corruption in the browser process, triggered by a browser shutdown that
+is not reliably triggered and/or is difficult to trigger (<a href="https://crbug.com/1230513">1230513</a>).</li>
+<li>Memory corruption in the browser process from a compromised renderer that
+requires browser shutdown to trigger.</li>
+<li>Memory corruption in the browser process which requires an extension with the
+debugger permission.</li>
+<li>An uncontrolled uninitialized memory read in the browser, network or gpu
+process where the values are passed to a compromised renderer via IPC
+(<a href="https://crbug.com/469151">469151</a>). Note that evidence of an
+controlled leak of 16 or more bytes of data from the browser, network or gpu
+process is High Severity.</li>
+</ul>
+<h3 id="web-platform--ux-2">Web Platform &amp; UX</h3>
+<ul>
+<li>A bug that allows web content to draw over browser UI
+(<a href="https://crbug.com/550047">550047</a>).</li>
+<li>A bug that reduces the effectiveness of the sandbox
+(<a href="https://crbug.com/338538">338538</a>).</li>
+<li>Bypass requirement for a user gesture (<a href="https://crbug.com/256057">256057</a>).</li>
+<li>Partial CSP bypass. This is either:<ul>
+<li>The bypass of an extremely lax CSP (<a href="https://crbug.com/534570">534570</a>).</li>
+<li>or a CSP bypass that is very limited in scope (requires pre-conditions and
+does not allow arbitrary script execution).</li>
+</ul>
+</li>
+<li>A limited extension permission bypass (<a href="https://crbug.com/169632">169632</a>).</li>
+<li>An omnibox spoof where only certain URLs can be displayed, or with other
+mitigating factors (<a href="https://crbug.com/265221">265221</a>).</li>
+<li>A UI spoof on a surface other than the omnibox or the site information panel
+(<a href="https://issues.chromium.org/issues/421690383">421690383</a>)</li>
+<li>A bug that allows an attacker to reliably read or infer limited browsing
+history.</li>
+<li>A bug that allows local network access without the LNA permission.</li>
+<li>Spoofs that hide important warnings under other obvious UI elements.</li>
+<li>Split-view dialog confusion.</li>
+<li>Clickjacking and enterjacking bugs of any kind (rapid clicks, holding
+down a key, etc) (<a href="https://issues.chromium.org/issues/40092362">400923</a>). Any
+complex gestures or preconditions render these usability bugs and not security
+issues.</li>
+</ul>
+<h2 id="TOC-No-impact">Can&#39;t impact Chrome users by default</h2>
+<p>If the bug can&#39;t impact Chrome users by default, this is denoted instead by
+the <strong>Security-Impact_None</strong> hotlist (hotlistID: 5433277). See
+<a href="security-labels#TOC-Security_Impact-None">the security labels document</a>
+for more information. The bug should still have a severity set according
+to these guidelines.</p>
+<h2 id="TOC-Not-a-security-bug">Not a security bug</h2>
+<p>The <a href="faq">security FAQ</a> covers many of the cases that we do not consider to
+be security bugs, such as <a href="faq#TOC-Are-denial-of-service-issues-considered-security-bugs-">denial of service</a>
+and, in particular, null pointer dereferences with consistent fixed offsets.</p>
+<h2 id="TOC-MiraclePtr">&quot;MiraclePtr&quot; protection against use-after-free</h2>
+<p><a href="https://github.com/chromium/chromium/blob/HEAD/base/memory/raw_ptr.md">&quot;MiraclePtr&quot;</a> is a technology designed to
+deterministically prevent exploitation of use-after-free bugs. Address
+sanitizer is aware of MiraclePtr and will report on whether a given
+use-after-free bug is protected or not:</p>
+<pre>MiraclePtr Status: NOT PROTECTED
+No raw_ptr&lt;T&gt; access to this region was detected prior to the crash.</pre>
+<p>or</p>
+<pre>MiraclePtr Status: PROTECTED
+The crash occurred while a raw_ptr&lt;T&gt; object containing a dangling pointer was being dereferenced.
+MiraclePtr should make this crash non-exploitable in regular builds.</pre>
+<p>If a bug is marked <code>MiraclePtr Status:PROTECTED</code>, it is not considered a
+security issue. It should be converted to type:Bug and assigned to the
+appropriate engineering team as functional issue.</p>
+<h2 id="TOC-Sandboxed-shader-compilers">Sandboxed GPU Shader Compilers</h2>
+<p>If a GPU shader compiler is in a separate process outside the GPU process and
+sandboxed, the overall attack surface of a vulnerability in that specific
+compiler may be much lower than an in-GPU-process shader compiler. Unlike the
+renderer process, which can make hundreds of different IPCs to the browser
+process, a well sandboxed shader compiler process can make a very limited number
+of IPCs back to the GPU process. Furthermore, code execution in a sandboxed GPU
+shader compiler is now limited to writing arbitrary shaders, which is a much
+lower threat surface than code execution in the GPU process as a whole.</p>
+<p>Currently, only the Metal shader compiler is in its own sandboxed process, so
+vulnerabilities that would otherwise be high severity should be considered
+medium severity if they are specific to that compiler.</p>
+<p>Vulnerabilities specific to the Metal shader compiler will typically call into
+the <code>MTLCompiler</code> in the stack trace, and a PoC will only be reproducible on
+MacOS devices. An example of a stack trace specific to the metal shader compiler
+can be found at (<a href="https://crbug.com/40074630">40074630</a>).</p>
+<h2 id="TOC-SLOs">Prioritization</h2>
+<h3 id="critical-s0">Critical (S0)</h3>
+<p>Critical Severity (S0) issues are normally assigned Priority <strong>P0</strong> and assigned
+to the current stable milestone (or earliest milestone affected). For critical
+severity bugs, <a href="https://www.chromium.org/issue-tracking/autotriage">SheriffBot</a>
+will automatically assign the milestone.</p>
+<p><strong>For critical severity (S0) vulnerabilities, we aim to deploy the patch to all
+Chrome users in under 30 days.</strong></p>
+<p>Critical vulnerability details may be made public in 60 days, in accordance with
+Google&#39;s general <a href="https://security.googleblog.com/2010/07/rebooting-responsible-disclosure-focus.html">vulnerability disclosure
+recommendations</a>,
+or <a href="https://security.googleblog.com/2013/05/disclosure-timeline-for-vulnerabilities.html">faster (7
+days)</a>
+if there is evidence of active exploitation.</p>
+<h3 id="high-s1">High (S1)</h3>
+<p>High Severity (S1) issues are normally assigned Priority <strong>P1</strong> and assigned to
+the current stable milestone (or earliest milestone affected). For high severity
+bugs, <a href="https://www.chromium.org/issue-tracking/autotriage">SheriffBot</a> will
+automatically assign the milestone.</p>
+<p><strong>For high severity (S1) vulnerabilities, we aim to deploy the patch to all
+Chrome users in under 60 days.</strong></p>
+<h3 id="medium-s2">Medium (S2)</h3>
+<p>Medium Severity (S2) issues are normally assigned Priority <strong>P1</strong> and assigned
+to the current stable milestone (or earliest milestone affected). If the fix
+seems too complicated to merge to the current stable milestone, they may be
+assigned to the next stable milestone.</p>
+<h3 id="low-s3">Low (S3)</h3>
+<p>Low Severity (S3) issues are normally initially assigned Priority <strong>P3</strong>.
+Milestones can be assigned to low severity bugs on a case-by-case basis, but
+they are not normally merged to Stable or Beta branches.</p>
+<p>After a bug has been at low severity (S3) for 30 days:</p>
+<ul>
+<li>It becomes exempt from the usual rule requiring security bugs to be assigned
+to a developer.</li>
+<li>It will be made visible to everyone in <a href="mailto:edit-bug-access@chromium.org">edit-bug-access@chromium.org</a> (i.e.,
+all chromium committers), rather than just the security team.</li>
+</ul>
+<p>This policy is intended to strike a balance between ensuring bugs are triaged
+and fixed in a timely manner and ensuring that low severity bugs are visible for
+opportunistic fixes by engineers who happen to be working in the affected area.</p>
+<h3 id="TOC-itw-pri">Priority for in the wild vulnerabilities</h3>
+<p>If there is evidence of a weaponized exploit or active exploitation in the wild,
+the vulnerability is considered a P0 priority - regardless of the severity
+rating -with a SLO of 7 days or faster. Our goal is to release a fix in a
+Stable channel update of Chrome as soon as possible.</p>
+<h3 id="security-impact_none">Security-Impact_None</h3>
+<p>Bugs which have <strong>Security-Impact_None</strong> are exempt from the usual fix timelines
+given in this document. These bugs are often in experimental, prototype, or
+unfinished features, some of which have very long development timelines, and
+setting fix deadlines for them doesn&#39;t improve security outcomes for users.
+Instead, teams are expected to fix these bugs before default-enabling these
+features.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/severity-guidelines.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/severity-guidelines.md</a>
+  </p>
+</div>

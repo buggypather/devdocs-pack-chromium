@@ -1,0 +1,20 @@
+<h1>Gpu Acceleration In Crd</h1>
+<h2 id="using-gpu-acceleration-in-chrome-remote-desktop">Using GPU Acceleration in Chrome Remote Desktop</h2>
+<p>When Chrome Remote Desktop is launched in Wayland mode, it can easily
+provide GPU acceleration for Chrome instances launched within it!
+Thanks to colleagues on the Chrome Remote Desktop team for
+demonstrating how to get this working in internal Bug 511233442.</p>
+<p>In short, on a Google-managed Linux workstation:</p>
+<ul>
+<li>Enable CRD Wayland mode (<a href="http://go/crd-wayland">go/crd-wayland</a>)</li>
+<li>Add your user-account to the &quot;render&quot; group (<code>sudo usermod -a -G render $USER</code>)</li>
+<li>Reboot (just to make sure everything takes effect)</li>
+</ul>
+<p>Chrome running in Wayland mode receives acceleration via the host
+machine&#39;s GPU!</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu-acceleration-in-crd.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu-acceleration-in-crd.md</a>
+  </p>
+</div>

@@ -1,0 +1,38 @@
+<h1>Chrome Speed Benchmark Shortlist</h1>
+<p>Target audience: if you are a Chrome developer who wants to quickly gauge how
+your change would affect Chrome performance, then this doc is for you.</p>
+<blockquote>
+<p><strong>Warning:</strong> this doc just gives you a general reduced list of Chrome
+benchmarks to try out if you don’t know where to start or just want some quick
+feedback. There is no guarantee that if your change doesn’t regress these
+benchmarks, it won’t regress any benchmarks or regress UMA metrics. We believe
+it’s best to rely on <a href="https://docs.google.com/document/d/1Ww487ZskJ-xBmJGwPO-XPz_QcJvw-kSNffm0nPhVpj8/edit#heading=h.2uunmi119swk">key UMA metrics</a>
+to evaluate performance effects of any Chrome change.</p>
+</blockquote>
+<p>Here is the list of benchmarks which we recommend:
+Android:</p>
+<ul>
+<li>system_health.common_mobile</li>
+<li>system_health.memory_mobile</li>
+<li>startup.mobile</li>
+</ul>
+<p>Desktop:</p>
+<ul>
+<li>system_health.common_desktop</li>
+<li>system_health.memory_desktop</li>
+</ul>
+<p>Both desktop &amp; mobile:</p>
+<ul>
+<li>speedometer2</li>
+</ul>
+<p>Instructions for how to run these benchmarks:</p>
+<ul>
+<li><a href="https://chromium.googlesource.com/catapult/+/main/telemetry/docs/run_benchmarks_locally.md">Running them locally</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/perf_trybots.md">Running on perf trybot</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/benchmark_short_list.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/benchmark_short_list.md</a>
+  </p>
+</div>

@@ -1,0 +1,282 @@
+<h1>Life of a policy</h1>
+<h2 id="summary">Summary</h2>
+<p>Once a policy is defined and implemented, it will be launched to the public.
+After that, any modification or deprecation will require additional cautions and
+steps.</p>
+<p>This article describes the process and requirements of policy launch,
+modification and deprecation.</p>
+<p>And if you are not sure, don’t hesitate to contact the <a href="mailto:chromium-enterprise@chromium.org">Chrome enterprise team</a>.</p>
+<p>More details about policy development can be found in the <a href="add_new_policy">Chromium doc</a>.</p>
+<h2 id="launch-a-new-policy">Launch a new policy</h2>
+<h3 id="before-the-policy-is-ready">Before the policy is ready</h3>
+<p>When adding a new policy, put the platforms it will be supported in the
+<code>future_on</code> list. This will ensure that the policy is not included in the
+auto-generated documentation or templates. It will also exclude the policy from
+the Stable and Beta channels unless it&#39;s enabled specifically by
+<a href="https://chromeenterprise.google/policies/?policy=EnableExperimentalPolicies">EnableExperimentalPolicies</a>
+policy.</p>
+<h3 id="review-process">Review process</h3>
+<p>Once a policy is implemented and tested, it&#39;s time to launch it. Policy launch
+process follows the general guidelines of Chrome or Chrome OS launch process.
+In short:</p>
+<ul>
+<li>If a policy is part of a big project, please make sure the launch review cover
+it as well.</li>
+<li>If a policy is complicated and is an independent project, please open a
+launch review for it.</li>
+<li>If a policy is trivial, launch review can be skipped.</li>
+</ul>
+<p><strong>Do not use Finch experimentation to manage policy rollout</strong>.
+Policy launches require domain-level control for gradual rollout which is not
+supported by Finch. However, you could still use Feature to disable a policy
+in case of any major issue.</p>
+<p>After the feature launch, remove the flag (after 2-3 releases). In some
+cases, you may want to wait for the next Long Term Stable (LTS) release before
+removing the flag (see <a href="http://go/chromeos-commercial-lts-chrome">go/chromeos-commercial-lts-chrome</a>).</p>
+<p>If you need to launch an emergency kill switch config due to a bug,
+please contact your TPM and the release owner (see
+<a href="https://chromiumdash.appspot.com/schedule">https://chromiumdash.appspot.com/schedule</a>).</p>
+<p>For more information see <a href="http://go/chrome-flag-guarding">go/chrome-flag-guarding</a>
+(internal doc, Googlers only).</p>
+<h3 id="trusted-testers">Trusted testers</h3>
+<p>Some enterprise features will be tested by a small set of users before the
+general launch. Contact the
+<a href="mailto:chromium-enterprise@chromium.org">Chrome enterprise team</a> if needed.</p>
+<h3 id="flip-the-bit">Flip the bit</h3>
+<p>Once everything is ready, launch the policy by moving the platforms from
+<code>future_on</code> to <code>supported_on</code> and setting the <em>since_version</em> of those platforms
+to the milestone for which the launch approval was granted. If the
+<em>since_version</em> is set to a earlier milestone, you need to merge back all
+necessary commits.</p>
+<h3 id="android-desktop-policy-launch-special-guidance">Android Desktop policy launch special guidance</h3>
+<p>In general, all policies that work for Android Mobile can be launched as long
+as they&#39;re ready while the Desktop part should be held back.</p>
+<table>
+<thead>
+<tr>
+<th align="left">Target Scope</th>
+<th align="left">Existing policy with Android support</th>
+<th align="left">Existing policy without Android</th>
+<th align="left">New Policy</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>Target: Desktop Only</strong></td>
+<td align="left">N/A</td>
+<td align="left">Hold</td>
+<td align="left">Hold</td>
+</tr>
+<tr>
+<td align="left"><strong>Target: Mobile &amp; Desktop</strong></td>
+<td align="left">Test</td>
+<td align="left">Launch</td>
+<td align="left">Launch</td>
+</tr>
+</tbody></table>
+<ul>
+<li>N/A: Not a valid case.</li>
+<li>Test: Test the policy. Fix issues if found.</li>
+<li>Hold: The policy launch process should be held until Android
+Desktop is ready.</li>
+<li>Launch: The policy can be launched for Android Mobile as long as it&#39;s ready.
+But the Android Desktop part must remains on hold</li>
+</ul>
+<p>For example, a new policy controls bookmarks can be launched while a policy for
+extensions has to wait. Because bookmarks is a mobile+desktop feature but
+extensions will only be available for Android Desktop.</p>
+<p>Note that policies should aim for supporting both Mobile and Desktop together
+if possible. And even the desktop part won&#39;t be launched immediately, it still
+needs to be tested.</p>
+<h2 id="deprecating-a-policy">Deprecating a policy</h2>
+<p>A policy is deprecated when admins should stop using it. This is often because
+a new policy has been released and should be used instead.</p>
+<p>When deprecating a policy, it&#39;s important to ensure that the old policy still
+works as expected. If you wish to remove the functionality, you&#39;ll need to
+change the <code>supported_on</code> list.</p>
+<h3 id="steps">Steps</h3>
+<ol>
+<li>Update <code>YourPolicyName.yaml</code>, marking the policy as deprecated with the
+<code>deprecated</code> field and updating the description to describe when and why the
+policy is deprecated and what admins should be doing instead.</li>
+<li>Update the policy handling code. This is generally ensuring that if the old
+policy is set, the values are propagated to the new policies if they were
+unset.</li>
+<li>Notify <a href="mailto:chromium-enterprise@chromium.org">Chrome enterprise team</a> to
+ensure this deprecation is mentioned in the enterprise release notes.</li>
+</ol>
+<h2 id="removing-support-for-a-policy">Removing support for a policy</h2>
+<p>Generally speaking, policies shouldn&#39;t be removed from Chrome. Although they can
+be deprecated fairly easily, removing support for a policy is a much bigger
+issue, because admins might be relying on that functionality.</p>
+<p>The two main reasons for removing support for a policy are:</p>
+<ol>
+<li><p>It is a policy that was always documented as having a limited lifespan,
+such as an escape hatch policy.</p>
+</li>
+<li><p>The feature this policy impacts is being removed from Chrome. In such cases,
+policy support should be removed in the same Chrome milestone as the feature
+removal.</p>
+</li>
+</ol>
+<p>If you want to remove support for another reason, please reach out to
+<a href="mailto:chromium-enterprise@chromium.org">Chrome enterprise team</a>
+to ensure this is okay. The general preference is to leave policies as
+deprecated, but still supported.</p>
+<p>If the policy was never launched, <code>YourPolicyName.yaml</code> can be deleted and you
+may replace the policy name in <code>policies.yaml</code> by an empty string.</p>
+<p>Otherwise, follow these steps:</p>
+<ol>
+<li><p>Update <code>YourPolicyName.yaml</code> to mark the poilcy as no longer supported.</p>
+<ul>
+<li>Set <code>deprecated</code> to True if the policy skipped past the deprecation
+state.</li>
+<li>Update <code>supported_on</code> to correctly list the last milestone the policy is
+supported on.<ul>
+<li>For example, if the impacted feature is being removed in M110, set
+<code>supported_on</code> to <code>X-109</code>. The policy would have no effect in M110,
+so the last supported milestone is M109.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>If the last milestone lies in the future file a bug to clean up the policy
+supporting code as soon as the milestone has been reached. Set its
+NextAction field to a date shortly after the expected branch date for that
+version. Add a comment in the yaml file with the bug number for reference.</p>
+</li>
+<li><p>Lastly after the last supported version has been branched:</p>
+<ul>
+<li>remove all the code that implements the policy behavior after the
+milestone has been reached.</li>
+<li>Update the related tests in the under <code>policy/test/data/pref_mapping</code> by
+removing all test related to that policy and any resulting empty file.</li>
+</ul>
+</li>
+<li><p>Notify <a href="mailto:chromium-enterprise@chromium.org">Chrome enterprise team</a> to
+ensure this removal of support is mentioned in the enterprise release notes.</p>
+<ul>
+<li>Ideally, a policy should be deprecated for at least 3 milestones before
+removing support. This gives admins time to migrate away from the
+policy.</li>
+</ul>
+</li>
+</ol>
+<h2 id="modifying-existing-policies">Modifying existing policies</h2>
+<p>If you are planning to modify an existing policy, notify the
+<a href="mailto:chromium-enterprise@chromium.org">Chrome enterprise team</a> ahead of time.
+If necessary, please includes a one-pager to explaining the planned change.</p>
+<h3 id="add-new-policy-functionality">Add new policy functionality</h3>
+<p>This usually includes adding a new value to an enum policy, or adding a new
+field to a dictionary policy.</p>
+<p>The new field needs to be added to the policy schema and mentioned in the
+policy description about the versions and platforms it is supported on.</p>
+<p>Admins likely will deploy the new field to all their browsers, including the
+older ones that don&#39;t support it. In this case, the new field should be ignored
+properly without disrupting the existing behavior. If not possible, the policy
+should be deprecated and replaced by a new one.</p>
+<h3 id="remove-policy-functionality">Remove policy functionality</h3>
+<p>Please follow the same rules of <a href="#deprecating-a-policy">deprecating</a> or
+<a href="#removing-support-for-a-policy">removing</a> a policy. The main difference is that
+instead of updating the <code>deprecated</code> and <code>supported_on</code> fields, mention
+the change in the policy description.</p>
+<h3 id="any-other-modification">Any other modification</h3>
+<p>In general, don&#39;t change policy semantics in a way that is incompatible with
+previous semantics. Some fields like <code>default</code>, <code>type</code> or <code>device_only</code> should
+never be updated after the launch.</p>
+<p>However, if a modification is necessary, please update the policy description
+to mention the change with the versions and platforms.</p>
+<h3 id="migration">Migration</h3>
+<p>Unless the policy is <code>cloud_only</code> or only supported on ChromeOS, it shouldn&#39;t
+rely on any cloud policy server for the migration. In other words, all
+compatibility and migration code should be contained in the client.</p>
+<h3 id="presubmit-checks-when-modifying-existing-policies">Presubmit Checks when Modifying Existing Policies</h3>
+<p>To enforce the above rules concerning policy modification and ensure no
+backwards incompatible changes are introduced, presubmit checks
+will be performed on every change to
+<a href="https://cs.chromium.org/chromium/src/components/policy/resources/templates/policy_definitions/">templates</a>.</p>
+<p>The presubmit checks perform the following verifications:</p>
+<ol>
+<li><p>It verifies whether a policy is considered <strong>unreleased</strong> before allowing a
+change. A policy is considered unreleased if <strong>any</strong> of the following
+conditions are true:</p>
+<ol>
+<li>It is an unchanged policy marked as <code>future: true</code>.</li>
+<li>All the <code>supported_versions</code> of the policy satisfy <strong>any</strong> of the
+following conditions<ol>
+<li>The unchanged supported major version is &gt;= the current major
+version stored in the VERSION file at tip of tree. This covers the
+case of a policy that has just recently been added, but has not yet
+been released to a stable branch.</li>
+<li>The changed supported version == unchanged supported version + 1 and
+the changed supported version is equal to the version stored in the
+VERSION file at tip of tree. This check covers the case of
+&quot;unreleasing&quot; a policy after a new stable branch has been cut, but
+before a new stable release has rolled out. Normally such a change
+should eventually be merged into the stable branch before the
+release.</li>
+</ol>
+</li>
+<li><code>supported_on</code> list is empty.</li>
+</ol>
+</li>
+<li><p>If the policy is considered <strong>unreleased</strong>, all changes to it are allowed.</p>
+</li>
+<li><p>However if the policy is released then the following verifications
+are performed on the delta between the original policy and the changed
+policy.</p>
+<ol>
+<li>Released policies cannot be removed.</li>
+<li>Released policies cannot have their type changed (e.g. from bool to
+Enum).</li>
+<li>Released policies cannot have the <code>future: true</code> flag added to it. This
+flag can only be set on a new policy.</li>
+<li>Released policies can only add additional <code>supported_on</code> versions. They
+cannot remove or modify existing values for this field except for the
+special case above for determining if a policy is released. Policy
+support end version (adding &quot;-xx&quot; ) can however be added to the
+supported_on version to specify that a policy will no longer be
+supported going forward (as long as the initial <code>supported_on</code> version
+is not changed).</li>
+<li>Released policies cannot be renamed (this is the equivalent of a
+delete + add).</li>
+<li>Released policies with non dict types cannot have their schema changed.<ol>
+<li>For enum types, we will allow adding new enum value. Any values that
+are no longer supported should be marked as deprecated.</li>
+<li>For int types, we will allow making the minimum and maximum values
+less restrictive than the existing values.</li>
+<li>For string types, we will allow the removal of the &quot;pattern&quot;
+property to allow the validation to be less restrictive.</li>
+<li>We will allow addition to any list type values only at the end of
+the list of values and not in the middle or at the beginning (this
+restriction will cover the list of valid enum values as well).</li>
+<li>These same restrictions will apply recursively to all property
+schema definitions listed in a dictionary type policy.</li>
+</ol>
+</li>
+<li>Released dict policies cannot remove or modify any existing keys in
+their schema. They can only add new keys to the schema.<ol>
+<li>Dictionary policies can have some of their &quot;required&quot; fields removed
+in order to be less restrictive.</li>
+</ol>
+</li>
+</ol>
+</li>
+<li><p>A policy is <strong>partially released</strong>  if both <code>supported_on</code> and
+<code>future_on</code> list are not empty.</p>
+</li>
+<li><p>The <strong>partially released</strong> policy is considered as a <strong>released</strong> policy
+and only the <code>future_on</code> list can be modified freely. However, any
+platform in the <code>supported_on</code> list cannot be moved back to the <code>future_on</code>
+list.</p>
+</li>
+<li><p>Compatibility checks can be bypassed by adding
+<code>BYPASS_POLICY_COMPATIBILITY_CHECK=&lt;reason&gt;</code> to the CL description. However,
+this should be used sparingly and only if there is a strong reason to do so.</p>
+</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/life_of_a_policy.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/life_of_a_policy.md</a>
+  </p>
+</div>

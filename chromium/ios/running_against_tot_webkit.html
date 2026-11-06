@@ -1,0 +1,75 @@
+<h1>Running Against ToT WebKit in the Simulator</h1>
+<p>This is a simplified workflow intended to make it as easy as possible to compile
+and run against ToT WebKit locally. If you intend to do daily development in a
+WebKit tree, you may want to consider an alternate workflow as described
+<a href="https://docs.google.com/document/d/1l74JNYr9dniUnT5aKUS1_EswlDmuQghlEfyVCiPh9a4">here</a>.</p>
+<p>A design doc explaining the details behind these steps can be found
+<a href="https://docs.google.com/document/d/15HCmvC_yKNpmcrgHaGUA5LWWwROCmOz7qyYnMmhQkBQ">here</a></p>
+<p>Note: this only works on Simulator.  At present, we do not have the ability to
+compile WebKit for devices.</p>
+<h2 id="warning-do-this-in-a-new-checkout">Warning: do this in a new checkout</h2>
+<p>The changes below will substantially increase compile times, for both clean and
+incremental builds.  No-op builds will jump from ~0s to ~60s, which will
+likely be an unacceptable regression in a daily development checkout.</p>
+<p>By pulling a separate, new checkout for WebKit, you sidestep these issues at the
+expense of greater disk usage.</p>
+<h2 id="updating-gclient-to-pull-webkit">Updating .gclient to pull WebKit</h2>
+<p>To start, edit your <code>.gclient</code> file to checkout WebKit @HEAD. Both of the custom
+variables are necessary, as by default webkit.git is pinned to a revision in the
+distant past.</p>
+<pre>solutions = [
+  {
+    &quot;url&quot;: &quot;https://chromium.googlesource.com/chromium/src.git&quot;,
+    &quot;name&quot;: &quot;src&quot;,
+
+    &quot;custom_vars&quot;: {
+      &quot;checkout_ios_webkit&quot;: True,
+      &quot;ios_webkit_revision&quot;: &quot;refs/heads/main&quot;,
+    },
+
+  },
+]
+target_os = [&quot;ios&quot;]
+target_os_only = &quot;True&quot;</pre>
+<p>Add the <code>custom_vars</code> section as above and re-run <code>gclient sync</code>.  After it
+completes, you should have a WebKit checkout in <code>ios/third_party/webkit/src</code>.</p>
+<h2 id="building">Building</h2>
+<p>WebKit-enabled checkouts expose a <code>webkit</code> target via GN/ninja. The WebKit
+libraries will automatically be built as part of the default set of targets, or
+you can build it individually.</p>
+<pre># Builds all targets, including webkit.
+autoninja -C out/Debug-iphonesimulator
+
+# Builds just the webkit target.
+autoninja -C out/Debug-iphonesimulator webkit</pre>
+<p>The WebKit build output can be found at
+<code>out/Debug-iphonesimulator/obj/ios/third_party/webkit/</code>.</p>
+<h3 id="speeding-up-clean-builds-by-building-webkit-first">Speeding up clean builds by building WebKit first</h3>
+<p>We build using a set of scripts provided by WebKit; they set up an environment
+and then invoke xcodebuild directly.  To prevent xcodebuild from competing with
+ninja for CPU/RAM, we limit the WebKit build to four parallel jobs. This is
+generally sufficient for incremental builds, but for clean builds (or after a
+sync) it may be faster to build WebKit without this limitation.</p>
+<pre># After a sync, build WebKit first. Make sure to use the same args as in
+# //ios/third_party/webkit/BUILD.gn.
+ios/third_party/webkit/build-webkit.py --ios_simulator
+
+# Once WebKit is built, invoke ninja as usual to build Chromium.
+autoninja -C out/Debug-iphonesimulator</pre>
+<h3 id="fixing-compiler-errors-in-webkitlegacy-headers">Fixing compiler errors in WebKitLegacy headers</h3>
+<p>If you get compiler errors in <code>WebKitLegacy.framework/PrivateHeaders/WebView.h</code>,
+you can just edit
+<code>obj/ios/third_party/webkit/ios/Debug-iphonesimulator/WebKit.framework/Headers/WebKitLegacy.h</code>
+and remove the import of <code>WebKitLegacy/WebKit.h</code>. It&#39;s not actually needed, and
+the SDK shipped with Xcode doesn&#39;t include the WebKitLegacy framework too.</p>
+<h2 id="running-against-locally-built-libraries">Running against locally-built libraries</h2>
+<p>To run against the libraries you&#39;ve just built, set the <code>DYLD_FRAMEWORK_PATH</code>
+environment variable to the directory containing the WebKit build output.  This
+is usually easiest to do in the Xcode UI.</p>
+<pre>DYLD_FRAMEWORK_PATH = /path/to/out/Debug-iphonesimulator/obj/ios/third_party/webkit/Debug-iphonesimulator/</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ios/running_against_tot_webkit.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ios/running_against_tot_webkit.md</a>
+  </p>
+</div>

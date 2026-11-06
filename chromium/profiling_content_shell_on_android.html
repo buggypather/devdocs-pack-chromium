@@ -1,0 +1,135 @@
+<h1>Profiling Content Shell on Android</h1>
+<p>Below are the instructions for setting up profiling for Content Shell on
+Android. This will let you generate profiles for ContentShell. This will require
+linux, building an userdebug Android build, and wiping the device.</p>
+<h2 id="prepare-your-device">Prepare your device.</h2>
+<p>You need an Android 4.2+ device (Galaxy Nexus, Nexus 4, 7, 10, etc.) which you
+don’t mind erasing all data, rooting, and installing a userdebug build on.</p>
+<h2 id="get-and-build-content_shell_apk-for-android">Get and build <code>content_shell_apk</code> for Android</h2>
+<p>More detailed insturctions in <a href="android_build_instructions">android_build_instructions.md</a>.</p>
+<pre data-language="shell">ninja -C out/Release content_shell_apk</pre>
+<h2 id="setup-the-physical-device">Setup the physical device</h2>
+<p>Plug in your device. Make sure you can talk to your device, try:</p>
+<pre data-language="shell">third_party/android_sdk/public/platform-tools/adb shell ls</pre>
+<h2 id="root-your-device-and-install-a-userdebug-build">Root your device and install a userdebug build</h2>
+<ol>
+<li>This may require building your own version of Android:
+<a href="http://source.android.com/source/building-devices.html">http://source.android.com/source/building-devices.html</a></li>
+<li>A build that works is: <code>manta / android-4.2.2_r1</code> or
+<code>master / full_manta-userdebug</code>.</li>
+</ol>
+<h2 id="root-your-device">Root your device</h2>
+<ol>
+<li>Run <code>adb root</code>. Every time you connect your device you’ll want to run this.</li>
+<li>If adb is not available, make sure to run <code>. build/android/envsetup.sh</code></li>
+</ol>
+<p>If you get the error <code>error: device offline</code>, you may need to become a developer
+on your device before Linux will see it. On Jellybean 4.2.1 and above this
+requires going to “about phone” or “about tablet” and clicking the build number
+7 times:
+<a href="http://androidmuscle.com/how-to-enable-usb-debugging-developer-options-on-nexus-4-and-android-4-2-devices/">http://androidmuscle.com/how-to-enable-usb-debugging-developer-options-on-nexus-4-and-android-4-2-devices/</a></p>
+<h2 id="enable-profiling">Enable profiling</h2>
+<p>Rebuild <code>content_shell_apk</code> with profiling enabled.</p>
+<p>With GN:</p>
+<pre>gn args out/Profiling
+# add &quot;enable_profiling = true&quot;
+ninja -C out/Profiling content_shell_apk
+export CHROMIUM_OUTPUT_DIR=&quot;$PWD/out/Profiling&quot;</pre>
+<h2 id="run-a-telemetry-perf-profiler">Run a Telemetry perf profiler</h2>
+<p>You can run any Telemetry benchmark with <code>--profiler=perf</code>, and it will:</p>
+<ol>
+<li>Download <code>perf</code> and <code>perfhost</code></li>
+<li>Install on your device</li>
+<li>Run the test</li>
+<li>Setup symlinks to work with the <code>--symfs</code> parameter</li>
+</ol>
+<p>You can also run &quot;manual&quot; tests with Telemetry, more information here:
+<a href="https://www.chromium.org/developers/telemetry/profiling#TOC-Manual-Profiling---Android">https://www.chromium.org/developers/telemetry/profiling#TOC-Manual-Profiling---Android</a></p>
+<p>The following steps describe building <code>perf</code>, which is no longer necessary if
+you use Telemetry.</p>
+<h2 id="use-adb_profile_chrome">Use <code>adb_profile_chrome</code></h2>
+<p>Even if you&#39;re not running a Telemetry test, you can use Catapult to
+automatically push binaries and pull the profile data for you.</p>
+<pre>build/android/adb_profile_chrome --browser=content_shell --perf</pre>
+<p>While you still have to build, install and launch the APK yourself, Catapult
+will take care of creating the symfs etc. (i.e. you can skip the &quot;not needed for
+Telemetry&quot; steps below).</p>
+<h2 id="install-systembinperf-on-your-device-not-needed-for-telemetry">Install <code>/system/bin/perf</code> on your device (not needed for Telemetry)</h2>
+<pre># From inside the Android source tree (not inside Chromium)
+mmm external/linux-tools-perf/
+adb remount # (allows you to write to the system image)
+adb sync
+adb shell perf top # check that perf can get samples (don’t expect symbols)</pre>
+<h2 id="install-and-run-contentshell">Install and Run ContentShell</h2>
+<p>Install with the following:</p>
+<pre>out/Release/bin/content_shell_apk run</pre>
+<p>If <code>content_shell</code> “stopped unexpectedly” use <code>adb logcat</code> to debug.</p>
+<h2 id="setup-a-symbols-directory-with-symbols-from-your-build-not-needed-for-telemetry">Setup a <code>symbols</code> directory with symbols from your build (not needed for Telemetry)</h2>
+<ol>
+<li><p>Figure out exactly what path <code>content_shell_apk</code> (or chrome, etc) installs
+to.</p>
+<ul>
+<li>On the device, navigate ContentShell to about:crash</li>
+</ul>
+<p>adb logcat | grep libcontent_shell_content_view.so</p>
+</li>
+</ol>
+<p>You should find a path that’s something like
+<code>/data/app-lib/org.chromium.content_shell-1/libcontent_shell_content_view.so</code></p>
+<ol>
+<li><p>Make a symbols directory</p>
+<pre>mkdir symbols (this guide assumes you put this next to src/)</pre>
+</li>
+<li><p>Make a symlink from your symbols directory to your un-stripped
+<code>content_shell</code>.</p>
+<pre># Use whatever path in app-lib you got above
+mkdir -p symbols/data/app-lib/org.chromium.content_shell-1
+ln -s `pwd`/src/out/Release/lib/libcontent_shell_content_view.so \
+    `pwd`/symbols/data/app-lib/org.chromium.content_shell-1</pre>
+</li>
+</ol>
+<h2 id="install-perfhost_linux-locally-not-needed-for-telemetry">Install <code>perfhost_linux</code> locally (not needed for Telemetry)</h2>
+<p>Note: modern versions of perf may also be able to process the perf.data files
+from the device.</p>
+<ol>
+<li><p><code>perfhost_linux</code> can be built from:
+<a href="https://android.googlesource.com/platform/external/linux-tools-perf/">https://android.googlesource.com/platform/external/linux-tools-perf/</a>.</p>
+</li>
+<li><p>Place <code>perfhost_linux</code> next to symbols, src, etc.</p>
+<p>chmod a+x perfhost_linux</p>
+</li>
+</ol>
+<h2 id="actually-record-a-profile-on-the-device">Actually record a profile on the device!</h2>
+<p>Run the following:</p>
+<pre>out/Release/content_shell_apk ps (look for the pid of the sandboxed_process)
+adb shell perf record -g -p 12345 sleep 5
+adb pull /data/perf.data</pre>
+<h2 id="create-the-report">Create the report</h2>
+<ol>
+<li><p>Run the following:</p>
+<pre>./perfhost_linux report -g -i perf.data --symfs symbols/</pre>
+</li>
+<li><p>If you don’t see chromium/webkit symbols, make sure that you built/pushed
+Release, and that the symlink you created to the .so is valid!</p>
+</li>
+</ol>
+<h2 id="add-symbols-for-the-kernel">Add symbols for the kernel</h2>
+<ol>
+<li><p>By default, /proc/kallsyms returns 0 for all symbols, to fix this, set
+<code>/proc/sys/kernel/kptr_restrict</code> to <code>0</code>:</p>
+<pre>adb shell echo “0” &gt; /proc/sys/kernel/kptr_restrict</pre>
+</li>
+<li><p>See <a href="http://lwn.net/Articles/420403/">http://lwn.net/Articles/420403/</a> for explanation of what this does.</p>
+<pre>adb pull /proc/kallsyms symbols/kallsyms</pre>
+</li>
+<li><p>Now add --kallsyms to your perfhost_linux command:</p>
+<pre>./perfhost_linux report -g -i perf.data --symfs symbols/ \
+    --kallsyms=symbols/kallsyms</pre>
+</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/profiling_content_shell_on_android.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/profiling_content_shell_on_android.md</a>
+  </p>
+</div>

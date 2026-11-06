@@ -1,0 +1,28 @@
+<h1>Graphics Memory Metrics</h1>
+<p>The intent of this page is to provide more context and pointers to assess the
+cost of Chromium&#39;s rendering. It is also meant to be used to complement to
+warning in <code>//tools/metrics/histograms/metadata/memory/histograms.xml</code>.</p>
+<h2 id="gpu-process-and-private-memory-footprint">GPU Process and Private Memory Footprint</h2>
+<p><strong>tl;dr:</strong> Memory.Gpu.PrivateMemoryFootprint does <strong>not</strong> reflect memory used by
+graphics buffers on all platforms. A rough breakdown of platforms follows:</p>
+<ul>
+<li><strong>Android (including Android WebView), Linux, Chrome OS:</strong> None of the
+graphics buffers are accounted for. Only CPU-side memory is reflected.</li>
+<li><strong>Windows:</strong> Graphics memory may be partially or fully accounted for.</li>
+<li><strong>macOS, Intel CPUs:</strong> Graphics memory may be partially or fully accounted for.</li>
+<li><strong>macOS, ARM64:</strong> We believe that graphics buffers are fully accounted for.</li>
+</ul>
+<p>In summary, ARM64 macOS is the only platform where we are reasonably confident
+that all memory allocations are properly reflected in
+Memory.Gpu.PrivateMemoryFootprint.</p>
+<p><strong>Caution:</strong> Rendering is heavily platform-specific. Do not assume that changes
+impacting a platform are reflected on another one. Even for macOS, there are
+many hardware, OS and Chromium-level differences. For instance, as of early
+2024, rendering is performed using Metal on ARM64, and OpenGL on Intel mac
+devices.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/graphics_metrics.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory/graphics_metrics.md</a>
+  </p>
+</div>

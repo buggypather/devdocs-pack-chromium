@@ -1,0 +1,39 @@
+<h1>Linkers for macOS and iOS builds</h1>
+<p>Chromium defaults to LLVM&#39;s LLD linker for macOS and iOS builds, but supports opting into the Apple linker (ld-prime) for local macOS development.</p>
+<h2 id="overview">Overview</h2>
+<p>Historically, Chromium migrated from Apple&#39;s legacy ld64 linker to LLD for both macOS and iOS builds to improve link times and unify the toolchain.</p>
+<p>Recent benchmarks show that Apple&#39;s new linker (ld-prime) is faster than LLD for local macOS development (tracked by <a href="https://crbug.com/502338406">https://crbug.com/502338406</a>). However, to maintain toolchain uniformity, control, and semantic equivalence across platforms, Chromium continues to default to LLD for all configurations. The Apple linker is supported as a developer-selectable opt-in.</p>
+<ul>
+<li><strong>LLD (Default)</strong>: Used for all macOS and iOS builds, including release builds, ThinLTO, bot builds, and default local developer builds.</li>
+<li><strong>Apple linker (ld-prime) (Opt-in)</strong>: Can be enabled for macOS builds by setting <code>use_lld = false</code> in GN args. Supported only for local non-cross arm64 macOS development (ARM Mac) to get faster link times.</li>
+</ul>
+<h2 id="lld-background--design-decisions">LLD Background &amp; Design Decisions</h2>
+<p>Using LLD as the default linker offers several advantages:</p>
+<ul>
+<li><strong>Control</strong>: It is developed within the LLVM repository and shipped with our Clang package. We can fix compiler/linker issues upstream and deploy them quickly without waiting for Xcode releases.</li>
+<li><strong>Interoperability</strong>: Clang and LLD use the same LLVM libraries built at the same revision, which makes LTO setup simpler. With ld64 or ld-prime, LTO requires building a plugin loaded by the linker.</li>
+<li><strong>Uniformity</strong>: While the Mach-O, ELF, and COFF ports of LLD are independent codebases, they share common LLVM libraries and command-line compatibility conventions, simplifying cross-platform build configurations.</li>
+</ul>
+<h2 id="linker-selection-criteria">Linker Selection Criteria</h2>
+<h3 id="macos-builds">macOS Builds</h3>
+<ul>
+<li><strong>Default:</strong> LLD is used for all builds.</li>
+<li><strong>Opt-in (Apple linker ld-prime):</strong> Set <code>use_lld = false</code> in <code>args.gn</code>. Supported only for local non-cross arm64 macOS builds (ARM Mac) to improve link speed (yielding up to a 4-6x speedup depending on configuration). Note that ld-prime is not supported for Intel Macs (x86-64) as either a build host or build target (opt-in support is tracked in <a href="https://crbug.com/518652539">https://crbug.com/518652539</a>), cross-compilation, or ThinLTO builds.</li>
+</ul>
+<h3 id="ios-builds">iOS Builds</h3>
+<ul>
+<li><strong>Default:</strong> LLD is used for all builds. Opt-in support for the Apple linker is tracked in <a href="https://crbug.com/518651436">https://crbug.com/518651436</a>.</li>
+</ul>
+<h2 id="future-work--lld-optimizations">Future Work &amp; LLD Optimizations</h2>
+<p>We are committed to further improving LLD performance to close the speed gap with the Apple linker. We will continue to evaluate both linkers as they evolve.</p>
+<h2 id="hacking-on-lld">Hacking on LLD</h2>
+<p>If you want to work on LLD, follow <a href="clang#Using-a-custom-clang-binary">this paragraph</a>.</p>
+<h2 id="creating-stand-alone-repros-for-lld-bugs">Creating stand-alone repros for LLD bugs</h2>
+<p>For simple cases, LLD&#39;s <code>--reproduce=foo.tar</code> flag / <code>LLD_REPRODUCE=foo.tar</code> env var is sufficient.</p>
+<p>See the &quot;Note to self&quot; on <a href="https://bugs.llvm.org/show_bug.cgi?id=48657#c0">LLVM bug 48657</a> for making a repro file that involves the full app and framework bundles.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/apple_platform_linkers.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/apple_platform_linkers.md</a>
+  </p>
+</div>

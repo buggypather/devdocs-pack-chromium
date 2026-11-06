@@ -1,0 +1,880 @@
+<h1>Using Lit in Chromium WebUI Development</h1>
+<h2 id="background">Background</h2>
+<p>This documentation focuses on using Lit in the context of Chromium WebUI.
+Polymer is deprecated and unsupported for new non-CrOS WebUI development; Lit
+is required for all new non-CrOS WebUI pages and custom elements. Because some
+Chromium WebUI code is still written in Polymer, this document also covers
+compatibility between Lit and Polymer elements and migrating existing Polymer
+elements to Lit. It assumes familiarity with the following:</p>
+<ul>
+<li>Web Components: The basic foundation on which Lit is built. See
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_components">Introduction to Web Components from MDN</a> and the related
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements">MDN guide for custom elements</a>.</li>
+<li>Lit framework, see <a href="https://lit.dev/docs/">official docs</a>, and especially
+the <a href="https://lit.dev/docs/components/lifecycle/">Reactive properties, Lifecycle</a>
+and <a href="https://lit.dev/docs/templates/expressions/">Expressions</a> sections.</li>
+<li>Lit vs Polymer differences. See
+<a href="https://lit.dev/articles/lit-for-polymer-users/">Lit for Polymer users</a>,
+covering some general Lit/Polymer compatibility and migration issues</li>
+</ul>
+<p>***promo
+For developers unfamiliar with these, the external sources linked above are
+recommended before continuing with this documentation.</p>
+<hr>
+<h2 id="chromium-webui-infrastructure-crlitelement-base-class">Chromium WebUI Infrastructure: CrLitElement base class</h2>
+<p><code><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/lit/v3_0/cr_lit_element.ts;l=1?q=cr_lit_element&amp;sq=&amp;ss=chromium%2Fchromium%2Fsrc">CrLitElement</a></code> is provided as a base class for Chromium WebUI development. It contains code to</p>
+<ol>
+<li>Reduce the amount of boilerplate code necessary for individual elements.</li>
+<li>Improve compatibility with elements using Polymer (necessary in a codebase
+that is using both Polymer and Lit).</li>
+<li>Make Polymer -&gt; Lit migrations easier</li>
+</ol>
+<p>***promo
+Lit custom elements in Chromium should inherit from the <code>CrLitElement</code> class.</p>
+<hr>
+<p>Specific features of <code>CrLitElement</code> include:</p>
+<ol>
+<li><p>Forces initial rendering to be synchronous when</p>
+<ol>
+<li>The element’s connectedCallback runs</li>
+<li>The element is focused before the connectedCallback has run</li>
+<li>Child elements are accessed with <code>this.$</code> before the connectedCallback
+has run</li>
+</ol>
+<p> This means that there is no need to call <code>await element.updateComplete</code>
+ before accessing the element’s DOM in certain cases:</p>
+<ol>
+<li>Immediately after attaching it</li>
+<li>When doing something like focusing the element or accessing its children
+with <code>element.$</code> in a Polymer parent’s <code>connectedCallback()</code>, which may
+run before the Lit child’s <code>connectedCallback()</code>.</li>
+</ol>
+<p> For more detail on this, see the inline documentation in <code>CrLitElement</code>.</p>
+</li>
+<li><p>“$” proxy to allow accessing child elements by ID with <code>this.$.id</code>, to match
+the behavior of Polymer, which does the same thing.</p>
+</li>
+<li><p>Implementation of <code>notify: true</code> for properties. Setting this will cause
+<code>CrLitElement</code> to fire <code>foo-changed</code> events in the <code>updated()</code> lifecycle
+callback, whenever some property <code>foo</code> with <code>notify: true</code> set is changed.
+This allows compatibility with Polymer parent element two-way bindings, but
+is not exactly the same; see more details below.</p>
+</li>
+<li><p>Changes Lit’s default property/attribute mapping to match the mapping used
+in Polymer - i.e. property <code>fooBar</code> will be mapped to attribute <code>foo-bar</code>,
+not the Lit default of <code>foobar</code></p>
+</li>
+</ol>
+<h2 id="lit-data-bindings-and-handling--changed-events">Lit Data Bindings and handling <code>-changed</code> events</h2>
+<p>As noted above, <code>CrLitElement</code> forces an initial synchronous render in
+<code>connectedCallback()</code>. This means child elements may initialize properties
+with <code>notify: true</code> and then fire <code>-changed</code> events for these properties in
+<code>updated()</code> as soon as they are connected, which may occur before the parent
+element has finished its first update.</p>
+<p>One consequence of this is that <code>-changed</code> event handlers cannot assume that
+the element has completed its first update when the <code>-changed</code> event is
+received, and should not make any changes to the element&#39;s DOM until after
+waiting for the element&#39;s <code>updateComplete</code> promise. This means such handlers
+must either (1) be async and <code>await this.updateComplete;</code> before running any
+code that updates the element&#39;s DOM, or (2) only update properties on the
+parent in response to the child&#39;s property change, and perform resulting UI
+updates in the <code>updated()</code> lifecycle method instead.</p>
+<p>Note that if the parent property being updated is protected or private, a cast
+will be necessary to check for changes to the property in <code>changedProperties</code>.
+This is also demonstrated in the example below.</p>
+<p>Suppose the Lit child has a property with <code>notify: true</code> as follows:</p>
+<pre data-language="ts">static override get properties() {
+  return {
+    foo: {
+      type: Boolean,
+      notify: true,
+    },
+ };
+}</pre>
+<p>This property is also bound to a parent element that listens for the
+<code>-changed</code> event as follows:</p>
+<pre data-language="html">&lt;foo-child ?foo=&quot;${this.foo}&quot; on-foo-changed=&quot;${this.onFooChanged}&quot;&gt;
+&lt;/foo-child&gt;
+&lt;demo-child id=&quot;demo&quot;&gt;&lt;/demo-child&gt;</pre>
+<p>The parent TypeScript code could look like this:</p>
+<pre data-language="ts">static override get properties() {
+  return {
+    foo: {type: Boolean},
+ };
+}
+
+protected accessor foo: boolean = true;
+
+onFooChanged(e: CustomEvent&lt;{value: boolean}&gt;) {
+  // Updates the parent's property that is bound to the child.
+  this.foo = e.detail.value;
+}
+
+override updated(changedProperties: PropertyValues&lt;this&gt;) {
+  super.updated(changedProperties);
+
+  // Cast necessary to check for changes to protected/private properties.
+  const changedPrivateProperties =
+      changedProperties as Map&lt;PropertyKey, unknown&gt;;
+
+  // Updates the DOM when |foo| changes.
+  if (changedPrivateProperties.has('foo')) {
+    if (this.foo) {
+      this.$.demo.show();
+    } else {
+      this.$.demo.hide();
+    }
+  }
+}</pre>
+<h2 id="lit-data-binding-issue-with-select-elements">Lit data binding issue with select elements</h2>
+<p>The <code>&lt;select&gt;</code> element has an ordering requirement that sometimes causes a
+bug when using Lit data bindings on both the <code>value</code> property of the
+<code>&lt;select&gt;</code> and the <code>value</code> attribute of its child <code>&lt;option&gt;</code> elements.
+Specifically, when the <code>&lt;select&gt;</code>&#39;s <code>value</code> property is set, there must
+already be an existing <code>&lt;option&gt;</code> with that value, or the <code>&lt;select&gt;</code> will
+be rendered as blank. If Lit bindings are used for the <code>&lt;option&gt;</code> values,
+these values will not be populated in time, and the <code>&lt;select&gt;</code> will be
+empty at startup. The following example would reproduce this bug and
+have an empty <code>&lt;select&gt;</code> displayed at startup.</p>
+<p><code>.html.ts</code> file with <code>&lt;select&gt;</code> bug:</p>
+<pre data-language="html">&lt;select .value=&quot;${this.mySelectValue}&quot; @change=&quot;${this.onSelectChange}&quot;&gt;
+  &lt;option value=&quot;${MyEnum.FIRST}&quot;&gt;Option 1&lt;/option&gt;
+  &lt;option value=&quot;${MyEnum.SECOND}&quot;&gt;Option 2&lt;/option&gt;
+&lt;/select&gt;</pre>
+<p>Corresponding <code>.ts</code>. Note that the bug manifests even though <code>mySelectValue</code>
+is being initialized to a valid option.</p>
+<pre data-language="ts">static get properties() {
+  return {
+    mySelectValue: {type: String},
+  };
+}
+
+accessor mySelectValue: MyEnum = MyEnum.SECOND;
+
+onSelectChange(e: Event) {
+  this.mySelectValue = (e.target as HTMLSelectElement).value;
+}</pre>
+<p>The current recommended workaround is to instead bind to the <code>selected</code>
+attribute on each <code>&lt;option&gt;</code>, i.e.:</p>
+<p><code>.html.ts</code> file:</p>
+<pre data-language="html">&lt;select @change=&quot;${this.onSelectChange}&quot;&gt;
+  &lt;option value=&quot;${MyEnum.FIRST}&quot;
+      ?selected=&quot;${this.isSelected(MyEnum.FIRST)}&quot;&gt;
+    Option 1
+  &lt;/option&gt;
+  &lt;option value=&quot;${MyEnum.SECOND}&quot;
+      ?selected=&quot;${this.isSelected(MyEnum.SECOND)}&quot;&gt;
+    Option 2
+  &lt;/option&gt;
+&lt;/select&gt;</pre>
+<p>Corresponding <code>.ts</code> file:</p>
+<pre data-language="ts">static get properties() {
+  return {
+    mySelectValue: {type: String},
+  };
+}
+
+accessor mySelectValue: MyEnum = MyEnum.SECOND;
+
+onSelectChange(e: Event) {
+  this.mySelectValue = (e.target as HTMLSelectElement).value;
+}
+
+isSelected(value: MyEnum): boolean {
+  return value === this.mySelectValue;
+}</pre>
+<p>Note: This bug can also be worked around by using Lit&#39;s <code>live</code> directive in
+the data binding and requesting an extra update any time the <code>&lt;select&gt;</code> is
+rendered. Including <code>live</code> in the Chromium Lit bundle is still under
+consideration. Reach out to the WebUI team if you have a <code>&lt;select&gt;</code> where the
+workaround above is problematic or impractical (e.g. due to a huge list of
+<code>&lt;option&gt;</code> elements).</p>
+<h2 id="lit-and-polymer-data-bindings-compatibility">Lit and Polymer Data Bindings Compatibility</h2>
+<p>Two-way bindings are not natively supported in Lit. As mentioned above,
+basic compatibility is provided by the <code>CrLitElement</code> base class’s
+implementation of <code>notify: true</code>. However, these events differ from the Polymer
+two-way binding behavior.</p>
+<ul>
+<li>In Polymer two-way bindings, the child element only fires a <code>-changed</code>
+event if the property is modified from the child. The child element does not
+fire the event if the property value is set from the parent.</li>
+<li>The equivalent code in <code>CrLitElement</code> can’t differentiate  whether the
+property was set from the parent or the child itself and always fires the
+<code>-changed</code> event when the value changes.</li>
+</ul>
+<p>*** promo
+When migrating parent or child elements to Lit, any code directly handling
+<code>-changed</code> events in the parent should either be agnostic to whether the
+corresponding property was changed from the parent or the child, or should check
+that the new value in the event differs from the current parent value.</p>
+<hr>
+<p>Example: a <code>-changed</code> event handler that logs a metric indicating something was
+changed from the child (e.g. due to user input) should add a check before
+logging that the new value is in fact new, and was not set by the parent via the
+data binding.</p>
+<p>The behavior difference for two-way bindings can be seen by playing with this <a href="https://lit.dev/playground/#project=W3sibmFtZSI6InRvcC1lbGVtZW50LnRzIiwiY29udGVudCI6ImltcG9ydCB7UG9seW1lckVsZW1lbnQsIGh0bWx9IGZyb20gJ0Bwb2x5bWVyL3BvbHltZXInO1xuaW1wb3J0IHtjdXN0b21FbGVtZW50LCBwcm9wZXJ0eX0gZnJvbSAnQHBvbHltZXIvZGVjb3JhdG9ycyc7XG5pbXBvcnQge0NyRHVtbXlQb2x5bWVyRWxlbWVudH0gZnJvbSAnLi9jcl9kdW1teV9wb2x5bWVyLmpzJztcbmltcG9ydCB7Q3JEdW1teUxpdEVsZW1lbnR9IGZyb20gJy4vY3JfZHVtbXlfbGl0LmpzJztcbmltcG9ydCAnLi9jcl9kdW1teV9saXQuanMnO1xuaW1wb3J0ICcuL2NyX2R1bW15X3BvbHltZXIuanMnO1xuXG5AY3VzdG9tRWxlbWVudCgndG9wLWVsZW1lbnQnKVxuY2xhc3MgVG9wRWxlbWVudCBleHRlbmRzIFBvbHltZXJFbGVtZW50IHtcbiAgc3RhdGljIGdldCB0ZW1wbGF0ZSgpIHtcbiAgICByZXR1cm4gaHRtbGBcbiAgICAgIDxzdHlsZT5cbiAgICAgICAgOmhvc3Qge1xuICAgICAgICAgIGNvbG9yOiBibHVlO1xuICAgICAgICAgIGRpc3BsYXk6YmxvY2s7XG4gICAgICAgICAgYm9yZGVyOiAycHggc29saWQgYmx1ZTtcbiAgICAgICAgfVxuICAgICAgICBcbiAgICAgICAgI2NoaWxkcmVuIHtcbiAgICAgICAgICBkaXNwbGF5OiBmbGV4O1xuICAgICAgICAgIGdhcDogMTBweDtcbiAgICAgICAgfVxuICAgICAgPC9zdHlsZT5cbiAgICAgIDxkaXY-UE9MWU1FUiBQQVJFTlQ8L2Rpdj5cbiAgICAgIDxsYWJlbD5TZXQgUG9seW1lciBwYXJlbnQgdmFsdWU6IDxpbnB1dCB0eXBlPVwibnVtYmVyXCIgb24taW5wdXQ9XCJvbklucHV0X1wiPjwvaW5wdXQ-PC9sYWJlbD5cbiAgICAgIDxkaXYgaWQ9XCJjaGlsZHJlblwiPlxuICAgICAgPGNyLWR1bW15LXBvbHltZXIgdmFsdWU9XCJ7e3ZhbHVlUG9seW1lcn19XCIgb24tdmFsdWUtY2hhbmdlZD1cIm9uUG9seW1lclZhbHVlQ2hhbmdlZF9cIj48L2NyLWR1bW15LXBvbHltZXI-XG4gICAgICA8Y3ItZHVtbXktbGl0IHZhbHVlPVwie3t2YWx1ZUxpdH19XCIgb24tdmFsdWUtY2hhbmdlZD1cIm9uTGl0VmFsdWVDaGFuZ2VkX1wiPjwvY3ItZHVtbXktbGl0PlxuICAgICAgPC9kaXY-XG4gICAgICA8ZGl2IGlkPVwibG9nXCI-PC9kaXY-XG4gICAgYDtcbiAgfVxuICBcbiAgc3RhdGljIGdldCBwcm9wZXJ0aWVzKCkge1xuICAgIHJldHVybiB7XG4gICAgICB2YWx1ZVBvbHltZXI6IHt0eXBlOiBOdW1iZXJ9LFxuICAgICAgdmFsdWVMaXQ6IHt0eXBlOiBOdW1iZXJ9LFxuICAgIH07XG4gIH1cbiAgXG4gIHZhbHVlTGl0OiBudW1iZXI7XG4gIHZhbHVlUG9seW1lcjogbnVtYmVyO1xuICBcbiAgb25JbnB1dF8oKSB7ICAgIFxuICAgIHRoaXMudmFsdWVQb2x5bWVyID0gTnVtYmVyKHRoaXMuc2hhZG93Um9vdC5xdWVyeVNlbGVjdG9yKCdpbnB1dCcpLnZhbHVlKTtcbiAgICB0aGlzLnZhbHVlTGl0ID0gdGhpcy52YWx1ZVBvbHltZXI7XG4gIH1cbiAgXG4gIG9uUG9seW1lclZhbHVlQ2hhbmdlZF8oZSkge1xuICAgIGNvbnN0IGR1bW15ID0gdGhpcy5zaGFkb3dSb290IS5xdWVyeVNlbGVjdG9yKCdjci1kdW1teS1wb2x5bWVyJykgYXMgQ3JEdW1teVBvbHltZXJFbGVtZW50O1xuICAgIHRoaXMuJC5sb2cudGV4dENvbnRlbnQgKz0gJ3BvbHltZXItdmFsdWUtY2hhbmdlZCB0byAnICsgZS5kZXRhaWwudmFsdWUgKyAnLi4uICAnO1xuICB9XG4gICBvbkxpdFZhbHVlQ2hhbmdlZF8oZSkge1xuICAgIGNvbnN0IGR1bW15ID0gdGhpcy5zaGFkb3dSb290IS5xdWVyeVNlbGVjdG9yKCdjci1kdW1teS1saXQnKSBhcyBDckR1bW15TGl0RWxlbWVudDtcbiAgICB0aGlzLiQubG9nLnRleHRDb250ZW50ICs9ICdsaXQtdmFsdWUtY2hhbmdlZCB0byAnICsgZS5kZXRhaWwudmFsdWUgKyAnLi4uICAnO1xuICB9XG59O1xuXG4ifSx7Im5hbWUiOiJwYWNrYWdlLmpzb24iLCJjb250ZW50Ijoie1xuICBcImRlcGVuZGVuY2llc1wiOiB7XG4gICAgXCJsaXRcIjogXCJeMy4wLjBcIixcbiAgICBcIkBsaXQvcmVhY3RpdmUtZWxlbWVudFwiOiBcIl4yLjAuMFwiLFxuICAgIFwibGl0LWVsZW1lbnRcIjogXCJeNC4wLjBcIixcbiAgICBcImxpdC1odG1sXCI6IFwiXjMuMC4wXCJcbiAgfVxufSIsImhpZGRlbiI6dHJ1ZX0seyJuYW1lIjoiaW5kZXguaHRtbCIsImNvbnRlbnQiOiI8IURPQ1RZUEUgaHRtbD5cbjxoZWFkPlxuICA8c2NyaXB0IHR5cGU9XCJtb2R1bGVcIiBzcmM9XCIuL3RvcC1lbGVtZW50LmpzXCI-PC9zY3JpcHQ-XG4gIDxzY3JpcHQgdHlwZT1cIm1vZHVsZVwiIHNyYz1cIi4vdG9wLWVsZW1lbnQtbGl0LmpzXCI-PC9zY3JpcHQ-XG48L2hlYWQ-XG48Ym9keT5cbiAgPHRvcC1lbGVtZW50PjwvdG9wLWVsZW1lbnQ-XG4gIDx0b3AtZWxlbWVudC1saXQ-PC90b3AtZWxlbWVudC1saXQ-XG48L2JvZHk-XG4ifSx7Im5hbWUiOiJjcl9kdW1teV9wb2x5bWVyLnRzIiwiY29udGVudCI6ImltcG9ydCB7UG9seW1lckVsZW1lbnQsIGh0bWx9IGZyb20gJ0Bwb2x5bWVyL3BvbHltZXInO1xuaW1wb3J0IHtjdXN0b21FbGVtZW50LCBwcm9wZXJ0eX0gZnJvbSAnQHBvbHltZXIvZGVjb3JhdG9ycyc7XG5cbkBjdXN0b21FbGVtZW50KCdjci1kdW1teS1wb2x5bWVyJylcbmV4cG9ydCBjbGFzcyBDckR1bW15UG9seW1lckVsZW1lbnQgZXh0ZW5kcyBQb2x5bWVyRWxlbWVudCB7XG4gIHN0YXRpYyBnZXQgdGVtcGxhdGUoKSB7XG4gICAgcmV0dXJuIGh0bWxgXG4gICAgICAgPHN0eWxlPlxuICAgICAgICA6aG9zdCB7XG4gICAgICAgICAgYm9yZGVyOiAycHggc29saWQgYmx1ZTtcbiAgICAgICAgICBjb2xvcjogYmx1ZTtcbiAgICAgICAgICBkaXNwbGF5OiBibG9jaztcbiAgICAgICAgfVxuICAgICAgIDwvc3R5bGU-XG4gICAgICAgPGRpdj5Qb2x5bWVyIGNoaWxkIHZhbHVlIGlzOiBbW3ZhbHVlXV08L2Rpdj5cbiAgICBgO1xuICB9XG4gIFxuICBzdGF0aWMgZ2V0IHByb3BlcnRpZXMoKSB7XG4gICAgcmV0dXJuIHtcbiAgICAgIHZhbHVlOiB7dHlwZTogTnVtYmVyLCBub3RpZnk6IHRydWV9LFxuICAgIH07XG4gIH1cbiAgXG4gIHZhbHVlOiBudW1iZXIgPSAxO1xufSJ9LHsibmFtZSI6InRvcC1lbGVtZW50LWxpdC50cyIsImNvbnRlbnQiOiJpbXBvcnQge0xpdEVsZW1lbnQsIGh0bWwsIG5vdGhpbmd9IGZyb20gJ2xpdCc7XG5pbXBvcnQge2N1c3RvbUVsZW1lbnR9IGZyb20gJ2xpdC9kZWNvcmF0b3JzLmpzJztcblxuaW1wb3J0IHtDckR1bW15UG9seW1lckVsZW1lbnR9IGZyb20gJy4vY3JfZHVtbXlfcG9seW1lci5qcyc7XG5pbXBvcnQgJy4vY3JfZHVtbXlfcG9seW1lci5qcyc7XG5pbXBvcnQge0NyRHVtbXlMaXRFbGVtZW50fSBmcm9tICcuL2NyX2R1bW15X2xpdC5qcyc7XG5pbXBvcnQgJy4vY3JfZHVtbXlfbGl0LmpzJztcblxuQGN1c3RvbUVsZW1lbnQoJ3RvcC1lbGVtZW50LWxpdCcpXG5jbGFzcyBUb3BFbGVtZW50TGl0IGV4dGVuZHMgTGl0RWxlbWVudCB7XG4gIG92ZXJyaWRlIHJlbmRlcigpIHtcbiAgICByZXR1cm4gaHRtbGBcbiAgICAgIDxzdHlsZT5cbiAgICAgICAgOmhvc3Qge1xuICAgICAgICAgIGJvcmRlcjogMnB4IHNvbGlkIGdyZWVuO1xuICAgICAgICAgIGNvbG9yOiBncmVlbjtcbiAgICAgICAgICBkaXNwbGF5OiBibG9jaztcbiAgICAgICAgfVxuICAgICAgICBcbiAgICAgICAgI2NoaWxkcmVuIHtcbiAgICAgICAgICBkaXNwbGF5OiBmbGV4O1xuICAgICAgICAgIGdhcDogMTBweDtcbiAgICAgICAgfVxuICAgICAgPC9zdHlsZT5cbiAgICAgIDxkaXY-TElUIFBBUkVOVDwvZGl2PlxuICAgICAgPGxhYmVsPlNldCBMaXQgcGFyZW50IHZhbHVlOiA8aW5wdXQgdHlwZT1cIm51bWJlclwiIEBpbnB1dD1cIiR7dGhpcy5vbklucHV0X31cIj48L2lucHV0PjwvbGFiZWw-XG4gICAgICA8ZGl2IGlkPVwiY2hpbGRyZW5cIj5cbiAgICAgIDxjci1kdW1teS1wb2x5bWVyIHZhbHVlPVwiJHt0aGlzLnZhbHVlUG9seW1lciB8fCBub3RoaW5nfVwiIEB2YWx1ZS1jaGFuZ2VkPVwiJHt0aGlzLm9uUG9seW1lclZhbHVlQ2hhbmdlZF99XCI-PC9jci1kdW1teS1wb2x5bWVyPlxuICAgICAgPGNyLWR1bW15LWxpdCB2YWx1ZT1cIiR7dGhpcy52YWx1ZUxpdCB8fCBub3RoaW5nfVwiIEB2YWx1ZS1jaGFuZ2VkPVwiJHt0aGlzLm9uTGl0VmFsdWVDaGFuZ2VkX31cIj48L2NyLWR1bW15LWxpdD5cbiAgICAgIDwvZGl2PlxuICAgICAgPGRpdiBpZD1cImxvZ1wiPjwvZGl2PlxuICAgIGA7XG4gIH1cblxuICBzdGF0aWMgb3ZlcnJpZGUgZ2V0IHByb3BlcnRpZXMoKSB7XG4gICAgcmV0dXJuIHtcbiAgICAgIHZhbHVlUG9seW1lcjoge3R5cGU6IE51bWJlcn0sXG4gICAgICB2YWx1ZUxpdDoge3R5cGU6IE51bWJlcn0sXG4gICAgfTtcbiAgfVxuICBcbiAgdmFsdWVQb2x5bWVyOiBudW1iZXI7XG4gIHZhbHVlTGl0OiBudW1iZXI7XG4gIFxuICBvbklucHV0XygpIHtcbiAgICB0aGlzLnZhbHVlUG9seW1lciA9IE51bWJlcih0aGlzLnNoYWRvd1Jvb3QucXVlcnlTZWxlY3RvcignaW5wdXQnKS52YWx1ZSk7XG4gICAgdGhpcy52YWx1ZUxpdCA9IHRoaXMudmFsdWVQb2x5bWVyO1xuICB9XG4gIFxuICBvblBvbHltZXJWYWx1ZUNoYW5nZWRfKGUpIHtcbiAgICBjb25zdCBkdW1teSA9IHRoaXMuc2hhZG93Um9vdCEucXVlcnlTZWxlY3RvcignY3ItZHVtbXktcG9seW1lcicpIGFzIENyRHVtbXlQb2x5bWVyRWxlbWVudDtcbiAgICB0aGlzLnNoYWRvd1Jvb3QhLnF1ZXJ5U2VsZWN0b3IoJyNsb2cnKS50ZXh0Q29udGVudCArPSAncG9seW1lci12YWx1ZS1jaGFuZ2VkIHRvICcgKyBlLmRldGFpbC52YWx1ZSArICcuLi4gICc7XG4gIH1cbiAgXG4gIG9uTGl0VmFsdWVDaGFuZ2VkXyhlKSB7XG4gICAgY29uc3QgZHVtbXkgPSB0aGlzLnNoYWRvd1Jvb3QhLnF1ZXJ5U2VsZWN0b3IoJ2NyLWR1bW15LWxpdCcpIGFzIENyRHVtbXlMaXRFbGVtZW50O1xuICAgIHRoaXMuc2hhZG93Um9vdCEucXVlcnlTZWxlY3RvcignI2xvZycpLnRleHRDb250ZW50ICs9ICdsaXQtdmFsdWUtY2hhbmdlZCB0byAnICsgZS5kZXRhaWwudmFsdWUgKyAnLi4uICAnO1xuICB9XG59XG4gIn0seyJuYW1lIjoiY3JfZHVtbXlfbGl0LnRzIiwiY29udGVudCI6ImltcG9ydCB7TGl0RWxlbWVudCwgaHRtbCwgUHJvcGVydHlWYWx1ZXN9IGZyb20gJ2xpdCc7XG5pbXBvcnQge2N1c3RvbUVsZW1lbnR9IGZyb20gJ2xpdC9kZWNvcmF0b3JzLmpzJztcblxuQGN1c3RvbUVsZW1lbnQoJ2NyLWR1bW15LWxpdCcpXG5leHBvcnQgY2xhc3MgQ3JEdW1teUxpdEVsZW1lbnQgZXh0ZW5kcyBMaXRFbGVtZW50IHtcbiAgb3ZlcnJpZGUgcmVuZGVyKCkge1xuICAgIHJldHVybiBodG1sYFxuICAgICAgPHN0eWxlPlxuICAgICAgICA6aG9zdCB7XG4gICAgICAgICAgYm9yZGVyOiAycHggc29saWQgZ3JlZW47XG4gICAgICAgICAgY29sb3I6IGdyZWVuO1xuICAgICAgICAgIGRpc3BsYXk6IGJsb2NrO1xuICAgICAgICB9XG4gICAgICA8L3N0eWxlPlxuICAgICAgPGRpdj5MaXQgY2hpbGQgdmFsdWUgaXM6ICR7dGhpcy52YWx1ZX08L2Rpdj5cbiAgICBgO1xuICB9XG5cbiAgc3RhdGljIG92ZXJyaWRlIGdldCBwcm9wZXJ0aWVzKCkge1xuICAgIHJldHVybiB7XG4gICAgICB2YWx1ZToge3R5cGU6IE51bWJlcn0sXG4gICAgfTtcbiAgfVxuICBcbiAgb3ZlcnJpZGUgY29ubmVjdGVkQ2FsbGJhY2soKSB7XG4gICAgc3VwZXIuY29ubmVjdGVkQ2FsbGJhY2soKTtcbiAgICBcbiAgICB0aGlzLnBlcmZvcm1VcGRhdGUoKTtcbiAgfVxuIFxuICB2YWx1ZTogbnVtYmVyID0gMTtcbiAgXG4gIC8vIEltcGxlbWVudGF0aW9uIG9mIG5vdGlmeTogdHJ1ZSBmcm9tIENyTGl0RWxlbWVudFxuICBvdmVycmlkZSB1cGRhdGVkKGNoYW5nZWRQcm9wZXJ0aWVzOiBQcm9wZXJ0eVZhbHVlczx0aGlzPikge1xuICAgIGlmIChjaGFuZ2VkUHJvcGVydGllcy5oYXMoJ3ZhbHVlJykpIHtcbiAgICAgIHRoaXMuZGlzcGF0Y2hFdmVudChuZXcgQ3VzdG9tRXZlbnQoJ3ZhbHVlLWNoYW5nZWQnLCB7IGJ1YmJsZXM6IHRydWUsIGNvbXBvc2VkOiB0cnVlLCBkZXRhaWw6IHsgdmFsdWU6IHRoaXMudmFsdWUgfX0pKTtcbiAgICB9XG4gIH1cbn0ifV0">Lit playground example</a>.
+Modifying initialization of the properties in the different parent and child
+elements in this playground example reveals that there are also differences
+in behavior on initialization. These differences are also documented in the
+following table:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Property initialized in both parent and child</th>
+<th>Property initialized in parent only</th>
+<th>Property initialized in child only</th>
+<th>Property uninitialized in both parent adnd child</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Polymer parent hosting Polymer child</strong></td>
+<td>Parent value propagates to child. No <code>-changed</code> event fired.</td>
+<td>Parent value propagates to child. No <code>-changed</code> event fired.</td>
+<td>Child value propagates to parent. <code>-changed</code> event fired.</td>
+<td>Property is left undefined. No events fired.</td>
+</tr>
+<tr>
+<td><strong>Polymer parent hosting Lit child</strong></td>
+<td>Parent value propagates to child. <code>-changed</code> event fired.</td>
+<td>Parent value propagates to child. <code>-changed</code> event fired.</td>
+<td>Child value propagates to parent. <code>-changed</code> event fired.</td>
+<td>Property is left undefined. No events fired.</td>
+</tr>
+<tr>
+<td><strong>Lit parent hosting Polymer child</strong></td>
+<td>Parent value propagates to child. <code>-changed</code> event fired.</td>
+<td>Parent value propagates to child. <code>-changed</code> event fired.</td>
+<td>Child value propagates to parent if binding is using attribute syntax*. If using property syntax**, parent <code>undefined</code> value takes precedence and <code>-changed</code> event fires with <code>undefined</code>.</td>
+<td>Property is left undefined. No events fired.</td>
+</tr>
+<tr>
+<td><strong>Lit parent hosting Lit child</strong></td>
+<td>Parent value propagates to child. <code>-changed</code> event fired.</td>
+<td>Parent value propagates to child. <code>-changed</code> event fired.</td>
+<td>Child value propagates to parent if binding is using attribute syntax*. If using property syntax**, parent <code>undefined</code> value takes precedence and <code>-changed</code> event fires with <code>undefined</code>.</td>
+<td>Property is left undefined. No events fired.</td>
+</tr>
+</tbody></table>
+<p>***aside
+* attribute syntax: <code>value=&quot;${this.childValue || nothing}&quot;</code></p>
+<p>** property syntax: <code>.value=&quot;${this.value}&quot; </code>Note that this syntax must be used for anything that is not a boolean, string, or number.</p>
+<hr>
+<h2 id="polymer-ironpaper-elements-alternatives">Polymer iron/paper elements alternatives</h2>
+<p>Previously, code in Chromium WebUI relied heavily on the Polymer library of
+elements in addition to the Polymer framework itself. The following table
+captures the list of elements that were still being used in Desktop WebUI code
+when the WebUI team started exploring Lit as an alternative to Polymer, and
+discusses the recommended future approach for each. Some of these
+elements have subsequently been removed from Desktop (non-CrOS) builds, and more
+will be removed over time.</p>
+<p>*** note
+Note: <code>iron-</code> and <code>paper-</code> elements are
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/styleguide/web/web.md#Polymer">no longer recommended even for Polymer UIs.</a></p>
+<hr>
+<table>
+<thead>
+<tr>
+<th>POLYMER LIBRARY ELEMENT</th>
+<th>RECOMMENDED APPROACH</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>iron-list</code></td>
+<td>Use <code>cr-infinite-list</code> or, if the list is not very large, use the <code>map()</code> directive. See additional detail on migrating <code>iron-list</code> clients below.</td>
+</tr>
+<tr>
+<td><code>iron-icon</code></td>
+<td>Use <code>cr-icon</code>.</td>
+</tr>
+<tr>
+<td><code>iron-collapse</code></td>
+<td>Use <code>cr-collapse</code>.</td>
+</tr>
+<tr>
+<td><code>paper-spinner</code></td>
+<td>Use <code>cr-spinner-style</code> CSS, or for more customization style <code>throbber.svg</code> as needed.</td>
+</tr>
+<tr>
+<td><code>paper-styles</code></td>
+<td>Do not use, these styles are pre-2023 refresh and have been removed on non-CrOS builds.</td>
+</tr>
+<tr>
+<td><code>iron-flex-layout</code></td>
+<td>Do not use, use standard CSS to style elements.</td>
+</tr>
+<tr>
+<td><code>iron-a11y-announcer</code></td>
+<td>Use <code>cr-a11y-announcer</code></td>
+</tr>
+<tr>
+<td><code>iron-location</code>/<code>iron-query-params</code></td>
+<td>Use <code>CrRouter</code> or custom code.</td>
+</tr>
+<tr>
+<td><code>iron-scroll-target-behavior</code></td>
+<td>Do not use.</td>
+</tr>
+<tr>
+<td><code>paper-progress</code></td>
+<td>Use either <code>cr-progress</code> or the native <code>&lt;progress&gt;</code> element with CSS styling.</td>
+</tr>
+<tr>
+<td><code>iron-iconset-svg</code>/<code>iron-meta</code></td>
+<td>Use <code>cr-iconset</code> and <code>IconsetMap</code>.</td>
+</tr>
+<tr>
+<td><code>iron-media-query</code></td>
+<td>Do not use, use <code>window.matchMedia()</code>.</td>
+</tr>
+<tr>
+<td><code>iron-pages</code></td>
+<td>Do not use, replace with equivalent conditional rendering or use <code>cr-page-selector</code>.</td>
+</tr>
+<tr>
+<td><code>iron-scroll-threshold</code></td>
+<td>Do not use.</td>
+</tr>
+<tr>
+<td><code>iron-resizable-behavior</code></td>
+<td>Do not use. <code>ResizeObserver</code>s can be used to trigger changes in items that need to be modified when something is resized.</td>
+</tr>
+<tr>
+<td><code>paper-tooltip</code></td>
+<td>Use <code>cr-tooltip</code>.</td>
+</tr>
+<tr>
+<td><code>iron-a11y-keys</code></td>
+<td>Do not use.</td>
+</tr>
+<tr>
+<td><code>iron-selector</code>/<code>iron-selectable-behavior</code></td>
+<td>Use <code>CrSelectableMixin</code>.</td>
+</tr>
+</tbody></table>
+<h2 id="anatomy-of-a-lit-based-element">Anatomy of a Lit-based element</h2>
+<p>In Chromium WebUI, Lit based custom elements are defined using 3 files:</p>
+<ol>
+<li>A *<code>.ts</code> file defining the element, which imports the template from the
+*<code>.html.js</code> file and the style from the *<code>.css.js</code> file.</li>
+<li>A *<code>.css</code> file containing the element’s styling. This file is run through
+<code>css_to_wrapper</code> at build time to create a *<code>.css.js</code> file that the
+element’s *<code>.ts</code> file can import the styles from.</li>
+<li>A *<code>.html.ts</code> file containing the element’s HTML template. This file can be
+either<ul>
+<li>auto-generated from a checked-in <code>*.html</code> file via <code>html_to_wrapper</code>
+(preferred approach for Polymer-&gt;Lit migrations), OR</li>
+<li>directly be checked in to the repository (preferred approach for new Lit
+code, or post migration cleanups)</li>
+</ul>
+</li>
+</ol>
+<p>***note
+Note: This differs from Polymer based custom elements in Chromium, which
+typically use only 2 files: a <code>.html</code> file containing both the element’s
+template and its styling, and a <code>.ts</code> file containing the element definition.</p>
+<hr>
+<p>Example <code>.ts</code> file:</p>
+<pre data-language="ts">// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+import '//resources/cr_elements/cr_input/cr_input.js';
+
+import {CrLitElement} from '//resources/lit/v3_0/lit.rollup.js';
+import {getCss} from './my_example.css.js';
+import {getHtml} from './my_example.html.js';
+
+export interface MyExampleElement {
+  $: {
+    input: HTMLElement,
+  };
+}
+
+export class MyExampleElement extends CrLitElement {
+  static get is() {
+    return 'my-example';
+  }
+
+  static override get styles() {
+    return getCss();
+  }
+
+  override render() {
+    return getHtml.bind(this)();
+  }
+
+  static override get properties() {
+    return {
+      disabled: {
+        type: Boolean,
+        reflect: true,
+      },
+      myValue: {type: String},
+    };
+  }
+
+  accessor disabled: boolean = false;
+  accessor myValue: string = 'hello world';
+
+  // Referenced from the template, so must be protected (not private).
+  protected onInputValueChanged(e: CustomEvent&lt;string&gt;) {
+    this.myValue = e.detail.value;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'my-example': MyExampleElement;
+  }
+}
+
+customElements.define(MyExampleElement.is, MyExampleElement);</pre>
+<p>Example CSS file:</p>
+<pre data-language="css">/* Copyright 2024 The Chromium Authors
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file. */
+
+/* #css_wrapper_metadata_start
+ * #type=style-lit
+ * #import=//resources/cr_elements/cr_shared_vars.css.js
+ * #scheme=relative
+ * #css_wrapper_metadata_end */
+
+#input {
+  background-color: blue;
+  --cr-input-error-display: none;
+}
+
+:host([disabled]) #input {
+   background-color: gray;
+}</pre>
+<p>***note
+CSS files holding Lit element styles should begin with metadata comments,
+between 2 lines marked with <code>#css_wrapper_metadata_start</code> and
+<code>#css_wrapper_metadata_end</code>. These comments tell <code>css_to_wrapper()</code> how to
+generate the wrapper <code>.css.ts</code> file.</p>
+<ul>
+<li><code>style-lit</code> indicates this is a Lit style file</li>
+<li>imports are specified with <code>#import=//import/path/for/file</code></li>
+<li>includes (not used in this particular example) are specified with
+<code>#include=&quot;style-name-1 style-name-2&quot;</code></li>
+<li><code>scheme=relative</code> indicates imports should be scheme-relative
+(i.e. use “<code>//resources</code>”)</li>
+</ul>
+<hr>
+<p>Example <code>.html.ts </code>file:</p>
+<pre data-language="ts">// Copyright 2024 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import {html} from '//resources/lit/v3_0/lit.rollup.js';
+import type {MyExampleElement} from './my_example.js';
+
+export function getHtml(this: MyExampleElement) {
+ return html`
+   &lt;div&gt;Input something&lt;/div&gt;
+   &lt;cr-input id=&quot;input&quot; .value=&quot;${this.myValue}&quot;
+       ?disabled=&quot;${this.disabled}&quot;
+       @value-changed=&quot;${this.onInputValueChanged}&quot;&gt;
+   &lt;/cr-input&gt;`;
+}</pre>
+<p><code>BUILD.gn</code> file configuration:</p>
+<pre data-language="python">build_webui(&quot;build&quot;) {
+  …
+  # Use ts_files since the .html.ts file is checked in.
+  ts_files = [
+     &quot;my_example.html.ts&quot;,
+     &quot;my_example.ts&quot;,
+  ]
+  # Unlike Polymer, when using Lit non-shared CSS code resides in dedicated
+  # CSS files passed to css_to_wrapper.
+  css_files = [
+    &quot;my_example.css&quot;,
+  ]
+  # Other TS Compiler related arguments…
+  ts_deps = [
+    &quot;//ui/webui/resources/cr_elements:build_ts&quot;,
+    &quot;//third_party/lit/v3_0:build_ts&quot;,
+  ]
+}</pre>
+<p>***note
+Note that unlike for Polymer custom elements, both <code>.ts</code> and <code>.html.ts</code> files
+are passed as <code>ts_files</code>. This indicates to <code>build_webui()</code> that they do not
+have a corresponding <code>.html</code> file that needs to be passed to <code>html_to_wrapper()</code>
+(since in the case of Lit elements, <code>.html.ts</code> files are checked in directly).</p>
+<hr>
+<h2 id="polymer-to-lit-migrations">Polymer to Lit migrations</h2>
+<p>Many of the boilerplate steps for migrating from Polymer to Lit are documented
+in the <a href="https://chromium.googlesource.com/chromium/src/+/main/ui/webui/resources/tools/codemods/lit_migration.md">readme</a>
+in the Lit migration <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/webui/resources/tools/codemods/lit_migration.py">script</a>
+folder.</p>
+<p>***promo
+Most of the basic boilerplate migration steps can be automated using the
+migration script.</p>
+<hr>
+<p>Prior to running the script, <a href="https://github.com/facebook/jscodeshift#readme">jscodeshift</a>
+needs to be downloaded and installed as follows:</p>
+<pre>npm install --prefix ui/webui/resources/tools/codemods jscodeshift</pre>
+<p>The script can be invoked to begin migrating an element from Polymer to Lit as
+follows (replace the <code>most_visited.ts</code> file path with the file being migrated):</p>
+<pre>python3 ui/webui/resources/tools/codemods/lit_migration.py \
+   --file ui/webui/resources/cr_components/most_visited/most_visited.ts</pre>
+<p>The rest of this section describes migration steps that cannot be automated
+using the script.</p>
+<h3 id="computed-properties">Computed properties</h3>
+<p>Computed properties in Polymer may not be needed after migrating Lit, if the
+properties are simply used to populate some part of the element’s template and
+are not reflected as attributes or double-bound to a Polymer parent. Lit
+automatically re-renders any changed parts of the template without needing to
+have the individual properties listed as parameters in the HTML template, so
+in these cases the computation method can be used directly in the template
+without specifying parameters. An example of this follows.</p>
+<p>Polymer HTML template snippet:</p>
+<pre data-language="html">&lt;cr-button hidden=&quot;[[hideButton]]&quot;&gt;Click Me&lt;/cr-button&gt;</pre>
+<p>In the Polymer element definition:</p>
+<pre data-language="ts">static get properties() {
+  return {
+   loading: Boolean,
+   showingDialog: Boolean,
+   hideButton: {
+     type: Boolean,
+     computed: 'computeHideButton(loading, showingDialog)',
+   },
+ };
+}
+// Other code goes here
+
+private computeHideButton(): boolean {
+  return !this.loading &amp;&amp; !this.showingDialog;
+}</pre>
+<p>This could be rewritten in Lit, omitting the <code>hideButton</code> property entirely.</p>
+<p>Equivalent Lit HTML template snippet:</p>
+<pre data-language="html">&lt;cr-button ?hidden=&quot;${this.computeHideButton()}&quot;&gt;Click Me&lt;/cr-button&gt;</pre>
+<p>Equivalent Lit element definition:</p>
+<pre data-language="ts">static get properties() {
+  return {
+   loading: {type: Boolean},
+   showingDialog: {type: Boolean},
+ };
+}
+// Other code goes here
+// Anything referenced in the HTML template needs to be protected, not
+// private.
+protected computeHideButton(): boolean {
+  return !this.loading &amp;&amp; !this.showingDialog;
+}</pre>
+<p>In other cases, where computed properties are bound to other elements, used as
+attributes, or are needed for other internal logic, they can be computed in the
+<code>willUpdate()</code> lifecycle callback when the properties that they depend on change
+as in the following example:</p>
+<pre data-language="ts">override willUpdate(changedProperties: PropertyValues&lt;this&gt;) {
+  super.willUpdate(changedProperties);
+
+  if (changedProperties.has('value')) {
+    const values = (this.value || '').split(',');
+    this.multipleValues = values.length &gt; 1;
+  }
+}</pre>
+<h3 id="observers">Observers</h3>
+<p>Observer code should be triggered in either the <code>willUpdate()</code> lifecycle
+callback or the <code>updated()</code> lifecycle callback, depending on whether it is
+internal logic or requires accessing the element’s DOM:</p>
+<ul>
+<li>Any code that measures or queries the element’s DOM belongs in <code>updated()</code>
+to avoid measuring or querying before rendering has actually completed for
+the current cycle.</li>
+<li>Otherwise, updates to other reactive properties should generally be put in
+<code>willUpdate() </code>so that any resulting template changes from these property
+updates can be batched with the other changes in a single update, rather
+than triggering a second round of updates.</li>
+</ul>
+<p>Consider the following Polymer code, with a complex observer:</p>
+<pre data-language="ts">static get properties() {
+  return {
+   max: Number,
+   min: Number,
+   value: Number,
+ };
+}
+
+static get observers() {
+  return [ 'onValueSet(min, max, value)' ];
+}
+
+private onValueSet() {
+  this.value = Math.min(Math.max(this.value, this.min), this.max);
+  const demo = this.shadowRoot!.querySelector('#demo');
+  if (demo) {
+    demo.style.height = `${this.value}px`;
+  }
+}</pre>
+<p>The Lit migrated code would look as follows, with the observer code split
+into <code>willUpdate()</code> and <code>updated()</code> based on whether it accesses the DOM:</p>
+<pre data-language="ts">static override get properties() {
+  return {
+   max: {type: Number},
+   min: {type: Number},
+   value: {type: Number},
+ };
+}
+
+override willUpdate(changedProperties: PropertyValues&lt;this&gt;) {
+  super.willUpdate(changedProperties);
+  // Clamp value in willUpdate() so we don't trigger a second update
+  // cycle for the same changes.
+  if (changedProperties.has('min') || changedProperties.has('max') ||
+      changedProperties.has('value')) {
+    this.value = Math.min(Math.max(this.value, this.min), this.max);
+  }
+}
+
+override updated(changedProperties: PropertyValues&lt;this&gt;) {
+  super.updated(changedProperties);
+
+  // Querying and modifying the DOM should happen in updated().
+  if (changedProperties.has('value')) {
+    const demo = this.shadowRoot!.querySelector('#demo');
+    if (demo) {
+      demo.style.height = `${this.value}px`;
+    }
+  }
+}</pre>
+<h3 id="dom-if">dom-if</h3>
+<p>Polymer <code>&lt;template is=&quot;dom-if&quot;&gt;</code> should generally be replaced by ternary
+statements in the <code>.html.ts</code> file of the form
+<code>${condition ? html</code>&lt;some-html&gt;<code> : &#39;&#39;}</code>. Example simplified from
+<code>cr-toolbar</code>:</p>
+<p>Polymer <code>cr_toolbar.html</code>:</p>
+<pre data-language="html">&lt;div id=&quot;content&quot;&gt;
+  &lt;template is=&quot;dom-if&quot; if=&quot;[[showMenu]]&quot; restamp&gt;
+    &lt;cr-icon-button id=&quot;menuButton&quot; class=&quot;no-overlap&quot;
+        iron-icon=&quot;cr20:menu&quot; on-click=&quot;onMenuClick&quot;&gt;
+    &lt;/cr-icon-button&gt;
+  &lt;/template&gt;
+  &lt;h1&gt;[[pageName]]&lt;/h1&gt;
+&lt;/div&gt;</pre>
+<p>Lit <code>cr_toolbar.html.ts</code>:</p>
+<pre data-language="html">&lt;div id=&quot;content&quot;&gt;
+  ${this.showMenu ? html`
+    &lt;cr-icon-button id=&quot;menuButton&quot; class=&quot;no-overlap&quot;
+        iron-icon=&quot;cr20:menu&quot; @click=&quot;${this.onMenuClick}&quot;&gt;
+    &lt;/cr-icon-button&gt;` : ''}
+  &lt;h1&gt;${this.pageName}&lt;/h1&gt;
+&lt;/div&gt;</pre>
+<p>***note
+Lit conditional rendering is specifically similar to a dom-if template
+that uses <code>restamp</code> (like the example above). This represents the vast majority
+of cases in Chromium WebUI code.</p>
+<hr>
+<h3 id="dom-repeat">dom-repeat</h3>
+<p>Polymer <code>&lt;template is=&quot;dom-repeat&quot;&gt;</code> should generally be replaced by a <code>map()</code>
+call, of the form
+<code>${this.myItems.map((item, index) =&gt; html</code>&lt;div&gt;item.name</div><code>)}</code>.</p>
+<p>Unlike in Polymer where events triggered from elements in the template are
+augmented with data about the item and index they are associated with (i.e. the
+<code>DomRepeatEvent</code> data), event handlers connected to elements in a repeated
+subtree in Lit receive the original event without any additional data.</p>
+<p>*** promo
+When migrating to Lit, event handlers that use the <code>DomRepeatEvent&#39;</code>s <code>item</code>
+and/or <code>index</code> need to use a different method to get this information.</p>
+<hr>
+<p>One possibility is to set the index or item as data attributes on elements that
+fire events, as seen in the example that follows.</p>
+<p>From the Polymer element template:</p>
+<pre data-language="html">&lt;template is=&quot;dom-repeat&quot; items=&quot;[[listItems]]&quot;&gt;
+  &lt;div class=&quot;item-container [[getSelectedClass(item, selectedItem)]]&quot;&gt;
+    &lt;cr-button id=&quot;[[getItemId(index)]]&quot; on-click=&quot;onItemClick&quot;&gt;
+      [[item.name]]
+    &lt;/cr-button&gt;
+  &lt;/div&gt;
+&lt;/template&gt;</pre>
+<p>From the Polymer element definition:</p>
+<pre data-language="ts">private getItemId(index: number): string {
+  return 'listItemId' + index;
+}
+
+private getSelectedClass(item: ListItemType): string {
+  return (item === this.selectedItem) ? 'selected' : '';
+}
+
+private onItemClick(e: DomRepeatEvent&lt;ListItemType&gt;) {
+  this.selectedItem = e.model.item;
+  // Autoscroll to selected item if it is not completely visible.
+  const list =
+      this.shadowRoot!.querySelectorAll&lt;HTMLElement&gt;('.item-container');
+  const selectedElement = list[e.model.index];
+  assert(selectedElement!.classList.contains('selected'));
+  selectedElement!.scrollIntoViewIfNeeded();
+}</pre>
+<p>Lit template:</p>
+<pre data-language="ts">${this.listItems.map((item, index) =&gt; html`
+  &lt;div class=&quot;item-container ${this.getSelectedClass(item)}&quot;&gt;
+    &lt;cr-button id=&quot;${this.getItemId(index)}&quot;
+        data-index=&quot;${index}&quot; @click=&quot;${this.onItemClick}&quot;&gt;
+      ${item.name}
+    &lt;/cr-button&gt;
+  &lt;/div&gt;
+`)}</pre>
+<p>***note
+Note the <code>data-index</code> setting the <code>data</code> attribute on the
+<code>cr-button</code> that triggers the click handler.</p>
+<hr>
+<p>From the Lit element definition file:</p>
+<pre data-language="ts">protected getItemId(index: number): string {
+  return 'listItemId' + index;
+}
+
+protected getSelectedClass(item: ListItemType): string {
+  return item === this.selectedItem ? 'selected' : '';
+}
+
+protected onItemClick(e: Event) {
+  const currentTarget = e.currentTarget as HTMLElement;
+
+  // Use dataset to get the index set in the .html.ts template.
+  const index = Number(currentTarget.dataset['index']);
+  this.selectedItem = this.listItems[index];
+
+  // Autoscroll to selected item if it is not completely visible.
+  const list =
+      this.shadowRoot!.querySelectorAll&lt;HTMLElement&gt;('.item-container');
+  const selectedElement = list[index];
+  selectedElement!.scrollIntoViewIfNeeded();
+}</pre>
+<h3 id="migrating-iron-list-clients">Migrating iron-list clients</h3>
+<p>There are a few considerations when migrating <code>iron-list</code> clients.</p>
+<p>First, many existing <code>iron-list</code> clients don&#39;t require virtualization
+as the lists they render are bounded in size and not particularly large (e.g.
+only ~100 items). Such clients should use Lit&#39;s <code>map()</code> directive.</p>
+<p>If the <code>iron-list</code> client is actually rendering a very large number of items,
+some lazy rendering may be necessary. <code>cr-infinite-list</code> replicates the
+focus and navigation behavior of <code>iron-list</code>. It uses <code>cr-lazy-list</code>
+internally to render items.</p>
+<p><code>cr-lazy-list</code> adds list items to the DOM lazily as the user scrolls to them.
+It also leverages CSS <code>content-visibility</code> to avoid rendering work for items
+not in the viewport. If custom navigation or focus behavior (i.e. different
+from <code>iron-list</code>) is desired, <code>cr-lazy-list</code> can be used directly as it is in
+the Tab Search Page&#39;s <code>selectable-lazy-list</code>.</p>
+<p>If you do not think any of the 3 options above are suitable for a list you
+are migrating or adding to a WebUI, reach out to the WebUI team.</p>
+<p>For incremental migrations, it may be useful to migrate <code>iron-list</code> children
+prior to migrating the <code>iron-list</code> client itself. This can be somewhat
+complicated by <code>iron-list</code> manually positioning its items, meaning it must
+always know when its children change size. When migrating <code>iron-list</code>
+children, the child elements must manually fire an <code>iron-resize</code> event from
+their <code>updated()</code> lifecycle callback whenever any property that may impact
+their height has changed. See example below:</p>
+<p>From the <code>list_parent.html</code> template (<code>iron-list</code> client so must be Polymer)</p>
+<pre data-language="html">&lt;iron-list id=&quot;list&quot; items=&quot;[[listItems]]&quot; as=&quot;item&quot;&gt;
+  &lt;template&gt;
+    &lt;custom-item description=&quot;[[item.description]]&quot; name=&quot;[[item.name]]&quot;
+        on-click=&quot;onListItemClick&quot;&gt;
+    &lt;/custom-item&gt;
+  &lt;/template&gt;
+&lt;/iron-list&gt;</pre>
+<p>From the child <code>custom_item.html.ts</code> template:</p>
+<pre data-language="html">&lt;div class=&quot;name&quot;&gt;${this.name}&lt;/div&gt;
+&lt;div class=&quot;description&quot; ?hidden=&quot;${!this.description}&quot;&gt;
+  ${this.description}
+&lt;/div&gt;</pre>
+<p>In this case, the value of <code>description</code> impacts the height of the child
+item. If <code>iron-list</code> is not notified of when the child is done with rendering
+a change to this property, it may compute the child&#39;s height incorrectly, and
+display gaps or overlap in the list. To prevent this, the child item should
+fire <code>iron-resize</code> in <code>updated()</code> if its <code>description</code> property changes.</p>
+<p>From <code>custom_item.ts</code>:</p>
+<pre data-language="ts">override updated(changedProperties: PropertyValues&lt;this&gt;) {
+  super.updated(changedProperties);
+  if (changedProperties.has('description')) {
+    this.fire('iron-resize');
+  }
+}</pre>
+<h2 id="additional-lit-and-polymer-differences">Additional Lit and Polymer differences</h2>
+<h3 id="use-of-the-accessor-keyword">Use of the accessor keyword</h3>
+<p>As can be observed in the examples in this file, Lit properties should be
+declared as class members using the <code>accessor</code> keyword rather than using the
+<code>declare</code> keyword that is used when declaring Polymer properties. Polymer
+properties use the <code>declare</code> keyword because they do not need to initialize the
+property in the constructor, since Polymer provides the <code>value</code> field that can
+be used to initialize such properties instead. For Lit properties to use
+<code>declare</code>, they would need to also explicitly initialize all reactive
+properties in the constructor, creating a large amount of boilerplate code
+(listing each reactive property in the <code>properties()</code> getter, declaring it as a
+class member, and then initializing its value in the <code>constructor()</code>).</p>
+<p>As a result, for Lit the <code>accessor</code> keyword is preferred. Because <code>accessor</code> is
+not natively supported by Chromium yet, the TS compiler polyfills it when
+<code>target: &#39;ES2024&#39;</code> is set by generating a getter, setter, and JS private
+property for every reactive property. <code>target: &#39;ES2024&#39;</code> is set for all WebUIs
+using <code>build_webui()</code> that depend on Lit by default.</p>
+<p>Without either keyword, TS compiler defines instance properties for each
+reactive property. This breaks Lit&#39;s reactive properties by shadowing the
+getters and setters defined by Lit on the class prototype at runtime,
+preventing Lit from detecting any changes to the reactive properties. This
+happens because of JavaScript&#39;s <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Classes/Public_class_fields">public class fields feature</a>. The <code>useDefineForClassFields: false</code> flag can be used to
+prevent this TS compiler behavior, but it is deprecated and will be removed in
+a future version of TS compiler. As a result it should not be used for
+compiling any new targets.</p>
+<h3 id="i18n-replacements-in-checked-in-htmlts-files">i18n replacements in checked-in .html.ts files</h3>
+<p>As mentioned in a preceding section, unlike for Polymer, the preferred approach
+for Lit templates is to check in the <code>.html.ts</code> file directly, instead of
+autogenerating it using <code>html_to_wrapper()</code>. This means that for C++ side
+<code>i18n{}</code> replacements to work in the HTML template, markers for the start and
+end of the template must be added at the start and end of the HTML template
+string in the <code>.html.ts</code> file. e.g.:</p>
+<pre data-language="ts">export function getHtml(this: MyExampleElement) {
+ return html`&lt;!--_html_template_start_--&gt;
+   &lt;div&gt;$i18n{inputLabel}&lt;/div&gt;
+   &lt;cr-input id=&quot;input&quot; .value=&quot;${this.myValue}&quot;
+       ?disabled=&quot;${this.disabled}&quot;
+       @value-changed=&quot;${this.onInputValueChanged}&quot;&gt;
+   &lt;/cr-input&gt;
+&lt;!--_html_template_end_--&gt;`;
+}</pre>
+<h3 id="testing">Testing</h3>
+<p>A large number of unit tests do something like the following:</p>
+<pre data-language="ts">// Validate that the input is disabled when invalid is set.
+myTestElement.invalid = true;
+assertTrue(myTestElement.$.input.disabled);</pre>
+<p>This assumes that setting <code>invalid</code> synchronously updates the DOM of the test
+element. If the test element is a Lit-based element, this is no longer the case,
+and we need to wait for a render cycle to complete. There are a couple of ways
+to do this:</p>
+<ol>
+<li>Preferred: Use <code>await microtasksFinished()</code> test helper method from
+chrome://webui-test/test_util.js. This method awaits a setTimeout of 0 which
+allows any render cycles to complete (useful if there may be multiple Lit
+elements that need to finish updating before assertions).</li>
+<li>Directly <code>await myTestElement.updateComplete</code> (waits for the test element’s
+render cycle).</li>
+</ol>
+<p>Updated example:</p>
+<pre data-language="ts">// Validate that the input is disabled when invalid is set.
+myTestElement.invalid = true;
+await microtasksFinished();
+assertTrue(myTestElement.$.input.disabled);</pre>
+<p>*** note
+Note: for many test cases, it is less fragile to directly wait on an event
+or BrowserProxy call that should be triggered by an action in a test, instead
+of either assuming everything is synchronous or waiting on framework-dependent
+test helpers like <code>microtasksFinished()</code> or the Polymer
+<code>waitAfterNextRender()/flushTasks()</code> that do not actually guarantee that
+anything specific has happened.</p>
+<hr>
+<h3 id="use-of-the-hidden-attribute">Use of the hidden attribute</h3>
+<p>As documented in the <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/styleguide/web/web.md#Polymer">styleguide</a>,
+in Polymer the <code>hidden</code> attribute was recommended over <code>&lt;template is=&quot;dom-if&quot;&gt;</code>
+for cases of showing and hiding small amounts of HTML or a single element. In
+Lit, since conditional rendering does not rely on adding a custom element like
+dom-if, there is not the same potential performance downside to using
+conditional rendering instead of the <code>hidden</code> attribute.</p>
+<p>***promo
+In Lit, conditional rendering can be used instead of the
+<code>hidden</code> attribute in most cases, and should always be used anywhere
+<code>&lt;template is=&quot;dom-if&quot;&gt;</code> would previously have been used in Polymer code.</p>
+<hr>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_using_lit.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_using_lit.md</a>
+  </p>
+</div>

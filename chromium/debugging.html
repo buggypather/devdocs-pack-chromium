@@ -1,0 +1,82 @@
+<h1>Debugging Chromium</h1>
+<p>This document provides a high-level overview of debugging the Chromium browser
+and its child processes. For more detailed and platform-specific instructions,
+please see the links at the end of this guide.</p>
+<h2 id="getting-started-attaching-to-processes">Getting Started: Attaching to Processes</h2>
+<p>Chromium is a multi-process application. The first step in debugging is often
+identifying and attaching to the correct process.</p>
+<ul>
+<li><strong>Browser Process:</strong> This is the main process. You can start it directly
+in a debugger (e.g., <code>gdb --args out/Default/chrome</code>).</li>
+<li><strong>Renderer, GPU, and Utility Processes:</strong> These are child processes launched
+by the browser. To debug them from startup, you need to use special
+command-line flags.</li>
+</ul>
+<h3 id="useful-command-line-flags-for-debugging">Useful Command-Line Flags for Debugging</h3>
+<p>Pass these to the <code>chrome</code> executable to alter its behavior for debugging.</p>
+<ul>
+<li><code>--wait-for-debugger</code><ul>
+<li>Pauses the child process (renderer, GPU, etc.) on startup until a
+debugger is attached. This is the most reliable way to debug child
+process initialization.</li>
+</ul>
+</li>
+<li><code>--renderer-cmd-prefix=&#39;xterm -e gdb --args&#39;</code><ul>
+<li>Launches new renderer processes inside an <code>xterm</code> with <code>gdb</code> attached.
+This is a common and useful debugging flag on Linux.</li>
+</ul>
+</li>
+<li><code>--utility-cmd-prefix=&#39;xterm -e gdb --args&#39;</code><ul>
+<li>Same as above, but for utility processes.</li>
+</ul>
+</li>
+<li><code>--no-sandbox</code><ul>
+<li>Disables the security sandbox in all processes. This can make it easier
+to attach a debugger, but be aware of the security implications.</li>
+</ul>
+</li>
+<li><code>--single-process</code><ul>
+<li>Runs the renderer and browser in the same process. <strong>Note:</strong> This is not
+a realistic representation of how Chrome runs and can mask or create
+bugs that don&#39;t exist in multi-process mode. Use with caution.</li>
+</ul>
+</li>
+<li><code>--enable-logging --v=1</code><ul>
+<li>Enables verbose logging, which can be very helpful for understanding
+what&#39;s happening. Increase the <code>v</code> value for more verbosity.</li>
+</ul>
+</li>
+</ul>
+<h3 id="finding-the-right-process">Finding the Right Process</h3>
+<p>When Chrome is already running, you can use its built-in Task Manager to find
+the process you want to debug.</p>
+<ul>
+<li><strong>Open Task Manager:</strong> <code>Shift+Esc</code> (or <code>More Tools &gt; Task Manager</code> in
+the menu).</li>
+<li><strong>Get Process ID (PID):</strong> Right-click on the table header and enable the
+&quot;Process ID&quot; column. You can then use this PID to attach your debugger
+(<code>gdb -p &lt;pid&gt;</code>).</li>
+</ul>
+<h2 id="platform-specific-guides">Platform-Specific Guides</h2>
+<p>For detailed instructions on setting up and using a debugger on your specific
+platform, please refer to the following guides:</p>
+<ul>
+<li><strong><a href="linux/debugging">Debugging on Linux</a></strong></li>
+<li><strong><a href="https://github.com/chromium/chromium/blob/HEAD/docs/windows/debugging.md">Debugging on Windows</a></strong></li>
+<li><strong><a href="mac/debugging">Debugging on macOS</a></strong></li>
+<li><strong><a href="https://github.com/chromium/chromium/blob/HEAD/docs/chromeos/debugging.md">Debugging on ChromeOS</a></strong></li>
+<li><strong><a href="https://github.com/chromium/chromium/blob/HEAD/docs/android/debugging.md">Debugging on Android</a></strong></li>
+<li><strong><a href="fuchsia/debug_instructions">Debugging on Fuchsia</a></strong></li>
+</ul>
+<h2 id="other-useful-debugging-resources">Other Useful Debugging Resources</h2>
+<ul>
+<li><strong><a href="gpu/debugging_gpu_related_code">Debugging GPU-related code</a></strong></li>
+<li><strong><a href="memory/debugging_memory_issues">Debugging memory issues</a></strong></li>
+<li><strong><a href="debugging_with_crash_keys">Debugging with crash keys</a></strong></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/debugging.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/debugging.md</a>
+  </p>
+</div>

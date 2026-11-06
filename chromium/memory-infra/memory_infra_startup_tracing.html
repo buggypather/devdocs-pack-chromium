@@ -1,0 +1,73 @@
+<h1>Startup Tracing with MemoryInfra</h1>
+<p><a href="memory-infra">MemoryInfra</a> supports startup tracing.</p>
+<h2 id="the-simple-way">The Simple Way</h2>
+<p>Start Chrome as follows:</p>
+<pre>$ chrome --no-sandbox \
+         --trace-startup=-*,disabled-by-default-memory-infra \
+         --trace-startup-file=/tmp/trace.json \
+         --trace-startup-duration=7</pre>
+<p>On Android, first ensure that Chrome can write output files to storage. Replace
+&quot;org.chromium.chrome&quot; with the Chrome package you are tracing:</p>
+<pre>$ adb shell pm grant org.chromium.chrome android.permission.READ_EXTERNAL_STORAGE
+$ adb shell pm grant org.chromium.chrome android.permission.WRITE_EXTERNAL_STORAGE</pre>
+<p>Then enable startup tracing and start Chrome as follows:</p>
+<pre>$ build/android/adb_chrome_public_command_line \
+      --trace-startup=-*,disabled-by-default-memory-infra \
+      --trace-startup-file=/sdcard/Download/trace.json \
+      --trace-startup-duration=7
+
+$ build/android/adb_run_chrome_public
+
+$ adb pull /sdcard/Download/trace.json  # After tracing.</pre>
+<p>Note that startup tracing will be enabled upon every Chrome launch until you
+delete the command-line flags:</p>
+<pre>$ build/android/adb_chrome_public_command_line &quot;&quot;</pre>
+<p>This will use the default configuration: one memory dump every 250 ms with a
+detailed dump ever two seconds.</p>
+<h2 id="the-advanced-way">The Advanced Way</h2>
+<p>If you need more control over the granularity of the memory dumps, you can
+specify a custom trace config file as follows:</p>
+<pre>$ cat &gt; /tmp/trace.config
+{
+  &quot;startup_duration&quot;: 4,
+  &quot;result_file&quot;: &quot;/tmp/trace.json&quot;,
+  &quot;trace_config&quot;: {
+    &quot;included_categories&quot;: [&quot;disabled-by-default-memory-infra&quot;],
+    &quot;excluded_categories&quot;: [&quot;*&quot;],
+    &quot;memory_dump_config&quot;: {
+      &quot;triggers&quot;: [
+        { &quot;mode&quot;: &quot;light&quot;, &quot;periodic_interval_ms&quot;: 50 },
+        { &quot;mode&quot;: &quot;detailed&quot;, &quot;periodic_interval_ms&quot;: 1000 }
+      ]
+    }
+  }
+}
+
+$ chrome --no-sandbox --trace-config-file=/tmp/trace.config</pre>
+<p>On Android, the config file has to be pushed to a fixed file location:</p>
+<pre>$ adb root
+$ adb push /tmp/trace.config /data/local/chrome-trace-config.json
+
+$ build/android/adb_run_chrome_public
+
+$ adb pull /sdcard/Download/trace.json  # After tracing.</pre>
+<p>Make sure that the &quot;result_file&quot; location is writable by the Chrome process on
+Android (e.g. &quot;/sdcard/Download/trace.json&quot;). To ensure Chrome has permissions
+to write to /sdcard, run the following, replacing &quot;org.chromium.chrome&quot; with
+the Chrome package you are tracing:</p>
+<pre>$ adb shell pm grant org.chromium.chrome android.permission.READ_EXTERNAL_STORAGE
+$ adb shell pm grant org.chromium.chrome android.permission.WRITE_EXTERNAL_STORAGE</pre>
+<p>Note that startup tracing will be enabled upon every Chrome launch until you
+delete the config file:</p>
+<pre>$ adb shell rm /data/local/chrome-trace-config.json</pre>
+<h2 id="related-pages">Related Pages</h2>
+<ul>
+<li><a href="https://sites.google.com/a/chromium.org/dev/developers/how-tos/trace-event-profiling-tool/recording-tracing-runs">General information about startup tracing</a></li>
+<li><a href="memory-infra">Memory tracing with MemoryInfra</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/memory_infra_startup_tracing.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/memory_infra_startup_tracing.md</a>
+  </p>
+</div>

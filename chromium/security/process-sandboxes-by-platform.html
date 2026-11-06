@@ -1,0 +1,105 @@
+<h1>Unsandboxed Processes by Platform</h1>
+<p>This document summarises the sandboxes used for different processes or services
+in Chrome. This informs the <a href="severity-guidelines">severity of security
+issues</a> in different processes.
+Security issues are triaged based on the least-sandboxed platform where an issue
+occurs. Some processes may be sandboxed but contain important credentials or
+cross-origin data, for this table they count as being sandboxed.</p>
+<p>This table will be updated to track the default configuration of the Stable
+Chrome channel (i.e. 100% of clients adopt the tighter configuration).</p>
+<p>The utility process type hosts several services with different sandboxing
+requirements. Find the sandbox used by a utility by finding the
+<a href="https://github.com/chromium/chromium/blob/HEAD/sandbox/policy/mojom/sandbox.mojom"><code>ServiceSandbox</code> attribute</a> used in
+its main mojo service.</p>
+<p>Last updated for M128.</p>
+<h1 id="not-sandboxed-on-some-platforms">Not sandboxed on some platforms</h1>
+<table>
+<thead>
+<tr>
+<th>Process / Service</th>
+<th>Platform(s)</th>
+<th>Sandbox</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Browser</td>
+<td>all</td>
+<td><strong>unsandboxed</strong></td>
+</tr>
+<tr>
+<td>Network</td>
+<td>Android, Windows, Linux</td>
+<td><strong>unsandboxed</strong></td>
+</tr>
+<tr>
+<td>GPU</td>
+<td>Android, Linux (X11)</td>
+<td><strong>unsandboxed</strong></td>
+</tr>
+<tr>
+<td>On Device Model Execution</td>
+<td>Android, non-ChromeOS Linux</td>
+<td><strong>unsandboxed</strong></td>
+</tr>
+<tr>
+<td>Video Capture</td>
+<td>non-Fuchsia</td>
+<td><strong>unsandboxed</strong></td>
+</tr>
+<tr>
+<td>kNoSandbox</td>
+<td>all</td>
+<td><strong>unsandboxed</strong></td>
+</tr>
+<tr>
+<td>kNoSandboxAndElevatedPrivileges</td>
+<td>Windows</td>
+<td><strong>Elevated</strong></td>
+</tr>
+</tbody></table>
+<p>Note: On Linux, the GPU process is sandboxed except when using X11, since X11
+does not isolate clients. See the <a href="x11-threat-model">X11 threat model</a>.</p>
+<h1 id="sandboxed-on-specific-platforms">Sandboxed on specific platforms</h1>
+<ul>
+<li>kNetwork (Fuchsia, Mac)</li>
+<li>kGpu (Fuchsia, Mac, Windows, ChromeOS, Linux (non-X11))</li>
+<li>kVideoCapture (Fuchsia)</li>
+</ul>
+<p>Note: On macOS, until <code>kTriggerNetworkDataMigration</code> is enabled by default on
+Stable (<a href="https://crbug.com/40214277">crbug.com/40214277</a>,
+<a href="https://crbug.com/567101748">crbug.com/567101748</a>), the <code>kNetwork</code> sandbox
+permits full <code>file*</code> access to the user data directory (<code>DIR_USER_DATA</code>) and is
+not a security boundary for files inside <code>DIR_USER_DATA</code>.</p>
+<h1 id="sandboxed">Sandboxed</h1>
+<ul>
+<li>kRenderer (renderer, extensions, PDF renderers)</li>
+<li>kUtility</li>
+<li>kService</li>
+<li>kServiceWithJit</li>
+<li>kAudio</li>
+<li>kOnDeviceModelExecution</li>
+<li>kCdm</li>
+<li>kPrintCompositor</li>
+<li>kSpeechRecognition</li>
+<li>kScreenAI</li>
+<li>kPrintBackend</li>
+<li>kVideoCapture (Fuchsia only)</li>
+<li>kIconReader (Windows only)</li>
+<li>kMediaFoundationCdm (Windows only)</li>
+<li>kPdfConversion (Windows only)</li>
+<li>kXrCompositing (Windows only)</li>
+<li>kProxyResolver (Windows only)</li>
+<li>kHardwareVideoDecoding (Linux &amp; Ash)</li>
+<li>kHardwareVideoEncoding (Linux &amp; Ash)</li>
+<li>kIme (Ash only)</li>
+<li>kTts (Ash only)</li>
+<li>kLibassistant (Ash only)</li>
+<li>kNearby (Ash only)</li>
+<li>kMirroring (MacOS only)</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/process-sandboxes-by-platform.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/process-sandboxes-by-platform.md</a>
+  </p>
+</div>

@@ -1,0 +1,90 @@
+<h1>Chromium Updater Migration Test Instructions</h1>
+<p>This document describes how to do basic developer testing with <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/updater/">Chromium
+Updater</a>
+on systems or with software that already uses Keystone or Omaha 3. The intended
+audience is Google developers who work on software that uses Keystone (or Omaha
+3) and want to verify that their software works as expected with Chromium
+Updater.</p>
+<h2 id="step-1-install-keystone-or-omaha-3">Step 1: Install Keystone or Omaha 3</h2>
+<p>Install your product as you normally would, and run it. This should result in
+a successful setup of the updater. It is useful to install an old version of
+your product so that you can test that it updates correctly.</p>
+<p>The updater can be installed at either per-user or system-wide scopes; the
+instructions will vary depending on which type of installation your product
+uses.</p>
+<h2 id="step-2-opt-in-to-chromium-updater-deployment">Step 2: Opt-In to Chromium Updater Deployment</h2>
+<p>On macOS, and with a per-user Keystone (this is common), run:</p>
+<pre>~/Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdate.bundle/Contents/Helpers/ksadmin -C chromium-updater-opt-in -P com.google.Keystone &amp;&amp; ~/Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdate.bundle/Contents/Helpers/ksadmin --install -P com.google.Keystone &amp;&amp; sleep 10 &amp;&amp; ~/Library/Application\ Support/Google/GoogleUpdater/*/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake --enable-logging --vmodule=&quot;*/updater/*=2&quot;</pre>
+<p>On macOS, and with a system-wide Keystone, run:</p>
+<pre>sudo /Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdate.bundle/Contents/Helpers/ksadmin -C chromium-updater-opt-in -P com.google.Keystone -S &amp;&amp; /Library/Google/GoogleSoftwareUpdate/GoogleSoftwareUpdate.bundle/Contents/Resources/CheckForUpdatesNow.command &amp;&amp; sleep 10 &amp;&amp; sudo /Library/Application\ Support/Google/GoogleUpdater/*/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake --system --enable-logging --vmodule=&quot;*/updater/*=2&quot;</pre>
+<p>On Windows, and with a per-user Omaha 3, use <code>regedit.exe</code> to open the key
+<code>HKEY_CURRENT_USER\SOFTWARE\Google\Update\ClientState\{430FD4D0-B729-4F61-AA34-91526481799D}\cohort</code>
+and set the value of <code>hint</code> (<code>REG_SZ</code>) to <code>chromium-updater-opt-in</code>. Then,
+delete the <code>LastChecked</code> value from <code>HKEY_CURRENT_USER\SOFTWARE\Google\Update</code>.
+Then, run <code>taskschd.msc</code>, click <code>Task Scheduler Library</code>, and run a
+<code>GoogleUpdateTaskUserUA</code> task. Wait 5 minutes and then run
+<code>%LOCALAPPDATA%\Google\GoogleUpdater\updater.exe --wake --enable-logging --vmodule=&quot;*/updater/*=2&quot;</code>
+from an the command prompt (non-admin).</p>
+<p>On Windows, and with a system-wide Omaha 3, use <code>regedit.exe</code> to open the key
+<code>HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Google\Update\ClientState\{430FD4D0-B729-4F61-AA34-91526481799D}\cohort</code>
+and set the value of <code>hint</code> (<code>REG_SZ</code>) to <code>chromium-updater-opt-in</code>. Then,
+delete the <code>LastChecked</code> value from <code>HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Google\Update</code>.
+Then, run <code>taskschd.msc</code>, click <code>Task Scheduler Library</code>, and run a
+<code>GoogleUpdateTaskMachineUA</code> task. Wait 5 minutes and then run
+<code>%PROGRAMFILES(X86)%\Google\GoogleUpdater\updater.exe --wake --system --enable-logging --vmodule=&quot;*/updater/*=2&quot;</code>
+from an admin command prompt.</p>
+<h2 id="step-3-check-that-chromium-updater-is-installed">Step 3: Check that Chromium Updater is Installed</h2>
+<p>On macOS, check that
+<code>~/Library/Application Support/Google/GoogleUpdater</code> (per-user) or
+<code>/Library/Application Support/Google/GoogleUpdater</code> (per-system) exists.</p>
+<p>On Windows, check that <code>%LOCALAPPDATA%\Google\GoogleUpdater</code> (per-user) or
+<code>%PROGRAMFILES(X86)%\Google\GoogleUpdater</code> (system-wide) exists.</p>
+<h2 id="step-4-test-your-software">Step 4: Test Your Software</h2>
+<p>If your software uses any updater APIs (such as checking for updates on-demand,
+or Windows app commands), exercise those APIs and verify that they work as
+expected.</p>
+<p>If you installed an old version of your software, verify that Chromium Updater
+can update your software. You can either wait (up to 6 hours) for Chromium
+Updater to update it automatically, or you can trigger an early check by
+running:</p>
+<p>(macOS, per-user):
+<code>~/Library/Application\ Support/Google/GoogleUpdater/*/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake --enable-logging --vmodule=&quot;*/updater/*=2&quot;</code></p>
+<p>(macOS, system-wide):
+<code>sudo /Library/Application\ Support/Google/GoogleUpdater/*/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake --system --enable-logging --vmodule=&quot;*/updater/*=2&quot;</code></p>
+<p>(Windows, per-user):
+<code>%LOCALAPPDATA%\Google\GoogleUpdater\*\updater.exe --wake --enable-logging --vmodule=&quot;*/updater/*=2&quot;</code></p>
+<p>(Windows, system-wide) in command prompt running as admin:
+<code>%PROGRAMFILES(X86)%\Google\GoogleUpdater\*\updater.exe --wake --system --enable-logging --vmodule=&quot;*/updater/*=2&quot;</code></p>
+<h2 id="step-5-removing-chromium-updater">Step 5: Removing Chromium Updater</h2>
+<p>To remove Chromium Updater from your system, run:</p>
+<p>On macOS, and with a per-user updater, run:
+<code>~/Library/Application\ Support/Google/GoogleUpdater/*/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --uninstall &amp;&amp; rm -rf ~/Library/Google/GoogleSoftwareUpdate</code></p>
+<p>On macOS, and with a system-wide updater, run:
+<code>sudo /Library/Application\ Support/Google/GoogleUpdater/*/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --uninstall --system &amp;&amp; sudo rm -rf /Library/Google/GoogleSoftwareUpdate</code></p>
+<p>On Windows, and with a per-user updater, run <code>%LOCALAPPDATA%\Google\GoogleUpdater\*\updater.exe --uninstall</code>, then use <code>regedit.exe</code> to open the key
+<code>HKEY_CURRENT_USER\SOFTWARE\Google\Update\ClientState\{430FD4D0-B729-4F61-AA34-91526481799D}\cohort</code>
+and set the value of <code>hint</code> (<code>REG_SZ</code>) to `` (empty string).</p>
+<p>On Windows, and with a system-wide updater, from a command prompt running as admin, run <code>%PROGRAMFILES(X86)%\Google\GoogleUpdater\*\updater.exe --uninstall --system</code>, then use <code>regedit.exe</code> to open the key
+<code>HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Google\Update\ClientState\{430FD4D0-B729-4F61-AA34-91526481799D}\cohort</code>
+and set the value of <code>hint</code> (<code>REG_SZ</code>) to `` (empty string).</p>
+<p>Then, remove or reinstall any software that uses Keystone or Omaha 3 to update.</p>
+<h2 id="filing-issues">Filing Issues</h2>
+<p>Any discovered bugs can be filed under the <code>Internals&gt;Updater</code> component at
+crbug.com. It is helpful to include the updater log files in the report. The
+updater log files are at:</p>
+<p>(macOS, per-user):
+<code>~/Library/Application Support/Google/GoogleUpdater/updater.log</code></p>
+<p>(macOS, system-wide):
+<code>/Library/Application Support/Google/GoogleUpdater/updater.log</code></p>
+<p>(Windows, per-user):
+<code>%LOCALAPPDATA%\Google\GoogleUpdater\updater.log</code></p>
+<p>(Windows, system-wide):
+<code>%PROGRAMFILES(X86)%\Google\GoogleUpdater\updater.log</code></p>
+<p>You may need to use admin permissions or <code>sudo</code> to view logs from a system-wide
+updater.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updater/test_migration_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updater/test_migration_instructions.md</a>
+  </p>
+</div>

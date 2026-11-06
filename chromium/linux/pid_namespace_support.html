@@ -1,0 +1,50 @@
+<h1>Linux PID Namespace Support</h1>
+<p>The <a href="https://github.com/chromium/chromium/blob/HEAD/sandbox/linux/README.md">LinuxSUIDSandbox</a> currently relies on
+support for the <code>CLONE_NEWPID</code> flag in Linux&#39;s
+<a href="http://www.kernel.org/doc/man-pages/online/pages/man2/clone.2.html">clone() system call</a>.
+You can check whether your system supports PID namespaces with the code below,
+which must be run as root:</p>
+<pre data-language="c">#define _GNU_SOURCE
+#include &lt;unistd.h&gt;
+#include &lt;sched.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;sys/wait.h&gt;
+
+#if !defined(CLONE_NEWPID)
+#define CLONE_NEWPID 0x20000000
+#endif
+
+int worker(void* arg) {
+  const pid_t pid = getpid();
+  if (pid == 1) {
+    printf(&quot;PID namespaces are working\n&quot;);
+  } else {
+    printf(&quot;PID namespaces ARE NOT working. Child pid: %d\n&quot;, pid);
+  }
+
+  return 0;
+}
+
+int main() {
+  if (getuid()) {
+    fprintf(stderr, &quot;Must be run as root.\n&quot;);
+    return 1;
+  }
+
+  char stack[8192];
+  const pid_t child = clone(worker, stack + sizeof(stack), CLONE_NEWPID, NULL);
+  if (child == -1) {
+    perror(&quot;clone&quot;);
+    fprintf(stderr, &quot;Clone failed. PID namespaces ARE NOT supported\n&quot;);
+  }
+
+  waitpid(child, NULL, 0);
+
+  return 0;
+}</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/pid_namespace_support.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/pid_namespace_support.md</a>
+  </p>
+</div>

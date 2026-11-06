@@ -1,0 +1,171 @@
+<h1>Rust Build Errors Guide</h1>
+<p>This document lists Rust-related build errors that are noteworthy in the context
+of Chromium builds.</p>
+<h2 id="unsafe-rust">Unsafe Rust</h2>
+<p>Chromium configures its compiler to disallow <code>unsafe</code> Rust by default.
+Unexpected <code>unsafe</code> Rust can cause build errors below:</p>
+<pre>error: usage of an `unsafe` block
+error: declaration of an `unsafe` function
+error: implementation of an `unsafe` trait
+error: implementation of an `unsafe` method
+...
+note: requested on the command line with `-F unsafe-code`</pre>
+<p><code>unsafe</code> Rust is <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/unsafe.md">disallowed by default</a> to:</p>
+<ul>
+<li>Discourage using <code>unsafe</code> Rust code</li>
+<li>Make code reviews easier (e.g. <code>//third_party/rust</code> crates with
+<code>allow_unsafe = false</code> can get a bit less scrutiny).</li>
+</ul>
+<p>To fix the errors above you can either:</p>
+<ul>
+<li>Express the same code in safe Rust if possible
+(e.g. using
+<code>slice[i]</code> or
+<a href="https://doc.rust-lang.org/std/primitive.slice.html#method.get"><code>slice.get(i)</code></a>
+rather than
+<a href="https://doc.rust-lang.org/std/primitive.slice.html#method.get_unchecked"><code>slice.get_unchecked(i)</code></a>,
+unless disassembly results show that the compiler cannot elide the checks
+and/or performance measurements show significant runtime difference)</li>
+<li>Allow <code>unsafe</code> code in the given crate (ideally only for a small,
+easy-to-reason-about crate that encapsulates the unsafety behind a safe public
+API).<ul>
+<li>In manually-authored <code>BUILD.gn</code> files (e.g. in first-party code) you can
+  set <code>allow_unsafe = true</code> in <code>rust_static_library</code></li>
+<li>In <code>gnrt</code>-generated <code>BUILD.gn</code> files you can
+  set <code>extra_kv.allow_unsafe</code> property to <code>true</code> in
+  <code>third_party/rust/chromium_crates_io/gnrt_config.toml</code> (and then
+  regenerate <code>BUILD.gn</code> with <code>tools/crates/run_gnrt.py gen</code>).</li>
+</ul>
+</li>
+</ul>
+<h2 id="unstable-features">Unstable features</h2>
+<p>Chromium builds require an explicit opt-in to use unstable Rust features
+(see the policy in <code>//docs/rust/unstable_rust_feature_usage.md</code>).
+Unexpected usage of unstable Rust features can cause build errors below:</p>
+<pre>error[E0725]: the feature `feature_name` is not in the list of allowed features
+error[E0658]: use of unstable library feature `feature_name`
+...
+note: see issue #XXXXX &lt;https://github.com/rust-lang/rust/issues/XXXXX&gt; for more information
+help: add `#![feature(feature_name)]` to the crate attributes to enable</pre>
+<p>To opt into allowing certain unstable features, you need to:</p>
+<ul>
+<li>Opt into allowing an unstable feature in the <code>BUILD.gn</code> of a Rust crate
+(justifying edits to the policy in
+<code>//docs/rust/unstable_rust_feature_usage.md</code> as needed)<ul>
+<li>In manually-authored <code>BUILD.gn</code> files (e.g. in first-party code) you can
+  set the following properties of <code>rust_static_library</code>:<ul>
+<li><code>rustflags = [ &quot;-Zallow-features=feature_name&quot; ]</code></li>
+<li><code>configs -= [ &quot;//build/config/compiler:disallow_unstable_features&quot; ]</code></li>
+</ul>
+</li>
+<li>In <code>gnrt</code>-generated <code>BUILD.gn</code> files you can
+  set <code>extra_kv.allow_unstable_features</code> property in
+  <code>third_party/rust/chromium_crates_io/gnrt_config.toml</code> to the list of
+  allowed feature names (and then
+  regenerate <code>BUILD.gn</code> with <code>tools/crates/run_gnrt.py gen</code>).</li>
+</ul>
+</li>
+<li>Opt into allowing an unstable feature in the root module of a Rust crate.
+To do this add <code>#![feature(feature_name)]</code> to <code>lib.rs</code>.  See also:<ul>
+<li>The brief
+  <a href="https://doc.rust-lang.org/reference/attributes.html#:~:text=feature%20%E2%80%94%20Used%20to%20enable%20unstable%20or%20experimental%20compiler%20features.">language reference documentation</a>
+  of the <code>feature</code> attribute</li>
+<li>An example usage in
+  <a href="https://doc.rust-lang.org/unstable-book/index.html">the Unstable Book</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="missing-sources">Missing sources</h2>
+<p><code>gn</code> and <code>ninja</code> know about build target inputs and sources through <code>input</code>
+and/or <code>sources</code> properties specified in <code>BUILD.gn</code> files.
+<code>rustc</code> independently discovers all <code>.rs</code> files by starting from a crate
+root, and then following <code>mod foo;</code> declarations.
+Chromium build will report an error when those 2 sources of information
+are out of sync - for example:</p>
+<pre>ERROR: Rust source file or input not in GN sources: ../../foo/bar/baz.rs</pre>
+<p>To fix errors like the one above
+you should ensure that the <code>BUILD.gn</code> lists the same source files and inputs
+as the ones actually used in <code>.rs</code> source code:</p>
+<ul>
+<li>In manually-authored <code>BUILD.gn</code> files (e.g. in first-party code) you should
+double-check the <code>sources</code> property (or the <code>inputs</code> property in less common
+cases like when using
+<a href="https://doc.rust-lang.org/std/macro.include.html"><code>include!</code></a> macro).<ul>
+<li>TODO(lukasza): Figure out if/why it matters whether an <code>.rs</code> or <code>.rs.incl</code>
+  file is listed in <code>sources</code> vs <code>inputs</code>.</li>
+</ul>
+</li>
+<li>In <code>gnrt</code>-generated <code>BUILD.gn</code> files, <code>gnrt</code> typically can discover all
+<code>.rs</code> files on its own, but sometimes <code>gnrt</code> may need extra crate metadata
+that you can provide via <code>gnrt_config.toml</code> - for example:<ul>
+<li><code>extra_input_roots</code> can list source files
+  to append to <code>sources</code> / <code>inputs</code> for the main Rust target</li>
+<li><code>extra_build_script_input_roots</code>
+  can list sources files to append to <code>sources</code> / <code>inputs</code>
+  for the <code>build.rs</code> script</li>
+<li>See a comment at the top of <code>gnrt_config.toml</code> for more information</li>
+<li>After editing <code>gnrt_config.toml</code> run
+  <code>tools/crates/run_gnrt.py gen</code> to regenerate <code>BUILD.gn</code> files.</li>
+</ul>
+</li>
+</ul>
+<h2 id="cant-find-and-include-buildrs-output">Can&#39;t find and include <code>build.rs</code> output</h2>
+<p>Third-party crates may depend on <code>build.rs</code> output - typically through
+<code>include!</code> of one or more files from the <code>env!(&quot;OUT_DIR&quot;)</code> directory.
+If <code>gn</code> and <code>ninja</code> are not aware of these <code>build.rs</code> outputs, then it may
+lead to build errors like the one:</p>
+<pre>   --&gt; ../../third_party/rust/chromium_crates_io/vendor/rustversion-v1/src/lib.rs:217:30
+    |
+217 | const RUSTVERSION: Version = include!(concat!(env!(&quot;OUT_DIR&quot;), &quot;/version.expr&quot;));
+    |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ in this macro invocation
+    |
+   --&gt; library/core/src/macros/mod.rs:1487:4
+    |
+    = note: in this expansion of `include!`</pre>
+<p>To fix the error above:</p>
+<ul>
+<li>check if <code>build_script_outputs</code> in <code>gnrt_config.toml</code> lists
+all <code>build.rs</code> outputs.<ul>
+<li>See a comment at the top of <code>gnrt_config.toml</code> for more information</li>
+<li>After editing <code>gnrt_config.toml</code> run
+  <code>tools/crates/run_gnrt.py gen</code> to regenerate <code>BUILD.gn</code> files.</li>
+</ul>
+</li>
+</ul>
+<h2 id="dependency-not-visible-to-an-internal-rust-target">Dependency not visible to an internal Rust target</h2>
+<p>Rust target templates like <code>rust_static_library(&quot;some_target&quot;)</code>
+internally expand into multiple smaller targets
+(e.g. a <code>rust_library</code> for invoking <code>rustc</code>,
+an <code>action</code> for invoking <code>clippy-driver</code>,
+<code>cxx</code>-supporting targets, etc.).
+This may cause <code>gn gen</code> errors when a dependency is exposed to the main
+target (e.g. <code>&quot;:some_target&quot;</code>), but not to the internal targets (e.g.
+<code>&quot;:some_target_clippy&quot;</code> or <code>&quot;:some_target_generator&quot;</code>).</p>
+<p>Example error:</p>
+<pre>$ gn gen out/Default
+ERROR at //build/rust/gni_impl/rust_target.gni:587:9: Dependency not allowed.
+        action(&quot;${_clippy_target_name}&quot;) {
+        ^---------------------------------
+The item //foo/bar:some_target_clippy
+can not depend on //foo/bar:internal_impl
+because it is not in //foo/bar:internal_impl's visibility list: [
+  //foo/bar:internal_target1
+  //foo/bar:internal_target2
+]</pre>
+<p>To fix the error above, we recommend the following approach to
+<code>visibility</code> declarations in <code>BUILD.gn</code> files:</p>
+<ul>
+<li>Public targets should use unrestricted <code>visibility</code></li>
+<li>Private targets should restrict their <code>visibility</code>
+to specific directories - e.g. <code>visibility = [ &quot;:*&quot; ]</code></li>
+<li>Avoid restricting target <code>visibility</code> to specific, individual
+targets - e.g. do <strong>not</strong> say <code>visibility = [ &quot;:some_target&quot; ]</code>.</li>
+</ul>
+<p>Note: Other fix approaches have been discussed with
+<a href="https://groups.google.com/a/chromium.org/g/gn-dev/c/8cUBSIsd8Qw/m/32uA6L1iCAAJ"><code>@gn-dev</code> here</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/build_errors_guide.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/build_errors_guide.md</a>
+  </p>
+</div>

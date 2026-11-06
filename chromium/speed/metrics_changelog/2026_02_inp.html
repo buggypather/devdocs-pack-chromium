@@ -1,0 +1,37 @@
+<h1>Interaction to Next Paint Changes in Chrome 147</h1>
+<h2 id="early-interaction-id-assignment-for-event-timing-entries">Early Interaction ID assignment for Event Timing entries</h2>
+<p>In Chrome 147, Chrome overhauled how interaction IDs are assigned in the Event Timing API, reduced reporting latency, and thus improved Event Timing reporting rates.</p>
+<p>Previously, interaction IDs were generated and associated with <code>PerformanceEventTiming</code> entries asynchronously only after the presentation time of the next paint was available, and full <code>duration</code> value of the Event Timing was known.  I.e., measure timing first, assign Interaction status last.</p>
+<p>In general this ordering didn&#39;t matter much, since we couldn&#39;t report the entry until both interaction status and final duration were available.</p>
+<p>However, some event types, such as <code>pointerdown</code> and <code>keydown</code>, needed to wait for <code>pointerup</code> or <code>keyup</code> events to arrive before a full interaction could be identified, and they were waiting needlessly long.  Additionally, the previous behaviour could lead to a different event ordering for interaction id assignment, relative to original main thread event dispatch.  This led to needlessly complex internal state machine processing.</p>
+<p>Starting in Chrome 147, interaction IDs are assigned synchronously at <code>processingStart</code> as soon as event dispatch begins on the main thread. This decouples interaction ID generation from asynchronous presentation timing, ensuring all event parts of an interaction share the same ID reliably and in chronological order.  This was mostly an internal simplification, but did potentially fix interactionID assignment in some rare edge cases.</p>
+<p>This work was needed to support <code>interaction-contentful-paint</code>.</p>
+<h3 id="removal-of-renderer-side-ukm-buffering">Removal of renderer-side UKM buffering</h3>
+<p>Alongside early ID assignment, Chrome removed renderer-side UKM buffering. Previously, the renderer buffered Event Timing data to identify and report only the single longest event per interaction (&quot;whole interaction / max event duration&quot;). In Chrome 147, the renderer reports &quot;each event&quot; (every part of every interaction) directly to the browser process, where <code>PageLoadMetricsObserver</code> handles aggregation for PageLoad UKM.</p>
+<p>This eliminates complex renderer timers, data structures, and flushing logic upon page unload.</p>
+<p>Importantly, this reduces the risk of dropping very late interaction data during page abandonment, such as when a user clicks a link that immediately navigates away, especially on pages with only a single interaction.</p>
+<p>The implementation change can be seen in <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7596544">crrev.com/c/7596544</a>.</p>
+<h3 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h3>
+<ul>
+<li><strong>Deterministic RUM grouping</strong>: Real User Monitoring (RUM) libraries can reliably group all related event entries (<code>pointerdown</code>, <code>pointerup</code>, <code>click</code>, <code>keydown</code>, <code>keyup</code>) using <code>interactionId</code> with a few less edge-case ID mismatches during rapid user input.</li>
+<li><strong>Increased field metrics coverage (fewer dropped interactions in CrUX data)</strong>:  Sites may see higher reporting rates and improved INP coverage in CrUX and PageLoad UKM.</li>
+<li><strong>Metric values</strong>: Does not fundamentally alter individual interaction durations, but improves metric consistency, completeness, and field reporting reliability.</li>
+</ul>
+<hr>
+<h2 id="explicit-fallback-for-interactions-opening-context-menus">Explicit fallback for interactions opening context menus</h2>
+<p>When a user right-clicks or triggers a context menu, the operating system / browser native context menu UI can take focus and interrupt regular web page rendering.</p>
+<p>Previously, Chrome relied on timer-based flushes to finalize the duration of preceding input events when a context menu appeared. If main-thread or system scheduling delayed the timer, the interaction could report an artificially inflated duration.</p>
+<p>Chrome 147 introduces an explicit fallback mechanism that immediately resolves the end time of preceding interaction events upon <code>contextmenu</code> dispatch.</p>
+<p>The source change can be found in <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7588183">crrev.com/c/7588183</a>.</p>
+<h3 id="how-does-this-affect-a-sites-metrics-1">How does this affect a site&#39;s metrics?</h3>
+<ul>
+<li><strong>Fewer spurious INP outliers</strong>: Eliminates rare, artificial long interaction durations reported in field data when users open context menus or right-click links.</li>
+</ul>
+<h3 id="when-were-users-affected">When were users affected?</h3>
+<p>Chrome 147 reached stable users in February 2026.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_02_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_02_inp.md</a>
+  </p>
+</div>

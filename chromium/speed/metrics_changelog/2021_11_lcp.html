@@ -1,0 +1,23 @@
+<h1>Largest Contentful Paint Bug Fixes in M98</h1>
+<h2 id="bug-fixes-in-chrome-98">Bug Fixes in Chrome 98</h2>
+<p>In Chrome 98, a bug fix was made to the Chrome implementation. Previously, we
+would wait for one visual update at a time and record the paint times of all
+pending text nodes upon receiving the timestamp for the visual update. This
+could cause certain text nodes that had just been detected to be considered
+displayed even though they&#39;re not. Instead, we keep track of the objects which
+are painted on each animation frame and set their timestamps to the visual
+update corresponding to that animation frame. This is already how it works for
+image objects, so this change only impacts text paint times, making them more
+accurate. <a href="https://chromium-review.googlesource.com/c/chromium/src/+/3265727">Source code for this
+change</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>A website whose LCP is text may see their LCP values increase due to the more
+accurate paint times being used.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 98 is currently scheduled to be released the week of February 1, 2022.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_11_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_11_lcp.md</a>
+  </p>
+</div>

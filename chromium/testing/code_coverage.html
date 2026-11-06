@@ -1,0 +1,312 @@
+<h1>Code Coverage in Chromium</h1>
+<h3 id="coverage-dashboard-link">Coverage Dashboard: <a href="https://analysis.chromium.org/coverage/p/chromium">link</a></h3>
+<p>Table of contents:</p>
+<ul>
+<li><a href="#coverage-infra">Coverage Infrastructure</a><ul>
+<li><a href="#coverage-builders">Coverage Builders</a></li>
+<li><a href="#coverage-service">Coverage Service</a></li>
+<li><a href="#coverage-clients">Coverage Clients</a></li>
+</ul>
+</li>
+<li><a href="#local-coverage-script">Local Coverage Script</a><ul>
+<li><a href="#step-0-download-tooling">Step 0 Download Tooling</a></li>
+<li><a href="#step-1-build">Step 1 Build</a></li>
+<li><a href="#step-2-create-raw-profiles">Step 2 Create Raw Profiles</a></li>
+<li><a href="#step-3-create-indexed-profile">Step 3 Create Indexed Profile</a></li>
+<li><a href="#step-4-create-coverage-reports">Step 4 Create Coverage Reports</a></li>
+</ul>
+</li>
+<li><a href="#read-the-artifact">Read The Artifact</a><ul>
+<li><a href="#html-report">HTML report</a></li>
+<li><a href="#lcov-report">lcov report</a></li>
+</ul>
+</li>
+<li><a href="#contacts">Contacts</a></li>
+<li><a href="#faq">FAQ</a></li>
+</ul>
+<p>This document is divided into two parts.</p>
+<ul>
+<li>The first part introduces the code coverage infrastructure that
+continuously generates code coverage information for the whole codebase and for
+specific CLs in Gerrit. For the latter, refer to
+<a href="code_coverage_in_gerrit">code_coverage_in_gerrit.md</a>.</li>
+<li>The second part talks about how to generate code coverage locally for Clang-compiled languages like C++. Refer to <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/build/android/docs/coverage.md">android code coverage instructions</a> for instructions for java code.</li>
+</ul>
+<h2 id="coverage-infrastructure">Coverage Infrastructure</h2>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_infra_diagram.png" alt="coverage infra diagram"></p>
+<p>There are 3 layers in the system:</p>
+<h3 id="coverage-builders">Coverage Builders</h3>
+<p>The first layer is the LUCI builders that</p>
+<ul>
+<li>build instrumented targets,</li>
+<li>run the instrumented tests,</li>
+<li>merge the results into single streams,</li>
+<li>upload data to cloud storage.</li>
+</ul>
+<p>There are two types of builder:</p>
+<p>CI Builder</p>
+<p>The code coverage CI Builders periodically build all the test targets and fuzzer
+targets for a given platform and instrument all available source files. Then
+save the coverage data to a dedicated storage bucket.</p>
+<p>CQ Builder</p>
+<p>The code coverage CQ builders instrument only the files changed for a given CL.
+More information about per-cl coverage info in <a href="code_coverage_in_gerrit">this
+doc</a>.</p>
+<h3 id="coverage-service">Coverage Service</h3>
+<p>The second layer in the system consists of an AppEngine application that
+consumes the coverage data from the builders above, structures it and stores it
+in cloud datastore. It then serves the information to the clients below.</p>
+<h3 id="coverage-clients">Coverage Clients</h3>
+<p>In the last layer we currently have two clients that consume the service:</p>
+<h4 id="coverage-dashboard">Coverage Dashboard</h4>
+<p>The <a href="https://analysis.chromium.org/coverage/p/chromium">coverage dashboard</a> front end is hosted in the same application as the
+service above.
+It shows the full-code coverage reports with links to the builds that generated
+them, as well as per-directory and per-component aggregation, and can be drilled
+down to the single line of code level of detail.</p>
+<p>Refer to the following screenshots:</p>
+<h5 id="directory-view">Directory View</h5>
+<p>See coverage breakdown by directories (default landing page).</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_directory_view.png" alt="coverage dashboard directory view"></p>
+<h5 id="component-view">Component View</h5>
+<p>Use the view dropdown menu to switch between directory and component.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_component_view.png" alt="coverage dashboard component view"></p>
+<h5 id="source-view">Source View</h5>
+<p>Click on a particular source file in one of the views above to see line-by-line
+coverage breakdown, and it&#39;s useful to identify:</p>
+<ul>
+<li>Uncovered lines and code blocks that lack test coverage.</li>
+<li>Potentially dead code. See <a href="https://chromium.googlesource.com/chromium/src/+/ac6e09311fcc7e734be2ef21a9ccbbe04c4c4706">dead code example</a>.</li>
+<li>Hot spots in your code.</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_file_view.png" alt="coverage dashboard file view"></p>
+<h5 id="project-view">Project View</h5>
+<p>Click on &quot;Previous Reports&quot; to check out the coverage history of the project.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_link_to_previous_reports.png" alt="coverage dashboard link to previous reports"></p>
+<p>List of historical coverage reports are in reverse chronological order.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_previous_reports.png" alt="coverage dashboard previous reports"></p>
+<h4 id="gerrit-coverage-view">Gerrit Coverage View</h4>
+<p>The other client supported at the moment is the gerrit plugin for code coverage.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_annotations.png" alt="gerrit coverage view"></p>
+<p>See <a href="code_coverage_in_gerrit">this doc</a> for information about the feature
+that allows gerrit to display code coverage information generated for a given CL
+by CQ bot. Or see this
+<a href="https://www.youtube.com/watch?v=cxXlYcSgIPE">15-second video tutorial</a>.</p>
+<h2 id="local-coverage-script">Local Coverage Script</h2>
+<p>This <a href="https://clang.llvm.org/docs/SourceBasedCodeCoverage.html">documentation</a> explains how to use Clang’s source-based coverage
+features in general. The <a href="https://cs.chromium.org/chromium/src/tools/code_coverage/coverage.py">coverage script</a> automates the process described below and provides a
+one-stop service to generate code coverage reports locally in just one command.</p>
+<p>This script is currently supported on Android, Linux, Mac, iOS and ChromeOS
+platforms.</p>
+<p>Here is an example usage:</p>
+<pre>$ gn gen out/coverage \
+    --args=&quot;use_clang_coverage=true is_component_build=false
+    dcheck_always_on=true is_debug=false&quot;
+$ python tools/code_coverage/coverage.py \
+    crypto_unittests url_unittests \
+    -b out/coverage -o out/report \
+    -c 'out/coverage/crypto_unittests' \
+    -c 'out/coverage/url_unittests --gtest_filter=URLParser.PathURL' \
+    -f url/ -f crypto/</pre>
+<p>The command above builds <code>crypto_unittests</code> and <code>url_unittests</code> targets and then
+runs them individually with their commands and arguments specified by the <code>-c</code> flag.
+For <code>url_unittests</code>, it only runs the test <code>URLParser.PathURL</code>. The coverage report
+is filtered to include only files and sub-directories under <code>url/</code> and <code>crypto/</code>
+directories.</p>
+<p>Aside from automating the process, this script provides visualization features to
+view code coverage breakdown by directories and by components, similar to the
+views in the <a href="#coverage-dashboard">coverage dashboard</a> above.</p>
+<h2 id="workflow">Workflow</h2>
+<p>This section presents the workflow of generating code coverage reports using two
+unit test targets in Chromium repo as an example: <code>crypto_unittests</code> and
+<code>url_unittests</code>, and the following diagram shows a step-by-step overview of the
+process.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_workflow.png" alt="code coverage generation workflow"></p>
+<h3 id="step-0-download-tooling">Step 0 Download Tooling</h3>
+<p>Generating code coverage reports requires llvm-profdata and llvm-cov tools.
+You can get them by adding <code>&quot;checkout_clang_coverage_tools&quot;: True,</code> to
+<code>custom_vars</code> in the <code>.gclient</code> config and run <code>gclient runhooks</code>. You can also
+download the tools manually (<a href="https://storage.googleapis.com/chromium-browser-clang-staging/">tools link</a>)</p>
+<h3 id="step-1-build">Step 1 Build</h3>
+<p>In Chromium, to compile code with coverage enabled, one needs to add
+<code>use_clang_coverage=true</code>, <code>is_component_build=false</code> and <code>is_debug=false</code> GN
+flags to the args.gn file in the build output directory. Under the hood, they
+ensure <code>-fprofile-instr-generate</code> and <code>-fcoverage-mapping</code> flags are passed to
+the compiler.</p>
+<pre>$ gn gen out/coverage \
+    --args='use_clang_coverage=true is_component_build=false is_debug=false'
+$ gclient runhooks
+$ autoninja -C out/coverage crypto_unittests url_unittests</pre>
+<h3 id="step-2-create-raw-profiles">Step 2 Create Raw Profiles</h3>
+<p>The next step is to run the instrumented binaries. When the program exits, it
+writes a raw profile for each process. Because Chromium runs tests in
+multiple processes, the number of processes spawned can be as many as a few
+hundred, resulting in the generation of a few hundred gigabytes’ raw
+profiles. To limit the number of raw profiles, <code>%Nm</code> pattern in
+<code>LLVM_PROFILE_FILE</code> environment variable is used to run tests in multi-process
+mode, where <code>N</code> is the number of raw profiles. With <code>N = 4</code>, the total size of
+the raw profiles are limited to a few gigabytes. (If working on Android, the
+.profraw files will be located in ./out/coverage/coverage by default.)</p>
+<p>Additionally, we also recommend enabling the continuous mode by adding the <code>%c</code>
+pattern to <code>LLVM_PROFILE_FILE</code>. The continuous mode updates counters in real
+time instead of flushing to disk at process exit. This recovers coverage data
+from tests that exit abnormally (e.g. death tests). Furthermore, the continuous
+mode is required to recover coverage data for tests that run in sandboxed
+processes. For more information, see crbug.com/1468343.</p>
+<pre>$ export LLVM_PROFILE_FILE=&quot;out/report/crypto_unittests.%4m%c.profraw&quot;
+$ ./out/coverage/crypto_unittests
+$ ls out/report/
+crypto_unittests.3657994905831792357_0.profraw
+...
+crypto_unittests.3657994905831792357_3.profraw</pre>
+<h3 id="step-3-create-indexed-profile">Step 3 Create Indexed Profile</h3>
+<p>Raw profiles must be indexed before generating code coverage reports, and this
+is done using the <code>merge</code> command of <code>llvm-profdata</code> tool, which merges multiple
+raw profiles (.profraw) and indexes them to create a single profile (.profdata).</p>
+<p>At this point, all the raw profiles can be thrown away because their information
+is already contained in the indexed profile.</p>
+<pre>$ llvm-profdata merge -o out/report/coverage.profdata \
+    out/report/crypto_unittests.3657994905831792357_0.profraw
+...
+out/report/crypto_unittests.3657994905831792357_3.profraw
+out/report/url_unittests.714228855822523802_0.profraw
+...
+out/report/url_unittests.714228855822523802_3.profraw
+$ ls out/report/coverage.profdata
+out/report/coverage.profdata</pre>
+<h3 id="step-4-create-coverage-reports">Step 4 Create Coverage Reports</h3>
+<p>Finally, <code>llvm-cov</code> is used to render code coverage reports. There are different
+report generation modes, and all of them require the following as input:</p>
+<ul>
+<li>Indexed profile</li>
+<li>All built target binaries</li>
+<li>All exercised source files</li>
+</ul>
+<p>For example, the following command can be used to generate per-file line-by-line
+code coverage report:</p>
+<pre>$ llvm-cov show -output-dir=out/report -format=html \
+    -instr-profile=out/report/coverage.profdata \
+    -compilation-dir=out/coverage \
+    -object=out/coverage/url_unittests \
+    out/coverage/crypto_unittests</pre>
+<p>If creating a report for Android, the -object arg would be the lib.unstripped
+file, ie out/coverage/lib.unstripped/libcrypto_unittests__library.so</p>
+<p>For more information on how to use llvm-cov, please refer to the <a href="http://llvm.org/docs/CommandGuide/llvm-cov.html">guide</a>.</p>
+<h2 id="read-the-artifact">Read The Artifact</h2>
+<p>The code coverage tool generates some artifacts, and it is good to
+understand the data format to be used by automation tools.</p>
+<h3 id="html-report">HTML Report</h3>
+<p>If the argument <code>--format=html</code> is used in the <code>llvm-cov export</code> command, it
+generates a report in html format. In this html report, it shows the source
+files, lists the functions and coverage metadata on whether the functions are
+executed or not.</p>
+<p>Reading a html report is straightforward: Just open up this html page with a
+Chrome browser.</p>
+<h3 id="lcov-report">lcov Report</h3>
+<p>If the argument <code>--format=lcov</code> is used in the <code>llvm-cov export</code> command, it
+generates a report in lcov format.</p>
+<p>In the lcov file, the meaning of these keywords are listed below.</p>
+<ul>
+<li><code>SF</code>: source file name (typically beginning of one record)</li>
+<li><code>FN</code>: mangled function symbol</li>
+<li><code>FNDA</code>: functions execution</li>
+<li><code>FNF</code>: functions found</li>
+<li><code>FNH</code>: functions hit</li>
+<li><code>DA</code>:  lines executed</li>
+<li><code>BRH</code>: branches hit</li>
+<li><code>BRF</code>: branches found</li>
+<li><code>LH</code>: lines hit</li>
+<li><code>LF</code>: lines found</li>
+<li><code>end_of_record</code> end of one record</li>
+</ul>
+<p>The number right after <code>FN</code> indicates the starting line number of this function.
+The number right after <code>FNDA</code> indicates the total number of execution of this
+function.</p>
+<p>In the following example record, it means that function <code>_ZN4apps18AppLifetimeMonitorC2EPN7content14BrowserContextE</code> is defined at line
+21 in file <code>app_lifetime_monitor.cc</code> and it is executed once.</p>
+<pre>SF:../../chromium/src/apps/app_lifetime_monitor.cc
+FN:21,_ZN4apps18AppLifetimeMonitorC2EPN7content14BrowserContextE
+FN:32,_ZN4apps18AppLifetimeMonitorD2Ev
+FNDA:1,_ZN4apps18AppLifetimeMonitorC2EPN7content14BrowserContextE
+FNF:7
+FNH:1
+DA:34,0
+BRF:0
+BRH:0
+LF:5
+LH:1
+end_of_record</pre>
+<h2 id="contacts">Contacts</h2>
+<h3 id="reporting-problems">Reporting problems</h3>
+<p>For any breakage report and feature requests, please <a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ETest%3ECodeCoverage">file a bug</a>.</p>
+<h3 id="mailing-list">Mailing list</h3>
+<p>For questions and general discussions, please join <a href="https://groups.google.com/a/chromium.org/forum/#!forum/code-coverage">code-coverage group</a>.</p>
+<h2 id="faq">FAQ</h2>
+<h3 id="can-i-use-is_component_buildtrue-for-code-coverage-build">Can I use <code>is_component_build=true</code> for code coverage build?</h3>
+<p>Yes, code coverage instrumentation works with both component and non-component
+builds. Component build is usually faster to compile, but can be up to several
+times slower to run with code coverage instrumentation. For more information,
+see <a href="https://crbug.com/831939">crbug.com/831939</a>.</p>
+<h3 id="i-am-getting-some-warnings-while-using-the-script-is-that-fine">I am getting some warnings while using the script, is that fine?</h3>
+<p>Usually this is not a critical issue, but in general we tend not to have any
+warnings. Please check the list of <a href="https://bugs.chromium.org/p/chromium/issues/list?q=component:Infra%3ETest%3ECodeCoverage">known issues</a>, and if there is a similar
+bug, leave a comment with the command you run, the output you get, and Chromium
+revision you use. Otherwise, please <a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ETest%3ECodeCoverage">file a bug</a> providing the same information.</p>
+<h3 id="how-do-crashes-affect-code-coverage">How do crashes affect code coverage?</h3>
+<p>If a crash of any type occurs (e.g. Segmentation Fault or ASan error), the
+crashing process might not dump coverage information necessary to generate
+code coverage report. For single-process applications (e.g. fuzz targets), that
+means no coverage might be reported at all. For multi-process applications, the
+report might be incomplete. It is important to fix the crash first. If this is
+happening only in the coverage instrumented build, please <a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ETest%3ECodeCoverage">file a bug</a>.</p>
+<h3 id="how-do-assertions-affect-code-coverage">How do assertions affect code coverage?</h3>
+<p>If a crash is caused by CHECK or DCHECK, the coverage dump will still be written
+on the disk (<a href="https://crrev.com/c/1172932">crrev.com/c/1172932</a>). However, if a crashing process calls the
+standard <a href="http://man7.org/linux/man-pages/man3/assert.3.html">assert</a> directly or through a custom wrapper, the dump will not be
+written (see <a href="#how-do-crashes-affect-code-coverage">How do crashes affect code coverage?</a>).</p>
+<h3 id="is-it-possible-to-obtain-code-coverage-from-a-full-chromium-build">Is it possible to obtain code coverage from a full Chromium build?</h3>
+<p>Yes, with some important caveats. It is possible to build <code>chrome</code> target with
+code coverage instrumentation enabled. However, there are some inconveniences
+involved:</p>
+<ul>
+<li>Linking may take a while, especially if you use a non-component build.</li>
+<li>The binary is huge (2-4GB).</li>
+<li>The browser may be noticeably slow and laggy.</li>
+</ul>
+<p>For more information, please see <a href="https://crbug.com/834781">crbug.com/834781</a>.</p>
+<h3 id="why-do-we-see-significantly-different-coverage-reported-on-different-revisions">Why do we see significantly different coverage reported on different revisions?</h3>
+<p>There can be two possible scenarios:</p>
+<ul>
+<li>It can be a one time flakiness due to a broken build or failing tests.</li>
+<li>It can be caused by extension of the test suite used for generating code
+coverage reports. When we add new tests to the suite, the aggregate coverage
+reported usually grows after that.</li>
+</ul>
+<h3 id="how-can-i-improve-coverage-dashboard">How can I improve <a href="https://analysis.chromium.org/coverage/p/chromium">coverage dashboard</a>?</h3>
+<p>The code for the service and dashboard currently lives along with findit at
+<a href="https://chromium.googlesource.com/infra/infra/+/main/appengine/findit/">this location</a>
+because of significant shared logic.</p>
+<p>The code used by the bots that generate the coverage data lives (among other
+places) in the
+<a href="https://chromium.googlesource.com/chromium/tools/build/+/main/scripts/slave/recipe_modules/code_coverage/">code coverage recipe module</a>.</p>
+<h3 id="why-is-coverage-for-x-not-reported-or-unreasonably-low-even-though-there-is-a-test-for-x">Why is coverage for X not reported or unreasonably low, even though there is a test for X?</h3>
+<p>There are several reasons why coverage reports can be incomplete or incorrect:</p>
+<ul>
+<li>A particular test is not used for code coverage report generation. Please
+<a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ETest%3ECodeCoverage">file a bug</a>.</li>
+<li>A test may have a build failure or a runtime crash. Please check the build
+for that particular report (rightmost column on the <a href="https://analysis.chromium.org/coverage/p/chromium">coverage dashboard</a>).
+If there is any failure, please upload a CL with the fix. If you can&#39;t fix it,
+feel free to <a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ETest%3ECodeCoverage">file a bug</a>.</li>
+<li>A particular test may not be available on a particular platform. As of now,
+only reports generated on Linux and CrOS are available on the
+<a href="https://analysis.chromium.org/coverage/p/chromium">coverage dashboard</a>.</li>
+</ul>
+<h3 id="is-coverage-reported-for-the-code-executed-inside-the-sandbox">Is coverage reported for the code executed inside the sandbox?</h3>
+<p>Yes!</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/code_coverage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/code_coverage.md</a>
+  </p>
+</div>

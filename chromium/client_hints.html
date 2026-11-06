@@ -1,0 +1,535 @@
+<h1>Life of Client Hint</h1>
+<p>Client hints are a set of headers that a server can proactively request from a
+client to get information about the device, network, user preference and
+User-Agent specific preference. This document traces the life of a Client Hint,
+from the server&#39;s request in a response header to the client sending the
+corresponding hints in request headers. This allows committers to have a better
+understanding the Client Hints mechanism and the underlying implementation
+changes, reducing efforts when debugging issues related to Client Hints
+architecture.</p>
+<p>See also:</p>
+<ul>
+<li><a href="https://datatracker.ietf.org/doc/html/rfc8942">HTTP Client Hint RFC</a></li>
+<li><a href="https://wicg.github.io/ua-client-hints/">User-Agent Client Hints Specification</a></li>
+</ul>
+<h2 id="background">Background</h2>
+<h3 id="client-hints-usage">Client Hints Usage</h3>
+<p>A site must explicitly announce that it supports Client Hints. One primary way
+is using the <code>Accept-CH</code> header to specify the hints that the site is interested
+in.</p>
+<pre>Accept-CH: Sec-CH-Width, Sec-CH-UA-Bitness</pre>
+<p>When a site sends the <code>Accept-CH</code> header with a list of Client Hints, a client
+will choose to append some or all of the listed Client Hint headers to
+subsequent requests for that origin. For example, <code>Sec-CH-UA-Bitness</code>, the
+client uses a system library to determine the &quot;bitness&quot; of the underlying CPU
+architecture and then appends it to the request header. The browser stores those
+preferences on a per-origin basis when the <code>Accept-CH</code> header is received in a
+response to a secure, top-level navigation request.</p>
+<p>Sites can also specify Client Hints in HTML using the <code>&lt;meta&gt;</code> element with the
+<code>http-equiv</code> attribute.</p>
+<pre>&lt;meta http-equiv=&quot;Accept-CH&quot; content=&quot;Sec-CH-Width, Sec-CH-UA-Bitness&quot; /&gt;</pre>
+<p>For User-Agent Client Hints, it has an additional way to expose browser and
+platform information via <a href="https://developer.mozilla.org/en-US/docs/Web/API/User-Agent_Client_Hints_API">JavaScript
+API</a>:
+<code>NavigatorUAData</code>, and <code>NavigatorUAData.getHighEntropyValues()</code>.</p>
+<h3 id="client-hints-cache">Client Hints Cache</h3>
+<p>The Client Hints cache can only be accessed (read and write) via a delegate in
+the browser process. Only the main frame can write the Client Hints cache (This
+is because having more than one method of affecting the Client Hints storage
+introduces far more unnecessary complexity to the implementation, the
+specification and the developers). In other words, writing to the Client Hints
+cache requires passing several checks: the navigation must be top-frame, in a
+secure context, and have the necessary JS permissions and feature flags enabled.</p>
+<p>In detail, Client Hints are read and written using the C++
+<code>ClientHintsControllerDelegate</code> class which is a property of
+<code>content::BrowserContext</code>. In <code>//chrome</code> space, this delegate is implemented as
+the <code>ProfileImpl</code> and <code>OffTheRecordProfileImpl</code>. The delegate provides read and
+write Client Hints on a per-origin basis. Each platform has its own overrides
+implementation, such as principal implementation <code>client_hints::ClientHints</code> in
+<code>//components</code>, <code>AwClientHintsControllerDelegate</code> in Android WebView, and
+<code>InMemoryClientHintsControllerDelegate</code> for Fuchsia. Client hints values are
+read and written to the <code>PrefService</code> if the platform supports it, otherwise
+using in-memory <code>std::map</code> as the cache media. Client Hint preferences are
+stored in the preferences service as a origin-based content setting
+(<code>ContentSettingsType::CLIENT_HINTS</code>).</p>
+<p><strong>Note:</strong> Any storage related to an incognito mode profile is cleared when the
+last incognito tab is closed. Incognito profile (an off-the-record profile that
+is used for incognito mode) will have its own separate Client Hints storage.</p>
+<h3 id="client-hints-storage-lifetime">Client Hints Storage Lifetime</h3>
+<p>Since Chrome M103, Client hints storage is marked as <code>SessionModel::Durable</code>,
+meaning the storage no longer has a predefined expiration lifetime. Client Hints
+preferences can be read from disk when the browser starts up and loaded into
+memory. This also means the Client Hints storage persist until either of the
+following happens:</p>
+<ul>
+<li>when session cookies are cleared.</li>
+<li>when a user clears site data or cookies for a given origin.</li>
+<li>when an origin responds with an empty <code>Accept-CH</code>.</li>
+</ul>
+<h2 id="overview">Overview</h2>
+<p>To support Client Hints on a new platform or embedder, the platform should
+implement its own <code>ClientHintsControllerDelegate</code>. For User-Agent Client Hints,
+it also needs to override the <code>GetUserAgentMetadata()</code> method to generate the
+User-Agent metadata, which usually involves calling <code>embedder_support ::GetUserAgentMetadata</code> in the component layer. We will discuss more in detailed
+design.</p>
+<p>To address the issue that the client may not know what Client Hints to send on
+the first page load, we provided two mechanisms (Client Hint Reliability, <a href="https://github.com/Tanych/http-client-hint-reliability">RFC
+draft</a>) to fix it:</p>
+<ul>
+<li>Critical-CH header (an HTTP header to retry the request)</li>
+<li>A connection-level optimization (TLS ALPS frame in HTTP2/HTTP3)</li>
+</ul>
+<p>To add a new Client Hint, we usually follow <a href="https://github.com/chromium/chromium/blob/HEAD/docs/client_hints/components/client_hints/README.md">the guide
+here</a> or find the latest example CL of
+adding a Client Hint.</p>
+<h2 id="detailed-design">Detailed Design</h2>
+<p>As mentioned earlier, here are the major ways to access the Client Hints:</p>
+<ul>
+<li>Ways for sites specify the interested Client Hints<ul>
+<li>HTTP Accept-CH header</li>
+<li><code>&lt;meta&gt;</code> tag</li>
+</ul>
+</li>
+<li>Ways for sites getting Client Hints<ul>
+<li>JS interface for User-Agent Client Hints</li>
+</ul>
+</li>
+</ul>
+<h3 id="parse-response-headers">Parse Response Headers</h3>
+<p>When a site support Client Hints via the HTTP headers, it specifies the Client
+Hints preferences in the <code>Accept-CH</code> header and can optionally send the
+<code>Critical-CH</code> header with critical Client Hints. To allow navigation requests to
+access those two response headers, we added two optional
+<code>array&lt;WebClientHintsType&gt;</code> fields : <code>accept_ch</code> and <code>critical_ch</code>, to the
+<code>ParsedHeaders</code> struct. These are populated in the <code>PopulateParsedHeaders</code>
+function by <code>ParseClientHintsHeader</code>, which parses <code>Accept-CH</code> and <code>Critical-CH</code>
+headers and returns the parsed representations of Client Hints as
+<code>array&lt;WebClientHintsType&gt;</code>.</p>
+<p><strong>Notes:</strong> An <code>Accept-CH</code> header with empty value (e.g.<code>Accept-CH:</code>) is
+considered valid. This instructs the browser to clear the Client Hints storage
+for the given origin.</p>
+<h3 id="subresource">Subresource</h3>
+<p>By design, when a site enables Client Hints, the top-level document&#39;s
+preferences are used to determine which hints to delegate to subresource
+requests associated with that document. This delegation is governed by settings
+like Permissions Policy.</p>
+<p>When requests are initiated from a document, the Client Hints are filtered
+through <a href="https://w3c.github.io/webappsec-permissions-policy/">Permission
+Policies</a>, which allows
+origins to control what features are available to third parties within a
+document. By default, if an embedded document is same-origin with its embedder,
+then Permissions Policy will delegate all available hints. For example, when a
+user visits <code>https://a.com</code> with Client Hints <code>sec-ch-ua-bitness</code>,
+<code>sec-ch-ua-platform-version</code> in the request header, the subresource request
+<code>https://a.com/b.img</code> will have the same Client Hints preferences in the request
+header.</p>
+<p>The policy can specify a list of allowed origins or an asterisk <code>*</code> for all
+origins (low-entropy hints like <code>Sec-CH-UA</code>, <code>Sec-CH-UA-Mobile</code>
+,<code>Sec-CH-UA-Platform</code> and <code>Save-Data</code> are considered safe to send to all
+subresources by default, so their policy defaults to <code>*</code>). Permissions can also
+be set in HTML for iframes in the same format through the allow attribute. See
+more details in <a href="https://github.com/w3c/webappsec-permissions-policy/blob/main/permissions-policy-client-hints.md">Permissions Policy and Client
+Hints</a>.</p>
+<h3 id="critical-ch">Critical-CH</h3>
+<p>As one of Client Hint Reliability mechanisms, the <code>Critical-CH</code> response header
+is used to specify important hints for the origin to have on the very first
+request. For example, a server may use the <code>Sec-CH-Device-Memory</code> Client Hint to
+select simple and complex variants of a resource to different user agents. Such
+a resource should be fetched consistently across page loads even in the very
+first request to prevent inconsistent behavior. The interaction between
+<code>Critical-CH</code> and <code>Accept-CH</code> is discussed in a later section.</p>
+<h3 id="fenced-frame">Fenced Frame</h3>
+<p>Based on <a href="https://developer.chrome.com/en/docs/privacy-sandbox/fenced-frame/">Fenced
+Frame</a>’s
+privacy guarantee, it doesn&#39;t allow communication between the embedding frame
+and the fenced frame. Currently, a fenced frame won’t have access to the Client
+Hints storage of the embedding page. There are ongoing discussions regarding how
+to handle Client Hints in a fenced frame, see <a href="https://github.com/WICG/fenced-frame/blob/master/explainer/permission_document_policies.md#ua-client-hints-open-question">the github
+issue</a>.
+If a frame is inside a fenced frame, its origin is considered as opaque when
+looking up Client Hint preferences.</p>
+<h3 id="content-security-policy-csp-sandbox">Content-Security-Policy (CSP) Sandbox</h3>
+<p>Initially, we only considered the request’s URL when creating the origin to
+access the Client Hints storage for navigation. However, this might be an issue
+when a sandboxed iframe opens a popup (with the attribute <code>allow-popup</code>). In
+this case, the popup&#39;s origin should be considered opaque, not the origin of its
+URL. When a new browsing context is created, it can inherit a <a href="https://html.spec.whatwg.org/multipage/origin.html#determining-the-creation-sandboxing-flags">&quot;sandboxing flag
+set&quot;</a>
+from the embedding iframe or document. If any of the <a href="https://html.spec.whatwg.org/multipage/origin.html#sandboxed-origin-browsing-context-flag">sandboxed origin browsing
+context
+flags</a>
+is set, the resulting origin is <code>opaque</code>.</p>
+<h2 id="implementation-details">Implementation Details</h2>
+<h3 id="top-level-document">Top-level Document</h3>
+<h4 id="before-receiving-response">Before Receiving Response</h4>
+<p>The following diagram shows how Client Hints are added to the HTTP request
+header before a response is received from the site. We only parse and persist
+Client Hints for the top-level document.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/initial_navigation_flow.png" alt="initial navigation
+flow"></p>
+<p>When initializing the <code>NavigationRequest</code> in <code>//content</code> layer, we look up the
+existing Client Hints storage to add them to the HTTP request header(the
+decision to add a specific hint also considers other settings like Permissions
+Policy). For User-Agent Client Hints, one special case is User-Agent overrides.
+If User-Agent has been overridden and the overridden User-Agent metadata is also
+not empty, the User-Agent Client Hints will be added to the requests header.
+Otherwise, no User-Agent Client Hints will be added. For details, check the
+current implementation of <code>UpdateNavigationRequestClientUaHeadersImpl</code>.</p>
+<h4 id="after-receiving-response">After Receiving Response</h4>
+<p>Once the site&#39;s response is available, <code>CriticalClientHintsThrottle</code> (a
+<code>URLLoaderThrottle</code> that is registered on top-level navigation requests)
+monitors whether the corresponding request needs to be restarted based on the
+values in the <code>Critical-CH</code> header and the existing Client Hints storage. It’s
+run on every response in the navigation it’s assigned to. The restart is
+implemented as an internal redirect. It replaces the original response and is
+sent to the navigation stack to proceed as normal.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/navigation_response_flow.png" alt="navigation response
+flow"></p>
+<p>In <code>URLLoaderThrottle</code>, responses are handled separately for normal(a.k.a.
+“final”) response and redirect response. When a redirect response occurs, the
+//net stack is notified of a redirect, not a final response. This notification
+is sent via a <code>URLLoaderClient</code> mojo pipe through either <code>OnReceivedResponse</code> or
+<code>OnReceivedRedirect</code>. The <code>ThrottlingURLLoader</code> (a wrapper around the
+<code>URLLoader</code>) loops through each throttle and calls
+<code>BeforeWillProcessResponse</code>/<code>WillProcessResponse</code> or
+<code>BeforeWillRedirectRequest</code>/<code>WillRedirectRequest</code>. This means responses handled
+by <code>OnReceivedRedirect</code> are not also processed by <code>OnReceivedResponse</code>. This is
+the reason why we need to implement both <code>BeforeWillProcessResponse</code> and
+<code>BeforeWillRedirectRequest</code> in the <code>CriticalClientHintsThrottle</code>.</p>
+<p>In the following sections, we will discuss detailed workflow on handling normal
+and redirect responses with and without <code>Critical-CH</code>.</p>
+<h5 id="normal-200">Normal 200</h5>
+<p>For a normal 200 response without restarting the request, we parse the
+<code>Accept-CH header</code> and persist the Client Hints preferences
+(<code>ParseAndPersistAcceptCHForNavigation</code>) if it’s top-level frame during
+navigation commit(<code>​​NavigationRequest::CommitNavigation</code>). We also update
+<code>enabled_client_hints</code> commit parameter to allow subresource requests to inherit
+the top-level frame’s Client Hints storage.</p>
+<h5 id="redirect-301302">Redirect 301/302</h5>
+<p>For a redirect response like 301, 302 without a restart, we parse the
+<code>Accept-CH</code> header from the redirect response and persist the Client Hints
+preferences when checking redirect completion
+(<code>NavigationRequest::OnRedirectChecksComplete</code>). This means the subsequent
+request header to the redirect page will include the Client Hints which
+specified in the original response <code>Accept-CH</code> header. Once the response of the
+redirect page is available, the remaining workflow is similar to a normal 200
+response:</p>
+<ul>
+<li>Parsing and persisting the Client Hints storage again using the redirect
+page response header.</li>
+<li>Updating the <code>enabled_client_hints</code> commit params.</li>
+</ul>
+<p>The following example explains how the redirect request works:</p>
+<pre>GET /foo HTTP/1.1
+Host: example.com
+
+HTTP/1.1 301 Moved Permanently
+Accept-Ch: Sec-CH-UA-Platform-Version,Sec-CH-UA-Bitness
+Location: /bar
+
+GET /bar
+Sec-CH-UA-Platform-Version: &quot;6.1.25&quot;
+Sec-CH-UA-Bitness: &quot;64&quot;
+Host: example.com
+
+HTTP/1.1 200 OK
+Accept-Ch: Sec-CH-UA-Full-Version-List</pre>
+<p>The first request to <code>example.com/foo</code> won’t include any Client Hints since
+clients don’t know what to send before receiving any response. Once the redirect
+response arrives, it will update the Client Hints storage to include
+<code>Sec-CH-UA-Platform-Version</code> and <code>Sec-CH-UA-Bitness</code>, and the request to the new
+redirect location <code>/bar</code> will include these hints. However, if the final
+redirect location 200 response has a different Client Hints preference (e.g.,
+<code>Sec-CH-UA-Full-Version-List</code>), it will update the Client Hints storage as
+<code>Sec-CH-UA-Full-Version-List</code> when committing the navigation. The next request
+to <code>example.com</code> will then send <code>Sec-CH-UA-Full-Version-List</code> int the request
+headers. Therefore, we recommend that sites send a consistent Client Hints
+preference for the same origin to avoid frequently changing Client Hints
+storage.</p>
+<h5 id="normal-200-with-critical-ch">Normal 200 with Critical-CH</h5>
+<p>As mentioned earlier, the <code>Critical-CH</code> restart mechanism was implemented as an
+internal redirect. In this case, the response goes through
+<code>CriticalClientHintsThrottle::BeforeWillProcessResponse</code>. Once there are missing
+critical hints on the request header, we parse and persist the Client Hints
+preferences based on the latest response and then trigger an internal 307
+redirect to restart the request. As the internal redirect response won’t contain
+the original response header (this means no <code>Accept-CH</code> header and <code>Critical-CH</code>
+header on the internal redirect response), we won’t update the Client Hints
+preferences storage when checking navigation redirect request completion
+(<code>NavigationRequest::OnRedirectChecksComplete</code>). However, we parse and update
+the Client Hints storage for the top-level frame when the final redirect
+response arrives and the navigation is committed.</p>
+<h5 id="redirect-301302-with-critical-ch">Redirect 301/302 with Critical-CH</h5>
+<p>In this scenario, a site redirects a request to a different location, and the
+responses include both <code>Accept-CH</code> header and <code>Critical-CH</code> header. The redirect
+response goes through <code>CriticalClientHintsThrottle::BeforeWillRedirectRequest</code>,
+where we check if any critical Client Hints are missing. Then, we parse and
+update the Client Hints storage on <code>MaybeRestartWithHints</code> accordingly. If a
+restart is needed, an internal redirect 307 will be sent to replace the original
+response. As mentioned earlier, we won’t update Client Hints preference storage
+for the internal redirect 307. The restarted request will include the missing
+critical Client Hints in its headers and then proceed as normal redirect
+requests, without further restarts.</p>
+<p><strong>Notes:</strong> To avoid endless redirect loops, we only restart once per origin.</p>
+<p>The following example explains in details:</p>
+<pre>GET /foo HTTP/1.1
+Host: example.com
+
+HTTP/1.1 301 Moved Permanently
+Accept-CH: Sec-CH-UA-Platform-Version,Sec-CH-UA-Bitness
+Critical-CH: Sec-CH-UA-Platform-Version
+Location: /bar
+
+Internal Redirect
+HTTP/1.1 307 Internal Redirect
+
+GET /foo HTTP/1.1
+Host: example.com
+Sec-CH-UA-Platform-Version: &quot;6.1.25&quot;
+Sec-CH-UA-Bitness: &quot;64&quot;
+
+HTTP/1.1 301 Moved Permanently
+Accept-CH: Sec-CH-UA-Platform-Version,Sec-CH-UA-Bitness
+Critical-CH: Sec-CH-UA-Platform-Version
+Location: /bar
+
+GET /bar
+Sec-CH-UA-Platform-Version: &quot;6.1.25&quot;
+Sec-CH-UA-Bitness: &quot;64&quot;
+Host: example.com
+
+HTTP/1.1 200 OK
+Accept-CH: Sec-CH-UA-Platform-Version,Sec-CH-UA-Bitness
+Critical-CH: Sec-CH-UA-Platform-Version</pre>
+<p>The first request to <code>/foo</code> doesn’t contains any Client Hints header. The
+browser receives the 301 redirect response with critical hint
+<code>Sec-CH-UA-Platform-Version</code>. As the critical hint was missing from the original
+request, the request to <code>/foo</code> will be restarted via an internal 307 redirect.
+The restarted request to <code>/foo</code> will include Client Hints headers
+<code>Sec-CH-UA-Platform-Version</code> and <code>Sec-CH-UA-Bitness</code> and then follow the
+redirect new direction <code>/bar</code> as described in the <a href="#redirect-301302">Redirect 301/302
+section</a>.</p>
+<h3 id="subresource-requests">Subresource Requests</h3>
+<h4 id="general-client-hints">General Client Hints</h4>
+<p>This section will cover the implementation details on adding Client Hints to
+subresource requests. Since we only parse and store preferences for the
+top-level frame, these preferences are passed to the document via the
+<code>enabled_client_hints</code> property of <code>CommitNavigationParams</code> when the navigation
+commits. It carries the commit params to
+<code>RenderFrameHostImpl::CommitNavigation</code>, which calls
+<code>NavigationClient::CommitNavigation</code>. The data is then transferred into a Blink
+format <code>WebNavigationParams</code> when calling <code>RenderFrameImpl::CommitNavigation</code>.
+Finally, the parameters are passed down to <code>FrameLoader::CommitNavigation</code>, and
+the Client Hint preferences are saved to <code>client_hints_preferences_</code> when the
+document starts loading(<code>DocumentLoader::StartLoadingInternal</code>). This allows
+<code>FrameFetchContext</code> to add the appropriate Client Hint headers when populating
+resource request.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/subresource_client_hints.png" alt="subresource Client
+Hints"></p>
+<h4 id="user-agent-client-hints">User-Agent Client Hints</h4>
+<p>To populate User-Agent Client Hints on the subresource requests, one additional
+information is getting the User-Agent metadata. A frame fetch request will get
+the User-Agent metadata from <code>UserAgentMetadata()</code> in the <code>LocalFrameClient</code>
+interface. Implementation is in <code>LocalFrameClientImpl::UserAgentMetadata()</code>.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/ua_client_hints.png" alt="ua Client Hints"></p>
+<p>The logic then branches based on whether the User-Agent has been overridden.</p>
+<p>If the User-Agent has <strong>not</strong> been overridden, it calls the
+<code>Platform::UserAgentMetadata()</code> API. The <code>RenderBlinkPlatformImpl</code>
+implementation overrides <code>UserAgentMetadata</code> and calls
+<code>RenderThreadImpl::GetUserAgentMetadata()</code>. It returns <code>user_agent_metadata_</code>
+which is updated by <code>RenderProcessHostImpl::Init()</code> via Mojo.
+<code>RenderProcessHostImpl</code> will call the platform&#39;s content browser client to get
+their own User-Agent metadata. Usually, different platforms call
+<code>embedder_support::GetUserAgentMetadata</code> in <code>//components</code> layer to generate the
+consistent User-Agent Client Hints metadata across all platforms. Exceptions
+include Android WebView and legacy Headless, which overrides the brand lists,
+and the Shell client, which provides its own User-Agent metadata for testing.</p>
+<p>If the User-Agent has been overridden, it calls
+<code>WebLocalFrameClient::UserAgentMetadataOverride</code> API to get the User-Agent
+metadata. <code>RenderFrameImpl</code>, which implements the <code>WebLocalFrameClient</code>
+interface, overrides the <code>UserAgentMetadataOverride</code> method to get the
+User-Agent metadata from render preferences via
+<code>blink::WebView::GetRendererPreferences</code>. <code>Blink::WebView</code> (implemented as
+<code>WebViewImpl</code>) gets the render preferences via Mojo. To update the render
+preferences with the overridden User-Agent metadata, <code>RenderViewHostImpl</code>
+broadcasts the <code>renderer_preferences_</code> to all renders via Mojo once a platform
+has set the User-Agent metadata overrides.</p>
+<p>Before returning the final User-Agent metadata, we had a probe for
+<code>InspectorEmulationAgent</code> to apply User-Agent metadata overrides from devtools
+if it has.</p>
+<h3 id="meta-tag">&lt;meta&gt; tag</h3>
+<p>As described in the <a href="#subresource-requests">Subresource Requests section</a>,
+Client hints specified in a <code>&lt;meta&gt;</code> tag is one of the sources that
+<code>FrameFetchContext</code> users when adding Client Hints to the subresource requests.</p>
+<p>When <code>HTMLDocumentParser</code> processes a Client Hints <code>&lt;meta&gt;</code> tag, it updates the
+local frame’s <code>client_hints_preferences_</code> based on permission policy via
+<code>ClientHintsPreferences::UpdateFromMetaCH</code>. For security reasons, we only
+support <code>&lt;meta&gt;</code> tags in the raw HTML text. Client Hint preferences will not be
+updated if the tag is injected via JavaScript.</p>
+<h3 id="javascript-interface">JavaScript Interface</h3>
+<p>User-Agent Client Hints can be accessed through the JavaScript interface:
+<code>navigator.NavigatorUAData</code> and <code>NavigatorUAData: getHighEntropyValues()</code>.
+<code>getHighEntropyValues()</code> is an asynchronous API, it returns a Promise that
+resolves with a dictionary object containing the User-Agent high entropy Client
+Hints values. As <code>getHighEntropyValues()</code> could reveal more information, its
+asynchronous design allows the browser time to perform checks, such as
+requesting user permission.</p>
+<p>When users call JS interface to get User-Agent Client Hints, the key step is
+still getting the User-Agent metadata. <code>NavigatorBase::GetUserAgentMetadata()</code>
+implements the <code>NavigatorUA::GetUserAgentMetadata()</code> interface and sets the
+User-Agent Client Hints data in <code>NavigatorUAData</code>. The JS call gets the
+User-Agent metadata from <code>UserAgentMetadata()</code> in the <code>LocalFrameClient</code>
+interface. The remaining logics are the same as subresource requests getting the
+User-Agent metadata.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/js_ua_client_hints.png" alt="js ua Client Hints"></p>
+<p>When web developers call <code>getHighEntropyValues()</code>, it reads data from
+<code>NavigatorUAData</code>, triggers a promise resolver, and returns the values
+asynchronously.</p>
+<h3 id="accept_ch-frame">ACCEPT_CH Frame</h3>
+<p>The ACCEPT_CH frame is one of mechanisms defined in the Client Hints Reliability
+protocol <a href="https://datatracker.ietf.org/doc/draft-victortan-httpbis-chr-accept-ch-frame/">RFC
+draft</a>.
+We take advantage of
+<a href="https://datatracker.ietf.org/doc/html/draft-vvv-tls-alps-01">ALPS</a>
+(Application-Layer Protocol Settings) to deliver the ACCEPT_CH frame over the
+TLS handshake before the first application protocol round trip. For Client
+Hints, the ACCEPT_CH HTTP/2 and HTTP/3 frame is added to the TLS handshake. It&#39;s
+a connection-level optimization to avoid the performance hit of a retry in most
+cases. The browser can see the connection-level settings and react appropriately
+before sending the request to the server. It’s not an alternative mechanism to
+replace the <code>Accept-CH</code> header. The goal of <code>ACCEPT_CH</code> frame is to provide a
+reliable way to make Client Hints available in requests header avoiding an extra
+network round-trip in the common cases.</p>
+<h4 id="passing-accept_ch-frame-to-urlrequest">Passing ACCEPT_CH frame to URLRequest</h4>
+<p>Once the server sends the <code>ACCEPT_CH</code> frame during TLS handshake, we can access
+that data from <code>HttpStream::GetAcceptChViaAlps()</code>.</p>
+<ul>
+<li>For HTTP/2 frames, <code>AlpsDecoder</code> in <code>//net/spdy</code> is responsible for decoding
+the <code>ACCEPT_CH</code> frame. <code>SpdySession</code> saves the <code>ACCEPT_CH</code> frame entries
+(where an entry is a Client Hints preference and origin pair) to a hash map.</li>
+<li>For HTTP/3 frames, <code>OnAcceptChFrameReceivedViaAlps</code> in
+<code>QuicChromiumClientSession</code> will analyze the <code>ACCEPT_CH</code> frame and save the
+entries to a hash map. The QUIC stack is responsible for decoding the
+<code>ACCEPT_CH</code> frame.</li>
+<li>A <code>ConnectedCallback</code> is used to carry the <code>accept_ch_frame</code> raw string from
+<code>HttpStream</code> to <code>URLRequest</code> as a property of <code>TransportInfo</code> struct.</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/accept_ch_frame_url_request.png" alt="accept_ch frame url
+request"></p>
+<p>See here for detailed documents on <a href="https://chromium.googlesource.com/chromium/src/+/refs/heads/master/net/docs/life-of-a-url-request.md#check-the-cache_request-an-httpstream">how to request an
+HttpSteam</a>.</p>
+<h4 id="acceptchframeobserver">AcceptCHFrameObserver</h4>
+<p>To send Client Hints messages from network service to the browser process, we
+added a Mojo interface <code>AcceptCHFrameObserver</code> which is owned by a single
+<code>URLLoader</code>. The observer checks whether an <code>ACCEPT_CH</code> frame received over
+HTTP/2 or HTTP/3 affects the associated navigation request.
+<code>OnAcceptCHFrameReceived</code> informs the observer an <code>ACCEPT_CH</code> frame was received
+for a given URL. The observer MUST check if the Client Hints in the frame need
+to be added to the request. If so, the request should drop the associated
+<code>URLLoader</code>, terminate the Mojo pipe, and issue a new request with the updated
+headers.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/accept_ch_frame_observer.png" alt="accept_ch frame
+observer"></p>
+<h4 id="onacceptchframereceived">OnAcceptCHFrameReceived</h4>
+<p><code>OnAcceptCHFrameReceived</code> is used to inform <code>AcceptCHFrameObserver</code> that an
+<code>ACCEPT_CH</code> frame was received for the given origin. Once the <code>accept_ch_frame</code>
+is received, we filter all enabled Client Hints and check whether any Client
+Hints are missed from the frame tree node. If so, we set those Client Hints as
+additional Client Hints and store them in memory on the connection, but not
+persistent in prefs storage. Then, we apply those Client Hints to the
+<code>modified_headers</code> and clean the Client Hints stored in the memory for the given
+origin. Finally, we check whether those Client Hints are already in the
+<code>resource_request_-&gt;headers</code>. If not, we restart the request and reset the
+<code>blink::ThrottlingURLLoader</code>.</p>
+<h4 id="a-simple-request">A Simple Request</h4>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/accept_ch_frame_simple_request.png" alt="accept_ch frame simple
+request"></p>
+<p>The following are the major steps for how the <code>ACCEPT_CH</code> frame Client Hints
+added to the request header when visiting <code>https://a.com</code>:</p>
+<ol>
+<li><code>NavigationRequest</code> initialize the request and call
+<code>NavigationURLLoaderImpl</code> to start it.</li>
+<li>Initially, the <code>ThrottlingURLLoader(url_loader_)</code> is null and
+<code>NavigationURLLoaderImpl</code> creates one when it calls <code>MaybeStartLoader</code>.</li>
+<li>When constructing <code>ThrottlingURLLoader</code>, it calls
+<code>ThrottlingURLLoader::Start()</code> to start the request before returning to
+<code>NavigationURLLoaderImpl</code>.</li>
+<li>Once <code>url_loader_</code> is created, it calls <code>URLLoaderFactory</code> to create an
+instance of <code>URLLoader</code> (to perform a single request to a URL).
+<code>NetworkService</code> can now send the <code>ACCEPT_CH</code> frame message to the
+browser/render process once the message pipe is created for the <code>URLLoader</code>.</li>
+<li><code>URLLoader</code>&#39;s <code>onConnected</code> callback checks if there are Client Hints
+(retrieved from <code>TransportInfo</code> in <code>HttpStream</code>) that have not yet been
+added to the request header. In this initial request, only default hints are
+present. It notifies the <code>AcceptCHFrameObserver</code> (via the Mojo interface),
+which then calls <code>OnAcceptCHFrameReceived</code> to add the <code>ACCEPT_CH</code> frame
+hints and returns <code>net::ERR_IO_PENDING</code>.</li>
+<li>Once the <code>ACCEPT_CH</code> frame is received, <code>OnAcceptCHFrameReceived</code> adds the
+expected Client Hints to the requests, stores the Client Hints in memory and
+cleans them before restarting the request. It also reset the <code>url_loader_</code>.</li>
+<li>Then, <code>NavigationURLLoaderImpl</code> creates a new instance of <code>url_loader_</code> for
+restarting.</li>
+<li>Once the new <code>url_loader_</code> is created, it calls <code>URLLoaderFactory</code> to create
+the <code>URLLoader</code>, and <code>onConnected</code> is triggered again.</li>
+<li>Now, <code>onConnected</code> knows that the request header already included the hint
+values from the <code>ACCEPT_CH</code> frame.</li>
+<li>Since all Client Hints are already added to the request header, finally
+returns <code>net::OK</code>.</li>
+</ol>
+<h4 id="a-restart-request-internal-redirect">A Restart Request (Internal Redirect)</h4>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/accept_ch_frame_restart_request.png" alt="accept_ch frame restart
+request"></p>
+<p>Here are the major steps when visiting <code>https//a.com</code> with a rewrite rule to a
+new location: <code>https://a.com?foo=1&amp;bar=2</code> :</p>
+<ol>
+<li>When visiting <code>https//a.com</code>, <code>NavigationRequest</code> initializes the request
+and calls <code>NavigationURLLoaderImpl</code> to start the request.</li>
+<li>For the initial request, <code>ThrottlingURLLoader(url_loader_)</code> is null and
+<code>NavigationURLLoaderImpl</code> creates one when it calls <code>MaybeStartLoader</code>.</li>
+<li>A <code>URLLoaderThrottle</code> applies a configured rule in <code>WillStartRequest</code>,
+updating the URL from <code>https://a.com</code> to <code>https://a.com?foo=1&amp;bar=2</code>.</li>
+<li><code>ThrottlingURLLoader</code> sends an internal redirect request (307) because the
+<code>throttle_will_start_redirect_url_</code> (Set when a throttle changed the URL in
+<code>WillStartRequest</code>) is not null.</li>
+<li><code>NavigationRequest</code> adds the Client Hints to the new request header after
+reading the Client Hints cache(both persistent and in-memory). At this
+point, no specific hints are cached, the new request header only includes
+the default enabled Client Hints. Any hints from the previous request are
+removed to prevent cross-origin leaks.</li>
+<li>Then, <code>NavigationURLLoaderImpl</code>follows the redirect chains to start the new
+request to <code>https://a.com?foo=1&amp;bar=2</code>.</li>
+<li>Since <code>url_loader_</code> was already created, it follows the redirect chains to
+request as a normal URL.</li>
+<li><code>url_loader_</code> calls <code>URLLoaderFactory</code> to create a new <code>URLLoader</code> (to
+perform a single request to a URL). <code>NetworkService</code> now can send the
+<code>ACCEPT_CH</code> frame message to the browser/render process once the message
+pipe is created in <code>URLLoader</code>.</li>
+<li><code>URLLoader</code>&#39;s <code>onConnected</code> checks whether the request header already
+includes all the Client Hints in the <code>ACCEPT_CH</code> frame. As the request
+header only added the default Client Hints, it will call
+<code>OnAcceptCHFrameReceived</code> and returns <code>net::ERR_IO_PENDING</code>.</li>
+<li>Once the <code>ACCEPT_CH</code> frame is received, <code>OnAcceptCHFrameReceived</code> adds the
+expected Client Hints to the requests, stores the Client Hints in memory and
+cleans them before restarting the request. It also reset the <code>url_loader_</code>.</li>
+<li>Once the request restarts, the <code>url_loader_</code> doesn&#39;t send another internal
+redirect because no rewrite URL applies again.</li>
+<li><code>url_loader_</code> calls <code>URLLoaderFactory</code> to create another instance of
+<code>URLLoader</code> to make the request, and <code>onConnected</code> was triggered again.</li>
+<li><code>onConnected</code> checks again if the request header includes all the Client
+Hints in the <code>ACCEPT_CH</code> frame.</li>
+<li>Since add all the <code>ACCEPT_CH</code> frame Client Hints in the previous call of
+<code>OnAcceptCHFrameReceived</code>, we returns <code>net::OK</code>. Request internal redirect
+form <code>https://a.com</code> to <code>https://a.com?foo=1&amp;bar=2</code> completed.</li>
+</ol>
+<p><strong>Notes:</strong> In a redirect (step 5), the new request is initially populated with
+only the default hints. The <code>ACCEPT_CH</code> frame hints are only added later (step
+10) because they are stored temporarily in memory and cleared immediately after
+use within <code>OnAcceptCHFrameReceived</code>. One of the reasons to clean the additional
+client hints immediately is to avoid sending client hints to origins that don’t
+request them, especially for cross origins.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/client_hints/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/client_hints/README.md</a>
+  </p>
+</div>

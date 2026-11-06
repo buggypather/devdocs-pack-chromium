@@ -1,0 +1,220 @@
+<h1>Chromium SECURITY.md Guidelines</h1>
+<p>This document explains how to write an effective SECURITY.md for components in Chromium. A SECURITY.md lives in your component&#39;s directory and documents its security boundaries, process model, threat assumptions, and explicit non-bugs for reviewers, maintainers, security researchers, and AI tools.</p>
+<h2 id="authors">Authors</h2>
+<ul>
+<li>Aaron Selya (<a href="mailto:selya@google.com">selya@google.com</a>)</li>
+</ul>
+<h2 id="participate">Participate</h2>
+<ul>
+<li>CLs are welcome!</li>
+</ul>
+<h2 id="why-write-a-securitymd-in-chromium">Why Write a <code>SECURITY.md</code> in Chromium?</h2>
+<p>A <code>SECURITY.md</code> establishes a clear security contract for your component. Without one, security researchers and automated scanning tools may file bugs on intentional design decisions, safe-context crashes, or intended error recovery, wasting your team&#39;s engineering time on triage.</p>
+<p>A well-crafted Chromium <code>SECURITY.md</code> answers four basic questions:</p>
+<p><strong>1. Where</strong> does the code run (process type, sandbox level, privilege tier)?</p>
+<p><strong>2. What</strong> inputs are trusted vs. untrusted (and does it defend against a compromised renderer)?</p>
+<p><strong>3. Which</strong> vulnerability classes and behaviors are in scope vs. explicit non-bugs?</p>
+<p><strong>4. Why</strong> were specific design trade-offs made, and what risks are accepted?</p>
+<h2 id="checklist-for-chromium-component-authors">Checklist for Chromium Component Authors</h2>
+<p>Check off these items before committing your <code>SECURITY.md</code>:</p>
+<ul>
+<li><input disabled="" type="checkbox"> Location: Place it in your component&#39;s root directory (../my_component/SECURITY.md).</li>
+<li><input disabled="" type="checkbox"> Scope: State which directory paths are covered and which are excluded (e.g., testing/, test/).</li>
+<li><input disabled="" type="checkbox"> Process &amp; Sandbox: Name the process type (Browser, Renderer etc.) and sandbox constraints.</li>
+<li><input disabled="" type="checkbox"> Compromised Renderer Assumption: State whether your code defends against an attacker who has compromised a renderer process.</li>
+<li><input disabled="" type="checkbox"> Rule of Two: Explain if this component complies with Chromium&#39;s Rule of Two and, if so, how.</li>
+<li><input disabled="" type="checkbox"> Mojo IPC &amp; Origin Validation: Document argument validation, origin checks (ChildProcessSecurityPolicy), and ReportBadMessage() behavior.</li>
+<li><input disabled="" type="checkbox"> Component-Specific Non-Bugs: Write concrete, testable out-of-scope statements</li>
+<li><input disabled="" type="checkbox"> Accepted Risks: Document architectural trade-offs (e.g., shared memory IPC) and mitigations.</li>
+<li><input disabled="" type="checkbox"> Reporting: Direct reporters (including agents) to review <a href="https://source.chromium.org/chromium/chromium/src/+/main:docs/security/security-for-agents.md">security-for-agents.md</a> to double check any findings relevant before submitting a bug.</li>
+</ul>
+<h2 id="chromiums-security-architecture">Chromium&#39;s Security Architecture</h2>
+<p>Chromium&#39;s multi-process security model and bug taxonomy are canonically defined in central documentation:</p>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/security-for-agents.md">Security for Agents</a>: Canonical guide on process boundaries, bug classification, evidence requirements, and universal non-bugs.</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/rules.md">Chrome Security Rules</a>: Core architectural rules, including the Rule of Two and IPC boundary constraints.</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/faq.md">Chrome Security FAQ</a>: High-level security architecture, threat model, and isolation principles.</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/severity-guidelines.md">Severity Guidelines</a>: Vulnerability severity ratings and impact assessment.</li>
+</ul>
+<p>When authoring a component <code>SECURITY.md</code>, you do not need to re-explain Chromium&#39;s global security model. Instead, specify how your component integrates with these architectural boundaries:</p>
+<h3 id="process-type-and-sandbox-level">Process Type and Sandbox Level</h3>
+<p>Identify the execution context of your component:</p>
+<ul>
+<li><p><strong>Browser Process:</strong> Unsandboxed, highest privilege. Has direct access to the filesystem, network, and profile data. All IPC endpoints must treat inputs from other processes as untrusted.</p>
+</li>
+<li><p><strong>Renderer Process:</strong> Strongly sandboxed, lowest privilege. Runs untrusted web code (HTML/JS/Wasm/DOM). Other processes should assume that the renderer is compromised by attackers.</p>
+</li>
+<li><p><strong>Utility Process:</strong> Sandboxed (sandbox strength can be stronger than the renderer&#39;s but that depends on utility sandbox type and whether code is reachable from web content). Used for decoding, parsing, or unpacking untrusted data.</p>
+</li>
+<li><p><strong>Network Service (only on macOS) / GPU Process:</strong> Specialized sandboxed processes handling GPU commands and network I/O.</p>
+<p><em><code>Note: The sandbox varies based on the OS. Android in particular has weak sandboxing so Android GPU bugs are always Sev-0.</code></em></p>
+</li>
+</ul>
+<h3 id="the-compromised-renderer-assumption">The Compromised Renderer Assumption</h3>
+<p>Vulnerabilities that rely on a malicious web page compromising its own renderer process are valid as is the bug that allowed the renderer to be compromised.</p>
+<ul>
+<li>Your threat model must specify whether your code defends against a compromised renderer.</li>
+<li>While it is possible for a compromised renderer to leak information between sites, we generally don&#39;t have to worry about that because it is difficult for an attacker to arrange for two different sites to share the same renderer. In environments where Site Isolation is utilized, it ensures cross-site data is partitioned into separate processes; a compromised renderer cannot access another site&#39;s process without a sandbox escape or Site Isolation bypass bug.</li>
+</ul>
+<h3 id="the-rule-of-two">The Rule of Two</h3>
+<p>Chromium permits at most two of these dangerous properties in the same process:</p>
+<p><strong>1. Untrustworthy input</strong> (web content, network data)</p>
+<p><strong>2. Complex processing</strong> (parsing, decompression, compilation)</p>
+<p><strong>3. Memory-unsafe language</strong> (C/C++)</p>
+<p>If all three are combined, the code must run in a sandboxed process.</p>
+<p><em><code>Note: Do not prompt agents to audit Rule of Two compliance directly, as valid browser C++ will trigger false positives.</code></em></p>
+<h2 id="recommended-structure--authoring-guide">Recommended Structure &amp; Authoring Guide</h2>
+<p>Below is the recommended structure for a Chromium <code>SECURITY.md</code> file.</p>
+<h3 id="1-scope">1. Scope</h3>
+<p>Define exact source tree paths and explicit exclusions.</p>
+<pre>## Scope
+
+This policy applies to code located in `//chrome/browser/my_component/` and subdirectories.
+
+It does not apply to `//chrome/browser/my_component/testing/` or mock utilities.</pre>
+<h3 id="2-security-boundaries--threat-model">2. Security Boundaries &amp; Threat Model</h3>
+<p>Define execution context, input hostility, and trust assumptions.</p>
+<pre>## Security Boundaries &amp; Threat Model
+
+### Process type &amp; Sandbox
+
+Runs in the sandboxed Renderer process (or: sandboxed Utility process, un-sandboxed Browser process).
+
+### Inputs
+
+- Untrusted: JavaScript parameters and DOM data passed from web content.
+
+- Trusted: Mojo IPC responses received from the Browser process.
+
+### Trust relationships &amp; Renderer Compromise
+
+- Defends against a compromised Renderer: Yes / No.
+
+- Trusts the Browser process. Does not trust peer Renderer processes.</pre>
+<h3 id="3-security-boundaries-vs-out-of-scope-non-bugs">3. Security Boundaries vs. Out-of-Scope (Non-Bugs)</h3>
+<p>Vulnerabilities that are globally in scope across Chromium, do not need to be restated in the SECURITY.md files as doing so risks accidental negative-implication by scanners or researchers. The security boundaries section should focus on component-specific boundaries based on common false-positive patterns such as:</p>
+<ul>
+<li><strong>Intra-Process Privacy Partitioning:</strong> Bypassing client-side storage partitioning or fenced frame restrictions from within the same compromised renderer process (privacy features are not process-isolated security boundaries).</li>
+<li><strong>Feature Flags/ Disabled code:</strong> Flaws in code paths that are disabled by default or behind experimental flags without a proof of concept that the exploit can also enable the flag or code.</li>
+</ul>
+<p><em><code>Note: AI security scanners rely heavily on this section, so making sure that it&#39;s clear can reduce the number of and improve the quality of bugs that your engineers will need to triage.</code></em></p>
+<pre>## Security Boundaries &amp; Explicit Non-bugs
+
+### Security Boundaries
+- Enforces origin checks on privileged actions requested by Mojo IPC.
+
+- Sanitizes untrusted data before allowing other components to access it.
+
+### Out of scope (non-bugs)
+
+- Crashes in safe sandboxed contexts: CHECK failures or null-pointer dereferences in the sandboxed Utility process that terminate safely without memory corruption.
+
+- Intra-process state: Bypassing local in-memory cache limits from within the same renderer process.
+
+- Internal API preconditions: Calling FooService methods directly with invalid pointers via unit tests or internal C++ calls without a reachable IPC path.</pre>
+<h3 id="4-design-justifications--accepted-risks">4. Design Justifications &amp; Accepted Risks</h3>
+<p>Document deliberate architectural trade-offs made for performance or memory efficiency.</p>
+<pre>## Design Justifications &amp; Accepted Risks
+
+### Shared memory IPC
+
+Uses shared memory for high-throughput video frame transfers. Mitigated by validating all header metadata and buffer sizes before reading.
+
+### Accepted risk: network timing
+
+Network setup timing side channels are accepted residual risks.</pre>
+<h3 id="5-further-documentation-optional">5. Further Documentation (Optional)</h3>
+<p>Link to deeper design documents or architecture diagrams.</p>
+<pre>## Further Documentation
+- [Component Design Doc](path-to/my-component-design): Architecture overview.
+
+- [Mojo Interface Specification](path-to/my-component-mojo): IPC definitions and security considerations.</pre>
+<h2 id="example-template-privileged-browser-process-service">Example Template: Privileged Browser-Process Service</h2>
+<pre># Security Model for [Browser Service Name]
+
+## Scope
+
+This policy applies to code in `//chrome/browser/my_service/` and subdirectories.
+
+## Security Boundaries &amp; Threat Model
+
+### Process Type &amp; Sandbox
+
+Runs in the un-sandboxed Browser process. Has full system access and profile data capability.
+
+### Inputs
+
+- Untrusted / Semi-trusted: Mojo IPC messages received from sandboxed Renderer processes (`//third_party/blink/`). Renderers may be compromised.
+
+- Trusted: OS signals and internal local configuration.
+
+### Mojo IPC Validation
+
+Must validate all Mojo arguments and verify calling process origin via ChildProcessSecurityPolicy. Out-of-bounds arguments or invalid origins must trigger mojo::ReportBadMessage().
+
+## In-Scope vs. Out-of-Scope
+
+### In scope
+
+- Failure to validate origin or process permissions on incoming Mojo messages.
+
+- Memory corruption or logic bypasses in the Browser process triggered by IPC messages.
+
+### Out of scope (non-bugs)
+
+- Expected feature disablement: Inability to access protected resources when user permission is denied.</pre>
+<h2 id="policy-reference-table">Policy Reference Table</h2>
+<p>Consult these canonical policy guides when defining your component&#39;s security contract:</p>
+<table>
+<thead>
+<tr>
+<th align="left">Category</th>
+<th align="left">Policy / Guide</th>
+<th align="left">Best Used For</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">Core Rules</td>
+<td align="left"><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/rules.md">Chrome Security Rules</a></td>
+<td align="left">All Chromium components</td>
+</tr>
+<tr>
+<td align="left">Core Rules</td>
+<td align="left"><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/faq.md">Chrome Security FAQ</a></td>
+<td align="left">All Chromium components</td>
+</tr>
+<tr>
+<td align="left">Core Rules</td>
+<td align="left"><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/security-for-agents.md">Security for Agents</a></td>
+<td align="left">AI-agent scannability</td>
+</tr>
+<tr>
+<td align="left">Core Rules</td>
+<td align="left"><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/severity-guidelines.md">Severity Guidelines</a></td>
+<td align="left">Bug classification</td>
+</tr>
+<tr>
+<td align="left">Mojo &amp; Web</td>
+<td align="left"><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/mojo.md#Security">Mojo IPC Security</a></td>
+<td align="left">Mojo interface safety</td>
+</tr>
+<tr>
+<td align="left">Mojo &amp; Web</td>
+<td align="left"><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/web-platform-security-guidelines.md">Web Platform</a></td>
+<td align="left">Web-facing APIs</td>
+</tr>
+</tbody></table>
+<h2 id="real-world-canonical-examples--references">Real-World Canonical Examples &amp; References</h2>
+<p>Consult live SECURITY.md files and reference documentation in the Chromium repository for gold-standard patterns:</p>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/content/SECURITY.md">//content/SECURITY.md</a>: Process boundaries &amp; compromised renderer threat modeling</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/v8/SECURITY.md">//v8/SECURITY.md</a>: Top-level security contract for the V8 engine</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:docs/security/security-for-agents.md">Security for Agents</a>: Canonical agent security guidance</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/ai-generated-security-bugs-faq.md">AI-Generated Security Bugs FAQ</a>: AI bug filing context</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/security_md_guidelines.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/security_md_guidelines.md</a>
+  </p>
+</div>

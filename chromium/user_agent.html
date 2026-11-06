@@ -1,0 +1,71 @@
+<h1>User Agent</h1>
+<h2 id="user-agent">User-Agent</h2>
+<p>The User-Agent request header is a characteristic string that allows servers and
+network peers to identify the application, operating system, vendor, and/or
+version of the requesting user agent.</p>
+<p>Because the User-Agent string carries a significant amount of data that can be
+used for passive fingerprinting, Chrome has been fully rolling out User-Agent
+reduction since Chrome M110. This aims to minimize the information in the
+User-Agent string to enhance user privacy. For more details, please refer to the
+<a href="https://www.chromium.org/updates/ua-reduction/">User-Agent Reduction documentation</a>.</p>
+<h3 id="default-user-agent">Default User-Agent</h3>
+<p>Modifying the default User-Agent format can lead to requests being rejected by
+servers; therefore, any changes must be made with caution. As new device types
+emerge, it is crucial to follow existing patterns when altering the default
+User-Agent rather than creating a custom format.</p>
+<p>Currently, different versions of Chrome utilize the central API
+<code>embedder_support::GetUserAgent()</code> to construct platform-specific User-Agent
+strings. This function employs <code>BUILD_FLAG</code>s to differentiate between builds for
+various platforms such as Android, Windows, and macOS. For platform variants,
+like iPhone or iPad, <code>ui::GetDeviceFormFactor()</code> is used to distinguish between
+device types and compile the appropriate User-Agent string into the binary.</p>
+<p><strong>Note:</strong> User-Agent reduction has not been enabled for Chrome on Apple devices.
+For all other devices, please ensure that no build model or detailed operating
+system version information is included in the User-Agent string.</p>
+<p>If you have any questions regarding how to change the default User-Agent, please
+reach out to <a href="mailto:victortan@chromium.org">victortan@chromium.org</a>, <a href="mailto:miketaylr@chromium.org">miketaylr@chromium.org</a>.</p>
+<h3 id="user-agent-client-hints">User-Agent Client Hints</h3>
+<p>With the implementation of User-Agent reduction, we have introduced User-Agent
+Client Hints. This feature enables developers to actively request specific
+information about a user&#39;s device or conditions, eliminating the need to parse
+this data from the User-Agent string. For additional context, see the
+<a href="https://developer.chrome.com/docs/privacy-security/user-agent-client-hints">User-Agent Client Hints developer
+documentation</a>
+and the <a href="https://wicg.github.io/ua-client-hints/">User-Agent Client Hints
+Specification</a>.</p>
+<p>Changes to the default User-Agent for different platforms typically require
+corresponding changes to the User-Agent Client Hints. For instance, if the
+User-Agent is changed from &quot;Android&quot; to &quot;Linux,&quot; the <code>sec-ch-ua-platform</code> client
+hint must also be updated accordingly. To understand how default User--Agent
+Client Hints are generated, please review
+<code>embedder_support::GetUserAgentMetadata</code> in
+<code>components/embedder_support/user_agent_utils.cc</code>.</p>
+<ul>
+<li>To add a new client hint, please follow <a href="https://github.com/chromium/chromium/blob/HEAD/docs/user_agent/components/client_hints/README.md">this
+guide</a>.</li>
+<li>To fully understand the lifecycle of a client hint, refer to <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/client_hints/README.md">this
+document</a>.</li>
+</ul>
+<h3 id="user-agent-overrides">User-Agent Overrides</h3>
+<p>User-Agent overrides can originate from two different sources: the browser
+process via <code>WebContentsImpl::SetUserAgentOverride</code> and DevTools.</p>
+<p>For renderer or subresource requests, the override behavior depends on
+<code>CommitNavigationParams.is_overriding_user_agent</code>, which is set in the browser
+process.</p>
+<p>To access the User-Agent override values, read the <code>user_agent_override</code>
+property from <code>blink::RendererPreferences</code>. This property sets the User-Agent
+override from the browser process, and then a DevTools-provided method is called
+to apply the DevTools override.</p>
+<p>Intercepting and modifying User-Agent overrides for every possible request type
+is a non-trivial task. Currently, there is no specific team or individual
+responsible for the User-Agent override behavior. Generally, feature teams are
+responsible for ensuring that the override functionality works as expected.
+There are cases where User-Agent overrides may not function as intended. Please
+ensure that supporting User-Agent overrides does not introduce any security
+vulnerabilities.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/user_agent/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/user_agent/README.md</a>
+  </p>
+</div>

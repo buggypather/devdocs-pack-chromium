@@ -1,0 +1,185 @@
+<h1>Soft Navigation Heuristics Changelog</h1>
+<p>This is a list of changes to <a href="https://developer.chrome.com/docs/web-platform/soft-navigations-experiment">Soft Navigation Heuristics</a>.</p>
+<ul>
+<li><p>Chrome 151</p>
+<ul>
+<li>Metric bug fix: Directly attribute text node changes instead of marking their parent nodes, avoiding over-attribution of soft navigation paint context to unrelated sibling elements (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7906298">7906298</a>, <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7907938">7907938</a>).</li>
+<li>Other implementation changes:<ul>
+<li>Added UKM collection for prerendered page loads and back-forward cache restores prior to soft navigation detection to improve Core Web Vitals blending (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7888147">7888147</a>, <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7930830">7930830</a>).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>Chrome 150</p>
+<ul>
+<li><strong>Rename <code>SoftNavigationEntry</code> to <code>PerformanceSoftNavigation</code></strong>.<ul>
+<li>Renamed the performance entry interface to <code>PerformanceSoftNavigation</code> to align with the updated specification (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7883927">7883927</a>).</li>
+</ul>
+</li>
+<li><strong>Convert nested ICP getter to a method</strong>.<ul>
+<li>Replaced the static <code>largestInteractionContentfulPaint</code> attribute on <code>PerformanceSoftNavigation</code> with a <code>getLargestInteractionContentfulPaint()</code> method, allowing developers to query the latest paint candidate at any time (e.g., at beacon time) rather than just the state when the entry was emitted (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7876906">7876906</a>).</li>
+</ul>
+</li>
+<li><strong>Nest LCP entry inside ICP entry</strong>.<ul>
+<li>Nested the actual <code>LargestContentfulPaint</code> entry as a <code>largestContentfulPaint</code> attribute inside <code>InteractionContentfulPaint</code> (ICP) entries instead of copying/mimicking its properties. This ensures correct LCP performance timing attributes (<code>startTime</code>, <code>duration</code>) are exposed, and allows for future Container Timing API extensions (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7860127">7860127</a>).</li>
+</ul>
+</li>
+<li>Metric bug fix: Fixed soft navigation paint attribution for text pseudo elements with <code>content</code> set, matching standard LCP behavior (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7876071">7876071</a>).</li>
+<li>Metric bug fix: Fixed a soft navigation context mismatch crash caused by nested clicks (e.g., clicking a label that forwards to a form control) (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7870025">7870025</a>).</li>
+<li>Other implementation changes:<ul>
+<li>Set up <code>SoftNavigationPageLoadMetricsObserver</code> to record SoftNavigation UKM events for prerendered pages and back-forward cache restores (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7817946">7817946</a>).</li>
+<li>Dropped late arrivals of soft navigation events to avoid browser crashes due to race conditions during page lifecycle state transitions (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7855600">7855600</a>).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>Chrome 149</p>
+<ul>
+<li>Metric improvement: Removed main-world checks from Task Attribution, and soft-navs/icp, aligning with standard LCP behavior (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7762579">7762579</a>).</li>
+</ul>
+</li>
+<li><p>Chrome 148</p>
+<ul>
+<li>Metric bug fix: Use correct <code>NavigationId</code> for <code>InteractionContentfulPaint</code> entries (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7704133">59bc92edc430c</a>).</li>
+</ul>
+</li>
+<li><p>Chrome 147 (Major changes after origin trial expired &amp; preparing to extend OT for 3 milestones)</p>
+<ul>
+<li><strong><code>InteractionContentfulPaint</code> decoupled from <code>SoftNavigationEntry</code> and reported for all interactions</strong>.<ul>
+<li><code>InteractionContentfulPaint</code> entries now emit as soon as they occur, for any interaction, rather than waiting for a Soft Navigation to become detected first (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7512642">e8815d0acaf2f</a>).</li>
+<li>The same semantics used to measure soft-navigation loading performance can be used to measure any dynamic content updates, even when the URL doesn&#39;t change.</li>
+</ul>
+</li>
+<li><strong><code>SoftNavigationEntry</code> adds <code>largestInteractionContentfulPaint</code> attribute</strong>.<ul>
+<li><code>SoftNavigationEntry</code> entries now report a <code>largestInteractionContentfulPaint</code> attribute.  Because <code>InteractionContentfulPaint</code> entries are now decoupled from soft-navigations, this makes it more convenient to track soft-LCP for soft navs, specifically.</li>
+</ul>
+</li>
+<li><strong>Aligned &quot;Interaction Detection&quot; with INP</strong>.<ul>
+<li>Changed the implementation to reuse the existing Event Timing API mechanism for detecting interactions.</li>
+<li>To accomplish this, added support for measuring Event Timing for <code>navigate</code>, <code>popstate</code>, and <code>hashchange</code> events (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7598334">c6a49e314dfb5</a>), however, these Event Timing entry types are not yet exposed to the performance timeline.</li>
+<li>Added <code>interactionId</code> attribute to <code>InteractionContentfulPaint</code> and <code>SoftNavigationEntry</code> performance entries (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7638455">704c0222f53a3</a>).</li>
+</ul>
+</li>
+<li><strong>Added support for <code>replaceState</code></strong>.<ul>
+<li>Added support for triggering soft navigations on <code>replaceState</code> (in addition to <code>pushState</code>).</li>
+<li>Exposed the <code>navigationType</code> (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7530377">279eb27b6d2bb</a>).</li>
+</ul>
+</li>
+<li><strong>Refined TimeOrigin (to measure more time)</strong>.<ul>
+<li>Previously, TimeOrigin was a complicated value, something akin to <code>min(processingEnd, urlChangeTime)</code> and was meant to match hard-navs cross-document navigationStart, but this model proved confusing and undesired.</li>
+<li>Changed <code>InteractionContentfulPaint</code> and <code>SoftNavigationEntry</code> to report <code>startTime</code> equal to Interaction startTime (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7563413">12b7e08417957</a>).</li>
+</ul>
+</li>
+<li>Other implementation changes:<ul>
+<li>Set up paint tracking for inline style and class attribute changes (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7512446">50dc1d52a77ca</a>).</li>
+<li>Improved browser-side soft navigations tracking (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/7640511">a431cb877c128</a>).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>Chrome 140 - 144 (Addressing bugs during origin trial)</p>
+<ul>
+<li>Metric bug fix: Refactor pending <code>InteractionContentfulPaint</code> entry buffering (<a href="https://crrev.com/abe0507666c40">abe0507666c40</a>).</li>
+<li>Metric bug fix: Ensured correct navigation ID is used for entries from <code>SoftNavigationContext</code> (<a href="https://crrev.com/5bdc6551839e7">5bdc6551839e7</a>).</li>
+<li>Metric bug fix: Improve recording soft navigations in UKM (correct URL) (<a href="https://crrev.com/5c510d4ea6310">5c510d4ea6310</a>).</li>
+<li>Metric bug fix: Fixed browser-initiated intercepted back navigations (<a href="https://crrev.com/b0c3c8bac14d0">b0c3c8bac14d0</a>).</li>
+</ul>
+</li>
+<li><p>Chrome 139 (Major revamp completed &amp; new origin trial started)</p>
+<ul>
+<li><strong>Major revamp of Soft Navigation Heuristics</strong>.<ul>
+<li>This release included a large overhaul of the detection mechanics to improve accuracy and performance.</li>
+<li>This work culminated in Chrome 139, and we started a new 6 milestone origin trial: <a href="https://developer.chrome.com/blog/new-soft-navigations-origin-trial">https://developer.chrome.com/blog/new-soft-navigations-origin-trial</a>.</li>
+</ul>
+</li>
+<li><strong>Each Interaction now has independent painted area tracking</strong>.<ul>
+<li>Moved painted area tracking into each Context (<a href="https://crrev.com/a2a9986393624">a2a9986393624</a>) and removed the global &quot;Initial area&quot; requirement (<a href="https://crrev.com/7321c9f17fd69">7321c9f17fd69</a>).</li>
+<li>Explicitly supported dynamic content updates (in <code>PaintTimingDetectors</code>), rather than the need to &quot;reset LCP&quot; (<a href="https://crrev.com/e6d3c7c1267d7">e6d3c7c1267d7</a>).</li>
+</ul>
+</li>
+<li><strong>Introduced <code>InteractionContentfulPaint</code> PerformanceEntry</strong>.<ul>
+<li>Added the <code>InteractionContentfulPaint</code> entry to observe paint timings directly tied to interactions (<a href="https://crrev.com/88847f08dc064">88847f08dc064</a>).  This replaces &quot;soft&quot; LCP entries and removes the need for <code>includeSoftNavigationObservations</code> flag.</li>
+<li>Each interaction will stop soft-LCP attribution at the first discrete input or scroll (<a href="https://crrev.com/cbb9d4e7c5eb3">cbb9d4e7c5eb3</a>).</li>
+</ul>
+</li>
+<li><strong>Integrated <code>PaintTimingMixin</code> into <code>SoftNavigationEntry</code> for FCP</strong>.<ul>
+<li>See (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/6657746">7ef307610e5e9</a>).</li>
+</ul>
+</li>
+<li><strong>Expanded DOM modification triggers</strong>.<ul>
+<li>Add <code>&lt;video&gt;</code> and image <code>src</code> changes as DOM modifications (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/6788270">82614425d92f0</a>, <a href="https://chromium-review.googlesource.com/c/chromium/src/+/6599236">11dd080af48a9</a>).</li>
+</ul>
+</li>
+<li>Other implementation changes:<ul>
+<li>Introduced advanced paint attribution modes (Pre-Paint based and lazy bottom-up tree walk) (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/6629428">7dacb1ba603ea</a>, <a href="https://crrev.com/9f42b77c0cb66">9f42b77c0cb66</a>).</li>
+<li>Changed <code>NavigationID</code> to report a number instead of a UUID (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/6604387">c701061e45c73</a>).</li>
+<li>Replaced <code>NodeFlags::kModifiedBySoftNavigation</code> bit (which would persist forever) with per-context maps (<a href="https://crrev.com/4a275bc93d519">4a275bc93d519</a>).</li>
+<li>Improved support for multiple URL changes within a context (<a href="https://crrev.com/eb71cbb21b410">eb71cbb21b410</a>).</li>
+<li>Optimized <code>ModifiedDOM</code> calls and context validation checks (<a href="https://crrev.com/fe01d34922570">fe01d34922570</a>, <a href="https://crrev.com/1e8e9dc69d467">1e8e9dc69d467</a>).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>Chrome 122</p>
+<ul>
+<li>The 2% paint threshold now must be reached by each new soft navigation.</li>
+<li>The start time of the soft navigation entry now marks the processing end
+time of the user interaction which triggered it.</li>
+<li>Elements painted after an interaction, but before a soft navigation is
+detected will only count as LCP candidates if their paints are attributable
+to the interaction.</li>
+</ul>
+</li>
+<li><p>Chrome 121</p>
+<ul>
+<li>The paint threshold is reduced from 20% to 2%.</li>
+</ul>
+</li>
+<li><p>Chrome 120</p>
+<ul>
+<li>The first soft navigation on a page now also requires, in addition to the
+URL and DOM change, that the user interaction triggers a threshold amount of
+painting on the page.</li>
+<li>This threshold is set to 20% of the amount which was painted before the
+page&#39;s very first user interaction. (Subsequent navigations do not require
+this, due to a bug)</li>
+</ul>
+</li>
+<li><p>Chrome 119</p>
+<ul>
+<li>Keyboard events can now trigger soft navigations.</li>
+</ul>
+</li>
+<li><p>Chrome 117</p>
+<ul>
+<li>FP and FCP entries are no longer emitted after soft navigation (without a
+command-line flag).</li>
+</ul>
+</li>
+<li><p>Chrome 115</p>
+<ul>
+<li>Navigation ID is changed to a random UUID in performance entries.</li>
+</ul>
+</li>
+<li><p>Chrome 112</p>
+<ul>
+<li>Performance observers need to be created with a flag to see FP, FCP and LCP
+events after soft navigation.</li>
+</ul>
+</li>
+<li><p>Chrome 110: Initial origin trial release of soft navigation heuristics.</p>
+<ul>
+<li>Soft navigation requires a click event to trigger both a URL change and an
+addition to the DOM, in any order.</li>
+<li>Soft navigation entries are exposed to performance observers, as well as FP,
+FCP and LCP after each soft navigation.</li>
+<li>Navigation id is included, and is a simple incrementing integer.</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/soft_navigations.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/soft_navigations.md</a>
+  </p>
+</div>

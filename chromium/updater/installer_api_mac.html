@@ -1,0 +1,82 @@
+<h1>Mac Installer API</h1>
+<p>This document describes how macOS software integrates with Chromium Updater for
+software updates.</p>
+<h2 id="design">Design</h2>
+<p>macOS software updates are delivered as CRX archives that contain
+an <code>.install</code> executable at the root of the archive. (Typically the archives
+also contain an app bundle, i.e. the new version of the app.)</p>
+<p>The updater will execute all of the following executables in the archive, if
+they exist, in order:</p>
+<ol>
+<li><code>.preinstall</code></li>
+<li><code>.keystone_preinstall</code></li>
+<li><code>.install</code></li>
+<li><code>.keystone_install</code></li>
+<li><code>.postinstall</code></li>
+<li><code>.keystone_postinstall</code></li>
+</ol>
+<p>If any fail (exit with a non-zero status), the remaining executables are not
+run and the installation fails.</p>
+<p>If none exist, the installation fails.</p>
+<h2 id="execution-environment">Execution Environment</h2>
+<h3 id="environment-variables">Environment Variables</h3>
+<p>Installer executables are executed in an environment with the following
+environment variables:</p>
+<ul>
+<li><code>KS_TICKET_AP</code>: The ap value of the currently-installed version of the app.
+ (Note: &quot;ap&quot; was called &quot;tag&quot; in Keystone.)</li>
+<li><code>KS_TICKET_SERVER_URL</code>: The URL used for update-checking with the server,
+ regardless of what was in the Keystone ticket.</li>
+<li><code>KS_TICKET_XC_PATH</code>: The absolute path to the installation of the app, based
+ on its existence-checker value.</li>
+<li><code>PATH</code>: &#39;/bin:/usr/bin:/Path/To/ksadmin&#39;.</li>
+<li><code>PREVIOUS_VERSION</code>: The version of the app before this update.</li>
+<li><code>SERVER_ARGS</code>: The arguments sent from the server, if any. Refer to
+ the <a href="protocol_3_1">Omaha protocol</a>&#39;s description of <code>manifest</code> response
+ objects.</li>
+<li><code>UPDATE_IS_MACHINE</code>: An indicator of the updater&#39;s scope.<ul>
+<li>0 if the updater is per-user.</li>
+<li>1 if the updater is cross-user.</li>
+</ul>
+</li>
+<li><code>UNPACK_DIR</code>: The absolute path to the unpacked update archive (i.e. the
+ parent directory of the install executable.)</li>
+<li><code>%COMPANY%_USAGE_STATS_ENABLED</code>: where %COMPANY% is the uppercase company
+short name from branding.gni.<ul>
+<li>0 if the updater does not send usage stats.</li>
+<li>1 if the updater sends usage stats.</li>
+</ul>
+</li>
+</ul>
+<h3 id="command-line-arguments">Command-Line Arguments</h3>
+<p>Installer executables are passed the following arguments, in this order:</p>
+<ol>
+<li>The absolute path to the unpacked update archive (i.e. the parent directory
+of the install executable.)</li>
+<li>The absolute path to the installation of the app, based on its
+existence-checker value.</li>
+<li>The version of the app before this update.</li>
+</ol>
+<p>New install executables should instead depend on environment variables rather
+than positional arguments.</p>
+<h2 id="updating-product-metadata">Updating Product Metadata</h2>
+<p>If the install executables succeed, the updater will automatically record the
+new version of the application without any special action from the installers.</p>
+<p>If the installers must also change other elements of the installation, such as
+the brand, path, ap, or similar, they may do so by executing ksadmin, for
+example by running
+<code>ksadmin --register --product-id com.google.MyProductId --tag MyNewAp</code>.</p>
+<h2 id="updating-with-dmgs">Updating with DMGs</h2>
+<p>Many products distribute their app to first-time users as a DMG archive. It is
+possible to reuse the same DMG for updates, but this is not recommended: failure
+to mount DMGs is a common update error, and any compression applied to the DMG
+can frustrate the updater&#39;s attempts to use transparent differential updates.</p>
+<p>Instead, it is better to have your build system output a simple ZIP archive
+for the purposes of update, which can be repackaged into a CRX by release
+tooling.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updater/installer_api_mac.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updater/installer_api_mac.md</a>
+  </p>
+</div>

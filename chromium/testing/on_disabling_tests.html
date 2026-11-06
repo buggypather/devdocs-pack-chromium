@@ -1,0 +1,63 @@
+<h1>On disabling tests</h1>
+<p>Sometimes you don&#39;t want to run a test that you&#39;ve written (or that
+you&#39;ve imported, like conformance tests). The test might not be possible to
+run in a particular configuration, or be temporarily broken by another
+change, or be flaky, or simply not work yet. In these cases (and perhaps others),
+you should disable the test :).</p>
+<p>There are a number of different ways to do so:</p>
+<ul>
+<li><p>If the test is an entire binary or test suite, the first (and
+simplest) way is to simply not build (or build, but not run)
+the test binary, of course. This makes sense for binaries that
+are specific to particular build configurations (e.g., Android JUnit
+tests don&#39;t need to be built on Windows).</p>
+</li>
+<li><p>A second way (for tests in C++) is to not compile a test in a
+given configuration, e.g., <code>#ifndef WIN</code>. In this situation, the only
+way you would know the test existed and was disabled would be to
+parse the source code. We often do this today for tests that will
+never be enabled in particular build configurations, but sometimes we do
+this to temporarily skip tests as well.</p>
+</li>
+<li><p>A third way is to take advantage of features in your testing framework to
+skip over tests. Examples include involve adding <code>DISABLED_</code> to the test
+method name for GTest-based tests, <code>@unittest.skip</code> for Python-based tests,
+or using the
+<a href="https://github.com/chromium/chromium/blob/HEAD/base/test/android/javatests/src/org/chromium/base/test/util/DisabledTest.java">DisabledTest</a>
+annotation for JUnit-based Java tests (this works in both instrumentation
+and Robolectric tests). In these cases, you don&#39;t run the test by default,
+but you can determine the list of disabled tests at runtime because the
+tests are present in the executable, and you may still be able to force the
+test to be run via a command-line flag.</p>
+</li>
+<li><p>Fourth, for test frameworks that support
+<a href="https://bit.ly/chromium-test-list-format">expectations files or filter files</a>,
+you can use them to decide what to run and what to skip. This moves
+the mechanisms out of the source code and into separate files; there are
+advantages and disadvantages to this. The main advantage is that it
+can make it easier to write tooling to disable tests, and the main
+disadvantage is that it moves the mechanism away from the code it affects,
+potentially making it harder to understand what&#39;s going on.</p>
+</li>
+<li><p>Finally, the test harness can run the test, but the test itself
+might detect at runtime that it should exit early for some reason
+rather than actually executing the code paths you&#39;d normally want to
+test. For example, if you have a test for some code path that requires
+a GPU, but there&#39;s no GPU on the machine, the test might check for a
+GPU and exit early with &quot;success&quot;.</p>
+</li>
+</ul>
+<p>If you want to be able to determine a global picture of which tests
+were disabled, you can either parse BUILD files, expectations and filter
+files, and source code to try and figure that out, or require the tests be
+present in test binaries (i.e., not compiled out) and then run the test
+binaries in order to collect the lists of disabled tests and report them
+to a central system.</p>
+<p>Parsing code can be straightforward for some types of tests, but
+difficult-to-impractical to do correctly for others.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/on_disabling_tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/on_disabling_tests.md</a>
+  </p>
+</div>

@@ -1,0 +1,186 @@
+<h1>Policy Description Guidelines</h1>
+<h2 id="summary">Summary</h2>
+<p>The policy description provides details of a policy. It&#39;s defined in the <code>desc</code>
+field in each yaml files and will be used to generate
+policy doc site
+<a href="https://chromeenterprise.google/policies/">chromeenterprise.google/policies/</a>,
+ADM/AMDX templates or some other 3rd party management tools UI.</p>
+<p>More details about policy development can be found in the <a href="add_new_policy">Chromium doc</a>.</p>
+<h2 id="structure">Structure</h2>
+<p>In general, the policy descriptions should follow the structure below.</p>
+<pre>&lt;Overview of the policy&gt;
+
+&lt;Background&gt;
+
+&lt;One or more bullet points for setup&gt;
+
+&lt;Any other information&gt;</pre>
+<h3 id="overview">Overview</h3>
+<p>Using one or two sentences to explain the main function that the policy
+controls.</p>
+<h3 id="background">Background</h3>
+<p>It is usually worth a few sentences to describe what the function actually does.
+Keep in mind that the readers of the policy description are likely not experts
+in this area.</p>
+<h3 id="setup">Setup</h3>
+<p>It’s important to describe different states of a policy, including the unset
+state. Please also mention whether users can control any setting when the policy
+is unset or set to a specific value.</p>
+<h5 id="boolean">Boolean</h5>
+<p>Boolean policies usually have 3 states: <code>Enabled</code>, <code>Disabled</code> and <code>not set</code>.</p>
+<pre>Setting the policy to Enabled, ...
+
+Setting the policy to Disabled, ...
+
+Not setting the policy, ...</pre>
+<p>Please use <code>Enabled</code> with capital <code>E</code> and <code>Disabled</code> with capital <code>D</code>.</p>
+<p>In some cases, if the policy is default to <code>Enabled</code> or <code>Disabled</code>, combine the
+<code>not set</code> one to it.</p>
+<pre>Setting the policy to Enabled or not set, ...
+
+Setting the policy to Disabled, ..</pre>
+<p>If you need a long sentence to describe the policy state or need to repeat
+yourself in each state, consider putting that information in the background
+section above and keep the sentences here short.</p>
+<h4 id="enum">Enum</h4>
+<p>Similar to boolean, all enum options need to be listed separately. When
+referring to enum options, please mention their values and captions.</p>
+<pre>Setting the policy to &lt;0 - caption of option 0&gt;, ...
+
+Setting the policy to &lt;1 - caption of option 1&gt;, ...
+
+...
+Not setting the policy, ...</pre>
+<p>Same as boolean, if you need a long sentence to describe the policy state
+or need to repeat yourself in each state, consider putting that information in
+the background section above and keep the sentences here short.</p>
+<h4 id="stringlistdictionary">String/List/Dictionary</h4>
+<p>Those policies are usually complicated. In general, please describe the input
+requirements, like what each key of the dictionary means or what kind of string
+format can be accepted.</p>
+<h4 id="others">Others</h4>
+<p>Any other useful information can be provided here. Here are some common topics.</p>
+<h5 id="exceptions">Exceptions</h5>
+<p>Uncommon behavior. For example, most policies override user settings by default.
+If a policy configuration won’t do so, it definitely needs to be highlighted.</p>
+<h5 id="conflicts">Conflicts</h5>
+<p>When a policy can have a conflict with other policies or contains two
+mutual options, it’s always a good idea to talk about those edge cases. For
+example, if there is an allow list and block list, what if an option is put into
+both lists?</p>
+<h5 id="expiration">Expiration</h5>
+<p>Some policies are planned to be only available for a certain amount of time.
+It’s very important to communicate it ahead of time. However, it’s ok not to
+mention a specific date if the timeline is not decided yet.</p>
+<h5 id="not-launched">Not launched</h5>
+<p>Same as expiration, a policy can be added before the feature is launched. Please
+describe the default behavior now and once the feature is rolled out.</p>
+<h5 id="sensitive-policies">Sensitive policies</h5>
+<p>Malware could abuse policies to control users&#39; devices. Some policies are
+particularly dangerous so there will be additional management requirements
+before applying them. For those policies, please append the following statements
+at the end of the policy description according to their supported platforms.</p>
+<p>Policies marked as <code>sensitive: true</code> will have the appropriate statements
+automatically appended to their description.</p>
+<!-- LINT.IfChange(sensitive_policy_notices) -->
+<pre>On &lt;ph name=&quot;MS_WIN_NAME&quot;&gt;Microsoft® Windows®&lt;/ph&gt;, this policy is only available on instances that are joined to a &lt;ph name=&quot;MS_AD_NAME&quot;&gt;Microsoft® Active Directory®&lt;/ph&gt; domain, joined to &lt;ph name=&quot;MS_AAD_NAME&quot;&gt;Microsoft® Azure® Active Directory®&lt;/ph&gt; or enrolled in &lt;ph name=&quot;CHROME_ENTERPRISE_CORE_NAME&quot;&gt;Chrome Enterprise Core&lt;/ph&gt;.
+
+On &lt;ph name=&quot;MAC_OS_NAME&quot;&gt;macOS&lt;/ph&gt;, this policy is only available on instances that are managed via MDM, joined to a domain via MCX or enrolled in &lt;ph name=&quot;CHROME_ENTERPRISE_CORE_NAME&quot;&gt;Chrome Enterprise Core&lt;/ph&gt;.</pre>
+<!-- LINT.ThenChange(/components/policy/resources/policy_templates.py:sensitive_policy_notices) --><h4 id="too-many-details">Too many details</h4>
+<p>The policy description can’t be longer than 3500 characters. However, even
+before that limit is reached, as long as it’s necessary, consider creating a
+webpage for additional details and link it from the policy description.</p>
+<p>Usually, this can be a help center article. Please contact a tech writer to
+create one for you. It can also be any public documentation that can help. For
+example, if the policy accepts urls as input, you can link
+<a href="https://support.google.com/chrome/a?p=url_blocklist_filter_format">this</a> or
+<a href="https://chromeenterprise.google/policies/url-patterns/">this</a> article to avoid
+repeating most edge cases of URL input and only focus on the unique part.</p>
+<p>Note that when linking the help center article, please use a p link (e.g.
+<code>a?p=url_blocklist_filter_format</code>) instead of a number link (e.g.
+<code>a/answer/9942583</code>). Contact a tech writer to create the p link for you.</p>
+<h2 id="format">Format</h2>
+<p>The Policy description will be displayed in various different tools. Some of
+these tools may not support any kind of formatting except splitting each
+paragraph with an empty line.</p>
+<pre>Line A
+
+Line B
+
+Line C</pre>
+<p>Note that single line return may be used to keep the line length reasonably
+short. But it will be ignored in some generated documentations. In other words,</p>
+<pre>Line A
+Line B
+Line C</pre>
+<p>Will be presented as</p>
+<pre>Line A Line B Line C</pre>
+<p>If complicated formatting is needed, please create a help center article to
+include better expression such as graphs and tables.</p>
+<h2 id="translation">Translation</h2>
+<p>All policy descriptions and captions will be translated into multiple languages.
+Avoid using phrases that are unique to English culture and hard to translate.</p>
+<p>In addition to that, to ensure consistency in the policy descriptions, the
+following is a mapping of how various product names and the like should be
+referenced. All placeholders tags must be opened and closed on the same line to
+avoid validation errors.</p>
+<h4 id="chrome-product">Chrome Product</h4>
+<ul>
+<li>Chrome: <code>&lt;ph name=&quot;PRODUCT_NAME&quot;&gt;$1&lt;ex&gt;Google Chrome&lt;/ex&gt;&lt;/ph&gt;</code></li>
+<li>ChromeOS: <code>&lt;ph name=&quot;PRODUCT_OS_NAME&quot;&gt;$2&lt;ex&gt;Google ChromeOS&lt;/ex&gt;&lt;/ph&gt;</code></li>
+<li>ChromeOS Flex: <code>&lt;ph name=&quot;PRODUCT_OS_FLEX_NAME&quot;&gt;Google ChromeOS Flex&lt;/ph&gt;</code></li>
+<li>Chrome Browser Cloud Management: <code>&lt;ph name=&quot;CHROME_BROWSER_CLOUD_MANAGEMENT_NAME&quot;&gt;Chrome Browser Cloud Management&lt;/ph&gt;</code></li>
+<li>Chrome Enterprise Core: <code>&lt;ph name=&quot;CHROME_ENTERPRISE_CORE_NAME&quot;&gt;Chrome Enterprise Core&lt;/ph&gt;</code></li>
+<li>Chrome Enterprise Premium: <code>&lt;ph name=&quot;CHROME_ENTERPRISE_PREMIUM_NAME&quot;&gt;Chrome Enterprise Premium&lt;/ph&gt;</code></li>
+<li>Chrome Remote Desktop: <code>&lt;ph name=&quot;CHROME_REMOTE_DESKTOP_PRODUCT_NAME&quot;&gt;Chrome Remote Desktop&lt;/ph&gt;</code></li>
+<li>Chrome Sync: <code>&lt;ph name=&quot;CHROME_SYNC_NAME&quot;&gt;Chrome Sync&lt;/ph&gt;</code></li>
+<li>Chrome DevTools: <code>&lt;ph name=&quot;CHROME_DEVTOOLS_NAME&quot;&gt;Chrome DevTools&lt;/ph&gt;</code></li>
+</ul>
+<h4 id="google-product">Google Product</h4>
+<ul>
+<li>Gemini Enterprise: <code>&lt;ph name=&quot;GEMINI_ENTERPRISE_PRODUCT_NAME&quot;&gt;Gemini Enterprise&lt;/ph&gt;</code></li>
+<li>Gemini in Chrome: Gemini in Chrome</li>
+<li>Gemini Spark: <code>&lt;ph name=&quot;GOOGLE_GEMINI_SPARK_PRODUCT_NAME&quot;&gt;Gemini Spark&lt;/ph&gt;</code></li>
+<li>Google Admin console: <code>&lt;ph name=&quot;GOOGLE_ADMIN_CONSOLE_PRODUCT_NAME&quot;&gt;Google Admin console&lt;/ph&gt;</code></li>
+<li>Google AI Mode: <code>&lt;ph name=&quot;GOOGLE_AI_MODE_PRODUCT_NAME&quot;&gt;Google AI Mode&lt;/ph&gt;</code></li>
+<li>Google Calendar: <code>&lt;ph name=&quot;GOOGLE_CALENDAR_NAME&quot;&gt;Google Calendar&lt;/ph&gt;</code></li>
+<li>Google Cast: <code>&lt;ph name=&quot;PRODUCT_NAME&quot;&gt;Google Cast&lt;/ph&gt;</code></li>
+<li>Google Classroom: <code>&lt;ph name=&quot;GOOGLE_CLASSROOM_NAME&quot;&gt;Google Classroom&lt;/ph&gt;</code></li>
+<li>Google Cloud: <code>&lt;ph name=&quot;GOOGLE_CLOUD_PRODUCT_NAME&quot;&gt;Google Cloud&lt;/ph&gt;</code></li>
+<li>Google Cloud Print: <code>&lt;ph name=&quot;CLOUD_PRINT_NAME&quot;&gt;Google Cloud Print&lt;/ph&gt;</code></li>
+<li>Google Drive: <code>&lt;ph name=&quot;GOOGLE_DRIVE_NAME&quot;&gt;Google Drive&lt;/ph&gt;</code></li>
+<li>Google Gemini: <code>&lt;ph name=&quot;GOOGLE_GEMINI_PRODUCT_NAME&quot;&gt;Google Gemini&lt;/ph&gt;</code></li>
+<li>Google Lens: <code>&lt;ph name=&quot;GOOGLE_LENS_PRODUCT_NAME&quot;&gt;Google Lens&lt;/ph&gt;</code></li>
+<li>Google Photos: <code>&lt;ph name=&quot;GOOGLE_PHOTOS_PRODUCT_NAME&quot;&gt;Google Photos&lt;/ph&gt;</code></li>
+<li>Google Search: <code>&lt;ph name=&quot;GOOGLE_SEARCH_PRODUCT_NAME&quot;&gt;Google Search&lt;/ph&gt;</code></li>
+<li>Google Tasks: <code>&lt;ph name=&quot;GOOGLE_TASKS_NAME&quot;&gt;Google Tasks&lt;/ph&gt;</code></li>
+<li>Google Update: <code>&lt;ph name=&quot;GOOGLE_UPDATE_NAME&quot;&gt;Google Update&lt;/ph&gt;</code></li>
+<li>Google Workspace: <code>&lt;ph name=&quot;GOOGLE_WORKSPACE_PRODUCT_NAME&quot;&gt;Google Workspace&lt;/ph&gt;</code></li>
+<li>YouTube: <code>&lt;ph name=&quot;YOUTUBE_PRODUCT_NAME&quot;&gt;YouTube&lt;/ph&gt;</code></li>
+</ul>
+<h4 id="operating-system">Operating System</h4>
+<ul>
+<li>Android: <code>&lt;ph name=&quot;ANDROID_NAME&quot;&gt;Android&lt;/ph&gt;</code></li>
+<li>Fuchsia: <code>&lt;ph name=&quot;FUCHSIA_OS_NAME&quot;&gt;Fuchsia&lt;/ph&gt;</code></li>
+<li>iOS: <code>&lt;ph name=&quot;IOS_NAME&quot;&gt;iOS&lt;/ph&gt;</code></li>
+<li>Linux: <code>&lt;ph name=&quot;LINUX_OS_NAME&quot;&gt;Linux&lt;/ph&gt;</code></li>
+<li>macOS: <code>&lt;ph name=&quot;MAC_OS_NAME&quot;&gt;macOS&lt;/ph&gt;</code></li>
+<li>Windows: <code>&lt;ph name=&quot;MS_WIN_NAME&quot;&gt;Microsoft® Windows®&lt;/ph&gt;</code></li>
+</ul>
+<h4 id="other-product">Other Product</h4>
+<ul>
+<li>Internet Explorer: <code>&lt;ph name=&quot;IE_PRODUCT_NAME&quot;&gt;Internet® Explorer®&lt;/ph&gt;</code></li>
+<li>Microsoft Active Directory: <code>&lt;ph name=&quot;MS_AD_NAME&quot;&gt;Microsoft® Active Directory®&lt;/ph&gt;</code></li>
+<li>Microsoft Azure Active Directory <code>&lt;ph name=&quot;MS_AAD_NAME&quot;&gt;Microsoft® Azure® Active Directory®&lt;/ph&gt;</code></li>
+<li>Microsoft Authenticator: <code>&lt;ph name=&quot;MS_AUTH_APP_NAME&quot;&gt;Microsoft® Authenticator®&lt;/ph&gt;</code></li>
+<li>Microsoft Intune Company portal: <code>&lt;ph name=&quot;MS_ICP_NAME&quot;&gt;Microsoft® Intune Company Portal®&lt;/ph&gt;</code></li>
+<li>Microsoft Link to Windows: <code>&lt;ph name=&quot;MS_LTW_NAME&quot;&gt;Microsoft® Link to Windows®&lt;/ph&gt;</code></li>
+</ul>
+<p>Using placeholders means the text won’t be translated. Please update the list
+above if a new placeholder is introduced.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/description_guidelines.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/description_guidelines.md</a>
+  </p>
+</div>

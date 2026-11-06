@@ -1,0 +1,66 @@
+<h1>Network Stack Memory Tracing</h1>
+<p>This is an overview of the Net column in <a href="memory-infra">MemoryInfra</a>.</p>
+<h2 id="quick-start">Quick Start</h2>
+<p>To get an overview of total network stack memory usage, select the Browser
+process&#39; <em>net</em> category and look at <em>effective_size</em> or <em>size</em> column.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/net_category.png" alt="net stack column"></p>
+<h2 id="detailed-information">Detailed Information</h2>
+<p>The numbers are reported by the network stack’s MemoryDumpProvider, which is
+implemented by URLRequestContext class. URLRequestContext calls into major
+network stack objects (such as HttpNetworkSession, SSLClientSessionCache,
+HttpCache) to aggregate memory usage numbers. The total number reported in
+“net” is a lower bound of the memory used by the network stack. It is not
+intended to be an accurate measurement. Please use
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/heap_profiler.md">heap profiler</a> instead to see all allocations.</p>
+<p><strong>URLRequestContext</strong> (“url_request_context”)</p>
+<p>This is a top-level network stack object used to create url requests. There are
+several URLRequestContexts in Chrome. See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/net/docs/life-of-a-url-request.md">Anatomy of the Network Stack</a> for what these
+URLRequestContexts are created for. The number of URLRequestContexts increases
+with the number of profiles.</p>
+<p>For a “url_request_context” row, the “object_count” column indicates the number
+of live URLRequests created by that context.</p>
+<ul>
+<li><p>Sub rows</p>
+<ul>
+<li><p>HttpCache (“http_cache”)</p>
+<p>  This cache can be a disk cache (backed by either block file or simple
+  cache backend) or an in-memory cache. An incognito profile, for example,
+  has an in-memory HttpCache. You can tell this by whether
+  <em>mem_backend_size</em> column is present for that particular
+  URLRequestContext.</p>
+</li>
+</ul>
+</li>
+</ul>
+<p><strong>HttpNetworkSession</strong> (“http_network_session”)</p>
+<p>This network stack object owns socket pools, the HTTP/2 and QUIC session pools. 
+There is usually a 1:1 correspondence from a URLRequestContext to an
+HttpNetworkSession, but there are exceptions. For example, the “main”
+URLRequestContext shares the same HttpNetworkSession with “main_media”
+URLRequestContext and “main_isolated_media” URLRequestContext.</p>
+<ul>
+<li><p>Sub rows</p>
+<ul>
+<li><p>HttpStreamFactory(“stream_factory”)</p>
+<p>  This object is an entry to establish HTTP/1.1, HTTP/2 and QUIC
+  connections.</p>
+</li>
+<li><p>SpdySessionPool (“spdy_session_pool”)</p>
+<p>  This object owns HTTP/2 sessions.</p>
+</li>
+<li><p>QuicSessionPool (“quic_session_pool”)</p>
+<p>  This object owns QUIC sessions and streams.</p>
+</li>
+</ul>
+</li>
+</ul>
+<p><strong>SSLClientSessionCache</strong> (“ssl_session_cache”)</p>
+<p>This is a global singleton that caches SSL session objects which retain
+references to refcounted SSL Certificates.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/probe-net.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/probe-net.md</a>
+  </p>
+</div>

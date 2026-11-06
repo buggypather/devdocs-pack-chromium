@@ -1,0 +1,413 @@
+<h1>Converting Legacy IPC to Mojo</h1>
+<h2 id="overview">Overview</h2>
+<p>A number of IPC messages sent (primarily between the browser and renderer
+processes) are still defined using Chrome&#39;s old IPC system in <code>//ipc</code>. This
+system uses
+<a href="https://cs.chromium.org/chromium/src/base/pickle.h?rcl=8b7842262ee1239b1f3ae20b9c851748ef0b9a8b&amp;l=128"><code>base::Pickle</code></a>
+as the basis for message serialization and is supported by a number if <code>IPC_*</code>
+preprocessor macros defined in <code>//ipc</code> and used around the source tree.</p>
+<p>There is an ongoing, distributed effort to get these messages converted to Mojo
+interface messages. Messages that still need to be converted are tracked in two
+spreadsheets:</p>
+<ul>
+<li><a href="https://docs.google.com/spreadsheets/d/1pGWX_wxGdjAVtQOmlDDfhuIc3Pbwg9FtvFXAXYu7b7c/edit#gid=0">Chrome IPC to Mojo migration</a> for non-web platform messages</li>
+<li><a href="https://docs.google.com/spreadsheets/d/1VIINt17Dg2cJjPpoJ_HY3HI0uLpidql-1u8pBJtpbGk/edit#gid=1603373208">Mojoifying Platform Features</a> for web platform messages</li>
+</ul>
+<p>This document is concerned primarily with rote conversion of legacy IPC messages
+to Mojo interface messages. If you are considering more holistic refactoring and
+better isolation of an entire subsystem of the browser, you may consider
+<a href="servicification">servicifying</a> the feature instead of merely converting its
+IPCs.</p>
+<p>See other <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/README.md#Mojo-Services">Mojo &amp; Services</a> documentation
+for introductory guides, API references, and more.</p>
+<h2 id="legacy-ipc-concepts">Legacy IPC Concepts</h2>
+<p>Each Content child process has a single <strong><code>IPC::Channel</code></strong> implementation going
+between it and the browser process, and this is used as the sole two-way FIFO
+to send legacy IPC messages between the processes.</p>
+<p>There are two fundamental types of legacy IPC messages: <strong>control</strong> messages,
+defined via <code>IPC_MESSAGE_CONTROLn</code> macros (where <code>n</code> is some small integer) and
+<strong>routed</strong> messages defined via <code>IPC_MESSAGE_ROUTEDn</code> macros.</p>
+<p>Control messages generally go between a browser-side process host (<em>e.g.</em>,
+<code>RenderProcessHost</code> or <code>GpuProcessHost</code>) and the child-side <code>ChildThreadImpl</code>
+subclass. All of these classes implement <code>IPC::Sender</code> and thus have a <code>Send</code>
+method for sending a control message to their remote counterpart, and they
+implement <code>IPC::Listener</code> to receive incoming control messages via
+<code>OnMessageReceived</code>.</p>
+<p>Routed messages are relegated to <strong>routes</strong> which have arbitrary meaning
+determined by their use within a given process. For example, renderers use
+routes to isolate messages scoped to individual render frames, and so such
+routed messages will travel between a <code>RenderFrameHostImpl</code> and its
+corresponding <code>RenderFrameImpl</code>, both of which also implement <code>IPC::Sender</code> and
+<code>IPC::Listener</code>.</p>
+<h2 id="mojo-interfaces-as-routes">Mojo Interfaces as Routes</h2>
+<p>Routed messages in the old IPC system always carry a <strong>routing ID</strong> to identify
+to the receiving endpoint which routed object (<em>e.g.</em> which <code>RenderFrameImpl</code>
+or <code>RenderViewImpl</code> or whatever) the message is targeting. Each endpoint is thus
+required to do some additional book-keeping to track what each routing ID means.</p>
+<p>Mojo interfaces obviate the need for routing IDs, as new &quot;routes&quot; can be
+established by simply creating a new interface pipe and passing one endpoint to
+something which knows how to bind it.</p>
+<p>When thinking about an IPC message conversion to Mojo, it&#39;s important to
+consider whether the message is a control message or a routed message, as this
+determines where you might find an existing Mojo interface to carry your
+message, or where you will want to add a new end-to-end Mojo interface for that
+purpose. This can mean the difference between a single per-process interface
+going between each <code>RenderProcessHostImpl</code> and its corresponding
+<code>RenderThreadImpl</code>, vs a per-frame interface going between each
+<code>RenderFrameHostImpl</code> and its corresponding <code>RenderFrameImpl</code>.</p>
+<h2 id="ordering-considerations">Ordering Considerations</h2>
+<p>One <strong>very important</strong> consideration when doing IPC conversions is the relative
+ordering of IPC-driven operations. With the old IPC system, because every
+message between two processes is globally ordered, it is quite easy for parts
+of the system to (intentionally or often unintentionally) rely on strict
+ordering guarantees.</p>
+<p>For example, imagine a <code>WebContentsObserver</code> in the browser processes observes
+a frame navigation and immediately sends an IPC message to the frame to
+configure some new behavior. The implementation may be inadvertently relying on
+this message arriving <em>before</em> some other tangentially related message sent to
+the same frame shortly after the same navigation event.</p>
+<p>While Mojo guarantees strict ordering within each message pipe, Mojo does not
+(and in fact cannot) make any strict ordering guarantees between separate
+message pipes, as message pipes may be freely moved across process boundaries
+and thus cannot necessarily share a common FIFO at all times.</p>
+<p>If the two messages described above were moved to separate Mojo interfaces on
+separate message pipes, renderer behavior could break as the first message may
+arrive after the second message.</p>
+<p>The best solution to this problem is to rethink the IPC surface and/or
+implementation on either side to eliminate ordering dependencies between two
+interfaces that otherwise seem to be logically distinct. Failing that, Mojo&#39;s
+solution to this problem is to support
+<a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/tools/bindings/README.md#Associated-Interfaces"><strong>associated interfaces</strong></a>.
+In a nutshell, these allow multiple distinct interfaces to be multiplexed over
+a shared message pipe.</p>
+<h2 id="channel-associated-interfaces">Channel-Associated Interfaces</h2>
+<p>The previous section mentions <strong>associated interfaces</strong> as a general-purpose
+solution for establishing a mutual FIFO between multiple logical Mojo interfaces
+by having them share a single message pipe.</p>
+<p>In Chrome, the <code>IPC::Channel</code> which carries all legacy IPC messages between two
+processes is itself a Mojo message pipe (implicitly). We provide a mechanism for
+associating arbitrary Mojo interfaces with this pipe, which means messages can
+be converted to Mojo while preserving strict FIFO with respect to other legacy
+IPC messages. Such interfaces are designated in Chrome parlance as
+<strong>Channel-associated interfaces</strong>.</p>
+<p>Usage of Channel-associated interfaces should be rare but is considered a
+reasonable intermediate solution for incremental IPC conversions where it would
+be too risky or noisy to convert a large IPC surface all at once, but it would
+also be impossible to split the IPC surface between legacy IPC and a dedicated
+Mojo interface pipe without introducing timing bugs.</p>
+<p>At this point in Chrome&#39;s development, practical usage of Channel-associated
+interfaces is restricted to the <code>IPC::Channel</code> between the browser process and
+a renderer process, as this is the most complex IPC surface with the most
+implicit ordering dependencies. A few simple APIs exist to support this.</p>
+<p><code>RenderProcessHostImpl</code> owns an <code>IPC::Channel</code> (through <code>IPC::ChannelProxy</code>)
+to its corresponding <code>RenderFrameImpl</code> in the render process. This object has a
+<code>GetRemoteAssociatedInterfaces</code> method which can be used to pass arbitrary
+associated interface requests:</p>
+<pre data-language="cpp">mojo::PendingAssociatedRemote&lt;magic::mojom::GoatTeleporter&gt; teleporter;
+render_frame-&gt;GetRemoteAssociatedInterfaces()-&gt;GetInterface(&amp;teleporter);
+
+// These messages are all guaranteed to arrive in the same order they were sent.
+channel_-&gt;Send(new FooMsg_SomeLegacyIPC);
+teleporter-&gt;TeleportAllGoats();
+channel_-&gt;Send(new FooMsg_AnotherLegacyIPC);</pre>
+<p>Likewise, <code>RenderFrameHostImpl</code> defines a <code>GetRemoteAssociatedInterfaces</code>
+method.</p>
+<p>To receive and bind incoming Channel-associated interface requests, the above
+objects also implement <code>IPC::Listener::OnAssociatedInterfaceRequest</code>.</p>
+<p>There are some example conversion CLs which use Channel-associated interfaces
+<a href="https://codereview.chromium.org/2381493003">here</a> and
+<a href="https://codereview.chromium.org/2400313002">here</a>.</p>
+<h2 id="deciding-how-to-approach-a-conversion">Deciding How to Approach a Conversion</h2>
+<p>There are a few questions you should ask before embarking upon any IPC message
+conversion journey, and there are many potential approaches to consider. The
+right one depends on context.</p>
+<p>Note that this section assumes the message is traveling between the browser
+process and a renderer process. Other cases are rare and developers may wish to
+consult
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/chromium-mojo">chromium-mojo@chromium.org</a>
+before proceeding with them. Otherwise, apply the following basic algorithm to
+decide how to proceed:</p>
+<ul>
+<li>General note: If the message is a reply to some other message (typically these
+take a &quot;request ID&quot; argument), see the note about message replies at the
+bottom of this section.</li>
+<li>Consider whether or not the message makes sense as part of the IPC surface of
+a new or existing service somewhere in <code>//services</code> or <code>//chrome/services</code>,
+<em>etc.</em> This is less and less likely to be the case as time goes on, as many
+remaining IPC conversions are quite narrowly dealing with specific
+browser/renderer details rather than the browser&#39;s supporting subsystems. If
+defining a new service, you may wish to consult some of the other
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/README.md#Mojo-Services">Mojo &amp; Services documentation</a> first.</li>
+<li>If the message is an <code>IPC_MESSAGE_CONTROL</code> message:<ul>
+<li>If there are likely to be strict ordering requirements between this
+message and other legacy IPC or Channel-associated interface messages,
+consider using a new or existing
+<a href="#Channel-Associated-Interfaces">Channel-associated interface</a> between
+<code>RenderProcessHostImpl</code> and <code>RenderThreadImpl</code>.</li>
+<li>If the message is sent from a renderer to the browser:<ul>
+<li>If an existing interface is bound by <code>RenderProcessHostImpl</code> and
+requested through <code>RenderThread</code>&#39;s Connector and seems to be a good
+fit for the message, add the equivalent Mojo message to that
+interface.</li>
+<li>If no such interface exists, consider adding one for this message and
+any related messages.</li>
+</ul>
+</li>
+<li>If the message is sent from the browser to a renderer:<ul>
+<li>If an existing interface is bound by <code>RenderThreadImpl</code> and requested
+through a <code>BrowserContext</code> Connector referencing a specific
+<code>RenderProcessHost</code> <a href="https://cs.chromium.org/chromium/src/content/public/browser/render_process_host.h?rcl=1497b88b7d6400a2a5cced258df03d53800d7848&amp;l=327">identity</a>,
+and the interface seems to be a good fit for the message, add the
+equivalent Mojo message to that interface.</li>
+<li>If no such interface exists, consider adding one for this message and
+any related messages.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>If the message is an <code>IPC_MESSAGE_ROUTED</code> message:<ul>
+<li>Determine what the routing endpoints are. If they are
+<code>RenderFrameHostImpl</code> and <code>RenderFrameImpl</code>:<ul>
+<li>If there are likely to be strict ordering requirements between this
+message and other legacy IPC or Channel-associated interface messages,
+consider using a new or existing
+<a href="#Channel-Associated-Interfaces">Channel-associated interface</a> between
+<code>RenderFrameHostImpl</code> and <code>RenderFrameImpl</code>.</li>
+<li>If the message is sent from a renderer to the browser:<ul>
+<li>If an existing interface is bound by <code>RenderFrameHostImpl</code> and
+acquired via <code>RenderFrame::GetBrowserInterfaceBroker</code> and the interface seems
+to be a good fit for this message, add the equivalent Mojo message
+to that interface.</li>
+<li>If no such interface exists, consider adding one and registering it
+with <code>RenderFrameHostImpl</code>&#39;s <code>BrowserInterfaceBroker</code>. See the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mojo_and_services.md#Example_Defining-a-New-Frame-Interface">simple example</a>
+in the &quot;Intro to Mojo &amp; Services&quot; document.</li>
+</ul>
+</li>
+<li>If the message is sent from the browser to a renderer, consider
+adding a Mojo equivalent to the <code>content.mojom.Frame</code> interface
+defined
+<a href="https://cs.chromium.org/chromium/src/content/common/frame.mojom?rcl=138b66744ee9ee853cbb0ae8437b71eaa1fafaa9&amp;l=42">here</a>.</li>
+</ul>
+</li>
+<li>If the routing endpoints are <strong>not</strong> frame objects (for example, they may
+be <code>RenderView</code>/<code>RenderViewHost</code> objects), this is a special case which
+does not yet have an easy conversion approach readily available. Contact
+<a href="https://groups.google.com/a/chromium.org/forum#!forum/chromium-mojo">chromium-mojo@chromium.org</a>
+to propose or discuss options.</li>
+</ul>
+</li>
+</ul>
+<p>*** aside
+<strong>NOTE</strong>: If you are converting a sync IPC, see the section on
+<a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/cpp/bindings/README.md#Synchronous-Calls">Synchronous Calls</a>
+in the Mojo documentation.</p>
+<hr>
+<h3 id="dealing-with-replies">Dealing With Replies</h3>
+<p>If the message is a <strong>reply</strong>, meaning it has a &quot;request ID&quot; which correlates it
+to a prior message in the opposite direction, consider converting the
+<strong>request</strong> message following the algorithm above. Unlike with legacy IPC, Mojo
+messages support replies as a first-class concept. So for example if you have:</p>
+<pre data-language="cpp">IPC_CONTROL_MESSAGE2(FooHostMsg_DoTheThing,
+                     int /* request_id */,
+                     std::string /* name */);
+IPC_CONTROL_MESSAGE2(FooMsg_DidTheThing,
+                     int /* request_id */,
+                     bool /* success */);</pre>
+<p>You should consider defining an interface <code>Foo</code> which is bound in
+<code>RenderProcessHostImpl</code> and acquired from <code>RenderThreadImpl</code>, with the following
+mojom definition:</p>
+<pre data-language="cpp">interface Foo {
+  DoTheThing(string name) =&gt; (bool success);
+};</pre>
+<p>See <a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/cpp/bindings/README.md#receiving-responses">Receiving responses</a>
+for more information.</p>
+<h2 id="repurposing-ipcparamtraits-and-ipc_struct-invocations">Repurposing <code>IPC::ParamTraits</code> and <code>IPC_STRUCT*</code> Invocations</h2>
+<p>Occasionally it is useful to do partial IPC conversions, where you want to
+convert a message to a Mojo interface method but you don&#39;t want to necessarily
+convert every structure passed by the message. In this case, you can leverage
+Mojo&#39;s
+<a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/cpp/bindings/README.md#Type-Mapping">type-mapping</a>
+system to repurpose existing <code>IPC::ParamTraits</code>.</p>
+<p>*** aside
+<strong>NOTE</strong>: Although in some cases <code>IPC::ParamTraits&lt;T&gt;</code> specializations are
+defined manually in library code, the <code>IPC_STRUCT*</code> macro helpers also define
+<code>IPC::ParamTraits&lt;T&gt;</code> specializations under the hood. All advice in this section
+pertains to both kinds of definitions.</p>
+<hr>
+<p>If a mojom struct is declared without a struct body and is tagged with
+<code>[Native]</code>, and a corresponding typemap is provided for the struct, the emitted
+C++ bindings will -- as if by magic -- replace the mojom type with the
+typemapped C++ type and will internally use the existing <code>IPC::ParamTraits&lt;T&gt;</code>
+specialization for that type in order to serialize and deserialize the struct.</p>
+<p>For example, given the
+<a href="https://cs.chromium.org/chromium/src/content/common/resource_messages.h?rcl=2e7a430d8d88222c04ab3ffb0a143fa85b3cec5b&amp;l=215"><code>resource_messages.h</code></a> header
+which defines an IPC mapping for <code>content::ResourceRequest</code>:</p>
+<pre data-language="cpp">IPC_STRUCT_TRAITS_BEGIN(content::ResourceRequest)
+  IPC_STRUCT_TRAITS_MEMBER(method)
+  IPC_STRUCT_TRAITS_MEMBER(url)
+  // ...
+IPC_STRUCT_TRAITS_END()</pre>
+<p>and the
+<a href="https://cs.chromium.org/chromium/src/content/common/resource_request.h?rcl=dce9e476a525e4ff0304787935dc1a8c38392ac8&amp;l=32"><code>resource_request.h</code></a> header
+which actually defines the <code>content::ResourceRequest</code> type:</p>
+<pre data-language="cpp">namespace content {
+
+struct CONTENT_EXPORT ResourceRequest {
+  // ...
+};
+
+}  // namespace content</pre>
+<p>we can declare a corresponding &quot;native&quot; mojom struct:</p>
+<pre data-language="cpp">module content.mojom;
+
+[Native]
+struct URLRequest;</pre>
+<p>and add a typemap like
+<a href="https://cs.chromium.org/chromium/src/content/common/url_request.typemap?rcl=4b5963fa744a706398f8f06a4cbbf70d7fa3213d"><code>url_request.typemap</code></a>
+to define how to map between them:</p>
+<pre data-language="python">mojom = &quot;//content/public/common/url_loader.mojom&quot;
+public_headers = [ &quot;//content/common/resource_request.h&quot; ]
+traits_headers = [ &quot;//content/common/resource_messages.h&quot; ]
+...
+type_mappings = [ &quot;content.mojom.URLRequest=content::ResourceRequest&quot; ]</pre>
+<p>Note specifically that public_headers includes the definition of the native C++
+type, and traits_headers includes the definition of the legacy IPC traits.</p>
+<p>As a result of all this, other mojom files can now reference
+<code>content.mojom.URLRequest</code> as a type for method parameters and other struct
+fields, and the generated C++ bindings will represent those values exclusively
+as <code>content::ResourceRequest</code> objects.</p>
+<p>This same basic approach can be used to leverage existing <code>IPC_ENUM_TRAITS</code> for
+invocations for <code>[Native]</code> mojom enum aliases.</p>
+<p>*** aside
+<strong>NOTE:</strong> Use of <code>[Native]</code> mojom definitions is strictly limited to C++
+bindings. If a mojom message depends on such definitions, it cannot be sent or
+received by other language bindings. This feature also depends on continued
+support for legacy IPC serialization and all uses of it should therefore be
+treated as technical debt.</p>
+<hr>
+<h2 id="blink-specific-advice">Blink-Specific Advice</h2>
+<h3 id="variants">Variants</h3>
+<p>Let&#39;s assume we have a mojom file such as this:</p>
+<pre data-language="cpp">module example.mojom;
+
+interface Foo {
+  SendData(string param1, array&lt;int32&gt; param2);
+};</pre>
+<p>The following GN snippet will generate two concrete targets: <code>example</code> and
+<code>example_blink</code>:</p>
+<pre>mojom(&quot;example&quot;) {
+  sources = [ &quot;example.mojom&quot; ]
+}</pre>
+<p>The target <code>example</code> will generate Chromium-style C++ bindings using STL types:</p>
+<pre data-language="cpp">// example.mojom.h
+namespace example {
+namespace mojom {
+
+class Example {
+  virtual void SendArray(const std::string&amp; param1, const std::vector&lt;int32_t&gt;&amp; param2) = 0;
+}
+
+} // namespace mojom
+} // namespace example</pre>
+<p>The target <code>example_blink</code> will generate Blink-style C++ bindings using WTF types:</p>
+<pre data-language="cpp">// example.mojom-blink.h
+namespace example {
+namespace mojom {
+namespace blink {
+
+class Example {
+  virtual void SendArray(const ::blink::String&amp; param1, const ::blink::Vector&lt;int32_t&gt;&amp; param2) = 0;
+}
+
+} // namespace blink
+} // namespace mojom
+} // namespace example</pre>
+<p>Thanks to these separate sets of bindings no work is necessary to convert types
+between Blink-style code and Chromium-style code. It is handled automatically
+during message serialization and deserialization.</p>
+<p>For more information about variants, see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/cpp/bindings/README.md#Variants">this section</a> of the C++ bindings
+documentation.</p>
+<h3 id="binding-callbacks">Binding callbacks</h3>
+<p>Mojo methods that return a value take an instance of <code>base::OnceCallback</code>.
+Use <code>blink::BindOnce()</code> and an appropriate wrapper function depending on the
+type of object and the callback.</p>
+<p>For garbage-collected (Oilpan) classes owning the <code>mojo::Remote</code>, it is recommended
+to use <code>WrapWeakPersistent(this)</code> for connection error handlers since they
+are not guaranteed to get called in a finite time period (wrapping the object
+with <code>WrapPersistent</code> in this case would cause memory leaks).</p>
+<p>If the response can be discarded in case the object is not alive by the time
+the response is received, use <code>WrapWeakPersistent(this)</code> for binding the response callback:</p>
+<pre data-language="cpp">// src/third_party/blink/renderer/modules/device_orientation/device_sensor_entry.cc
+sensor_.set_connection_error_handler(blink::BindOnce(
+    &amp;DeviceSensorEntry::HandleSensorError, WrapWeakPersistent(this)));
+sensor_-&gt;ConfigureReadingChangeNotifications(/*enabled=*/false);
+sensor_-&gt;AddConfiguration(
+    std::move(config), blink::BindOnce(&amp;DeviceSensorEntry::OnSensorAddConfiguration,
+                                 WrapWeakPersistent(this)));</pre>
+<p>Otherwise (for example, if the response callback is used to resolve a Promise),
+use <code>WrapPersistent(this)</code> to keep the object alive:</p>
+<pre data-language="cpp">// src/third_party/blink/renderer/modules/nfc/nfc.cc
+ScriptPromiseResolver* resolver = ScriptPromiseResolver::Create(script_state);
+...
+nfc_-&gt;CancelAllWatches(blink::BindOnce(&amp;NFC::OnRequestCompleted,
+                                 WrapPersistent(this),
+                                 WrapPersistent(resolver)));</pre>
+<p>Non-garbage-collected objects can use <code>blink::Unretained(this)</code> for both
+response and error handler callbacks when the <code>mojo::Remote</code> is owned by the
+object bound to the callback or the object is guaranteed to outlive the Mojo
+connection for another reason. Otherwise a weak pointer should be used. However,
+it is not a common pattern since using Oilpan is recommended for all Blink code.</p>
+<h3 id="implementing-mojo-interfaces-in-blink">Implementing Mojo interfaces in Blink</h3>
+<p>Only a <code>mojo::Receiver</code> or <code>mojo::ReceiverSet</code> should be used when implementing a
+Mojo interface in an Oilpan-managed object. The object must then have a pre-finalizer
+to close any open pipes when the object is about to be swept as lazy sweeping
+means that it may be invalid long before the destructor is called. This requires
+setup in both the object header and implementation.</p>
+<pre data-language="cpp">// MyObject.h
+class MyObject : public GarbageCollected,
+                 public example::mojom::blink::Example {
+  USING_PRE_FINALIZER(MyObject, Dispose);
+
+ public:
+  MyObject();
+  void Dispose();
+
+  // Implementation of example::mojom::blink::Example.
+
+ private:
+  mojo::Receiver&lt;example::mojom::blink::Example&gt; m_receiver{this};
+};
+
+// MyObject.cpp
+void MyObject::Dispose() {
+  m_receiver.Close();
+}</pre>
+<p>For more information about Blink&#39;s Garbage Collector, see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/heap/BlinkGCAPIReference.md">Blink GC API Reference</a>.</p>
+<h3 id="typemaps-for-content-and-blink-types">Typemaps For Content and Blink Types</h3>
+<p>Using typemapping for messages that go between Blink and content browser code
+can sometimes be tricky due to things like dependency cycles or confusion over
+the correct place for some definition
+to live. There are some example CLs provided here, but feel free to also contact
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/chromium-mojo">chromium-mojo@chromium.org</a>
+with specific details if you encounter trouble.</p>
+<p><a href="https://codereview.chromium.org/2363533002">This CL</a> introduces a Mojom
+definition and typemap for <code>ui::WindowOpenDisposition</code> as a precursor to the
+IPC conversion below.</p>
+<p>The <a href="https://codereview.chromium.org/2363573002">follow-up CL</a> uses that
+definition along with several other new typemaps (including native typemaps as
+described above) to convert the relatively large <code>ViewHostMsg_CreateWindow</code>
+message to Mojo.</p>
+<h2 id="additional-support">Additional Support</h2>
+<p>If this document was not helpful in some way, please post a message to your
+friendly
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/chromium-mojo">chromium-mojo@chromium.org</a>
+mailing list.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mojo_ipc_conversion.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mojo_ipc_conversion.md</a>
+  </p>
+</div>

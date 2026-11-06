@@ -1,0 +1,60 @@
+<h1>Proxy Auto Config Using WPAD</h1>
+<p>Most systems support manually configuring a proxy for web access, but this is
+cumbersome and kind of technical, so Chrome also supports
+<a href="http://en.wikipedia.org/wiki/Web_Proxy_Autodiscovery_Protocol">WPAD</a> for proxy
+configuration (enabled if &quot;automatically detect proxy settings&quot; is enabled on
+Windows).</p>
+<h2 id="problem">Problem</h2>
+<p>Currently, WPAD is pretty slow when we&#39;re starting up Chrome - we have to query
+the local network for WPAD servers using DNS (and maybe NetBIOS), and we wait
+all the way until the resolver timeout before we try sending any HTTP requests
+if there&#39;s no WPAD server. This is a really crappy user experience, since the
+browser&#39;s basically unusable for a couple of seconds after startup if
+autoconfig is turned on and there&#39;s no WPAD server.</p>
+<h2 id="solution">Solution</h2>
+<p>There are a couple of simplifying assumptions we make:</p>
+<ul>
+<li>If there is a WPAD server, it is on the same network as us, and hence likely
+to respond to lookups far more quickly than a random internet DNS server
+would.</li>
+<li>If we get a lookup success for WPAD, there&#39;s overwhelmingly likely to be a
+live WPAD server. The WPAD script could also be large (!?) whereas the DNS
+response is necessarily small.</li>
+</ul>
+<p>Therefore our proposed solution is that when we&#39;re trying to do WPAD resolution,
+we fail very fast if the WPAD server doesn&#39;t immediately respond to a lookup
+(like, 100ms or less). If there&#39;s no WPAD server, we&#39;ll time the lookup out in
+100ms and get ourselves out of the critical path much faster. We won&#39;t time out
+lookups for explicitly-configured WPAD servers (i.e., custom PAC script URLs) in
+this fashion; those will still use the normal DNS timeout.</p>
+<p><strong>This could have bad effects on networks with slow DNS or WPAD servers</strong>, so we
+should be careful to allow users to turn this off, and we should keep statistics
+as to how often lookups succeed after the timeout.</p>
+<p>So here&#39;s what our WPAD lookup policy looks like <strong>currently</strong> in practice
+(assuming WPAD is enabled throughout):</p>
+<ul>
+<li>If there&#39;s no WPAD server on the network, we try to do a lookup for WPAD,
+time out after two seconds, and disable WPAD. Until this time, no requests
+can proceed.</li>
+<li>If there&#39;s a WPAD server and our lookup for it answers in under two seconds,
+we use that WPAD server (fetch and execute its script) and proceed with
+requests.</li>
+<li>If there&#39;s a WPAD server and our lookup for it answers after two seconds, we
+time out and do not use it (ever) until a network change triggers a WPAD
+reconfiguration.</li>
+</ul>
+<p>Here&#39;s what the <strong>proposed</strong> lookup policy looks like in practice:</p>
+<ul>
+<li>If there&#39;s no WPAD server on the network, we try to do a lookup for WPAD,
+time out after 100ms, and disable WPAD.</li>
+<li>If there&#39;s a WPAD server and our lookup for it answers in under 100ms or
+it&#39;s explicitly configured (via a custom PAC URL), we use that WPAD server.</li>
+<li>If there&#39;s a WPAD server and our lookup for it answers after 100ms, we time
+out and do not use it until a network change.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/proxy_auto_config.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/proxy_auto_config.md</a>
+  </p>
+</div>

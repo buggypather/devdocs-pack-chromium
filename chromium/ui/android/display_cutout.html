@@ -1,0 +1,215 @@
+<h1>Display Cutout and Safe Area Insets</h1>
+<p>This document outlines the architecture and data flow for handling display cutouts (i.e., &quot;notches&quot;) and their associated safe area insets in Chromium. This mechanism allows web content to utilize the entire screen on devices with cutouts, using web standards like the <code>viewport-fit</code> meta tag and the <code>env()</code> CSS function.</p>
+<p>Relevant classes:</p>
+<ul>
+<li>//content/browser/display_cutout/</li>
+<li>//components/browser_ui/display_cutout/</li>
+<li>//chrome/android/java/src/org/chromium/chrome/browser/display_cutout/</li>
+<li>//ui/android/java/src/org/chromium/ui/insets/</li>
+</ul>
+<h2 id="core-concepts">Core Concepts</h2>
+<ul>
+<li><strong>Display Cutout</strong>: A physical area on a display that is not available for rendering, typically housing cameras and sensors.</li>
+<li><strong>Safe Area Insets</strong>: The area of the screen that can be obstructed by device cutouts, status bars, or other system UI. The insets are provided as a set of distances from the edges of the viewport (top, left, bottom, right). Content can use this this inset to position themselves to ensure they are not blocked by system UI. <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/env">Read more</a></li>
+<li><strong><code>viewport-fit</code></strong>: A CSS descriptor, specified via a <code>&lt;meta&gt;</code> tag, that controls how a web page is displayed relative to the safe area. <a href="https://drafts.csswg.org/css-round-display/#viewport-fit-descriptor">Read more</a><ul>
+<li><code>auto</code> (default): The web page is confined to the safe area.</li>
+<li><code>contain</code>: The web page is scaled to fit entirely within the safe area.</li>
+<li><code>cover</code>: The web page is scaled to fill the entire viewport, including the area &quot;under&quot; the cutout. This is used to create an &quot;edge-to-edge&quot; experience.<ul>
+<li>For example, when the browser goes into fullscreen mode, pages with <code>viewport-fit=cover</code> will draw under the display cutout, while pages with other values will not.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>Useful resources:</p>
+<ol>
+<li><a href="https://developer.android.com/develop/ui/views/layout/display-cutout#:~:text=Enable%20Developer%20options.,Select%20the%20cutout%20type">https://developer.android.com/develop/ui/views/layout/display-cutout#:~:text=Enable%20Developer%20options.,Select%20the%20cutout%20type</a>.</li>
+<li><a href="https://developer.chrome.com/docs/css-ui/edge-to-edge#safe-area-insets">https://developer.chrome.com/docs/css-ui/edge-to-edge#safe-area-insets</a></li>
+</ol>
+<h2 id="architecture-overview">Architecture Overview</h2>
+<p>The implementation spans three main layers of the Chromium stack: Blink, C++ browser, Java UI. The entire process involves a round trip of information. The sequence diagrams illustrating this data flow can be found below.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/android/display_cutout_flow.png" alt="display_cutout_flow"></p>
+<p>Source see <a href="#data-flow-source">Data flow source</a>.</p>
+<h3 id="blink-renderer-process">Blink (Renderer Process)</h3>
+<p>Parses the <code>viewport-fit</code> meta tag and uses the safe area insets provided by the browser to resolve the <code>env()</code> CSS function.</p>
+<h3 id="c-browser-layer-contentbrowserdisplay_cutout">C++ Browser Layer (<code>//content/browser/display_cutout</code>)</h3>
+<p>Acts as the central hub for display cutout information.
+    -  From Blink to Java, it tracks the <code>viewport-fit</code> state for each web page and notifies the UI layer to adjust the Android window layout.
+    -  From Java to Blink, it funnels the Android window inset data back to the renderer.</p>
+<h3 id="java-ui-layer-chromeandroid-and-componentsbrowser_ui">Java UI Layer (<code>//chrome/android</code> and <code>//components/browser_ui</code>)</h3>
+<p>Interacts with the Android OS to get cutout information, sets the appropriate window flags to enable drawing under the cutout or into system bars, and provides the safe area inset values to the C++ layer.</p>
+<h2 id="viewport-fit-flow">Viewport-fit flow</h2>
+<h3 id="render-blink">Render (Blink)</h3>
+<p>[1] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/viewport_data.h"><code>blink::ViewportData</code></a></strong></p>
+<ul>
+<li>Parses the <code>&lt;meta name=&quot;viewport&quot; content=&quot;viewport-fit=...&quot;&gt;</code> tag.</li>
+<li>Notifies the browser process of the value via the <code>DisplayCutoutHost</code> Mojo interface.</li>
+</ul>
+<h3 id="c">C++</h3>
+<p>[2] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/display_cutout/safe_area_insets_host_impl.h"><code>SafeAreaInsetsHostImpl</code></a> (<code>//content/browser/display_cutout</code>)</strong></p>
+<ul>
+<li>It is the Mojo endpoint for <code>blink::mojom::DisplayCutoutHost</code>, receiving <code>NotifyViewportFitChanged</code> calls from Blink.</li>
+<li>It uses <code>DocumentUserData</code> to correctly associate a <code>viewport-fit</code> value with each document.</li>
+<li>It determines the single &quot;active&quot; frame that should control the cutout settings (the fullscreen frame takes precedence over the primary main frame).</li>
+<li>When the active frame&#39;s viewport-fit value is updated, it calls <code>WebContentsImpl::NotifyViewportFitChanged()</code> to notify observers of the change.</li>
+</ul>
+<h3 id="java-ui">Java UI</h3>
+<p>[3] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/tab/TabWebContentsObserver.java"><code>TabWebContentsObserver</code></a></strong></p>
+<ul>
+<li>Receives the signal from <code>WebContentObserver.viewportFitChanged()</code> and forwards the info to <code>DisplayCutoutTabHelper</code>.</li>
+</ul>
+<p>[4] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/android/java/src/org/chromium/chrome/browser/display_cutout/DisplayCutoutTabHelper.java"><code>DisplayCutoutTabHelper</code></a> (<code>//chrome/android/java/src/org/chromium/chrome/browser/display_cutout</code>)</strong></p>
+<ul>
+<li>It is a <code>UserData</code> scoped to a <code>Tab</code>, and creates and owns the <code>DisplayCutoutController</code>.</li>
+<li>Acts as glue code by implementing the <code>DisplayCutoutController.Delegate</code> to provide the controller with access to tab-specific objects like <code>WebContents</code> and <code>WindowAndroid</code>.</li>
+<li>The viewport-fit data is forwarded to the <code>DisplayCutoutController</code>.</li>
+</ul>
+<p>[5] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/browser_ui/display_cutout/android/java/src/org/chromium/components/browser_ui/display_cutout/DisplayCutoutController.java"><code>DisplayCutoutController</code></a> (<code>//components/browser_ui/display_cutout</code>)</strong>
+    -   Calculates the appropriate <code>LayoutParams.layoutInDisplayCutoutMode</code> window flag based on the page&#39;s <code>viewport-fit</code> value and other states (e.g., fullscreen).
+        -   <code>viewport-fit=cover</code> → <code>LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES</code>
+        -   <code>viewport-fit=contain</code> → <code>LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER</code>
+    -   Applies this flag to the Activity window, telling Android to let the app draw behind the display cutout.</p>
+<h2 id="safe-area-inset-flow">Safe area inset flow</h2>
+<h3 id="java-ui-1">Java UI</h3>
+<p>[1] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/java/src/org/chromium/ui/insets/InsetObserver.java"><code>InsetObserver</code></a> (<code>//ui/android/java/src/org/chromium/ui/insets/</code>)</strong></p>
+<ul>
+<li>Observe the Android window insets and coordinate the inset consumption.</li>
+<li>Translate the display cutout from window insets into safe area insets values based on whether the Activity is drawing edge to edge.</li>
+<li>The safe-area-inset is dispatched from <code>WindowInsetObserver.onSafeAreaChanged()</code></li>
+</ul>
+<p>[2] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/browser_ui/display_cutout/android/java/src/org/chromium/components/browser_ui/display_cutout/DisplayCutoutController.java"><code>DisplayCutoutController</code></a> (<code>//components/browser_ui/display_cutout</code>)</strong></p>
+<ul>
+<li>Implements <code>WindowInsetObserver.onSafeAreaChanged()</code> to receive safe area updates calculated based on the Android Window Insets.</li>
+<li>When it receives new insets from the <code>InsetObserver</code>, it scales the pixels into dips and pushes them to the C++ layer via a JNI call (<code>WebContents.setDisplayCutoutSafeArea()</code>).</li>
+</ul>
+<h3 id="c-browser-layer-contentbrowserdisplay_cutout-1">C++ Browser Layer (<code>//content/browser/display_cutout</code>)</h3>
+<p>[3] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/display_cutout/safe_area_insets_host_impl.h"><code>SafeAreaInsetsHostImpl</code></a></strong>:</p>
+<ul>
+<li>When <code>SetDisplayCutoutSafeArea()</code> is called from the Java layer, it sends the inset values to the active frame in Blink via the <code>blink::mojom::DisplayCutoutClient</code> interface.</li>
+<li>This class is also responsible for picking the correct &quot;Active&quot; frame that receives the <code>safe-area-inset-*</code>. At all times, only one frame will receive the safe-area-inset.<ul>
+<li>If the browser is not in fullscreen mode, the main frame of the current page will be seen as &quot;active&quot; frame.</li>
+<li>If the browser is in fullscreen mode, the frame that requested fullscreen will be seen as &quot;active&quot; frame. This is even the case when a subframe requested fullscreen mode.</li>
+<li>When active frame switches, the <code>safe-area-inset-*</code> values in the previous active frame will be reset to 0.</li>
+</ul>
+</li>
+</ul>
+<h3 id="blink-renderer">Blink (Renderer)</h3>
+<p>[4] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/display_cutout_client_impl.h"><code>blink::DisplayCutoutClientImpl</code></a> (<code>//third_party/blink/renderer/core/frame</code>)</strong></p>
+<ul>
+<li>Receives safe area insets as <code>gfx::Insets</code> from the browser process via the <code>DisplayCutoutClient</code> interface.</li>
+<li>It passes the <code>gfx::Insets</code> to the current <code>blink::Page::SetMaxSafeAreaInsets</code>.</li>
+</ul>
+<p>[5] <strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/page/page.h"><code>blink::Page</code></a> (<code>//third_party/blink/renderer/core/page/</code>)</strong></p>
+<ul>
+<li>The Page receives the <code>gfx::Insets</code> and stores them as <code>scaled_max_safe_area_insets_</code>.</li>
+<li>If the <code>DynamicSafeAreaInsetsEnabled</code> setting is active, the final applied safe area can be adjusted dynamically. The function <code>UpdateSafeAreaInsetWithBrowserControls</code> calculates the effective bottom inset by considering the height and visibility of the browser&#39;s bottom controls (like a navigation bar). As the browser controls slide into view, the bottom safe area inset is reduced, and as they slide out, the inset is increased.</li>
+<li>Once the final safe area insets are calculated, the <code>SetSafeAreaEnvVariables</code> function is called to update the CSS <code>env()</code> variables. This updates <code>safe-area-inset-*</code> and <code>safe-area-max-inset-*</code>.<ul>
+<li>See <a href="#dynamic-safe-area-inset">Dynamic safe area inset</a> for more details.</li>
+</ul>
+</li>
+</ul>
+<h2 id="end-to-end-example-viewport-fit-cover">End-to-End Example: <code>viewport-fit: cover</code></h2>
+<ol>
+<li>A web page loads with <code>&lt;meta name=&quot;viewport&quot; content=&quot;viewport-fit=cover&quot;&gt;</code>.</li>
+<li><strong>Blink</strong> parses the tag and sends <code>cover</code> to the browser process via a <code>DisplayCutoutHost</code> Mojo call.</li>
+<li><strong><code>SafeAreaInsetsHostImpl</code> (C++)</strong> receives the value. It stores <code>viewport-fit=cover</code> for the document and notifies <code>WebContentsImpl</code> of the change.</li>
+<li><code>WebContentsImpl</code> propagates this notification to its Java observers.</li>
+<li><strong><code>DisplayCutoutTabHelper</code> (Java)</strong> receives the <code>cover</code> value and passes it to the <code>DisplayCutoutController</code>.</li>
+<li><strong><code>DisplayCutoutController</code> (Java)</strong>, seeing <code>cover</code> and assuming the tab is fullscreen, sets the Activity window&#39;s <code>layoutInDisplayCutoutMode</code> to <code>LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES</code>.</li>
+<li>The <strong>Android OS</strong> responds to the window flag change by sending new safe area insets (e.g., a 48px top inset) to the app&#39;s <code>InsetObserver</code>.</li>
+<li><code>DisplayCutoutController</code>&#39;s <code>onSafeAreaChanged</code> method is triggered. It calls <code>WebContents.setDisplayCutoutSafeArea()</code> with the new insets.</li>
+<li>This JNI call reaches <strong><code>SafeAreaInsetsHostImpl</code> (C++)</strong>, which forwards the insets to the active <code>RenderFrameHost</code> in Blink.</li>
+<li><strong>Blink</strong> receives the insets. Any CSS on the page, such as <code>padding-top: env(safe-area-inset-top);</code>, is now correctly resolved, and the <code>env()</code> function returns <code>48px</code>. The page can now adjust its layout to avoid the display cutout.</li>
+</ol>
+<h2 id="dynamic-safe-area-inset-chrome-status">Dynamic Safe Area Inset (<a href="https://chromestatus.com/feature/5174306712322048">Chrome status</a>)</h2>
+<p>In certain scenarios, such as when Chrome renders <a href="https://developer.chrome.com/blog/edge-to-edge">edge-to-edge</a> content outside of fullscreen mode, the safe area insets must be adjusted dynamically. This is necessary to account for the presence of browser controls (e.g., the top and bottom toolbars), which can overlay the web content.</p>
+<p>As a user scrolls the page, the browser controls retract to offer a more immersive experience. This retraction changes the size of the viewport and, crucially, the safe area available to the web content. The <code>safe-area-inset-*</code> CSS environment variables are updated dynamically to reflect these changes.</p>
+<p>For example, as the bottom browser toolbar slides into view, the <code>safe-area-inset-bottom</code> value decreases, ensuring that web content repositions itself to remain accessible. Conversely, as the toolbar slides out of view, the inset increases.</p>
+<p>To provide web developers with a stable value for layout calculations, <code>safe-area-max-inset-*</code> has been introduced. This variable represents the maximum possible inset value, which is the state when the browser controls are fully retracted. This allows developers to design layouts against a consistent and predictable safe area boundary.</p>
+<h3 id="references">References</h3>
+<ul>
+<li>For <code>safe-area-max-inset-*</code>, see the <a href="https://github.com/w3c/csswg-drafts/issues/11019">CSSWG discussion</a> for more details.</li>
+<li>For more on browser controls, see <a href="https://source.chromium.org/chromium/chromium/src/+/main:docs/ui/android/browser_controls.md"><code>//docs/ui/android/browser_controls.md</code></a>.</li>
+</ul>
+<h2 id="appendix">Appendix</h2>
+<h3 id="data-flow-source">Data flow source</h3>
+<pre>@startuml
+title Display Cutout Data Flow
+
+box &quot;Blink (Renderer)&quot; #LightBlue
+    participant &quot;ViewportData&quot; as ViewportData
+    participant &quot;DisplayCutoutClientImpl&quot; as CutoutClient
+    participant &quot;Page&quot; as Page
+end box
+
+box &quot;C++ Browser&quot; #LightGreen
+    participant &quot;SafeAreaInsetsHostImpl&quot; as InsetsHost
+end box
+
+box &quot;Java UI&quot; #LightYellow
+    participant &quot;TabWebContentsObserver&quot; as TabObserver
+    participant &quot;DisplayCutoutTabHelper&quot; as TabHelper
+    participant &quot;DisplayCutoutController&quot; as CutoutController
+    participant &quot;InsetObserver&quot; as InsetObserver
+end box
+
+participant &quot;Android Window&quot; as AndroidOS
+
+== Flow 1: viewport-fit value (Blink to Java) ==
+
+autonumber &quot;&lt;b&gt;[1]&quot;
+activate ViewportData
+ViewportData -&gt; InsetsHost: NotifyViewportFitChanged()
+deactivate ViewportData
+
+activate InsetsHost
+InsetsHost -&gt; TabObserver: WebContentsObserver.viewportFitChanged()
+deactivate InsetsHost
+
+activate TabObserver
+TabObserver -&gt; TabHelper: forwards viewport-fit
+deactivate TabObserver
+
+activate TabHelper
+TabHelper -&gt; CutoutController: forwards viewport-fit
+deactivate TabHelper
+
+activate CutoutController
+CutoutController -&gt; AndroidOS: Set Window LayoutParams
+deactivate CutoutController
+
+
+== Flow 2: safe-area-inset value (Java to Blink) ==
+
+autonumber &quot;&lt;b&gt;[2]&quot;
+activate AndroidOS
+AndroidOS -&gt; InsetObserver: Window Insets Changed
+deactivate AndroidOS
+
+activate InsetObserver
+InsetObserver -&gt; CutoutController: onSafeAreaChanged()
+deactivate InsetObserver
+
+activate CutoutController
+CutoutController -&gt; InsetsHost: setDisplayCutoutSafeArea() [JNI]
+deactivate CutoutController
+
+activate InsetsHost
+InsetsHost -&gt; CutoutClient: SetSafeArea()
+deactivate InsetsHost
+
+activate CutoutClient
+CutoutClient -&gt; Page: SetMaxSafeAreaInsets()
+note right of Page
+  Page receives insets and
+  updates CSS env() variables.
+end note
+deactivate CutoutClient
+
+@enduml</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/display_cutout.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/android/display_cutout.md</a>
+  </p>
+</div>

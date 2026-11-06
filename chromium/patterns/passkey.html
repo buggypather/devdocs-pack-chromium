@@ -1,0 +1,46 @@
+<h1>The Passkey Pattern</h1>
+<p>For the Chromium implementation of this pattern, see
+<a href="https://github.com/chromium/chromium/blob/HEAD/base/types/pass_key.h">//base/types/pass_key.h</a>.</p>
+<p>The Passkey pattern is used when you need to expose a subset of a class&#39;s
+methods to another class in a more granular way than simply friending the other
+class. In essence, it involves creating a &quot;passkey&quot; class that can only be
+constructed by specific other classes, and requiring an instance of that passkey
+class to be passed in when calling methods you wish to restrict the use of. It
+is used like this:</p>
+<pre data-language="cpp">#include &quot;base/types/pass_key.h&quot;
+
+class Foo {
+ public:
+  Foo();
+  ~Foo();
+
+  void NormalPublicMethod();
+  bool AnotherNormalPublicMethod(int a, int b);
+
+  using BarPassKey = base::PassKey&lt;Bar&gt;;
+
+  void HelpBarOut(BarPasskey, ...);
+};
+
+...
+
+void Bar::DoStuff() {
+  foo-&gt;HelpBarOut(Foo::BarPasskey(), ...);
+}</pre>
+<p>The private constructor on <code>Foo::BarPasskey</code> prevents any class other than <code>Bar</code>
+from constructing a <code>Foo::BarPasskey</code>, which means that:</p>
+<ul>
+<li>Only <code>Bar</code> can call those methods</li>
+<li><code>Bar</code> can delegate the ability to call those methods to other
+classes/functions by passing them a <code>Foo::BarPasskey</code> instance</li>
+</ul>
+<p>This method is effectively free at runtime - a few extra bytes of argument space
+are used to pass in the Passkey object.</p>
+<p>It is encouraged to leave the <code>BarPasskey</code> parameter unnamed to reinforce that it
+carries no semantic information and is not actually used for anything.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/passkey.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/passkey.md</a>
+  </p>
+</div>

@@ -1,0 +1,232 @@
+<h1>Automated testing for Chrome for iOS</h1>
+<p>See the <a href="build_instructions">instructions</a> for how to check out and build Chromium for iOS.</p>
+<p>Automated testing is a crucial part of ensuring the quality of Chromium.</p>
+<h2 id="unit-testing">Unit testing</h2>
+<p>Unit testing is done via gtests. The easiest way to run a unit test is to use
+the wrapper scripts generated at build time:</p>
+<pre data-language="sh">&lt;output directory&gt;/bin/run_&lt;target_name&gt; [options]</pre>
+<p>The wrapper scripts take care of invoking <code>//ios/build/bots/scripts/run.py</code>.
+In general, you need to pass at least <code>--out-dir</code> (a directory where test
+results will be stored), <code>--platform</code> (a device available to the simulator),
+<code>--xcode-build</code> (obtained via e.g. About Xcode) and <code>--version</code> (iOS version
+to run). The <code>--gtest_filter</code> option is also supported.</p>
+<p>A more complete example looks like this:</p>
+<pre data-language="sh">out/Debug-iphonesimulator/run_base_unittests \
+    --gtest_filter=Base64Test.Basic \
+    --platform &quot;iPhone 16&quot; \
+    --version 18.2 \
+    --xcode-build 16c5032a</pre>
+<h2 id="integration-testing">Integration testing</h2>
+<p><a href="https://github.com/google/EarlGrey/tree/earlgrey2">EarlGrey</a> (EG2) is the integration testing framework used by Chromium for iOS.</p>
+<h3 id="writing-earlgrey-tests">Writing EarlGrey tests</h3>
+<h4 id="before-you-start">Before you start</h4>
+<ul>
+<li>Just write a unit test if the purpose of your test does not involve UI.</li>
+<li>Learn about EarlGrey test framework principles and APIs in <a href="https://github.com/google/EarlGrey/tree/earlgrey2">EarlGrey</a>.</li>
+<li>Learn about <a href="https://developer.apple.com/documentation/xctest/defining_test_cases_and_test_methods?language=objc">Defining Test Cases and Test Methods</a> from Apple.</li>
+</ul>
+<h4 id="creating-test-files-and-writing-eg2-tests">Creating test files and writing EG2 tests</h4>
+<ol>
+<li><p>EG2 test files are ended with _egtest.mm, and usually located within the same
+directory of the UI code you wish to test.</p>
+</li>
+<li><p>Basic imports of a EG2 test file:</p>
+<ul>
+<li>You’ll have to include:</li>
+</ul>
+<pre>#import &quot;ios/chrome/test/earl_grey/chrome_test_case.h&quot;</pre>
+<ul>
+<li>You’ll most likely find util functions in these files helpful.</li>
+</ul>
+<pre>#import &quot;ios/chrome/test/earl_grey/chrome_earl_grey.h&quot;
+#import &quot;ios/chrome/test/earl_grey/chrome_earl_grey_ui.h&quot;
+#import &quot;ios/chrome/test/earl_grey/chrome_matchers.h&quot;</pre>
+<ul>
+<li>Beside these, directly import an EG2 header for an EG2 API you are using.</li>
+</ul>
+</li>
+<li><p>TestCase/testMethods definitions. Create <code>SomeGreatTestCase</code> as a subclass of
+<code>ChromeTestCase</code>. Create test methods, eg <code>-(void)testMyGreatUIFeature {...}</code>,
+and put UI actions within the test methods. </p>
+<ul>
+<li>Put your setup and tear down code for the <em>TestCase</em> in 
+<code>+(void)setUpForTestCase</code> and <code>+tearDown</code>. These will run once before and
+after all tests for the test class.</li>
+<li>Put your setup and tear down code for each <em>test method</em> in <code>-(void)setUp</code>
+and <code>-(void)tearDown</code>. These will run before and after every
+<code>-(void)testMethod</code> in the file.</li>
+</ul>
+</li>
+<li><p>Writing test contents. See the chrome helpers (imports in 2.) as well as
+<a href="https://github.com/google/EarlGrey/blob/master/docs/api.md">EarlGrey APIs</a> to write a UI action/assertion in your testMethod.</p>
+</li>
+</ol>
+<h4 id="interacting-with-the-app-in-a-test">Interacting with the app in a test</h4>
+<h5 id="relaunch-app-with-different-flags">Relaunch app with different flags</h5>
+<p>In EG2 tests, the test process launches the host app process at the beginning,
+then runs UI actions/assertions in the app. To pass args or feature flags to the
+app at initial launching, or relaunch the app in the middle of your test, see
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ios/testing/earl_grey/app_launch_manager.h;drc=d0889865de20c5b3bc59d58674eb2dcc02dd2269;l=47">this AppLaunchManager API</a>.</p>
+<h5 id="accessing-app-internals">Accessing app internals</h5>
+<p>EG2 test targets are built with test-related code but without app code.</p>
+<p>To access anything from the app side, use an &quot;app interface&quot;. App interface is
+implemented as a class that lives in the app process, but can be accessed in the
+test process through <a href="https://github.com/google/eDistantObject">eDO</a>. You can include the header in your test side code
+and call class methods of the interface class. The methods will execute code in
+the app process and can return basic Objective-C types. See this <a href="https://cs.chromium.org/chromium/src/ios/chrome/browser/metrics/model/metrics_app_interface.h">Example of App
+ Interface</a>.</p>
+<p>See <code>eg_test_support+eg2</code> (test side utilities) and <code>eg_app_support+eg2</code> (app
+side utilities) targets in <code>BUILD.gn</code> files to learn how test utilities are
+organized in targets. If you added an app side helper (app interface), you’ll
+also need to include your new <code>eg_app_support+eg2</code> target in
+<code>//ios/chrome/test/earl_grey/BUILD.gn</code>’s <code>eg_app_support+eg2</code> target. (<a href="https://chromium-review.googlesource.com/c/chromium/src/+/1919147">Example
+ CL adding App Interface</a>).</p>
+<p>Note that if you create an App interface, you can’t build the app interface
+class in your eg2_tests target, but you need to include and refer to it. To
+satisfy the linker, you&#39;ll need to create a <code>my_test_app_interface_stub.mm</code>
+file with the following content in it and build it as a dependency of your
+tests that use the app interface.</p>
+<pre data-language="objc">#import &quot;ios_internal/chrome/test/earl_grey2/my_test_app_interface.h&quot;
+
+#import &quot;ios/testing/earl_grey/earl_grey_test.h&quot;
+
+GREY_STUB_CLASS_IN_APP_MAIN_QUEUE(MyTestAppInterface)</pre>
+<p>If you don&#39;t you&#39;ll get linker errors that read like “Undefined symbols for
+architecture… MyTestAppInterface”</p>
+<h5 id="header-documentation-and-model-context-protocol-mcp-conformance">Header documentation and Model Context Protocol (MCP) conformance</h5>
+<p>Header discovery for the EarlGrey MCP server driver
+(<code>//ios/testing/earl_grey_mcp/</code>) is dictated by
+<code>//ios/testing/earl_grey_mcp/mcp_domains.yaml</code>. Headers matching the domain
+rules in <code>mcp_domains.yaml</code> (including feature <code>*app_interface.h</code> classes and
+test-side <code>*earl_grey.h</code> helpers) are ingested to dynamically expose testing
+interfaces as strongly-typed tools for AI agents.</p>
+<p>To guarantee complete tool schemas and prevent overflowing LLM context limits,
+<code>//ios/PRESUBMIT.py</code> enforces the following invariants on all matched headers:</p>
+<ol>
+<li><strong>Method Descriptions</strong>: Every class (<code>+</code>) and instance (<code>-</code>) method
+declaration must have a preceding comment block (<code>// ...</code>) describing its
+behavior. Block comments (<code>/* ... */</code>) are not allowed.</li>
+<li><strong>Parameter Enclosure</strong>: Every parameter (except <code>error:(NSError**)</code>, which
+is reserved for error reporting) must be documented in the comment with its
+exact parameter name enclosed in backticks (e.g. <code>`&lt;paramName&gt;`</code>).</li>
+<li><strong>Return Value Descriptions</strong>: All non-<code>void</code> return types must be described
+(e.g., <code>Returns ...</code>).</li>
+<li><strong>Category Grouping &amp; Breadth Caps</strong>: Use <code>#pragma mark - &lt;Category&gt;</code> to
+group related methods. Classes with more than 35 methods must be partitioned
+into categories containing at most 35 methods each, with no more than 35
+categories per class.</li>
+<li><strong>Domain Classification (<code>mcp_domains.yaml</code>)</strong>: All exposed headers are
+mapped into functional domain groups declared in
+<code>//ios/testing/earl_grey_mcp/mcp_domains.yaml</code>. When adding a new App
+Interface or EarlGrey helper header:<ul>
+<li>Verify that its file path matches an <code>includes</code> glob pattern in
+<code>mcp_domains.yaml</code> (e.g., <code>ios/chrome/browser/**/test/*app_interface.h</code>).</li>
+<li>If introducing a new testing domain or placing headers in a directory not
+covered by existing glob patterns, add or update the domain rule in
+<code>mcp_domains.yaml</code>.</li>
+<li>Headers not covered by any domain rule are rejected by
+<code>extract_eg_metadata.py</code> and excluded from MCP tool registration.</li>
+<li>If creating private backend interfaces or plumbing that should not be
+exposed directly to agents, list them under <code>excludes</code> in
+<code>mcp_domains.yaml</code>.</li>
+</ul>
+</li>
+</ol>
+<h4 id="creating-test-targets-and-adding-the-target-to-test-suites">Creating test targets and adding the target to test suites</h4>
+<ol>
+<li>Create a test target. Add a target(<code>source_set</code>) named &quot;eg2_tests&quot; into the
+closest <code>BUILD.gn</code> file. Put the test file into the <code>sources</code> array and put the
+targets containing headers used in your test file into <code>deps</code> array. This is to
+organize test source files and dependencies so that the GN build system can
+correctly build the test module. The skeleton of the target:</li>
+</ol>
+<pre>source_set(&quot;eg2_tests&quot;) {
+  configs += [
+    &quot;//build/config/ios:xctest_config&quot;,
+  ]
+  testonly = true
+  sources = [
+    &quot;some_egtest.mm&quot;
+  ]
+  deps = [
+    &quot;//ios/chrome/test/earl_grey:eg_test_support+eg2&quot;,
+    &quot;//ios/testing/earl_grey:eg_test_support+eg2&quot;,
+  ]
+  frameworks = [ &quot;UIKit.framework&quot; ]
+}</pre>
+<ol start="2">
+<li>Include your test target in the <code>deps</code> array of a suitable suite in
+<code>//src/ios/chrome/test/earl_grey2/BUILD.gn</code>.</li>
+<li>Optional: If you feel like your new test should be in a new suite, or you
+want to delete an existing suite to make tests better organized, you’ll need to
+change the suites in <code>//src/ios/chrome/test/earl_grey2/BUILD.gn</code> in the format
+of existing ones. (Do not forget to <a href="https://chromium.googlesource.com/chromium/src/testing/+/refs/heads/main/buildbot/README.md#buildbot-testing-configuration-files">config the bots</a> so the new suite can run
+in infra.)</li>
+<li>Ensure your dependencies are correct.</li>
+</ol>
+<pre>$ gn gen --check out/Debug-iphonesimulator</pre>
+<h3 id="running-earlgrey-tests">Running EarlGrey tests</h3>
+<p>EarlGrey tests are based on Apple&#39;s <a href="https://developer.apple.com/documentation/xctest">XCUITest</a>.</p>
+<h4 id="running-tests-from-xcode">Running tests from Xcode</h4>
+<ol>
+<li>If you added a new test file / suite, run <code>gclient runhooks</code> to sync for the
+list of tests in Xcode.</li>
+<li>Run a test suite(module), TestCase or testMethod in test navigator.
+Xcode will build the targets and run the test(s) you choose. Alternatively, 
+use ⌘+U to run all the tests. See Apple&#39;s <a href="https://developer.apple.com/library/archive/documentation/DeveloperTools/Conceptual/testing_with_xcode/chapters/05-running_tests.html">Running Tests and Viewing Results</a>.</li>
+<li>You can pass extra arguments to the app process with <code>--extra-app-args</code>, e.g.
+<code>--extra-app-args=&#39;--enable-features=Foo&#39;</code>.<ul>
+<li>This might not work consistently as tests can re-launch the app with
+ arbitrary command-line arguments.</li>
+</ul>
+</li>
+</ol>
+<h4 id="running-from-the-command-line">Running from the command-line</h4>
+<p>EG2 tests can run in the command line with test runner scripts. You’ll need to
+build the targets before running tests in cmd. This is used by continuous
+integration infra and thus not user friendly. Running UI tests directly in Xcode
+is recommended.</p>
+<p>Important notes:</p>
+<ul>
+<li>The test runner can invoke mac_toolchain to install a new Xcode of the version
+specified to the path specified. You may want to choose a different path from
+your daily use Xcode.</li>
+<li>If test_cases is empty in --args-json, all tests will run. Specifying a
+testMethod to run is currently not supported in the test runner.</li>
+</ul>
+<p>Example:</p>
+<pre>src/ios/build/bots/scripts/run.py
+    --app
+    src/out/Debug-iphonesimulator/ios_chrome_ui_eg2tests_module-Runner.app
+    --host-app
+    src/out/Debug-iphonesimulator/ios_chrome_eg2tests.app
+    --args-json
+    {&quot;test_args&quot;: [], &quot;xctest&quot;: false, &quot;test_cases&quot;: [&quot;ReadingListTestCase&quot;],
+    &quot;restart&quot;: false, &quot;xcode_parallelization&quot;: true, &quot;xcodebuild_device_runner&quot;:
+    false}
+    --out-dir
+   path/to/output/dir
+    --retries
+    3
+    --shards
+    1
+    --xcode-build-version
+    11c29
+    --mac-toolchain-cmd
+    path/to/mac_toolchain
+    --xcode-path
+    path/to/Xcode.app
+    --replay-path
+    NO_PATH
+    --platform
+    iPad (6th generation)
+    --version
+    13.3</pre>
+<p>The invocation args are logged. You can find the latest arg format at the
+beginning of stdout from an infra test shard if the above doesn&#39;t work.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ios/testing.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ios/testing.md</a>
+  </p>
+</div>

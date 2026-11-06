@@ -1,0 +1,79 @@
+<h1>C++ to Rust Cheat Sheet</h1>
+<p>This document provides a &quot;translation&quot; of
+C++ concepts and APIs into their Rust equivalents.</p>
+<h2 id="other-resources">Other resources</h2>
+<p>The document focuses on things that seem relevant and helpful to
+Chromium engineers.  If you are looking for a more generic C++ to Rust
+mapping, then try the following resources:</p>
+<ul>
+<li><a href="https://goto.google.com/rs-for-g3cc">go/rs-for-g3cc</a></li>
+<li>TODO: Add more resources (ideally, public ones...)</li>
+</ul>
+<h2 id="check-dcheck-dcheck_eq-dcheck_is_on"><code>CHECK</code>, <code>DCHECK</code>, <code>DCHECK_EQ</code>, <code>DCHECK_IS_ON</code></h2>
+<p><code>CHECK(condition) &lt;&lt; &quot;msg&quot;</code> from C++ is spelled
+<code>assert!(condition, msg)</code> in Rust - see also
+the official documentation of
+<a href="https://doc.rust-lang.org/std/macro.assert.html">the <code>assert</code> macro</a>.
+There are also
+<a href="https://doc.rust-lang.org/std/macro.assert_eq.html"><code>assert_eq</code></a>
+and
+<a href="https://doc.rust-lang.org/std/macro.assert_ne.html"><code>assert_ne</code></a>
+macros, but no equivalents of <code>CHECK_GT</code>, <code>CHECK_LE</code>, etc.</p>
+<p><code>DCHECK(condition) &lt;&lt; &quot;msg&quot;</code> from C++ is spelled
+<code>debug_assert!(condition, msg)</code> in Rust - see also
+the official documentation of
+<a href="https://doc.rust-lang.org/std/macro.debug_assert.html">the <code>debug_assert</code> macro</a>.
+There are also
+<a href="https://doc.rust-lang.org/std/macro.debug_assert_eq.html"><code>debug_assert_eq</code></a>
+and
+<a href="https://doc.rust-lang.org/std/macro.debug_assert_ne.html"><code>debug_assert_ne</code></a>
+macros, but no equivalents of <code>DCHECK_GT</code>, <code>DCHECK_LE</code>, etc.</p>
+<p><code>#if DCHECK_IS_ON()</code> is spelled as <code>#[cfg(debug_assertions)]</code> - see also
+the official documentation of
+<a href="https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg-attribute">the <code>cfg</code> attribute</a>.
+Note that <code>build/config/BUILD.gn</code>
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:build/config/BUILD.gn;l=50-53;drc=5f2c0dbe2bf823c4cb9af69f43b38ae68b5e9cd7">consistently applies</a>
+<code>dcheck_always_on</code> <em>both</em> to C++ and Rust, which means that
+<code>debug_assert!</code> is active exactly when <code>DCHECK</code> is active
+and should in general behave in a similar way.</p>
+<p><code>NOTREACHED() &lt;&lt; &quot;Foo is &quot; &lt;&lt; foo</code> from C++ is spelled as <code>panic!(&quot;Foo is {foo}&quot;)</code> in Rust.  Rust panics (triggered via <code>panic!</code>, <code>assert!</code>,
+<code>debug_assert!</code>, etc.) are translated into <code>LOG(FATAL)</code> calls and therefore
+should result in the same behaviour wrt printing a task trace, crash keys,
+communicating the crash to the test harness, etc.</p>
+<p>TODO(<a href="https://crbug.com/343218479">https://crbug.com/343218479</a>): Static linking of Rust standard library
+means that Chromium&#39;s custom panic hook is only active in <code>//base</code> component
+and not in other binaries.</p>
+<h2 id="if-buildflag"><code>#if</code>, <code>BUILDFLAG</code></h2>
+<p><code>#if BUILDFLAG(IS_MAC)</code> from C++ is spelled
+<code>#[cfg(target_os = &quot;macos&quot;)]</code> in Rust - see also
+the official documentation of
+<a href="https://doc.rust-lang.org/reference/conditional-compilation.html#the-cfg-attribute">the <code>cfg</code> attribute</a>
+and of
+<a href="https://doc.rust-lang.org/reference/conditional-compilation.html#set-configuration-options">the conditions natively understood by the Rust compiler</a>.</p>
+<p>Chromium-specific build settings are typically exposed to C++ and Rust
+via <a href="https://github.com/chromium/chromium/blob/HEAD/build/buildflag_header.gni"><code>//build/buildflag_header.gni</code></a>
+which has
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:build/buildflag_header.gni;l=59-76;drc=93d7cdf927a4cb81327613abbcfb66ddff0ab330">documentation comments</a>
+that describe how to 1) depend on the
+appropriate Rust-specific build <code>config</code> and 2) how to check the build
+configuration from an <code>.rs</code> file.  For example,
+<code>#if BUILDFLAG(CHROMIUM_BRANDING)</code> from C++ is spelled
+<code>#[cfg(CHROMIUM_BRANDING)]</code> in Rust.</p>
+<p>Note that Rust integration in <code>//build/buildflag_header.gni</code> only supports
+boolean configuration values.  TODO: Can this be done by
+setting (undocumented...) <code>rustenv</code> attribute in <code>rust_static_library</code> and
+reading the value using
+<a href="https://doc.rust-lang.org/std/macro.env.html">the <code>env!</code> macro</a>?</p>
+<h2 id="logerror--"><code>LOG(ERROR) &lt;&lt; ...</code></h2>
+<p><code>LOG(ERROR) &lt;&lt; &quot;Foo is &quot; &lt;&lt; foo</code> from C++ is spelled as
+<code>log::error!(&quot;Foo is {foo}&quot;)</code> in Rust.
+This Rust code depends on
+<a href="https://docs.rs/log">the <code>log</code> crate</a>
+which can be used with the following <code>.gn</code> snippet:
+<code>deps = [ &quot;//third_party/rust/log/v0_4:lib&quot; ]</code>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/cpp_to_rust_cheat_sheet.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/cpp_to_rust_cheat_sheet.md</a>
+  </p>
+</div>

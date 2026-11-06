@@ -1,0 +1,312 @@
+<h1>Post-Spectre Threat Model Re-Think</h1>
+<p>Contributors: awhalley, creis, dcheng, jschuh, jyasskin, lukasza, mkwst, nasko,
+palmer, tsepez. Patches and corrections welcome!</p>
+<p>Last Updated: 27 April 2021</p>
+<h2 id="introduction">Introduction</h2>
+<p>In light of <a href="https://spectreattack.com/">Spectre/Meltdown</a>, we needed to
+re-think our threat model and defenses for Chrome renderer processes. Spectre is
+a new class of hardware side-channel attack that affects (among many other
+targets) web browsers. This document describes the impact of these side-channel
+attacks and our approach to mitigating them.</p>
+<blockquote>
+<p>The upshot of the latest developments is that the folks working on this from
+the V8 side are increasingly convinced that there is no viable alternative to
+Site Isolation as a systematic mitigation to SSCAs [speculative side-channel
+attacks]. In this new mental model, we have to assume that user code can
+reliably gain access to all data within a renderer process through
+speculation. This means that we definitely need some sort of ‘privileged/PII
+data isolation’ guarantees as well, for example ensuring that password and
+credit card info are not speculatively loaded into a renderer process without
+user consent. — Daniel Clifford, in private email</p>
+</blockquote>
+<p>In fact, any software that both (a) runs (native or interpreted) code from more
+than one source; and (b) attempts to create a security boundary inside a single
+address space, is potentially affected. For example, software that processes
+document formats with scripting capabilities, and which loads multiple documents
+from different sources into the same process, may need to take defense measures
+similar to those described here.</p>
+<h3 id="problem-statement">Problem Statement</h3>
+<h4 id="active-web-content-renderer-processes">Active Web Content: Renderer Processes</h4>
+<p>We must assume that <em>active web content</em> (JavaScript, WebAssembly, Native
+Client, Flash, PDFium, …) will be able to read any and all data in the address
+space of the process that hosts it. Multiple independent parties have developed
+proof-of-concept exploits that illustrate the effectiveness and reliability of
+Spectre-style attacks. The loss of cross-origin confidentiality inside a single
+process is thus not merely theoretical.</p>
+<p>The implications of this are far-reaching:</p>
+<ul>
+<li>An attacker that can exploit Spectre can bypass certain native code exploit
+mitigations, even without an infoleak bug in software.<ul>
+<li>ASLR</li>
+<li>Stack canaries</li>
+<li>Heap metadata canaries</li>
+<li>Potentially certain forms of control-flow integrity</li>
+</ul>
+</li>
+<li>We must consider any data that gets into a renderer process to have no
+confidentiality from any origins running in that process, regardless of the
+same origin policy.</li>
+</ul>
+<p>Additionally, attackers may develop ways to read memory from other userland
+processes (e.g. a renderer reading the browser’s memory). We do not include
+those attacks in our threat model. The hardware, microcode, and OS must
+re-establish the process boundary and the userland/kernel boundary. If the
+underlying platform does not enforce those boundaries, there’s nothing an
+application (like a web browser) can do.</p>
+<h4 id="gpu-process">GPU Process</h4>
+<p>Chrome’s GPU process handles data from all origins in a single process. It is
+not currently practical to isolate different sites or origins into their own GPU
+processes. (At a minimum, there are time and space efficiency concerns; we are
+still trying to get Site Isolation shipped and are actively resolving issues
+there.)</p>
+<p>However, WebGL exposed high-resolution clocks that are useful for exploiting
+Spectre. It was possible to temporarily remove some of them, and to coarsen
+another, with minimal breakage of web compatibility, and so <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=808744">that has been
+done</a>. However, we
+expect to reinstate the clocks on platforms where Site Isolation is on by
+default. (See <a href="#attenuating-clocks">Attenuating Clocks, below</a>.)</p>
+<p>We do not currently believe that, short of full code execution, an attacker can
+control speculative execution inside the GPU process to the extent necessary to
+exploit Spectre-like vulnerabilities. <a href="https://www.google.com/about/appsecurity/chrome-rewards/index.html">As always, evidence to the contrary is
+welcome!</a></p>
+<h4 id="nastier-threat-models">Nastier Threat Models</h4>
+<p>It is generally safest to assume that an arbitrary read-write primitive in the
+renderer process will be available to the attacker. The richness of the
+attack/API surface available in a rendering engine makes this plausible.
+However, this capability is not a freebie the way Spectre is — the attacker must
+actually find 1 or more bugs that enable the RW primitive.</p>
+<p>Site Isolation (SI) gets us closer to a place where origins face in-process
+attacks only from other origins in their <code>SiteInstance</code>, and not from any
+arbitrary origin. (Origins that include script from hostile origins will still
+be vulnerable, of course.) However, <a href="#multiple-origins-within-a-siteinstance">there may be hostile origins in the same
+process</a>.</p>
+<p>Strict origin isolation is not yet being worked on; we must first ship SI on by
+default. It is an open question whether strict origin isolation will turn out to
+be feasible.</p>
+<h2 id="defensive-approaches">Defensive Approaches</h2>
+<p>These are presented in no particular order, with the exception that Site
+Isolation is currently the best and most direct solution.</p>
+<h3 id="site-isolation">Site Isolation</h3>
+<p>The first order solution is to simply get cross-origin data out of the Spectre
+attacker’s address space. <a href="https://www.chromium.org/Home/chromium-security/site-isolation">Site
+Isolation</a> (SI)
+more closely aligns the web security model (the same-origin policy) with the
+underlying platform’s security model (separate address spaces and privilege
+reduction).</p>
+<p>SI still has some bugs that need to be ironed out before we can turn it on by
+default, both on Desktop and on Android. As of May 2018 we believe we can turn
+it on by default, on Desktop (but not Android yet) in M67 or M68.</p>
+<p>On iOS, where Chrome is a WKWebView embedder, we must rely on <a href="https://webkit.org/blog/8048/what-spectre-and-meltdown-mean-for-webkit/">the mitigations
+that Apple is
+developing</a>.</p>
+<p>All major browsers are working on some form of site isolation, and <a href="https://groups.google.com/a/chromium.org/forum/#!forum/isolation-policy">we are
+collaborating publicly on a way for sites to opt in to
+isolation</a>,
+to potentially make implementing and deploying site isolation easier. (Chrome
+Desktop’s Site Isolation will be on by default, regardless, in the M67 – M68
+timeframe.)</p>
+<h4 id="limitations">Limitations</h4>
+<h5 id="incompleteness-of-corb">Incompleteness of CORB</h5>
+<p>Site Isolation depends on <a href="https://chromium.googlesource.com/chromium/src/+/main/content/browser/loader/cross_origin_read_blocking_explainer.md">cross-origin read
+blocking</a>
+(CORB; formerly known as cross-site document blocking or XSDB) to prevent a
+malicious website from pulling in sensitive cross-origin data. Otherwise, an
+attacker could use markup like <code>&lt;img src=&quot;http://example.com/secret.json&quot;&gt;</code> to
+get cross-origin data within reach of Spectre or other OOB-read exploits.</p>
+<p>As of M65, CORB protects:</p>
+<ul>
+<li>HTML, JSON, and XML responses.
+Protection requires the resource to be served with the correct
+<code>Content-Type</code> header. <a href="https://www.chromium.org/Home/chromium-security/ssca">We recommend using <code>X-Content-Type-Options: nosniff</code></a>.</li>
+<li>text/plain responses which sniff as HTML, XML, or JSON.</li>
+</ul>
+<p>Today, CORB doesn’t protect:</p>
+<ul>
+<li>Responses without a <code>Content-Type</code> header.</li>
+<li>Particular content types:<ul>
+<li><code>image/*</code></li>
+<li><code>video/*</code></li>
+<li><code>audio/*</code></li>
+<li><code>text/css</code></li>
+<li><code>font/*</code></li>
+<li><code>application/javascript</code></li>
+<li>PDFs, ZIPs, and other unrecognized MIME types</li>
+</ul>
+</li>
+<li>Responses to requests initiated from the Flash plugin.</li>
+</ul>
+<p>Site operators should read and follow, where applicable, <a href="https://developers.google.com/web/updates/2018/02/meltdown-spectre">our guidance for
+maximizing CORB and other defensive
+features</a>.
+(There is <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=806070">an open bug to add a CORB evaluator to
+Lighthouse</a>.)</p>
+<h5 id="multiple-origins-within-a-siteinstance">Multiple Origins Within A <code>SiteInstance</code></h5>
+<p>A <em>site</em> is defined as the effective TLD + 1 DNS label (“eTLD+1”) and the URL
+scheme. This is a broader category than the origin, which is the scheme, entire
+hostname, and port number. All of these origins belong to the same site:</p>
+<ul>
+<li>https, <a href="http://www.example.com">www.example.com</a>, 443</li>
+<li>https, <a href="http://www.example.com">www.example.com</a>, 8443</li>
+<li>https, goaty-desktop.internal.example.com, 443</li>
+<li>https, compromised-and-hostile.unmaintained.example.com, 8443</li>
+</ul>
+<p>Therefore, even once we have shipped SI on all platforms and have shaken out all
+the bugs, renderers will still not be perfect compartments for origins. So we
+will still need to take a multi-faceted approach to UXSS, memory corruption, and
+OOB-read attacks like Spectre.</p>
+<p>Note that we are looking into the possibility of disabling assignments to
+<code>document.domain</code> (via <a href="https://wicg.github.io/origin-policy">origin-wide</a>
+application of <a href="https://wicg.github.io/feature-policy/">Feature Policy</a> or the
+like). This would open the possibility that we could isolate at the origin
+level.</p>
+<h5 id="memory-cost">Memory Cost</h5>
+<p>With SI, Chrome tends to spawn more renderer processes, which tends to lead to
+greater overall memory usage (conservative estimates seem to be about 10%). On
+many Android devices, it is more than 10%, and this additional cost can be
+prohibitive. However, each renderer is smaller and shorter-lived under Site
+Isolation.</p>
+<h5 id="plug-ins">Plug-Ins</h5>
+<h6 id="pdfium">PDFium</h6>
+<p>Chrome uses different PPAPI processes per origin, for secure origins. (We
+tracked this as <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=809614">Issue
+809614</a>.)</p>
+<h6 id="flash">Flash</h6>
+<p>Click To Play greatly reduces the risk that Flash-borne Spectre (and other)
+exploits will be effective at scale.
+Even so,
+<a href="https://crbug.com/816318">we might want to consider teaching CORB about Flash flavour of CORS</a>.</p>
+<h5 id="android-webview">Android <code>WebView</code></h5>
+<p>Android <code>WebView</code>s run in their own process as of Android O, so the hosting
+application gets protection from malicious web content. However, all origins are
+run in the same <code>WebView</code> process.</p>
+<h3 id="ensure-user-intent-when-sending-data-to-a-renderer">Ensure User Intent When Sending Data To A Renderer</h3>
+<p>Before copying sensitive data into a renderer process, we should somehow get the
+person’s affirmative knowledge and consent. This has implications for all types
+of form auto-filling: normal form data, passwords, payment instruments, and any
+others. It seems like we are <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=802993">currently in a pretty good place on that
+front</a>, with one
+exception: usernames and passwords get auto-filled into the shadow DOM, and then
+revealed to the real DOM on a (potentially forged?) user gesture. These
+credentials are origin-bound, however.</p>
+<p>The <a href="https://developer.mozilla.org/en-US/docs/Web/API/Credential_Management_API">Credential Management
+API</a>
+still poses a risk, exposing usernames/passwords without a gesture for the
+subset of users who&#39;ve accepted the auto-sign-in mechanism.</p>
+<p>What should count as a secure gesture is a gesture on relevant, well-labeled
+browser chrome, handled in the browser process. Tracking the gesture in the
+renderer, that can be forged by web content that compromises the renderer, does
+not suffice.</p>
+<h4 id="challenge">Challenge</h4>
+<p>We must enable a good user experience with autofill, payments, and passwords,
+while also not ending up with a browser that leaks these super-important classes
+of data. (A good password management experience is itself a key security goal,
+after all.)</p>
+<h3 id="reducing-or-eliminating-speculation-gadgets">Reducing Or Eliminating Speculation Gadgets</h3>
+<p>Exploiting Spectre requires that the attacker can find (in V8, Blink, or Blink
+bindings), generate, or cause to be generated code ‘gadgets’ that will read out
+of bounds when speculatively executed. By exerting more control over how we
+generate machine code from JavaScript, and over where we place objects in memory
+relative to each other, we can reduce the prevalence and utility of these
+gadgets. The V8 team has been <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=798964">landing such code generation
+changes</a>
+continually since January 2018.</p>
+<p>Of the known attacks, we believe it’s currently only feasible to try to mitigate
+variant 1 with code changes in C++. We will need the toolchain and/or platform
+support to mitigate other types of speculation attacks. We could experiment with
+inserting <code>LFENCE</code> instructions or using
+<a href="https://support.google.com/faqs/answer/7625886">Retpoline</a> before calling into
+Blink.</p>
+<p>PDFium uses V8 for its JavaScript support. To the extent that we rely on V8
+mitigations for Spectre defense, we need to be sure that PDFium uses the latest
+V8, so that it gets the latest mitigations. In shipping Chrome/ium products,
+PDFium uses the V8 that is in Chrome/ium.</p>
+<h4 id="limitations-1">Limitations</h4>
+<p>We don’t consider this approach to be a true solution; it’s only a mitigation.
+We think we can eliminate many of the most obvious gadgets and can buy some time
+for better defense mechanisms to be developed and deployed (primarily, Site
+Isolation).</p>
+<p>It is very likely impossible to eliminate all gadgets. As with <a href="https://en.wikipedia.org/wiki/Return-oriented_programming">return-oriented
+programming</a>, a large
+body of object code (like a Chrome renderer) is likely to contain so many
+gadgets that the attacker has a good probability to craft a working exploit. At
+some point, we may decide that we can’t stay ahead of attack research, and will
+stop trying to eliminate gadgets.</p>
+<p>Additionally, the mitigations typically come with a performance cost, and we may
+ultimately roll some or all of them back. Some potential mitigations are so
+expensive that it is impractical to deploy them.</p>
+<h3 id="attenuating-clocks">Attenuating Clocks</h3>
+<p>Exploiting Spectre requires a clock. We don’t believe it’s possible to
+eliminate, coarsen, or jitter all explicit and implicit clocks in the Open Web
+Platform (OWP) in a way that is sufficient to fully resolve Spectre. (<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=798795">Merely
+enumerating all the
+clocks</a> is
+difficult.) Surprisingly coarse clocks are still useful for exploitation.</p>
+<p>While it sometimes makes sense to deprecate, remove, coarsen, or jitter clocks,
+we don’t expect that we can get much long-term defensive value from doing so,
+for several reasons:</p>
+<ul>
+<li>There are <a href="https://gruss.cc/files/fantastictimers.pdf">many explicit and implicit clocks in the
+platform</a></li>
+<li>It is not always possible to coarsen or jitter them enough to slow or stop
+exploitation…</li>
+<li>…while also maintaining web platform compatibility and utility</li>
+</ul>
+<p>In particular, <a href="https://rdist.root.org/2009/05/28/timing-attack-in-google-keyczar-library/#comment-5485">clock jitter is of extremely limited
+utility</a>
+when defending against side channel attacks.</p>
+<p>Many useful and legitimate web applications need access to high-precision
+clocks, and we want the OWP to be able to support them.</p>
+<h3 id="gating-access-to-apis-that-enable-exploitation">Gating Access To APIs That Enable Exploitation</h3>
+<p>We want to support a powerful web, though we recognize that some kinds of APIs
+a powerful web requires are more likely than others to facilitate exploitation,
+either because they can be used as very high-resolution timers
+(<code>SharedArrayBuffer</code>), or because they provide powerful introspection
+capabilities (<code>performance.measureMemory</code>). We can mitigate the risks these APIs
+pose by exposing them only in contexts that have opted-into a set of
+restrictions that limits access to cross-origin data.</p>
+<p>In particular, <a href="https://docs.google.com/document/d/1zDlfvfTJ_9e8Jdc8ehuV4zMEu9ySMCiTGMS9y0GU92k/edit"><code>Cross-Origin-Opener-Policy</code> (COOP) and
+<code>Cross-Origin-Embedder-Policy</code> (COEP)</a>
+seem promising. Together, these mechanisms change web-facing behavior to enable
+origin-level process isolation, and ensure that cross-origin subresources will
+flow into a given process only if they opt-into that usage. These properties
+give us a higher degree of confidence that otherwise dangerous APIs can be
+exposed safely, as any attack they enable would only gain access to same-origin
+data, or data that explicitly asserted that it accepted the risk of exposure.</p>
+<p>Both COOP and COEP are enabled as of M83, and we <a href="https://groups.google.com/a/chromium.org/d/msg/blink-dev/_0MEXs6TJhg/F0UduPfpAQAJ">plan to require both before
+enabling APIs like <code>SharedArrayBuffer</code></a>.
+Other browsers seem likely to do the same.</p>
+<h4 id="other-gating-mechanisms">Other Gating Mechanisms</h4>
+<p><strong>Note:</strong> This section explores ideas but we are not currently planning on
+implementing anything along these lines.</p>
+<p>Looking beyond developer opt-ins such as COOP and COEP, we might be able to find
+other ways of limiting the scope of APIs to reduce their risk. For example, a
+third-party <code>iframe</code> that is trying to exploit Spectre is very different than a
+WebAssembly game, in the top-level frame, that the person is actively playing
+(and issuing many gestures to). We could programmatically detect engagement and
+establish policies for when certain APIs and features will be available to web
+content. (See e.g. <a href="https://wicg.github.io/feature-policy/">Feature Policy</a>.)</p>
+<p><em>Engagement</em> could be defined in a variety of complementary ways:</p>
+<ul>
+<li>High <a href="https://www.chromium.org/developers/design-documents/site-engagement">site engagement
+score</a></li>
+<li>High site popularity, search rank, or similar</li>
+<li>Frequent gestures on/interactions with the document</li>
+<li>Document is the top-level document</li>
+<li>Document is the currently-focused tab</li>
+<li>Site is bookmarked or added to the Home screen or Desktop</li>
+</ul>
+<p>Additionally, we have considered the possibility of prompting the user for
+permission to run certain exploit-enabling APIs, although there are problems:
+warning fatigue, and the difficulty of communicating something accurate yet
+comprehensible to people.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>For the reasons above, we now assume any active code can read any data in the
+same address space. The plan going forward must be to keep sensitive
+cross-origin data out of address spaces that run untrustworthy code, rather than
+relying on in-process checks.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/side-channel-threat-model.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/side-channel-threat-model.md</a>
+  </p>
+</div>

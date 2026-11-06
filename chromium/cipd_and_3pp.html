@@ -1,0 +1,329 @@
+<h1>CIPD and 3pp for chromium dependencies</h1>
+<h2 id="what-is-cipd">What is CIPD?</h2>
+<ul>
+<li>CIPD stands for &quot;Chrome Infrastructure Package Deployment&quot;.</li>
+<li>Its code and docs <a href="https://chromium.googlesource.com/infra/luci/luci-go/+/main/cipd/README.md">live within the luci-go project</a>.</li>
+<li>Chromium uses CIPD to avoid checking large binary files into git, which git
+does not handle well.</li>
+<li>gclient supports CIPD packages in the same way as git repositories. They are
+specified in <a href="https://chromium.googlesource.com/chromium/src/+/main/DEPS">DEPS</a> and updated via <code>gclient sync</code>.</li>
+<li>You can <a href="https://chrome-infra-packages.appspot.com/p/chromium">browse Chromium&#39;s CIPD repository</a> online.</li>
+</ul>
+<h2 id="what-is-3pp">What is 3pp?</h2>
+<ul>
+<li>3pp stands for &quot;Third Party Packages&quot; which allows uniform cross-compiliation,
+version tracking and archival for third-party software packages for
+distribution via CIPD.</li>
+<li>The code and docs <a href="https://chromium.googlesource.com/infra/infra/+/main/recipes/README.recipes.md#recipe_modules-support_3pp">live within the recipe module support_3pp</a>.</li>
+<li>By specifying a 3pp package, you can define how to build certain artifacts and
+where to upload to CIPD. Then our packagers will do the rest for you.</li>
+</ul>
+<h2 id="why-use-cipd--3pp">Why use CIPD &amp; 3pp?:</h2>
+<ul>
+<li>CIPD is our solution to storing large binary blobs directly in git, which git
+is not good at.</li>
+<li>Building these packages with 3pp is beneficial because:<ul>
+<li>It makes how each binary file was created clear and verifiable.</li>
+<li>It avoids the need for maintaining a list of ACLs for uploading to CIPD.</li>
+</ul>
+</li>
+</ul>
+<h2 id="adding-a-new-3pp-package">Adding a new 3pp package</h2>
+<h3 id="1-set-up-a-new-directory-for-your-dependency">1. Set up a new directory for your dependency</h3>
+<p>You&#39;ll first want somewhere in the repository in which your dependency will
+live. For third-party dependencies, this should typically be a subdirectory
+of <code>//third_party</code>. You&#39;ll need to add the same set of things to that
+directory that you&#39;d add for a non-CIPD dependency -- OWNERS, README.chromium,
+etc.</p>
+<p>For example, if you want to add a package named <code>sample_cipd_dep</code>, you might
+create the following:</p>
+<pre>  third_party/
+    sample_cipd_dep/
+      LICENSE
+      OWNERS
+      README.chromium</pre>
+<p>For more on third-party dependencies, see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/adding_to_third_party.md">adding_to_third_party.md</a>.</p>
+<h3 id="2-set-up-the-3pp-subdirectory">2. Set up the 3pp subdirectory</h3>
+<p>The 3pp subdirectory will store all the 3pp related files, including a 3pp spec
+(<code>3pp.pb</code>), as well as scripts, patches and/or tools to build the software
+from source. It should be placed directly under the directory path that matches
+the desired name of the cipd package.</p>
+<p>Staying with the example from above, the <code>sample_cipd_dep</code> directory may be
+like the following.</p>
+<blockquote>
+<p>Note that among the files in 3pp subdirectory, the <code>3pp.pb</code> is always
+required. The rest are optional, depending on how the <code>3pp.pb</code> is specified.</p>
+</blockquote>
+<pre>  third_party/
+    sample_cipd_dep/
+      LICENSE
+      OWNERS
+      README.chromium
+      3pp/
+        3pp.pb  # REQUIRED
+        bootstrap.py
+        fetch.py
+        install.sh
+        install_win.sh
+        patches/
+          0001-foo.patch</pre>
+<h4 id="21-the-file-3pppb-required">2.1 The file <code>3pp.pb</code> (Required)</h4>
+<p><code>3pp.pb</code> is a text proto specified by the <strong><a href="https://chromium.googlesource.com/infra/infra/+/main/recipes/recipe_modules/support_3pp/spec.proto"><code>spec.proto</code></a></strong> schema. It is broken up
+into two main sections:</p>
+<ul>
+<li><code>create</code>: allows you to specify how the package software gets created, and
+ allows specifying differences in how it&#39;s fetched/built/tested on a
+ per-target basis. See <a href="https://chromium.googlesource.com/infra/infra/+/main/recipes/README.recipes.md#creation-stages">here</a> for more details.</li>
+<li><code>upload</code>: contains some details on how the final result gets uploaded to CIPD.
+ See <a href="https://chromium.googlesource.com/infra/infra/+/main/recipes/README.recipes.md#upload">here</a> for more details.</li>
+</ul>
+<p>Staying with the example from above, the file <code>sample_cipd_dep/3pp/3pp.pb</code> may
+be like the following:</p>
+<pre>create {
+  source {
+    url {
+      download_url: &quot;https://some_url_link/foo.zip&quot;
+      version: &quot;1.0.0&quot;
+      extension: &quot;.zip&quot;
+    }
+    patch_version: &quot;cr0&quot;
+    unpack_archive: true
+  }
+}
+
+upload {
+  pkg_prefix: &quot;tools&quot;
+  universal: true
+}</pre>
+<p>While the above example could meet most of the use case, <code>3pp.pb</code> is capable of
+handling more complicated use case like the following:</p>
+<pre># create section that is shared by linux-.* and mac-.* platforms
+create {
+  platform_re: &quot;linux-.*|mac-.*&quot;
+  source {
+    git {
+      repo: &quot;&lt;one_git_repo&gt;&quot;
+      tag_pattern: &quot;v%s&quot;,
+
+      # Fixed to 3.8.x for now.
+      version_restriction: { op: LT val: &quot;3.9a0&quot;}
+    }
+    patch_dir: &quot;patches&quot;
+  }
+  build {
+    # Can also leave as blank since the script name defaults to &quot;install.sh&quot;
+    install: &quot;install.sh&quot;
+  }
+}
+
+# create section that is specific to linux-.* platforms
+create {
+  platform_re: &quot;linux-.*&quot;
+  build {
+    dep: &quot;&lt;dep_foo&gt;&quot;
+    dep: &quot;&lt;dep_bar&gt;&quot;
+
+    tool: &quot;&lt;tool_foo&gt;&quot;
+  }
+}
+
+# create section that is specific to linux-arm.* and linux-mips.* platforms
+create {
+  platform_re: &quot;linux-arm.*|linux-mips.*&quot;
+  build {
+    tool: &quot;&lt;tool_bar&gt;&quot;
+  }
+}
+
+# create section that is specific to windows-*
+create {
+  platform_re: &quot;windows-.*&quot;
+  source { script { name: &quot;fetch.py&quot; } }
+  build {
+    install: &quot;install_win.sh&quot;
+  }
+}
+
+upload { pkg_prefix: &quot;tools&quot; }</pre>
+<h4 id="22-the-file-installsh-optional">2.2 The file <code>install.sh</code> (Optional)</h4>
+<p>When the <code>build</code> message is specified in <code>3pp.pb</code>, the file specified in
+&quot;build.install&quot; (Default to &quot;install.sh&quot;) will be run to transform the source
+into the built product.</p>
+<p>Staying with the example from above, the file <code>sample_cipd_dep/3pp/install.sh</code>
+may be like the following.</p>
+<blockquote>
+<p>Note that during the build stage, the 3pp directory and all its dependent 3pp
+directories (i.e. the <code>tool</code> and <code>dep</code> from the <code>build</code> message in <code>3pp.pb</code>)
+will be <a href="https://chromium.googlesource.com/infra/infra/+/53fd7d1eda2010009ed00fdc1a7b59fe5034ae0c/recipes/recipe_modules/support_3pp/source.py#246">copied to a different directory</a>. So commands in <code>install.sh</code> should
+not refer to files that are outside of these directories.</p>
+</blockquote>
+<pre>#!/bin/bash
+# Copyright 2021 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+set -e
+set -x
+set -o pipefail
+
+# An auto-created directory whose content will ultimately be uploaded to CIPD.
+# So the commands below should output the built product to this directory.
+PREFIX=&quot;$1&quot;
+
+# Commands to transform the source into the built product and move it to $PREFIX
+./configure
+make install
+
+SCRIPT_DIR=&quot;$( cd &quot;$( dirname &quot;${BASH_SOURCE[0]}&quot; )&quot; &gt;/dev/null &amp;&amp; pwd )&quot;
+cp -a bin_foo &quot;$SCRIPT_DIR/bootstrap.py&quot; &quot;$PREFIX&quot;</pre>
+<h4 id="23-the-file-fetchpy-optional">2.3 The file <code>fetch.py</code> (Optional)</h4>
+<p>When specifying the <code>source</code> in 3pp.pb, it is possible to use a custom catch-all
+script to probe for the latest version and obtain the latest sources. A simple
+example can be like the following:</p>
+<blockquote>
+<p>Note that this python script should be <strong>python3-compatible</strong>.</p>
+</blockquote>
+<pre>#!/usr/bin/env python3
+# Copyright 2023 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import argparse
+import json
+import os
+import urllib
+
+
+def do_latest():
+  print(urllib.urlopen('some_url/master/VERSION').read().strip())
+
+
+def get_download_url(version, platform):
+  target_os, target_arch = platform.split('-')
+  ext = '.zip' if target_os == 'windows' else '.tar.gz'
+  partial_manifest = {
+    'url': ['download_url1', 'download_url2'],
+    'ext': ext,
+  }
+  print(json.dumps(partial_manifest))
+
+
+def main():
+  ap = argparse.ArgumentParser()
+  sub = ap.add_subparsers()
+
+  latest = sub.add_parser(&quot;latest&quot;)
+  latest.set_defaults(func=lambda _opts: do_latest())
+
+  download = sub.add_parser(&quot;get_url&quot;)
+  download.set_defaults(
+    func=lambda _opts: get_download_url(
+      os.environ['_3PP_VERSION'], os.environ['_3PP_PLATFORM']
+    )
+  )
+
+  opts = ap.parse_args()
+  opts.func(opts)
+
+
+if __name__ == '__main__':
+  main()</pre>
+<h3 id="3-add-3pp-subdirectory-to-chromiumsrc-repo">3. Add &quot;3pp&quot; subdirectory to <code>chromium/src</code> repo</h3>
+<h4 id="3pp-cq-builders-presubmit">3pp CQ builders (Presubmit)</h4>
+<p>The following are the optional CQ builders to run the presubmit check for CLs
+that have the directory &quot;3pp&quot; in the patchset.</p>
+<ul>
+<li><a href="https://ci.chromium.org/p/chromium/builders/try/3pp-linux-amd64-packager">3pp-linux-amd64-packager</a>:
+For builds on the linux-amd64 platform or universal builds (e.g. to be used by
+all platforms)</li>
+</ul>
+<h4 id="3pp-ci-builders-postsubmit">3pp CI builders (Postsubmit)</h4>
+<p>Once the CLs pass the CQ and get landed, the following CI builders will
+periodically build all the 3pp packages that match the given platforms and
+upload any new results to CIPD.</p>
+<ul>
+<li><a href="https://ci.chromium.org/p/chromium/builders/ci/3pp-linux-amd64-packager">3pp-linux-amd64-packager</a>:
+For builds on the linux-amd64 platform or universal builds (e.g. to be used by
+all platforms)</li>
+</ul>
+<h3 id="4-add-your-cipd-package-to-deps">4. Add your CIPD package to DEPS</h3>
+<p>Once your CIPD package is created by the 3pp CI builders, you can add it to
+<code>DEPS</code> by adding an entry of the following form to the <code>deps</code> dict:</p>
+<pre>deps = {
+  # ...
+
+  # This is the installation directory.
+  'src/third_party/sample_cipd_dep': {
+
+    # In this example, we're only installing one package in this location,
+    # but installing multiple package in a location is supported.
+    'packages': [
+      {
+        'package': 'chromium/third_party/sample_cipd_dep',
+        'version': 'TX7HeY1_1JLwFVx-xiETOpT8YK4W5CbyO26SpmaMA0IC',
+      },
+    ],
+
+    # As with git-based DEPS entries, 'condition' is optional.
+    'condition': 'checkout_android',
+    'dep_type': 'cipd',
+  },
+
+  # ...
+}</pre>
+<p>This will result in CIPD package <code>chromium/third_party/sample_cipd_dep</code> at
+<code>TX7HeY1_1JLwFVx-xiETOpT8YK4W5CbyO26SpmaMA0IC</code> being installed in
+<code>src/third_party/sample_cipd_dep</code> (relative to the gclient root directory).</p>
+<h2 id="updating-a-cipd-dependency">Updating a CIPD dependency</h2>
+<p>To modify a CIPD dependency, follow steps 2 and 3 above, then modify the
+version listed in DEPS.</p>
+<h2 id="miscellaneous">Miscellaneous</h2>
+<h3 id="create-a-cipdyaml-file-in-the-old-way">Create a cipd.yaml file in the old way</h3>
+<p>While it is strongly suggested to use 3pp infrastructure, there are existing flows
+that create a cipd.yaml file by a GN template or a script, and upload it to CIPD
+by builders with custom recipes.</p>
+<p>Examples are:</p>
+<ul>
+<li><a href="https://ci.chromium.org/p/chromium/builders/ci/android-androidx-packager">android-androidx-packager</a></li>
+<li><a href="https://ci.chromium.org/p/chromium/builders/ci/android-sdk-packager">android-sdk-packager</a></li>
+</ul>
+<h4 id="generating-cipdyaml-via-gn-template">Generating cipd.yaml via GN Template:</h4>
+<p>The <code>cipd_package_definition</code> template in <a href="https://source.chromium.org/chromium/chromium/src/+/main:build/cipd/cipd.gni">build/cipd/cipd.gni</a> can be used to
+create the yaml definition as part of Chromium&#39;s normal build process. Declare
+a target like:</p>
+<pre>cipd_package_definition(&quot;my_cipd_package&quot;) {
+  package = &quot;path/to/cipd/package&quot;
+  description = &quot;Prebuilt test binary.&quot;
+  install_mode = &quot;copy&quot;
+  deps = [ &quot;//path/to:test_binary_target&quot; ]
+  sources = [ &quot;//path/to:test_binary_file&quot; ]
+}</pre>
+<h3 id="permissions-in-cipd">Permissions in CIPD</h3>
+<p>You can check a package&#39;s ACLs with <code>cipd acl-list</code>:</p>
+<pre>$ cipd acl-list chromium/third_party/sample_cipd_dep
+...</pre>
+<p>Permissions in CIPD are handled hierarchically. You can check entries higher
+in the package hierarchy with <code>cipd acl-list</code>, too:</p>
+<pre>$ cipd acl-list chromium
+...</pre>
+<p>By default, <a href="https://chrome-infra-auth.appspot.com/auth/groups/project-chromium-cipd-owners">cria/project-chromium-cipd-owners</a> own all CIPD packages
+under <code>chromium/</code>. If you&#39;re adding a package, talk to one of them.</p>
+<p>To obtain write access to a new package, ask an owner to run:</p>
+<pre>$ cipd acl-edit chromium/third_party/sample_cipd_dep -owner user:email@address.com</pre>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<ul>
+<li><strong>A file maintained by CIPD is missing, and gclient sync doesn&#39;t recreate it.</strong></li>
+</ul>
+<p>CIPD currently caches installation state. Modifying packages managed by CIPD
+will invalidate this cache in a way that CIPD doesn&#39;t detect - i.e., CIPD will
+assume that anything it installed is still installed, even if you deleted it.
+To clear the cache and force a full reinstallation, delete your
+<code>$GCLIENT_ROOT/.cipd</code> directory.</p>
+<p>Note that there is a <a href="https://crbug.com/1176408">bug</a> on file where
+<code>gclient sync</code> does not reset CIPD entries that are changed locally.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/cipd_and_3pp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/cipd_and_3pp.md</a>
+  </p>
+</div>

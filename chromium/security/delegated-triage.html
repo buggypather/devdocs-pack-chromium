@@ -1,0 +1,116 @@
+<h1>Delegated Triage</h1>
+<p>For certain areas of Chromium, security bug triage is delegated from the core
+security team to other teams. This doc describes how that process works at a
+high level and what you (a delegated triager) are supposed to do. This doc is an
+abridged version of the <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/shepherd.md">shepherd guide</a>, which describes the full security bug
+triage process, including a lot of steps and special cases you do not need to
+handle.</p>
+<p>Delegated triage is available to a limited number of areas in Chromium. Adding
+a new delegated triage requires agreement from the security team and a
+commitment from the team that issues will be assigned to meet security SLOs.</p>
+<h2 id="security-triage">Security Triage</h2>
+<p>Security bug reports in Chromium need to be <em>valid</em>, which means they:</p>
+<ul>
+<li>Describe actual security bugs in Chromium (a defect that a malicious party can
+use to materially harm a Chromium user)</li>
+<li>Have sufficient evidence and detail to allow engineers to reproduce them</li>
+</ul>
+<p>For every valid security bug report, our bug-response and release processes then
+require some metadata:</p>
+<ul>
+<li>Which versions are affected (so we know where to merge fixes to)</li>
+<li>Which OSes are affected (so we know which platforms need new releases)</li>
+<li>The <a href="severity-guidelines">severity</a> of the bug is (so we know how urgently to do those things)</li>
+</ul>
+<p>And then it needs to be assigned to engineers to be fixed, by setting:</p>
+<ul>
+<li>A component (where the root cause of the bug lies)</li>
+<li>A list of CC&#39;d users (because people can&#39;t view security bugs by default)</li>
+<li>An assignee (who will actually fix the bug)</li>
+</ul>
+<h2 id="delegated-triage-process">Delegated Triage Process</h2>
+<p>When a new security bug report is filed in the bug tracker, the on-duty security
+triager is normally responsible for performing all the steps above, for every
+incoming security bug. For delegated triage rotations, the security triager will
+instead simply move matching bugs into a special component for delegated triage,
+at which point delegated triagers for that component (that&#39;s you!) take over.</p>
+<p>If at any point you get stuck, confused, or this process isn&#39;t working for you,
+you can get in touch with the on-duty security shepherds: <a href="https://oncall.corp.google.com/interrupts.chrome-security-shepherds-1">shepherd-1</a> and
+<a href="https://oncall.corp.google.com/interrupts.chrome-security-shepherds-2">shepherd-2</a>. Please do not assign bugs to these shepherds, but you can reach
+them over Chat or ask a question on the issue and add the <a href="https://issues.chromium.org/hotlists/8699168">Chrome Security
+Klaxon</a> hotlist
+(hotlistid:8699168).</p>
+<p>For each security bug in the component you&#39;re triaging, do these steps:</p>
+<h3 id="skim">Skim</h3>
+<p>The goal of this step is to quickly reject bugs that are probably invalid, so
+that the more time-consuming later steps only happen on bugs that are likely to
+be valid.</p>
+<p>Quickly skim the bug, asking yourself: <em>could</em> this be a valid security bug?</p>
+<ul>
+<li>If it doesn&#39;t seem like a valid bug at all, WontFix it and you are done</li>
+<li>If it seems like a duplicate of an existing bug report (the bug tracker will
+surface examples), mark it as a duplicate. Do <strong>not</strong> CC the reporter on the
+canonical bug unless the canonical bug is already public. If they ask to be
+CCed, tell them to email <a href="mailto:product-security@chromium.org">product-security@chromium.org</a>.</li>
+<li>If it does seem like a valid bug but you can&#39;t see <em>clear</em> security
+consequences, change its type to Bug and you are done</li>
+<li>If it does seem like a valid bug with clear security consequences, is the
+information you need to reproduce it present? If not, WontFix it with a
+message telling the reporter what info was missing and asking them to re-file
+with the needed info, and you are done</li>
+<li>If all that info appears present, skim the attached proof-of-concept (if
+there is one) or other evidence - does it look at least vaguely plausible? If
+not, WontFix it and you are done</li>
+</ul>
+<h3 id="repro">Repro</h3>
+<p>The goal of this step is to become <em>nearly certain</em> that the bug is valid and
+<em>fairly confident</em> that it has security consequences.</p>
+<p><strong>Never run a proof-of-concept or repro steps that are not obviously safe</strong>.</p>
+<ul>
+<li>If there is a proof-of-concept, do a more detailed reading of it. If it is not
+<strong>obviously safe</strong> for you to run, WontFix the bug and ask the reporter to
+re-file it with a better proof-of-concept. You are done.</li>
+<li>If there is a proof-of-concept, but it doesn&#39;t clearly demonstrate the bug
+when you run it, WontFix the bug with an explanation of what happened and ask
+the reporter to re-file with a better proof-of-concept. Note that scary log
+messages like &quot;EXPLOIT CONFIRMED&quot; are not proof of anything; you must see a
+genuine crash, ASAN violation, or some other concrete thing <strong>not</strong> emitted by
+the proof-of-concept itself.</li>
+<li>If there is a video from the reporter, watch it, and if there are repro steps,
+follow them; do you get the same behavior?</li>
+</ul>
+<p>If the PoC does work for you, and demonstrates a security problem, leave a
+comment on the bug describing what happened, what revision you tested at, what
+build config you used, and any other info that someone else might need to
+reproduce the bug later. Hooray, you have a valid security bug!</p>
+<h3 id="annotate">Annotate</h3>
+<p>The goal of this step is to attach the metadata needed later in the bug-fixing
+process. By now, you are able to reproduce the bug yourself, so use either your
+judgment, code-reading, or your ability to reproduce the bug to:</p>
+<ul>
+<li>Find the earliest release starting with the <a href="https://chromiumdash.appspot.com/schedule">current extended
+stable</a> that
+the bug is present in, and <strong>set FoundIn</strong> to that milestone</li>
+<li>Assess which OSes it applies to, and <strong>set OS</strong></li>
+<li>Assess the bug&#39;s <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/severity-guidelines.md">severity</a> and <strong>set Severity</strong>; you can check with the
+on-duty security shepherd if you need help, but bear in mind they know less
+about what you&#39;re doing than you do</li>
+</ul>
+<h3 id="assign">Assign</h3>
+<p>The goal of this step is to get the bug to an engineering team that will fix it,
+and to ensure that security bugs are always assigned to someone so that we can
+stay within our SLOs.</p>
+<ul>
+<li>Find who owns the code where the root cause (or the most proximate cause in
+Chromium) lies. Add all those owners to the CC list of the bug.</li>
+<li>Pick some likely owner and assign the bug directly to them.</li>
+<li>Finally, move the bug into a relevant-looking component, taking it out of your
+own triage queue</li>
+</ul>
+<p>Great work, you have triaged a security bug!</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/delegated-triage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/delegated-triage.md</a>
+  </p>
+</div>

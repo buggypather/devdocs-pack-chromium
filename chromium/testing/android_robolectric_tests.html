@@ -1,0 +1,124 @@
+<h1>JUnit Tests</h1>
+<p>JUnit tests are Java unit tests. These tests run locally on your workstation.</p>
+<h2 id="writing-a-junit-test">Writing a JUnit test</h2>
+<p>When writing JUnit tests, you must decide whether you need to use Android code.
+If you want to use Android code you must write a <a href="http://robolectric.org/">Robolectric</a> test.</p>
+<h3 id="junit-tests-without-android">JUnit tests (without Android)</h3>
+<p>Build these types of test using the <code>robolectric_binary</code> GN template.</p>
+<p>If you don&#39;t need to use any Android code in your tests, you can write plain,
+old JUnit tests. Some more documentation about writing JUnit tests can be
+found <a href="https://github.com/junit-team/junit4/wiki/Getting-started">here</a>.</p>
+<h4 id="example-code">Example Code</h4>
+<pre data-language="java">package org.chromium.sample.test;
+
+import static org.junit.Assert.assertTrue;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.BlockJUnit4ClassRunner;
+
+@RunWith(BlockJUnit4ClassRunner.class)
+public class MyJUnitTest {
+
+    @Test
+    public void exampleTest() {
+        boolean shouldWriteMoreJUnitTests = true;
+        assertTrue(shouldWriteMoreJUnitTests);
+    }
+}</pre>
+<h4 id="example-within-chromium">Example within Chromium</h4>
+<p>See the <a href="https://cs.chromium.org/chromium/src/testing/android/junit/BUILD.gn">junit_unit_tests</a> test suite.</p>
+<h3 id="junit-tests-with-robolectric">JUnit tests with Robolectric</h3>
+<p>Example: <a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/android/junit/src/org/chromium/chrome/browser/ExampleRobolectricTest.java">ExampleRobolectricTest</a></p>
+<p>Build these types of test using the <code>robolectric_binary</code> GN template.</p>
+<p>Robolectric is a unit testing framework that lets you run tests with Android
+code on your workstation. It does this by providing a special version of the
+Android SDK jar that can run in your host JVM. Some more information about
+Robolectric can be found <a href="http://robolectric.org/">here</a>.</p>
+<p>One on the main benefits of using Robolectric framework are <a href="http://robolectric.org/extending/">shadow classes</a>.
+Robolectric comes with many prebuilt shadow classes and also lets you define
+your own. Whenever an object is instantiated within a Robolectric test,
+Robolectric looks for a corresponding shadow class (marked by
+<code>@Implements(ClassBeingShadowed.class)</code>). If found, any time a method is invoked
+on the object, the shadow class&#39;s implementation of the method is invoked first.
+This works even for static and final methods.</p>
+<h4 id="useful-tips">Useful Tips</h4>
+<ul>
+<li>Use <code>@RunWith(BaseRobolectricTestRunner.class)</code> for all Chromium Robolectric
+tests.</li>
+<li><code>@Config(manifest = Config.NONE)</code> can be used when Android resources aren&#39;t
+needed. The test runs faster with an empty manifest.</li>
+<li>You can specify the Android SDK to run your test with with
+<code>@Config(sdk = ??)</code>.</li>
+</ul>
+<h4 id="example-code-1">Example Code</h4>
+<pre data-language="java">package org.chromium.sample.test;
+
+import static org.junit.Assert.assertTrue;
+
+import android.text.TextUtils;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.annotation.Config;
+
+import org.chromium.base.test.BaseRobolectricTestRunner;
+
+// Be sure to specify to run tests with a RobolectricTestRunner. The
+// default JUnit test runner won't load the Robolectric Android code properly.
+// BaseRobolectricTestRunner will do some common initializations. If this is
+// not desired, then RobolectricTestRunner could be used directly.
+@RunWith(BaseRobolectricTestRunner.class)
+// Can specify some Robolectric related configs here.
+// More about configuring Robolectric at http://robolectric.org/configuring/.
+// SDK will default to the latest we support in Chromium.
+@Config(manifest = Config.NONE, sdk = 21)
+public class MyRobolectricJUnitTest {
+
+    @Test
+    public void exampleTest() {
+        String testString = &quot;test&quot;;
+
+        // Even though these tests runs on the host, Android classes are
+        // available to use thanks to Robolectric.
+        assertTrue(TextUtils.equals(testString, &quot;test&quot;));
+    }
+}</pre>
+<h4 id="example-robolectric_binary-build-template">Example robolectric_binary build template.</h4>
+<pre data-language="python">robolectric_binary(&quot;my_robolectric_tests&quot;) {
+
+    sources = [
+        &quot;java/src/foo/bar/MyJUnitTest.java&quot;
+    ]
+
+    deps = [
+        &quot;//my/test:dependency&quot;,
+    ]
+
+    # Sets app's package name in Robolectric tests. You need to specify
+    # this variable in order for Robolectric to be able to find your app's
+    # resources.
+    package_name = manifest_package
+}</pre>
+<h4 id="example-within-chromium-1">Example within Chromium</h4>
+<p>See the <a href="https://cs.chromium.org/chromium/src/content/public/android/BUILD.gn">content_junit_tests</a> test suite.</p>
+<h2 id="running-junit-tests">Running JUnit tests</h2>
+<p>After writing a test, you can run it by:</p>
+<ol>
+<li>Adding the test file to a <code>robolectric_binary</code> GN target.</li>
+<li>Rebuild.</li>
+<li>GN will generate binary <code>&lt;out_dir&gt;/bin/run_&lt;suite name&gt;</code> which
+can be used to run your test.</li>
+</ol>
+<p>For example, the following can be used to run chrome_junit_tests.</p>
+<pre data-language="bash"># Build the test suite after adding our new test.
+ninja -C out/Debug chrome_junit_tests
+
+# Run the test!
+out/Debug/bin/run_chrome_junit_tests</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_robolectric_tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_robolectric_tests.md</a>
+  </p>
+</div>

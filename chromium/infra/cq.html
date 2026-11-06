@@ -1,0 +1,346 @@
+<h1>CQ</h1>
+<p>This document describes how the Chromium Commit Queue (CQ) is structured and
+managed. This is specific for the Chromium CQ. Questions about other CQs should
+be directed to <a href="mailto:infra-dev@chromium.org">infra-dev@chromium.org</a>. If you find terms you&#39;re not familiar
+with in this doc, consult the infra <a href="glossary">glossary</a>.</p>
+<h2 id="purpose">Purpose</h2>
+<p>The Chromium CQ exists to test developer changes before they land into
+<a href="https://chromium.googlesource.com/chromium/src/">chromium/src</a>. It runs a
+curated set of test suites across a curated set of platforms for a given CL,
+and ensures the CL doesn&#39;t introduce any new regressions.</p>
+<h2 id="modes">Modes</h2>
+<p>The CQ supports a few different modes of execution. Each mode differs in what
+tests it runs and/or what happens when all those tests pass. These modes are
+described below.</p>
+<h3 id="dry-run">Dry-Run</h3>
+<p>This runs all the normal set of tests for a CL. When the dry-run has completed,
+it will simply report the results of the CQ attempt as a Gerrit comment on the
+CL and take no further action. This mode is intended to be used as a CL is
+developed. Can be triggered via either the <code>CQ Dry Run</code> button in Gerrit or by
+applying the <code>Commit-Queue +1</code> label vote. Passing tryjob builds from a dry-run
+can be reused at submit time (see <a href="#build-reuse">Build Reuse</a>). See
+<a href="#what-exactly-does-the-cq-run">below</a> for the anatomy of a build on the CQ.</p>
+<h3 id="full-run">Full-Run</h3>
+<p>Runs all the same tests as dry-run. If there are no new regressions introduced,
+the CL will be submitted into the repo. This mode should only be used when a CL
+is finalized. Can be triggered via either the <code>Submit to CQ</code> button in Gerrit or
+by applying the <code>Commit-Queue +2</code> label vote.</p>
+<h3 id="mega-cq-dry-run">Mega-CQ Dry-Run</h3>
+<p>This runs a much larger set of tests compared to the previous two CQ modes.
+Those run a limited &amp; curated set of tests that optimizes for quick turn-around
+time while still catching most <em>but not all</em> regressions. The Mega CQ, on the
+other hand, aims to catch nearly <em>all</em> regressions regardless of cycle time.
+Consequently, the Mega CQ takes much longer, and should only be used for
+particularly risky CLs. Triggered via the <code>Mega CQ: Dry Run</code> button under the
+three-dot menu in Gerrit.</p>
+<p>For a peak under the hood, the Mega CQ determines its test coverage by including
+in it the trybot mirrors of all CI builders gardened by the main Chromium
+gardening rotations. It also unconditionally applies
+<code>Include-Ci-Only-Tests: true</code> to its builds (see <a href="#options">below</a>).</p>
+<p>If you find that the Mega CQ isn&#39;t covering a build or test config that it
+should, please file a general <a href="https://g.co/bugatrooper">trooper bug</a> for the
+missing coverage.</p>
+<h3 id="mega-cq-full-run">Mega-CQ Full-Run</h3>
+<p>Runs all the same tests as the Mega-CQ dry-run. Will submit the CL if
+everything passes. Triggered via the <code>Mega CQ: Submit</code> button under the
+three-dot menu in Gerrit. The amount of builds and tests the Mega CQ runs makes
+a passing run much more unlikely than a normal CQ run. Consequently, when
+running the Mega CQ, you&#39;ll likely want to spot-check the failures listed on
+Gerrit for anything that looks particularly relevant to your CL. Then you can use
+the normal <code>SUBMIT TO CQ</code> button to land once all failures look unrelated.</p>
+<h2 id="build-reuse">Build Reuse</h2>
+<p>When you trigger a CQ run (<code>CQ+1</code> dry-run or <code>CQ+2</code> full-run), the CQ checks
+whether passing builds from an earlier run on the same patchset (or an
+equivalent patchset across trivial rebases or commit message edits) are still
+fresh enough to reuse instead of rebuilding from scratch.</p>
+<p>Whether a passing build can be reused depends on the reuse window configured
+for the target branch and builder:</p>
+<ul>
+<li><strong>Commit-distance reuse window</strong>: Builders configured with a commit-distance
+window (e.g. <code>800</code> commits on <code>main</code>) evaluate freshness based on how many
+commits have landed since the build ran rather than wall-clock time. A
+passing build remains reusable as long as the target branch has not advanced
+beyond that threshold, even if more than 24 hours have elapsed (such as over
+a quiet weekend or holiday). Conversely, during high-volume weekday commit
+surges, builds expire once the branch advances past the commit threshold.</li>
+<li><strong>Time-based reuse window (24-hour default)</strong>: If a builder or target branch
+(such as a milestone release branch) does not use a commit-distance window,
+passing builds can be reused for up to <strong>24 hours</strong> from when they were
+created.</li>
+</ul>
+<h2 id="options">Options</h2>
+<p>The Chromium CQ supports a variety of options that can change what it checks.</p>
+<blockquote>
+<p>These options are supported via git footers. They must appear in the last
+paragraph of your commit message to be used. See <code>git help footers</code> or
+<a href="https://chromium.googlesource.com/chromium/tools/depot_tools/+/HEAD/git_footers.py">git_footers.py</a> for more information.</p>
+</blockquote>
+<ul>
+<li><p><code>Binary-Size: &lt;rationale&gt;</code></p>
+<p>This should be used when you are landing a change that will intentionally
+increase the size of the Chrome binaries on Android (since we try not to
+accidentally do so). The rationale should explain why this is okay to do.</p>
+</li>
+<li><p><code>Commit: false</code></p>
+<p>You can mark a CL with this if you are working on experimental code and do not
+want to risk accidentally submitting it via the CQ. The CQ will immediately
+stop processing the change if it contains this option.</p>
+</li>
+<li><p><code>Cq-Exclude-Trybots: &lt;trybots&gt;</code></p>
+<p>  This flag allows you to specify trybots to exclude from running on this CL,
+  even if they would otherwise be triggered by default or by directory-based
+  rules (location filters). The format for the list of trybots is
+  &quot;bucket:trybot1,trybot2;bucket2:trybot3&quot;.</p>
+</li>
+<li><p><code>Cq-Include-Trybots: &lt;trybots&gt;</code></p>
+<p>This flag allows you to specify some additional bots to run for this CL, in
+addition to the default bots. The format for the list of trybots is
+&quot;bucket:trybot1,trybot2;bucket2:trybot3&quot;.</p>
+</li>
+<li><p><code>Cq-No-Rebase: true</code></p>
+<p>Instructs trybots to check out the patch ref directly without rebasing it
+onto the target branch tip (passes <code>gerrit_no_rebase_patch_ref=True</code> to
+<code>bot_update</code>). This is intended for testing multi-parent merge CLs (such as
+automated downstream syncs) where auto-rebasing the merged history onto the
+branch tip would attempt to cherry-pick all merged commits individually.</p>
+<p><strong>Restrictions:</strong></p>
+<ul>
+<li><strong>CQ Dry Runs only</strong>: In CV, this footer is only supported during CQ Dry
+Runs (<code>CQ+1</code>). Full CQ runs (<code>CQ+2</code>) containing this footer will fail
+immediately.</li>
+<li><strong>No build reuse</strong>: Builds executed with this footer are marked as reusable
+only by other dry runs, and cannot be reused by subsequent Full Runs
+(<code>CQ+2</code>).</li>
+<li><strong>Manual tryjobs</strong>: Supported when triggering tryjobs directly outside CV
+(e.g. via <code>git cl try</code> or <code>bb add</code>).</li>
+</ul>
+</li>
+<li><p><code>Disable-Retries: true</code></p>
+<p>The CQ will normally try to retry failed test shards (up to a point) to work
+around any intermittent infra failures. If this footer is set, it won&#39;t try
+to retry failed shards no matter what happens.</p>
+</li>
+<li><p><code>Ignore-Freeze: true</code></p>
+<p>Whenever there is an active prod freeze (usually around Christmas), it can be
+bypassed by setting this footer.</p>
+</li>
+<li><p><code>Include-Ci-Only-Tests: true</code> or
+<code>Include-Ci-Only-Tests: &lt;comma-separated-builder-ids&gt;|&lt;comma-separated-tests&gt;</code></p>
+<p>Some builder configurations may be configured to run some tests only after
+submission (on CI) and not before submission (in the CQ) by default. Possible
+reasons this might be are that the tests are too slow or too expensive or
+there is insufficient capacity to run the tests for every CL. In order to
+still be able to explicitly reproduce what the CI builder is doing, you can
+specify this footer to run those tests before submission anyway. Specifying
+true will run all such tests on any triggered try builders. Specifying builder
+IDs and tests will run only the named tests defined for the identified CI
+builders on the try builders that mirror those CI builders. A * can be used in
+place of a builder ID or test name to match any builder/test.</p>
+<p>Constructing a footer value manually should generally be unnecessary: tests
+configured to run only on CI will have the necessary footer included in their
+step text and in the build summary when they fail.</p>
+<p>If it is necessary to construct a footer manually, the builder IDs have the
+format of <em>builder-group</em>:<em>builder-name</em>. <em>builder-name</em> is the name of the CI
+builder that the test is configured for. <em>builder-group</em> is the &quot;builder
+group&quot; of that builder, which is a concept specific to chromium infra. The
+builder group of a builder can be found by going to a build of the builder,
+and finding the <code>builder_group</code> property in the <code>Input Properties</code> section of
+the <code>Infra</code> tab.</p>
+</li>
+<li><p><code>No-Presubmit: true</code></p>
+<p>If you want to skip the presubmit check, you can add this line, and the commit
+queue won&#39;t run the presubmit for your change. This should only be used when
+there&#39;s a bug in the PRESUBMIT scripts. Please check that there&#39;s a bug filed
+against the bad script, and if there isn&#39;t, <a href="https://crbug.com/new">file one</a>.</p>
+</li>
+<li><p><code>No-Tree-Checks: true</code></p>
+<p>Add this line if you want to skip the tree status checks. This means the CQ
+will commit a CL even if the tree is closed. Obviously this is strongly
+discouraged, since the tree is usually closed for a reason. However, in rare
+cases this is acceptable, primarily to fix build breakages (i.e., your CL will
+help in reopening the tree).</p>
+</li>
+<li><p><code>No-Try: true</code></p>
+<p>This should only be used for reverts to green the tree, since it skips try
+bots and might therefore break the tree. You shouldn&#39;t use this otherwise.</p>
+</li>
+<li><p><code>Validate-Test-Flakiness: skip</code></p>
+<p>This will disable the <code>test new tests for flakiness.*</code> steps in CQ builds that
+check new tests for flakiness.</p>
+</li>
+<li><p><code>Skip-Clang-Tidy-Checks: &lt;check_1&gt;,&lt;check_2&gt;,...</code></p>
+<p>This will skip the specified clang-tidy checks. The checks can be specified
+as check name (e.g. <code>modernize-use-equals-default</code>) or glob to skip a set of
+checks (e.g. <code>modernize-*</code> to skip checks that advocate usage of modern
+language constructs). This option can span across multiple lines, for example:</p>
+<pre>Skip-Clang-Tidy-Checks: google-explicit-constructor
+Skip-Clang-Tidy-Checks: modernize-*,readability-*</pre>
+</li>
+<li><p><code>Merge-Approval-Bypass: &lt;reason&gt;</code></p>
+<p>Bypasses merge-approval check on release branches. Googlers can read more at
+<a href="http://go/chrome-merge-process">http://go/chrome-merge-process</a>.</p>
+</li>
+<li><p><code>Max-Compile-Failures: &lt;number&gt;</code></p>
+<p>Specifies the number of compilation failures each trybot should collect before
+terminating the build (0 means infinity).</p>
+</li>
+<li><p><code>Missing-Deps: &lt;mode&gt;</code></p>
+<p>Configures how Siso handles missing dependencies (passing
+<code>-missing_deps=&lt;mode&gt;</code> to Siso). <code>&lt;mode&gt;</code> must be one of:</p>
+<ul>
+<li><code>ignore</code>: Skip missing dependency checks.</li>
+<li><code>warn</code>: Print warnings on missing dependencies without failing the build.</li>
+<li><code>error</code>: Print errors on missing dependencies and continue running remaining
+steps, then fail the build at completion.</li>
+<li><code>fatal</code>: Fail the build step immediately upon detecting missing
+dependencies.</li>
+</ul>
+</li>
+</ul>
+<h2 id="google-internal-cq-builders">Google-internal CQ Builders</h2>
+<p>A small subset of builders on the CQ are &quot;Google-internal&quot;. This means they
+compile Google Chrome binaries using internal resources rather than public
+builds of Chromium. See <a href="../chromium_browser_vs_google_chrome">here</a> for more
+info on the difference between the two types. Such CQ builders have a few
+differences compared to most other public builders:</p>
+<ul>
+<li>They only run in full CQ runs (CQ+2 mode) for non-Googlers, and <em>not</em> dry-runs
+(CQ+1 mode). This may lead to a non-Googler&#39;s CL passing a dry-run, but
+failing a subsequent full CQ run.</li>
+<li>Their logs are Googler-only. On Gerrit, their failures will post a nondescript
+comment like <code>This CL has failed the run. Reason: Tryjob has failed</code>, and
+opening the build directly will lead to a simple <code>does not have permission to view it</code> error if the user is not a Googler.</li>
+</ul>
+<p>You can see the list of such builders on the CQ
+<a href="https://github.com/chromium/chromium/blob/HEAD/infra/config/generated/cq-builders.md#required-builders-chrome">here</a>.
+If you&#39;re a non-Googler and these are the only builders reporting failures on
+your CL, you will likely need the assistance of a Googler to provide the
+relevant compile failure from the builder. In such a case, try reaching out to
+any Googlers that have reviewed your CL. Otherwise, you can reach out to the
+<a href="https://chromium.slack.com/messages/CGGPN5GDT/">#halp</a> or
+<a href="https://chromium.slack.com/messages/CGM8DQ3ST/">#ops</a> channels on slack.
+Googlers can read more about the details of these internal CQ builders
+<a href="http://goto.google.com/chrome-cq#internal-builders-on-the-cq">here</a>.</p>
+<h2 id="faq">FAQ</h2>
+<h3 id="what-exactly-does-the-cq-run">What exactly does the CQ run?</h3>
+<p>CQ runs the jobs specified in <a href="https://github.com/chromium/chromium/blob/HEAD/infra/config/generated/luci/commit-queue.cfg">commit-queue.cfg</a>. See
+<a href="https://github.com/chromium/chromium/blob/HEAD/infra/config/generated/cq-builders.md"><code>cq-builders.md</code></a>
+for an auto generated file with links to information about the builders on the
+CQ.</p>
+<p>Some of these jobs are experimental. This means they are executed on a
+percentage of CQ builds, and the outcome of the build doesn&#39;t affect if the CL
+can land or not. See the schema linked at the top of the file for more
+information on what the fields in the config do.</p>
+<p>The CQ has the following structure:</p>
+<ul>
+<li>Compile all test suites that might be affected by the CL.</li>
+<li>Runs all test suites that might be affected by the CL.<ul>
+<li>Many test suites are divided into shards. Each shard is run as a separate
+swarming task.</li>
+<li>These steps are labeled &#39;(with patch)&#39;</li>
+</ul>
+</li>
+<li>Retry each shard that has a test failure. The retry has the exact same
+configuration as the original run. No recompile is necessary.<ul>
+<li>If the retry succeeds, then the failure is ignored.</li>
+<li>These steps are labeled &#39;(retry shards with patch)&#39;</li>
+<li>It&#39;s important to retry with the exact same configuration. Attempting to
+retry the failing test in isolation often produces different behavior.</li>
+</ul>
+</li>
+<li>Recompile each failing test suite without the CL. Rerun each failing test
+suite in isolation.<ul>
+<li>If the retry fails, then the fail is ignored, as it&#39;s assumed that the test
+is broken/flaky on tip of tree.</li>
+<li>These steps are labeled &#39;(without patch)&#39;</li>
+</ul>
+</li>
+<li>Fail the build if there are tests which failed in both &#39;(with patch)&#39; and
+&#39;(retry shards with patch)&#39; but passed in &#39;(without patch)&#39;.</li>
+</ul>
+<h3 id="why-did-my-cl-fail-the-cq">Why did my CL fail the CQ?</h3>
+<p>Please follow these general guidelines:</p>
+<ol>
+<li>Check to see if your patch caused the build failures, and fix if possible.</li>
+<li>If compilation or individual tests are failing on one or more CQ bots and you
+suspect that your CL is not responsible, please contact your friendly
+neighborhood gardener by filing a
+<a href="https://bugs.chromium.org/p/chromium/issues/entry?template=Defect%20report%20from%20developer&amp;labels=Gardener-Chromium&amp;summary=%5BBrief%20description%20of%20problem%5D&amp;comment=What%27s%20wrong?">gardener bug</a>.
+If the code in question has appropriate OWNERS, consider contacting or CCing
+them.</li>
+<li>If other parts of CQ bot execution (e.g. <code>bot_update</code>) are failing, or you
+have reason to believe the CQ itself is broken, or you can&#39;t really
+tell what&#39;s wrong, please file a <a href="https://g.co/bugatrooper">trooper bug</a>.</li>
+</ol>
+<p>In both cases, when filing bugs, please include links to the build and/or CL
+(including relevant patchset information) in question.</p>
+<h3 id="how-do-i-stop-the-cq">How do I stop the CQ?</h3>
+<p>There are a few ways to do this. Here are 3:</p>
+<ol>
+<li>Change the Commit-Queue value from +1 to 0 in Gerrit UI.</li>
+<li>Upload a new patchset which triggers a new dry run (Ex: git cl upload -d).</li>
+<li>Code-Review -1. This prevents a CL from landing.</li>
+</ol>
+<h3 id="how-do-i-add-a-new-builder-to-the-cq">How do I add a new builder to the CQ?</h3>
+<p>There are several requirements for a builder to be added to the Commit Queue.</p>
+<ul>
+<li>There must be a &quot;mirrored&quot; (aka matching) CI builder that is gardened, to
+ensure that someone is actively keeping the configuration green.</li>
+<li>All the code for this configuration must be in Chromium&#39;s public repository or
+brought in through <a href="https://github.com/chromium/chromium/blob/HEAD/DEPS">src/DEPS</a>.</li>
+<li>Setting up the build should be straightforward for a Chromium developer
+familiar with existing configurations.</li>
+<li>Tests should use existing test harnesses i.e.
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/googletest">gtest</a>.</li>
+<li>It should be possible for any committer to replicate any testing run, i.e.
+tests and their data must be in the public repository.</li>
+<li>Median cycle time needs to be under 40 minutes for trybots. 90th percentile
+should be around an hour (preferably shorter).</li>
+<li>Configurations need to catch enough failures to be worth adding to the CQ.
+Running builds on every CL requires a significant amount of compute resources.
+If a configuration only fails once every couple of weeks on the waterfalls,
+then it&#39;s probably not worth adding it to the commit queue.</li>
+</ul>
+<p>Please email <a href="mailto:bpastene@chromium.org">bpastene@chromium.org</a>, who will approve new build configurations.</p>
+<h3 id="how-do-i-ensure-a-trybot-runs-on-all-changes-to-a-specific-directory">How do I ensure a trybot runs on all changes to a specific directory?</h3>
+<p>Several builders are included in the CQ only for changes that affect specific
+directories. These used to be configured via Cq-Include-Trybots footers
+injected at CL upload time. They are now configured via the <code>location_regexp</code>
+attribute of the tryjob parameter to the try builder&#39;s definition e.g.</p>
+<pre>  try_.some_builder_function(
+      name = &quot;my-specific-try-builder&quot;,
+      tryjob = try_.job(
+          location_regexp = [
+              &quot;.+/{+]/path/to/my/specific/directory/.+&quot;
+          ],
+      ),
+  )</pre>
+<h2 id="flakiness">Flakiness</h2>
+<p>The CQ can sometimes be flaky. Flakiness is when a test on the CQ fails, but
+should have passed (commonly known as a false negative). There are a few common
+causes of flaky tests on the CQ:</p>
+<ul>
+<li>Machine issues; weird system processes running, running out of disk space,
+etc...</li>
+<li>Test issues; individual tests not being independent and relying on the order
+of tests being run, not mocking out network traffic or other real world
+interactions.</li>
+</ul>
+<p>The CQ mitigates flakiness by retrying failed tests. The core tradeoff in retry
+policy is that adding retries increases the probability that a flaky test will
+land on tip of tree sublinearly, but mitigates the impact of the flaky test on
+unrelated CLs exponentially.</p>
+<p>For example, imagine a CL that adds a test that fails with 50% probability. Even
+with no retries, the test will land with 50% probability. Subsequently, 50% of
+all unrelated CQ attempts would flakily fail. This effect is cumulative across
+different flaky tests. Since the CQ has roughly ~20,000 unique flaky tests,
+without retries, pretty much no CL would ever pass the CQ.</p>
+<h2 id="help">Help!</h2>
+<p>Have other questions? Run into any issues with the CQ? Email
+<a href="mailto:infra-dev@chromium.org">infra-dev@chromium.org</a>, or file a <a href="https://g.co/bugatrooper">trooper bug</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/infra/cq.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/infra/cq.md</a>
+  </p>
+</div>

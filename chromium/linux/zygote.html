@@ -1,0 +1,73 @@
+<h1>Zygote</h1>
+<p>A zygote process is one that listens for spawn requests from a main process
+and forks itself in response. Generally they are used because forking a process
+after some expensive setup has been performed can save time and share extra
+memory pages.</p>
+<p>More specifically, on Linux, it allows to:</p>
+<ul>
+<li>Amortize the runtime and memory cost of the dynamic loader&#39;s relocations,
+which is respectively ~6 MB and 60 ms/GHz per process.
+See <a href="#appendix-a-runtime-impact-of-relocations">Appendix A</a> and
+<a href="#appendix-b-memory-impact-of-relocations">Appendix B</a>.</li>
+<li>Amortize the runtime and memory cost for initializing common
+libraries, such as ICU, NSS, the V8 snapshot and anything else in
+<code>ContentMainRunnerImpl::Initialize()</code>. With the above, this saves
+up to ~8 MB per process. See <a href="#appendix-c-overall-memory-impact">Appendix C</a>.</li>
+</ul>
+<p>Security-wise, the Zygote is responsible for setting up and bookkeeping the
+<a href="https://github.com/chromium/chromium/blob/HEAD/sandbox/linux/README.md">namespace sandbox</a>.</p>
+<p>Furthermore it is the only reasonable way to keep a reference to a binary
+and a set of shared libraries that can be exec&#39;ed. In the model used on Windows
+and Mac, renderers are exec&#39;ed as needed from the chrome binary. However, if the
+chrome binary, or any of its shared libraries are updated while Chrome is
+running, we&#39;ll end up exec&#39;ing the wrong version. A version <em>x</em> browser might be
+talking to a version <em>y</em> renderer. Our IPC system does not support this (and
+does not want to!).</p>
+<p>So we would like to keep a reference to a binary and its shared libraries and
+exec from these. However, unless we are going to write our own <code>ld.so</code>, there&#39;s
+no way to do this.</p>
+<p>Instead, we exec the prototypical renderer at the beginning of the browser
+execution. When we need more renderers, we signal this prototypical process (the
+zygote) to fork itself. The zygote is always the correct version and, by
+exec&#39;ing one, we make sure the renderers have a different address space
+randomisation than the browser.</p>
+<p>The zygote process is triggered by the <code>--type=zygote</code> command line flag, which
+causes <code>ZygoteMain</code> (in <code>chrome/browser/zygote_main_linux.cc</code>) to be run. The
+zygote is launched from <code>content/browser/zygote_host/zygote_host_impl_linux.cc</code>.</p>
+<p>Signaling the zygote for a new renderer happens in
+<code>chrome/browser/child_process_launcher.cc</code>.</p>
+<p>You can use the <code>--zygote-cmd-prefix</code> flag to debug the zygote process. If you
+use <code>--renderer-cmd-prefix</code> then the zygote will be bypassed and renderers will
+be exec&#39;ed afresh every time.</p>
+<h2 id="appendix-a-runtime-impact-of-relocations">Appendix A: Runtime impact of relocations</h2>
+<p>Measured on a Z620:</p>
+<pre>$ LD_DEBUG=statistics /opt/google/chrome-beta/chrome --help
+runtime linker statistics:
+  total startup time in dynamic loader: 73899158 clock cycles
+    time needed for relocation: 56836478 clock cycles (76.9%)
+       number of relocations: 4271
+       number of relocations from cache: 11347
+       number of relative relocations: 502740
+    time needed to load objects: 15789844 clock cycles (21.3%)</pre>
+<p>56836478 clock cycles -&gt; ~56 ms/GHz</p>
+<h2 id="appendix-b-memory-impact-of-relocations">Appendix B: Memory impact of relocations</h2>
+<pre>$ readelf -WS /opt/google/chrome-beta/chrome
+[Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
+...
+[25] .data.rel.ro      PROGBITS        0000000006a8b590 6a8a590 5b5500 00  WA  0   0 16
+...
+Note: 0x5b5500  -&gt; 5.98 MB</pre>
+<p>Actual impact in terms of memory pages that get shared due to CoW:</p>
+<pre>$ cat /proc/.../smaps
+7fbdd1c81000-7fbdd2233000 r--p 06a5d000 fc:00 665771     /opt/google/chrome-unstable/chrome
+...
+Shared_Dirty:       5796 kB</pre>
+<h2 id="appendix-c-overall-memory-impact">Appendix C: Overall memory impact</h2>
+<pre>$ cat /proc/$PID_OF_ZYGOTE/smaps | grep Shared_Dirty | awk '{TOTAL += $2} END {print TOTAL}'
+8092  # KB for dirty pages shared with other processes (mostly forked child processes).</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/zygote.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/zygote.md</a>
+  </p>
+</div>

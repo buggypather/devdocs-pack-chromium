@@ -1,0 +1,72 @@
+<h1>Developing Chrome for iOS with the Xcode IDE</h1>
+<p>This document contains notes used during a presentation about how to use Xcode
+to develop Chrome for iOS.</p>
+<h2 id="background">Background</h2>
+<h3 id="xcodeproj">.xcodeproj</h3>
+<ul>
+<li>Open all.xcodeproj only.</li>
+<li>Generated from BUILD.gn files.</li>
+<li>Don&#39;t make changes to it as it is a &quot;fake&quot; representation of the project<ul>
+<li>changes will not be committed</li>
+<li>changes will be overwritten without warning</li>
+</ul>
+</li>
+<li>Modify BUILD files instead</li>
+<li>Added BUILD.gn files/<code>source_sets</code> need to be referenced from other ones as
+a <code>dep</code> in order for it to be shown in xcode.</li>
+</ul>
+<h3 id="adding-new-files">Adding new files</h3>
+<ul>
+<li>Create new files with <code>tools/boilerplate.py</code></li>
+<li>Add files to BUILD.gn <code>mate ios/chrome/...BUILD.gn</code></li>
+<li>Add new source_set target as a dep of another target</li>
+<li>Execute <code>gclient runhooks</code> or <code>gclient sync</code></li>
+</ul>
+<h3 id="simulators">Simulators</h3>
+<ul>
+<li>Simulators build for Mac architecture, not emulators. Fast, generally good
+for most development</li>
+<li>To run on device, need provisioning profiles and certificate</li>
+</ul>
+<h2 id="xcode">Xcode</h2>
+<ul>
+<li>Project location is <code>src/out/build/</code>, open <code>all.xcodeproj</code></li>
+<li>Choose &quot;Automatically generate targets&quot; after a <code>gclient sync</code></li>
+<li>Start typing while dropdowns are presented to filter the displayed items</li>
+</ul>
+<h3 id="targets">Targets</h3>
+<ul>
+<li>`chrome&#39; is the main application target</li>
+<li><code>ios_web_shell</code> and <code>ios_web_view_shell</code> test lower level of application</li>
+</ul>
+<h3 id="tests">Tests</h3>
+<ul>
+<li><p>Unittests/Inttests</p>
+<ul>
+<li>Add flags to specify tests to run (Option-Click on unittest target name,
+select Run from left panel, add to &quot;Arguments Passed on Launch&quot;)</li>
+<li><code>gtest_filter=TestClass.*</code></li>
+<li><code>gtest_repeat=20</code></li>
+<li>Full list of options available by sending an unknown option</li>
+</ul>
+</li>
+<li><p>EarlGrey</p>
+<ul>
+<li>EG1 deprecated</li>
+<li>EG2 are current UI tests<ul>
+<li>A separate &quot;test&quot; process communicates with &quot;the app&quot;.</li>
+<li>EDO is term for &quot;distant object&quot; on &quot;the other side&quot;.</li>
+<li>egtest files can run under both EG1 and EG2 with correct setup in
+BUILD.gn because the layer of helpers encapsulate the necessary
+differences.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ios/xcode_tips.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ios/xcode_tips.md</a>
+  </p>
+</div>

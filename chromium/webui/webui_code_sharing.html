@@ -1,0 +1,161 @@
+<h1>Sharing Code in WebUI</h1>
+<style>
+.doc h1 {
+  margin: 0;
+}
+
+.doc h3,
+.doc h4 {
+  font-weight: bold;
+}
+
+.doc h4 {
+  font-style: italic;
+}
+</style><h2 id="summary-diagram"><strong>Summary Diagram</strong></h2>
+<p>The following diagram summarizes the correct location for TypeScript/CSS/HTML
+WebUI code that is used by 2 or more WebUIs. Details on how to determine which
+category a specific piece of code belongs to follow.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/webui/images/webui_code_sharing.png" alt="WebUI code sharing diagram"></p>
+<h2 id="step-1-determine-whether-the-code-should-be-widely-or-narrowly-shared"><strong>Step 1: Determine whether the code should be widely or narrowly shared.</strong></h2>
+<p><strong>Widely shared code</strong> should be located in <code>ui/webui/resources/</code> and will be
+served from <code>chrome://resources</code> and <code>chrome-untrusted://resources</code> at runtime.
+Code in these folders can be used by all UIs in Chrome (trusted and untrusted).
+As a result, code in these folders <strong>should be general purpose, and make sense
+for any Chrome UI to use, not just UIs with specific properties</strong>.</p>
+<p><strong>Examples of general purpose code:</strong></p>
+<ul>
+<li>Core UI elements like <code>cr_checkbox.ts</code> (lots of UIs have use for checkboxes)</li>
+<li>Widely useful utilities like <code>assert.ts</code> (lots of UIs need to
+<code>assert(&lt;some condition&gt;) </code>or <code>assertNotReached()</code>)</li>
+</ul>
+<p><em><strong>Rule of thumb: If code is needed by 3+ different WebUI surfaces, this
+is often a good indicator that it is sufficiently general purpose to be widely
+shared.</strong></em></p>
+<p><strong>Narrowly shared code</strong> should live in a specific folder that is a sibling of
+folders that need to use it. For example, code in
+<code>chrome/browser/resources/settings_shared</code> is used by <code>c/b/resources/settings</code>
+and <code>c/b/resources/password_manager</code>. Narrowly shared libraries are packaged
+with a <code>build_webui()</code> rule. UIs that need these libraries add a dependency on
+the generated <code>ts_library()</code> target, and add the files from the generated <code>.grd</code>
+to their data source.  Narrowly shared code is served from a designated path
+from the individual UIs that use it (e.g. <code>chrome://settings</code> and
+<code>chrome://password-manager</code> both serve code from <code>settings_shared</code> from
+<code>/shared/settings/</code>) and it is only available to these UIs, and not to all
+WebUIs in Chrome.</p>
+<p><strong>Examples of code that multiple UIs use, but is not general purpose and
+therefore is narrowly shared:</strong></p>
+<ul>
+<li>UI code that is only useful for UIs that are in the Side Panel (belongs in
+<code>chrome/browser/resources/side_panel/shared</code>)</li>
+<li>UI code that is only useful for UIs that have access to the
+<code>settingsPrivate</code> API and use the settings “prefs” mechanism (belongs in
+<code>chrome/browser/resources/settings_shared</code>)</li>
+<li>UI code for viewing a PDF document (belongs in
+<code>chrome/browser/resources/pdf</code>)</li>
+</ul>
+<h2 id="how-to-add-widely-shared-code"><strong>How to add widely shared code</strong></h2>
+<p>The organization of <code>ui/webui/resources</code> subfolders is as follows:</p>
+<p><strong><code>js</code></strong>:
+Used for general purpose utilities and some browser proxies.
+Not for UI elements; should not depend on Polymer or Lit.</p>
+<p><strong><code>cr_elements</code></strong>:
+Used for UI elements, styles, and mixins that meet the following requirements:</p>
+<ul>
+<li>Do not use <code>$i18n</code> replacements or the <code>I18nMixin</code>.</li>
+<li>Do not use <code>chrome.send</code>, Mojo, or extension APIs
+For more details see the <a href="https://chromium.googlesource.com/chromium/src/+/main/ui/webui/resources/cr_elements/README.md">cr_elements README</a></li>
+</ul>
+<p><strong><code>cr_components</code></strong>:
+Used for more complex UI elements or components that are widely shared, but
+don’t fit the requirements for cr_elements. For more details see the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/ui/webui/resources/cr_components/README.md">cr_components README</a></p>
+<p><strong>Note: All widely shared code in <code>ui/webui/resources</code> should have unit tests
+at the time it is added to this folder</strong>. Since the code is widely shared, it
+is likely many developers from different teams will need to make changes, and
+unit tests reduce the chance of such changes introducing regressions.
+Regressions in shared code are also more likely to be high impact, since they
+can impact many different UIs.</p>
+<h2 id="how-to-add-narrowly-shared-code"><strong>How to add narrowly shared code</strong></h2>
+<p>First, you will need to <strong>create a folder for your narrowly shared code to
+reside in</strong>. This folder should be a sibling of the highest level folder(s)
+that need to use it. Examples:</p>
+<ul>
+<li><code>chrome/browser/resources/settings/</code> and
+<code>chrome/browser/resources/password_manager/</code> share code in
+<code>chrome/browser/resources/settings_shared/</code>.</li>
+<li><code>chrome/browser/resources/side_panel/customize_chrome/</code> and
+<code>chrome/browser/resources/side_panel/bookmarks/</code> share code in
+<code>chrome/browser/resources/side_panel/shared</code>.</li>
+</ul>
+<p>Second, you need to <strong>set up a <code>build_webui()</code> target in your new shared
+library folder</strong>. This is largely the same as setting up a <code>build_webui()</code>
+target in any other folder, with some important possible differences below:</p>
+<ul>
+<li><code>grd_resource_path_prefix</code> should be set to a path that you want all
+UIs sharing the code to import these files from at runtime. For example,
+the target in <code>settings_shared</code> sets this to <code>shared/settings</code>, and all
+settings code importing these files imports them from
+<code>/shared/settings/</code>.</li>
+<li><code>ts_composite</code> must be set to true, because other library targets will
+depend on the shared code.</li>
+<li><code>webui_context_type</code> should be set based on all UIs using the code. In
+particular, if both trusted and untrusted UIs will use the shared
+library, this should be set to <code>relative</code> so that no absolute <code>chrome://</code>
+or <code>chrome-untrusted://</code> paths are allowed (since such paths will not
+work in both trusted and untrusted contexts).</li>
+</ul>
+<p>Third, <strong>add dependencies and corresponding path mappings</strong> in the build
+targets that depend on the new shared library. This is best demonstrated with
+an example:</p>
+<pre data-language="python">build_webui(&quot;build_my_webui&quot;) {
+  grd_prefix = &quot;my_webui&quot;
+  # Other params here
+  ts_deps = [
+    &quot;../foo_shared:build_ts&quot;,  # Limited shared library at ../foo_shared
+    &quot;//ui/webui/resources/js:build_ts&quot;,
+  ]
+  # Map to the output directory of the `ts_library` build rule for
+  # chrome/browser/resources/foo_shared.
+  ts_path_mappings = [
+    &quot;/foo_shared/*|&quot; + rebase_path(
+        &quot;$root_gen_dir/chrome/browser/resources/foo_shared/tsc/*&quot;,
+        target_gen_dir) ]
+  # other stuff goes here
+}</pre>
+<p>Fourth, <strong>ensure that any UIs using the shared library will have access to the
+resources at runtime</strong>. This has a few steps:</p>
+<ul>
+<li>Update <code>tools/gritsettings/resource_ids.spec</code> with an entry for the new
+generated shared <code>.grd</code> file.</li>
+<li>Add a dependency on the shared library&#39;s generated <code>resources</code> target.
+This should typically be added in the same target or group that depends
+on the <code>resources</code> target(s) of the code relying on the library (often
+in <code>chrome/browser/resources/BUILD.gn</code>).</li>
+<li>Add the generated <code>.pak</code> file in <code>chrome_paks.gni</code>.</li>
+<li>Register the shared library&#39;s resources in any data source that needs to
+serve them at runtime (see example code below) using
+<code>WebUIDataSource::AddResourcePaths()</code>.</li>
+</ul>
+<pre data-language="cpp">#include &quot;chrome/grit/foo_shared_resources.h&quot;
+#include &quot;chrome/grit/bar_shared_resources.h&quot;
+// ...
+HelloWorldUI::HelloWorldUI(content::WebUI* web_ui) {
+  // ...
+  // Add selected resources from foo_shared
+  static constexpr webui::ResourcePath kResources[] = {
+      {&quot;foo_shared/foo_shared.css.js&quot;, IDR_FOO_SHARED_FOO_SHARED_CSS_JS},
+      {&quot;foo_shared/foo_shared_vars.css.js&quot;,
+       IDR_FOO_SHARED_FOO_SHARED_VARS_CSS_JS},
+  };
+  source-&gt;AddResourcePaths(kResources);
+
+  // Add all shared resources from bar_shared
+  source-&gt;AddResourcePaths(kBarSharedResources);
+}</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_code_sharing.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_code_sharing.md</a>
+  </p>
+</div>

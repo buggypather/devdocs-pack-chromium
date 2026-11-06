@@ -1,0 +1,200 @@
+<h1>Memory Benchmarks</h1>
+<p>This document describes benchmarks available to track Chrome&#39;s and
+WebView&#39;s memory usage, where they live, what they measure, how to run them,
+and on how to diagnose regressions.</p>
+<h2 id="glossary">Glossary</h2>
+<ul>
+<li><strong>User story:</strong> a set of actions to perform on a browser or device (e.g.
+open google homepage, type &quot;foo&quot;, click search, scroll down, visit first
+result, etc.).</li>
+<li><strong>Metric:</strong> a data aggregation process that takes a Chrome trace as input
+(produced by a <a href="https://chromium.googlesource.com/catapult/+/refs/heads/main/telemetry/README.md">Telemetry</a> run) and produces a set of summary numbers as
+output (e.g. total GPU memory used).</li>
+<li><strong>Benchmark:</strong> a combination of (one or more) user stories and (one or
+more) metrics.</li>
+</ul>
+<h2 id="system-health">System Health</h2>
+<p><em>System health</em> is an effort to unify top-level benchmarks (as opposite to
+micro-benchmarks and regression tests) that are suitable to capture
+representative user stories.</p>
+<h3 id="benchmarks">Benchmarks</h3>
+<p>System health memory benchmarks are:</p>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/tools/perf/page_sets/system_health/">system_health.memory_mobile</a> -
+user stories running on Android devices.</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/tools/perf/page_sets/system_health/">system_health.memory_desktop</a> -
+user stories running on desktop platforms.</li>
+</ul>
+<p>These benchmarks are run continuously on the <a href="https://ci.chromium.org/p/chrome/g/chrome.perf/console">chrome.perf</a> waterfall,
+collecting and reporting results on the
+<a href="https://chromeperf.appspot.com/report">Chrome Performance Dashboard</a>.</p>
+<h3 id="user-stories">User stories</h3>
+<p>System health user stories are classified by the kind of interactions they
+perform with the browser:</p>
+<ul>
+<li><code>browse</code> stories navigate to a URL and interact with the page; e.g.
+scroll, click on elements, navigate to subpages, navigate back.</li>
+<li><code>load</code> stories just navigate to a URL and wait for the page to
+load.</li>
+<li><code>background</code> stories navigate to a URL, possibly interact with the
+page, and then bring another app to the foreground (thus pushing the
+browser to the background).</li>
+<li><code>long_running</code> stories interact with a page for a longer period
+of time (~5 mins).</li>
+<li><code>multitab</code> loads different web sites in several tabs, then cycles through
+them.</li>
+<li><code>play</code> loads a web site and plays some media (e.g. a song).</li>
+</ul>
+<p>The full name of a story has the form <code>{interaction}:{category}:{site}[:{year}]</code>
+where:</p>
+<ul>
+<li><code>interaction</code> is one the labels given above;</li>
+<li><code>category</code> is used to group together sites with a similar purpose,
+e.g. <code>news</code>, <code>social</code>, <code>tools</code>;</li>
+<li><code>site</code> is a short name identifying the website in which the story mostly
+takes place, e.g. <code>cnn</code>, <code>facebook</code>, <code>gmail</code>.</li>
+<li><code>year</code> indicates the year in which the web page recording for the story
+was most recently updated.</li>
+</ul>
+<p>For example <code>browse:news:cnn:2018</code> and <code>background:social:facebook</code> are two
+system health user stories. The list of all current stories can be found at
+<a href="http://bit.ly/csh-stories">bit.ly/csh-stories</a>.</p>
+<p>Today, for most stories, a garbage collection is forced at the end of the
+story and a memory dump is then triggered. Metrics report the values
+obtained from this single measurement.</p>
+<h2 id="continuous-monitoring">Continuous monitoring</h2>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/79d08f59cf497c761f7099ea427704c14e9afc03.png" alt="Chrome Performance Dashboard"></p>
+<p>To view data from one of the benchmarks on the
+<a href="https://chromeperf.appspot.com/report">Chrome Performance Dashboard</a> you should select:</p>
+<ul>
+<li><strong>Test suite:</strong> The name of a <em><a href="#Benchmarks">benchmark</a></em>.</li>
+<li><strong>Bot:</strong> The name of a <em>platform or device configuration</em>. Sign in to also
+see internal bots.</li>
+<li><strong>Subtest (1):</strong> The name of a <em><a href="#Understanding-memory-metrics">metric</a></em>.</li>
+<li><strong>Subtest (2):</strong> The name of a <em>story group</em>; these have the form
+<code>{interaction}_{category}</code> for system health stories.</li>
+<li><strong>Subtest (3):</strong> The name of a <em><a href="#User-stories">user story</a></em>
+(with <code>:</code> replaced by <code>_</code>).</li>
+</ul>
+<p>Clicking on any point of the graph will give you the commit range, links to the
+builder that ran the benchmark, and a trace file collected during the story
+run. See below for details on how to interpret these traces when
+<a href="#debugging-memory-regressions">debugging memory related issues</a>.</p>
+<p>Many of the high level memory measurements are automatically tracked and the
+Performance Dashboard will generate alerts when a memory regression is detected.
+These are triaged by <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/perf_regression_sheriffing.md">perf sheriffs</a> who create bugs and start bisect jobs
+to find the root cause of regressions.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/perfdashboard_alert.png" alt="Chrome Performance Dashboard Alert"></p>
+<h2 id="debugging-memory-regressions">Debugging memory regressions</h2>
+<p>If you are investigating a memory regression, chances are, a <a href="https://pinpoint-dot-chromeperf.appspot.com/">pinpoint</a>
+job identified one of your CLs as a possible culprit.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/pinpoint_regression.png" alt="Pinpoint Regression"></p>
+<p>Note the &quot;chart&quot; argument identifies the memory metric that regressed. The
+pinpoint results page also gives you easy access to traces before and after
+your commit landed. It&#39;s useful to look at both and compare them to identify what
+changed. The documentation on <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/README.md">memory-infra</a> explains how to dig
+down into details and interpret memory measurements. Also note that pinpoint
+runs each commit multiple times, so you can access more traces by clicking on
+a different &quot;repeat&quot; of either commit.</p>
+<p>Sometimes it&#39;s also useful to follow the link to &quot;Analyze benchmark results&quot;
+which will bring up the <a href="https://chromium.googlesource.com/catapult.git/+/HEAD/docs/metrics-results-ui.md">Metrics Results UI</a> to compare all
+measurements (not just the one caught by the alert) before and after your
+CL landed. Make sure to select the &quot;before&quot; commit as reference column, show
+absolute changes (i.e. &quot;Δavg&quot;) instead of relative, and sort by the column
+with changes on the &quot;after&quot; commit to visualize them more easily. This can be
+useful to find a more specific source of the regression, e.g.
+<code>renderer_processes:reported_by_chrome:v8:heap:code_space:effective_size</code>
+rather than just <code>all_processes:reported_by_chrome:effective_size</code>, and help
+you pin down the source of the regression.</p>
+<p>To confirm whether a revert of your CL would fix the regression you can run
+a <a href="#How-to-run-a-pinpoint-try-job">pinpoint try job</a> with a patch containing
+the revert. Finally, <strong>do not close the bug</strong> even if you suspect that your CL
+may not be the cause of the regression; instead follow the more general
+guidance on how to <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/addressing_performance_regressions.md">address performance regressions</a>.
+Bugs should only be closed if the regression has been fixed or justified.</p>
+<h2 id="how-to-run-the-benchmarks">How to run the benchmarks</h2>
+<p>Benchmarks may be run on a local platform/device or remotely on a pinpoint
+try job.</p>
+<h3 id="how-to-run-a-pinpoint-try-job">How to run a pinpoint try job</h3>
+<p>Given a patch already uploaded to code review, try jobs provide a convenient
+way to evaluate its memory implications on devices or platforms which
+may not be immediately available to developers.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/yHRMmUqraqJ.png" alt="New pinpoint try job dialog"></p>
+<p>To start a try job go to the <a href="https://pinpoint-dot-chromeperf.appspot.com/">pinpoint</a> website, click on the <code>+</code> button to
+create a new job, and fill in the required details:</p>
+<ul>
+<li><strong>Bug ID</strong> (optional): The id of a crbug.com issue where pinpoint can post
+updates when the job finishes.</li>
+<li><strong>Gerrit URL</strong>: URL to the patch you want to test. Note that your patch can
+live in chromium or any of its sub-repositories!</li>
+<li><strong>Bot</strong>: Select a suitable device/platform from the drop-down menu on which
+to run your job.</li>
+<li><strong>Benchmark</strong>: The name of the benchmark to run. If you are interested in
+memory try <code>system_health.memory_mobile</code> or <code>system_health.memory_desktop</code>
+as appropriate.</li>
+<li><strong>Story</strong> (optional): A pattern (Python regular expression) passed to
+Telemetry&#39;s <code>--story-filter</code> option to only run stories that match the
+pattern.</li>
+<li><strong>Extra Test Arguments</strong> (optional): Additional command line arguments for
+Telemetry&#39;s <code>run_benchmark</code>. Of note, if you are interested in running a
+small but representative sample of system health stories you can pass
+<code>--story-tag-filter health_check</code>.</li>
+</ul>
+<p>If you have more specific needs, or need to automate the creation of jobs, you
+can also consider using <a href="https://cs.chromium.org/chromium/src/tools/perf/pinpoint_cli">pinpoint_cli</a>.</p>
+<h3 id="how-to-run-locally">How to run locally</h3>
+<p>After building, e.g. <code>ChromePublic.apk</code>, you can run a specific system health
+story with the command:</p>
+<pre>$SRC/tools/perf/run_benchmark run system_health.memory_mobile \
+    --browser android-chromium --story-filter load:search:google</pre>
+<p>This will run the story with a default of 3 repetitions and produce a
+<code>results.html</code> file comparing results from this and any previous benchmark
+runs. In addition, you&#39;ll also get individual <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/README.md">trace files</a>
+for each story run by the benchmark. <strong>Note:</strong> by default only high level
+metrics are shown, you may need to tick the &quot;Show all&quot; check box in order to
+view some of the lower level memory metrics.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/ea60207d9bb4809178fe75923d6d1a2b241170ef.png" alt="Example results.html file"></p>
+<p>Other useful options for this command are:</p>
+<ul>
+<li><code>--pageset-repeat [n]</code> - override the default number of repetitions</li>
+<li><code>--reset-results</code> - clear results from any previous benchmark runs in the
+<code>results.html</code> file.</li>
+<li><code>--results-label [label]</code> - give meaningful names to your benchmark runs,
+this way it is easier to compare them.</li>
+</ul>
+<p>For WebView make sure to <a href="https://www.chromium.org/developers/how-tos/build-instructions-android-webview">replace the system WebView</a>
+on your device and use <code>--browser android-webview</code>.</p>
+<h2 id="understanding-memory-metrics">Understanding memory metrics</h2>
+<p>There is a large number of <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/README.md">memory-infra</a> metrics, breaking down usage
+attributed to different components and processes.</p>
+<p><img src="https://storage.googleapis.com/chromium-docs.appspot.com/a73239c6367ed0f844500e51ce1e04556cb99b4f.png" alt="memory-infra metrics"></p>
+<p>Most memory metrics have the form
+<code>memory:{browser}:{processes}:{source}:{component}:{kind}</code>
+where:</p>
+<ul>
+<li><strong>browser:</strong> One of <code>chrome</code> or <code>webview</code>.</li>
+<li><strong>processess:</strong> One of <code>browser_process</code>, <code>renderer_processess</code>,
+<code>gpu_process</code>, or <code>all_processess</code>.</li>
+<li><strong>source:</strong> One of <code>reported_by_chrome</code> or <code>reported_by_os</code></li>
+<li><strong>component:</strong> May be a Chrome component, e.g. <code>skia</code> or <code>sqlite</code>;
+details about a specific component, e.g. <code>v8:heap</code>; or a class of memory
+as seen by the OS, e.g. <code>system_memory:native_heap</code> or <code>gpu_memory</code>. If
+reported by chrome, the metrics are gathered by <code>MemoryDumpProvider</code>s,
+probes placed in the specific components&#39; codebase. For example, in
+&quot;memory:chrome:all_processes:reported_by_chrome:net:effective_size_avg,&quot;
+the component is &quot;net&quot; which is Chrome&#39;s network stack and
+&quot;reported_by_chrome&quot; means that this metric is gathered via probes in
+the network stack.</li>
+<li><strong>kind:</strong> The kind of memory being reported. For metrics reported by
+Chrome this usually is <code>effective_size</code> (others are <code>locked_size</code>
+and <code>allocated_objects_size</code>); for metrics by the OS this usually is
+<code>proportional_resident_size</code> (others are <code>peak_resident_size</code> and
+<code>private_dirty_size</code>).</li>
+</ul>
+<p>Read the <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/README.md">memory-infra documentation</a> for more details on them.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/memory_benchmarks.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/memory_benchmarks.md</a>
+  </p>
+</div>

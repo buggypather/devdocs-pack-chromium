@@ -1,0 +1,148 @@
+<h1>Key Concepts in Chrome Memory</h1>
+<h2 id="whats-so-hard-about-memory-isnt-it-just-malloc-and-free">What&#39;s so hard about memory? Isn&#39;t it just malloc and free?</h2>
+<p>Not really. There are lots of differences and subtleties that change per
+operating system and even per operating system configuration.</p>
+<p>Fortunately, these differences mostly disappear when a program is running
+with sufficient resources.</p>
+<p>Unfortunately, the distinctions end up being very relevant when
+working near out of memory conditions or analyzing overall performance
+when there is any amount of memory pressure; this makes crafting and
+interpreting memory statistics hard.</p>
+<p>Fortunately, the point of this doc is to give succinct background that
+will help you ramp up on the subtleties to work in this space. Yes, this
+is complicated stuff...but don&#39;t despair. You work on a multi-process
+browser implementing the web platform with high security guarantees.
+Compared to the rest the system, memory is not THAT complicated.</p>
+<h2 id="can-you-give-specific-examples-of-how-its-harder-than-mallocfree">Can you give specific examples of how it&#39;s harder than malloc/free?</h2>
+<p>Here are some example questions that require a more complex
+view of memory than malloc/free.</p>
+<ul>
+<li>When Chrome allocates memory, when does it take up swap space?</li>
+<li>When memory is <code>free()</code>d, when is it made usable by other applications?</li>
+<li>Is it always safe to touch the memory returned by malloc()?</li>
+<li>How many heaps does Chrome have?</li>
+<li>How are memory resources used by the GPU and drivers accounted for?</li>
+<li>Is that the same on systems where GPU memory isn&#39;t shared with main memory?</li>
+<li>How are shared libraries accounted for? How big of a penalty is there for
+each process that shares the memory?</li>
+<li>What types of memory does Task Manager/Activity Monitor/top report?</li>
+<li>What about the UMA stats?</li>
+</ul>
+<p>In many of the above, the answer actually changes per operating system variant.
+There is at least one major schism between Windows-based machines and more
+unixy systems. For example, it is impossible to return all resources (physical
+ram as well as swap space) to the OS in a way brings them back on demand which
+drastically changes the way one can handle free lists.</p>
+<p>However, even in macOS, Android, CrOS, and &quot;standard desktop linux&quot; each
+also have enough divergences (compressed memory, pagefile vs swap partition
+vs no swap, overcommit settings, memory perssure signals etc) that even
+answering &quot;how much memory is Chromium using&quot; is hard to do in a uniform
+manner.</p>
+<p>The goal of this document is to give a common set of vocabulary
+and concepts such that Chromium developers can more discuss questions like
+the ones above without misunderstanding each other.</p>
+<h2 id="key-gotchas">Key gotchas</h2>
+<h3 id="windows-allocation-uses-resources-immediately-other-oses-use-it-on-first-touch">Windows allocation uses resources immediately; other OSes use it on first touch.</h3>
+<p>Arguably the biggest difference for Windows and other OSes is memory granted to
+a process is always &quot;committed&quot; on allocation. Pragmatically this means that in
+Windows, <code>malloc(10*1024*1024*1024)</code> will immediately prevent other applications
+from being able to successfully allocate memory thereby causing them to crash
+or not be able to open. In Unix variants, usage usually only consumes system
+resources [TODO(awong): Link to overcommit] when pages are touched.</p>
+<p>Not being aware of this difference can cause architecture choices that have a
+larger than expected resource impact on Windows and incorrect interpretation for metrics on Windows</p>
+<p>See the following section on &quot;discardable&quot; memory for more info.</p>
+<h3 id="because-of-the-commit-guarantee-difference-discarding-memory-has-completely-different-meanings-across-platforms">Because of the commit guarantee difference, &quot;discarding&quot; memory has completely different meanings across platforms.</h3>
+<p>In Unix systems, there is an <code>madvise()</code> function via which pages that have
+been committed via usage can be returned to the non-resource consuming state.
+Such a page will then be recommitted on demand making it a tempting optimization
+for data structures with freelists. However, there is no such API on Windows.
+The <code>VirtualAlloc(MEM_RESET)</code>, <code>DiscardVirtualMemory()</code>, and
+<code>OfferVirtualMemory()</code> look temptingly similar and on first glance they even
+look like they work because they will immediately reduce the amount of physical
+ram (aka Working Set) a processes uses. However, they do NOT release swap
+meaning they will not help prevent OOM scenarios.</p>
+<p>Designing a freelist structure that conflates this behavior (see this
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=726077">PartitionAlloc bug</a>)
+will result in a system that only truly reduces resource usage on Unix-like
+systems.</p>
+<h2 id="terms-and-definitions">Terms and definitions</h2>
+<p>Each platform exposes a different memory model. This section describes a
+consistent set of terminology that will be used by this document. This
+terminology is intentionally Linux-biased, since that is the platform most
+readers are expected to be familiar with.</p>
+<h3 id="supported-platforms">Supported platforms</h3>
+<ul>
+<li>Linux</li>
+<li>Android</li>
+<li>ChromeOS</li>
+<li>Windows [kernel: Windows NT]</li>
+<li>macOS/iOS [kernel: Darwin/XNU/Mach]</li>
+</ul>
+<h3 id="terminology">Terminology</h3>
+<p>Warning: This terminology is neither complete, nor precise, when compared to the
+terminology used by any specific platform. Any in-depth discussion should occur
+on a per-platform basis, and use terminology specific to that platform.</p>
+<ul>
+<li><strong>Virtual memory</strong> - A per-process abstraction layer exposed by the kernel. A
+contiguous region divided into 4kb <strong>virtual pages</strong>.</li>
+<li><strong>Physical memory</strong> - A per-machine abstraction layer internal to the kernel.
+A contiguous region divided into 4kb <strong>physical pages</strong>. Each <strong>physical
+page</strong> represents 4kb of physical memory.</li>
+<li><strong>Resident</strong> - A virtual page whose contents is backed by a physical
+page.</li>
+<li><strong>Swapped/Compressed</strong> - A virtual page whose contents is backed by
+something other than a physical page.</li>
+<li><strong>Swapping/Compression</strong> - [verb] The process of taking Resident pages and
+making them Swapped/Compressed pages. This frees up physical pages.</li>
+<li><strong>Unlocked Discardable/Reusable</strong> - Android [Ashmem] and Darwin specific. A virtual
+page whose contents is backed by a physical page, but the Kernel is free
+to reuse the physical page at any point in time.</li>
+<li><strong>Private</strong> - A virtual page whose contents will only be modifiable by the
+current process.</li>
+<li><strong>Copy on Write</strong> - A private virtual page owned by the parent process.
+When either the parent or child process attempts to make a modification, the
+child is given a private copy of the page.</li>
+<li><strong>Shared</strong> - A virtual page whose contents could be shared with other
+processes.</li>
+<li><strong>File-backed</strong> - A virtual page whose contents reflect those of a
+file.</li>
+<li><strong>Anonymous</strong> - A virtual page that is not file-backed.</li>
+</ul>
+<h2 id="platform-specific-sources-of-truth">Platform Specific Sources of Truth</h2>
+<p>Memory is a complex topic, fraught with potential miscommunications. In an
+attempt to forestall disagreement over semantics, these are the sources of truth
+used to determine memory usage for a given process.</p>
+<ul>
+<li>Windows: <a href="https://docs.microsoft.com/en-us/sysinternals/downloads/vmmap">SysInternals
+VMMap</a></li>
+<li>Darwin:
+<a href="https://developer.apple.com/legacy/library/documentation/Darwin/Reference/ManPages/man1/vmmap.1.html">vmmap</a></li>
+<li>Linux/Derivatives:
+<a href="http://man7.org/linux/man-pages/man5/proc.5.html">/proc/&lt;pid&gt;/smaps</a></li>
+</ul>
+<h2 id="shared-memory">Shared Memory</h2>
+<p>Accounting for shared memory is poorly defined. If a memory region is mapped
+into multiple processes [possibly multiple times], which ones should it count
+towards?</p>
+<p>On Linux, one common solution is to use proportional set size, which counts
+1/Nth of the resident size, where N is the number of other processes that have
+page faulted the region. This has the nice property of being additive across
+processes. The downside is that it is context dependent. e.g. If a user opens
+more tabs, thus causing a system library to be mapped into more processes, the
+PSS for previous tabs will go down.</p>
+<p>File backed shared memory regions are typically not interesting to report, since
+they typically represent shared system resources, libraries, and the browser
+binary itself, all of which are outside of the control of developers. This is
+particularly problematic across different versions of the OS, where the set of
+base libraries that get linked by default into a process highly varies, out of
+Chrome&#39;s control.</p>
+<p>In Chrome, we have implemented ownership tracking for anonymous shared memory
+regions - each shared memory region counts towards exactly one process, which is
+determined by the type and usage of the shared memory region.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/key_concepts.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory/key_concepts.md</a>
+  </p>
+</div>

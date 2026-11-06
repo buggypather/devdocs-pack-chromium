@@ -1,0 +1,103 @@
+<h1>ChromeVox on Desktop Linux</h1>
+<h2 id="starting-chromevox">Starting ChromeVox</h2>
+<p>On ChromeOS, you can enable spoken feedback (ChromeVox) by pressing Ctrl+Alt+Z.</p>
+<p>If you have a Chromebook, this gives you speech support built-in. If you&#39;re
+building Chrome from source and running it on desktop Linux, speech and braille
+won&#39;t be included by default. Here&#39;s how to enable it.</p>
+<h2 id="compiling-the-chromeos-version-of-chrome">Compiling the ChromeOS version of Chrome</h2>
+<p>First follow the public instructions for
+<a href="https://www.chromium.org/developers/how-tos/get-the-code">Chrome checkout and build</a>.</p>
+<p>Edit <code>.gclient</code> (in <code>chromium/</code>) and at the bottom add:</p>
+<pre>target_os = [&quot;chromeos&quot;]</pre>
+<p>Run <code>gclient sync</code> to update your checkout.</p>
+<p>Then create a GN configuration with &quot;chromeos&quot; as the target OS, for example:</p>
+<pre>gn args out/cros</pre>
+<p>...in editor, add this line:</p>
+<pre>target_os = &quot;chromeos&quot;
+is_component_build = true
+is_debug = false</pre>
+<p>Note: Only <code>target_os = &quot;chromeos&quot;</code> is required, the others are recommended
+for a good experience but you can configure Chrome however you like otherwise.</p>
+<p>Now build Chrome as usual, e.g.:</p>
+<pre>autoninja -C out/cros chrome</pre>
+<p>And run it as usual to see a mostly-complete ChromeOS desktop inside
+of a window:</p>
+<pre>out/cros/chrome</pre>
+<p>By default you&#39;ll be logged in as the default user. If you want to
+simulate the login manager too, run it like this:</p>
+<pre>out/cros/chrome --login-manager</pre>
+<p>You can run any of the above under it’s own X session (avoiding any window
+manager key combo conflicts) by doing something like</p>
+<pre>startx out/cros/chrome</pre>
+<h3 id="remapping-keys-so-chromevox-recognizes-a-search-key">Remapping keys so ChromeVox recognizes a Search key</h3>
+<p>ChromeVox expects that the Search key is mapped from your
+left Windows key/LWIN/key code 91; however, your window manager/desktop
+environment (Linux) treats this as a Super or Meta which usually gets assigned
+to numerous shortcut combinations.</p>
+<h4 id="option-1-running-under-a-new-x-session">Option 1: running under a new X session</h4>
+<p>To avoid these conflicts, run using startx as described above.</p>
+<h4 id="option-2-remapping-keys-in-your-window-manager">Option 2: remapping keys in your window manager</h4>
+<p>If you decide not to run under X or wish to run Linux within a window manager
+such as through Chrome Remote Desktop or a virtual machine, you need to remap
+keys either in Linux or inside ChromeOS.</p>
+<p>To manually disable all conflicting key combinations in Linux, remove all
+keyboard bindings that reference &quot;Super&quot; or &quot;Meta&quot; in
+System Settings &gt; Keyboard &gt; Shortcuts.</p>
+<h4 id="option-3-remapping-the-search-key-inside-chromeos">Option #3: remapping the Search key inside ChromeOS</h4>
+<p>To remap the Search key inside ChromeOS, go to Settings &gt; Device &gt; Keyboard.
+The control key is a good choice for setting as Search as there should be no
+conflicts with Linux on its own. Caps Lock is not recommended to change as
+ChromeVox may handle it as a special case.</p>
+<h2 id="speech">Speech</h2>
+<p>If you want speech, you just need to copy the speech synthesis data files to
+/usr/share like it would be on a ChromeOS device:</p>
+<pre>gsutil ls gs://chromeos-localmirror/distfiles/espeak\*</pre>
+<p>Pick the latest version and</p>
+<pre>VERSION=1.51.8
+TMPDIR=$(mktemp -d)
+gsutil cp gs://chromeos-localmirror/distfiles/espeak-ng-$VERSION.tar.xz $TMPDIR
+mkdir $TMPDIR/extract
+tar -C $TMPDIR/extract -xvf $TMPDIR/espeak-ng-$VERSION.tar.xz
+sudo mkdir -p /usr/share/chromeos-assets/speech_synthesis/espeak-ng/
+sudo mkdir -p /usr/share/chromeos-assets/speech_synthesis/espeak-ng-mv3/
+sudo chown -R $(whoami) /usr/share/chromeos-assets/
+sudo cp -r $TMPDIR/extract/espeak-ng-mv2/* \
+  /usr/share/chromeos-assets/speech_synthesis/espeak-ng/
+sudo cp -r $TMPDIR/extract/espeak-ng-mv3/* \
+  /usr/share/chromeos-assets/speech_synthesis/espeak-ng-mv3/
+rm -rf $TMPDIR</pre>
+<p><strong>Be sure to check permissions of /usr/share/chromeos-assets, some users report
+they need to chmod or chown too, it really depends on your system.</strong></p>
+<p><strong>Note that the default Google tts engine is now only available on an actual
+ChromeOS device.</strong></p>
+<p>After you do that, just run &quot;chrome&quot; as above (e.g. out/cros/chrome) and press
+Ctrl+Alt+Z, and you should hear it speak! If not, check the logs.</p>
+<h2 id="braille">Braille</h2>
+<p>ChromeVox uses extension APIs to deliver braille to Brltty through libbrlapi
+and uses Liblouis to perform translation and backtranslation.</p>
+<p>Once built, Chrome and ChromeVox will use your machine’s running Brltty
+daemon to display braille if ChromeVox is running. Simply ensure you have a
+display connected before running Chrome and that Brltty is running.</p>
+<p>Note you may need to customize brltty.conf (typically found in /etc).
+In particular, the api-parameters Auth param may exclude the current user.
+You can turn this off by doing:
+api-parameters Auth=none</p>
+<p>Testing against the latest releases of Brltty (e.g. 6.3 at time of writing) is
+encouraged.</p>
+<p>For more general information, see <a href="chromevox">ChromeVox</a></p>
+<h1 id="using-chromevox">Using ChromeVox</h1>
+<p>ChromeVox keyboard shortcuts use Search. On Linux that&#39;s usually your Windows
+key. If some shortcuts don&#39;t work, you may need to remove Gnome keyboard
+shortcut bindings, or use &quot;startx&quot;, as suggested above, or remap it.</p>
+<ul>
+<li>Search+Space: Click</li>
+<li>Search+Left/Right: navigate linearly</li>
+<li>Search+Period: Open ChromeVox menus</li>
+<li>Search+H: jump to next heading on page</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/chromevox_on_desktop_linux.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/os/chromevox_on_desktop_linux.md</a>
+  </p>
+</div>

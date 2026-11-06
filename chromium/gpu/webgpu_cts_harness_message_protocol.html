@@ -1,0 +1,99 @@
+<h1>WebGPU CTS Harness Message Protocol</h1>
+<p>The WebGPU conformance test suite harness makes use of a websocket connection to
+pass information between the Python and JavaScript code. This document outlines
+all valid message types, when they should be sent, etc. All messages are JSON
+objects with at least a <code>type</code> field that differentiates message types from each
+other.</p>
+<h2 id="test_started">TEST_STARTED</h2>
+<h3 id="description">Description</h3>
+<p>A message sent exactly once by the JavaScript code once it starts running the
+requested test. In addition to serving as an ack, it also sends information
+about how the test will be run.</p>
+<p>Sending more than one message of this type during a test is considered an error.</p>
+<h3 id="fields">Fields</h3>
+<ul>
+<li><code>type</code> - A string denoting the message type</li>
+<li><code>adapter_info</code> - An optional object containing the same information as the
+<a href="https://gpuweb.github.io/gpuweb/#gpu-adapterinfo">GpuAdapterInfo</a> the test will be using</li>
+</ul>
+<h3 id="example">Example</h3>
+<pre>{
+  'type': 'TEST_STARTED',
+  'adapter_info': {
+    'vendor': 'NVIDIA',
+    'architecture': 'Turing',
+    'device': '2184',
+    'description': 'GTX 1660',
+  },
+}</pre>
+<h2 id="test_heartbeat">TEST_HEARTBEAT</h2>
+<h3 id="description-1">Description</h3>
+<p>A message sent periodically zero or more times by the JavaScript code to
+prevent the Python test harness from timing out.</p>
+<p>Sending a message of this type before TEST_STARTED or after TEST_STATUS is
+considered an error.</p>
+<h3 id="fields-1">Fields</h3>
+<ul>
+<li><code>type</code> - A string denoting the message type</li>
+</ul>
+<h3 id="example-1">Example</h3>
+<pre>{
+  'type': 'TEST_HEARTBEAT',
+}</pre>
+<h2 id="test_status">TEST_STATUS</h2>
+<h3 id="description-2">Description</h3>
+<p>A message sent exactly once when the actual test is completed. Contains
+information about the status/result of the test.</p>
+<p>Sending more than one message of this type or sending before TEST_STARTED is
+considered an error.</p>
+<h3 id="fields-2">Fields</h3>
+<ul>
+<li><code>type</code> - As string denoting the message type</li>
+<li><code>status</code> - A string containing the status of the test, e.g. <code>skip</code> or <code>fail</code></li>
+<li><code>js_duration_ms</code> - An int containing the number of milliseconds the
+JavaScript code took to run the test</li>
+</ul>
+<h3 id="example-2">Example</h3>
+<pre>{
+  'type': 'TEST_STATUS',
+  'status': 'fail',
+  'js_duration_ms': 243,
+}</pre>
+<h2 id="test_log">TEST_LOG</h2>
+<h3 id="description-3">Description</h3>
+<p>A message sent one or more times containing test logs. Multiple messages will be
+sent if a single message would exceed the max payload size, in which case the
+Python test harness will concatenate them together in the order received.</p>
+<p>Sending a message of this type before TEST_STATUS is considered an error.</p>
+<h3 id="fields-3">Fields</h3>
+<ul>
+<li><code>type</code> - A string denoting the message type</li>
+<li><code>log</code> - A string containing log content output by the test</li>
+</ul>
+<h3 id="example-3">Example</h3>
+<pre>{
+  'type': 'TEST_LOG',
+  'log': 'Logging is fun',
+}</pre>
+<h2 id="test_finished">TEST_FINISHED</h2>
+<h3 id="description-4">Description</h3>
+<p>A message sent exactly once after all other messages have been sent. This
+signals to the Python test harness that it should stop listening for any
+additional messages and proceed with test cleanup.</p>
+<p>Sending a message of this type before TEST_LOG is considered an error. Sending
+more than one message of this type is erroneous, but will not be caught until
+the following test is run.</p>
+<h3 id="fields-4">Fields</h3>
+<ul>
+<li><code>type</code> - A string denoting the message type</li>
+</ul>
+<h3 id="example-4">Example</h3>
+<pre>{
+  'type': 'TEST_FINISHED',
+}</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/webgpu_cts_harness_message_protocol.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/webgpu_cts_harness_message_protocol.md</a>
+  </p>
+</div>

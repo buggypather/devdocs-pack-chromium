@@ -1,0 +1,30 @@
+<h1>Interaction to Next Paint Changes in Chrome 148</h1>
+<h2 id="report-only-web-exposed-event-targets-in-event-timing">Report only web-exposed event targets in Event Timing</h2>
+<p>In Chrome 148, Chrome updated how <code>target</code> elements are captured and exposed on <code>PerformanceEventTiming</code> entries.</p>
+<p>Previously, the Event Timing implementation captured the target using internal <code>RawTarget()</code> pointers early in the event lifecycle. While this minimized the likelihood of <code>entry.target</code> returning <code>null</code>, it was overly aggressive and could leak internal, non-web-exposed targets (such as user-agent shadow roots or internal component implementations) that normal DOM event dispatch didn&#39;t expose on <code>event.target</code>.</p>
+<p>Starting in Chrome 148, Event Timing queries <code>event.target</code> at the end of event dispatch. This aligns Event Timing with standard DOM Event Dispatch and Shadow DOM encapsulation rules, ensuring only web-exposed targets are reported to web developers.</p>
+<p>As a consequence of this fix, <code>entry.target</code> may evaluate to <code>null</code> more often:</p>
+<ul>
+<li>When event dispatch is skipped or cancelled before reaching the target.</li>
+<li>When target elements are detached or removed from the DOM during event execution.</li>
+<li>When target elements reside behind closed shadow boundaries.</li>
+</ul>
+<p>The implementation change can be seen in <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7617568">crrev.com/c/7617568</a>.</p>
+<hr>
+<h2 id="experimental-targetselector-resilience-via-eventpath">Experimental targetSelector resilience via EventPath</h2>
+<p>To provide developers with a reliable identifier for interaction targets even when <code>entry.target</code> is <code>null</code> (or when elements are removed during event handling), Chrome has been developing an experimental <code>targetSelector</code> property on <code>PerformanceEventTiming</code> (<a href="https://github.com/w3c/event-timing/issues/126">w3c/event-timing#126</a>).</p>
+<p>In Chrome 148, <code>targetSelector</code> was updated to construct its CSS query selector from the event&#39;s propagation path (<code>EventPath</code>) rather than relying on <code>target()</code>. Because <code>EventPath</code> is available even when <code>entry.target</code> is null, <code>targetSelector</code> can still provide a valid selector string representing the interaction&#39;s target.</p>
+<p><em>(Note: <code>targetSelector</code> remains an experimental feature under evaluation and is not yet enabled by default in stable.)</em></p>
+<h3 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h3>
+<ul>
+<li><strong>No change to INP scores</strong>: This change only affects target element reporting on <code>PerformanceEventTiming</code> entries; interaction durations and UKM/CrUX INP scores remain unchanged.</li>
+<li><strong>RUM attribution</strong>: Real User Monitoring (RUM) and analytics scripts inspecting <code>entry.target</code> should anticipate receiving <code>null</code> more often for interactions where elements are removed or dynamically modified during event dispatch.</li>
+</ul>
+<h3 id="when-were-users-affected">When were users affected?</h3>
+<p>Chrome 148 reached stable users in March 2026.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_03_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_03_inp.md</a>
+  </p>
+</div>

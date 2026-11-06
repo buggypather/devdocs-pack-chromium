@@ -1,0 +1,36 @@
+<h1>First Contentful Paint Changes in M77</h1>
+<h2 id="changes-in-chrome-77">Changes in Chrome 77</h2>
+<p>In Chrome 77, two changes to the First Contentful Paint (FCP) metric occurred:</p>
+<ul>
+<li><strong>The way the metric is computed was changed.</strong> The change improves accuracy of the metric. Previously, the metric end time was the <code>swap time</code>--the time at which the compositor frame is sent to the display compositor. The metric was updated to end at the <code>presentation time</code> instead. The presentation time is the time pixels actually appear on screen, according to the GPU. The presentation time occurs after the swap time, so the metric duration is longer after this change. <a href="https://chromium-review.googlesource.com/c/chromium/src/+/1598212">The source code of the change can be seen here</a>.</li>
+<li><strong>There was an additional regression in Chrome&#39;s performance on the metric.</strong> In Chrome 77, FCP went up more than expected from the metric change. This points to a performance regression in Chrome. We were not able to find the source of the regression, but the additional regression beyond the metric change <strong>recovered in M78</strong>.</li>
+</ul>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>These changes will affect the <a href="https://developer.mozilla.org/en-US/docs/Web/API/PerformancePaintTiming">RUM API</a> data, the data reported in <a href="https://developers.google.com/web/tools/chrome-user-experience-report">Chrome User Experience Report</a>, the values reported in <a href="https://developers.google.com/web/tools/chrome-devtools">Chrome Devtools</a>, and in <a href="https://developers.google.com/web/tools/lighthouse">Lighthouse</a>.</p>
+<p>The metric now includes the time between swap time and presentation time, which is measured internally by the Chrome team in the <code>PageLoad.Internal.Renderer.PresentationTime.DeltaFromSwapTime</code> metric. How it affects a site will depend on the devices accessing the site, which can vary quite a bit in performance.</p>
+<ul>
+<li>On Android, the swap time is generally between <strong>10 milliseconds</strong> and <strong>65 milliseconds</strong>.</li>
+<li>On Windows, the swap time is generally between <strong>3 milliseconds</strong> and <strong>55 milliseconds</strong>.</li>
+</ul>
+<p>The performance regression in M77 will also vary depending on the usage of the site. This regression recovered in M78, so a site can understand the impact by comparing its metrics from M77 and M78.</p>
+<ul>
+<li>On Android, the median impact of the M77 performance regression was about <strong>40 milliseconds</strong>.</li>
+<li>On Windows, the median impact of the M77 performance regression was about <strong>50 milliseconds</strong>.</li>
+</ul>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>On Android, Chrome was updated by most users:</p>
+<ul>
+<li>To version 77 on September 24</li>
+<li>To version 78 on October 29</li>
+</ul>
+<p>On Windows, Chrome was updated by most users:</p>
+<ul>
+<li>To version 77 on September 25</li>
+<li>To version 78 on November 5</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2019_12_fcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2019_12_fcp.md</a>
+  </p>
+</div>

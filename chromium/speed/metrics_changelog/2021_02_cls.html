@@ -1,0 +1,30 @@
+<h1>Cumulative Layout Shift Changes in Chrome 90</h1>
+<h3 id="bug-fixes-involving-changes-to-transform-effect-clip-or-position">Bug fixes involving changes to transform, effect, clip or position</h3>
+<p><a href="https://chromium-review.googlesource.com/c/chromium/src/+/2660679">Source code for change 1</a>
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2666949">Source code for change 2</a>
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2665761">Source code for change 3</a>
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2690998">Source code for change 4</a></p>
+<h3 id="consider-transform-change-countering-layout-shift">Consider transform change countering layout shift</h3>
+<p>Corresponds to <a href="https://github.com/WICG/layout-instability/pull/94">the spec change</a>
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2673965">Source code</a></p>
+<h3 id="ignore-layout-shift-for-more-invisible-elements">Ignore layout shift for more invisible elements</h3>
+<p>The following nodes are ignored for layout shift:</p>
+<ul>
+<li>texts with unrenderable font or containing all whitespaces,</li>
+<li>blocks without any decorations or any children.</li>
+</ul>
+<p>If you still see layout shift reported for an invisible element, you can
+try to add &#39;visibility:hidden&#39; to the element&#39;s style.</p>
+<p><a href="https://chromium-review.googlesource.com/c/chromium/src/+/2743811">Source code</a></p>
+<h3 id="ignore-inline-direction-shift-moving-fromto-out-of-view">Ignore inline direction shift moving from/to out of view</h3>
+<p><a href="https://chromium-review.googlesource.com/c/chromium/src/+/2747689">Source code</a></p>
+<h3 id="improvement-for-shift-with-counterscroll">Improvement for shift with counterscroll</h3>
+<p><a href="https://chromium-review.googlesource.com/c/chromium/src/+/2741240">Source code</a></p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 90 is currently scheduled to be released the week of April 13, 2021.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_02_cls.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_02_cls.md</a>
+  </p>
+</div>

@@ -1,0 +1,42 @@
+<h1>Linux Sandbox IPC</h1>
+<p><em><strong>These days, only the out-of-process localtime implementation uses the
+Sandbox IPC file-descriptor based system.</strong></em></p>
+<p>The Sandbox IPC system is separate from the &#39;main&#39; IPC system. The sandbox IPC
+is a lower level system which deals with cases where we need to route requests
+from the bottom of the call stack up into the browser.</p>
+<p>The motivating example used to be Skia, which uses fontconfig to load
+fonts. Howvever, the OOP IPC for FontConfig was moved to using Font Service and
+the <code>components/services/font/public/cpp/font_loader.h</code> interface.</p>
+<p>Thus we define a small IPC system which doesn&#39;t depend on anything but <code>base</code>
+and which can make synchronous requests to the browser process.</p>
+<p>The <a href="zygote">zygote</a> starts with a <code>UNIX DGRAM</code> socket installed in a
+well known file descriptor slot (currently 4). Requests can be written to this
+socket which are then processed on a special &quot;sandbox IPC&quot; process. Requests
+have a magic <code>int</code> at the beginning giving the type of the request.</p>
+<p>All renderers share the same socket, so replies are delivered via a reply
+channel which is passed as part of the request. So the flow looks like:</p>
+<ol>
+<li>The renderer creates a <code>UNIX DGRAM</code> socketpair.</li>
+<li>The renderer writes a request to file descriptor 4 with an <code>SCM_RIGHTS</code>
+control message containing one end of the fresh socket pair.</li>
+<li>The renderer blocks reading from the other end of the fresh socketpair.</li>
+<li>A special &quot;sandbox IPC&quot; process receives the request, processes it and
+writes the reply to the end of the socketpair contained in the request.</li>
+<li>The renderer wakes up and continues.</li>
+</ol>
+<p>The browser side of the processing occurs in
+<code>chrome/browser/renderer_host/render_sandbox_host_linux.cc</code>. The renderer ends
+could occur anywhere, but the browser side has to know about all the possible
+requests so that should be a good starting point.</p>
+<p>Here is a list of endpoints in the renderer:</p>
+<h3 id="localtime">localtime</h3>
+<p><code>content/browser/sandbox_ipc_linux.h</code> defines HandleLocalTime which is
+implemented in <code>sandbox/linux/services/libc_interceptor.cc</code>.</p>
+<h3 id="creating-a-shared-memory-segment">Creating a shared memory segment</h3>
+<p>This has moved to <code>mojo::Core::Broker</code>, see crbug.com/40454515.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/sandbox_ipc.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/sandbox_ipc.md</a>
+  </p>
+</div>

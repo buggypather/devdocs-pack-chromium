@@ -1,0 +1,29 @@
+<h1>Largest Contentful Paint Changes in M81</h1>
+<h2 id="changes-in-chrome-81">Changes in Chrome 81</h2>
+<p>Prior to Chrome 81, the Largest Contentful Paint (LCP) reporting logic for the
+<a href="https://developers.google.com/web/tools/chrome-user-experience-report">Chrome User Experience Report</a>
+had a bug: if the largest image on the page was still loading, but the largest
+contentful paint on the page was text, the largest contentful paint would be
+recorded as the text. As of M81, it will be recorded as the largest image,
+unless the largest image does not finish loading before user input or the page
+is hidden, in which case LCP will not be recorded. <a href="https://chromium-review.googlesource.com/c/chromium/src/+/1998826">The source code of the change
+can be seen here</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>This only affects a site&#39;s metrics in the
+<a href="https://developers.google.com/web/tools/chrome-user-experience-report">Chrome User Experience Report</a>.
+Sites doing measurement using the <a href="https://wicg.github.io/largest-contentful-paint/">largest-contentful-paint API</a>
+are unaffected.</p>
+<p>Sites with very slow loading images which are smaller than the largest text
+block on the page will have additional LCP measures which would not have been
+previously reported. Generally these are slower-loading pages, so the site&#39;s
+overall metrics may shift higher.</p>
+<p>We do not see an impact from this change in our overall metrics, so we believe
+the effect on most sites will be minimal.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Most users were updated to Chrome 81 the week of April 20.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_04_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_04_lcp.md</a>
+  </p>
+</div>

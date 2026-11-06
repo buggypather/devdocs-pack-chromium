@@ -1,0 +1,101 @@
+<h1>Graphics metrics: Definitions</h1>
+<p>We need to have a metric to understand the smoothness of a particular
+interaction (e.g. scroll, animation, etc.). We also need to understand the
+latency of such interactions (e.g. touch-on-screen to
+scroll-displayed-on-screen), and the throughput during the interaction.</p>
+<p>We define these metrics as follows:</p>
+<h2 id="responsiveness--latency">Responsiveness / Latency</h2>
+<p>Responsiveness is a measure of how quickly the web-page responds to an event.
+Latency is defined as the time between when an event happens, (e.g. moving a
+touch-point on screen) and when the screen is updated directly in response to
+that event [1]. For example, the event could be a moving touch-point on the
+touchscreen, and the update would be scrolled content in response to that
+(may only require the compositor frame update). If a rAF callback was
+registered, the event would be the one that caused the current script execution
+(e.g. a click event which triggered rAF), and the update would be the displayed
+frame after the rAF callback is run and the content from the main-thread has
+been presented on screen.</p>
+<h2 id="throughput">Throughput</h2>
+<p>The ratio between the number of times the screen is updated for a particular
+interaction (e.g. scroll, animation, etc.), and the number of times the screen
+was expected to be updated (see examples below). On a 60Hz display, there would
+ideally be 60 frames produced during a scroll or an animation.</p>
+<h2 id="droppedframes--skippedframes">DroppedFrames / SkippedFrames</h2>
+<p>The ratio between the number of dropped/skipped frames for a particular
+interaction, and the number of times the screen was expected to be updated. This
+is the other part data of Throughput so it is a &quot;lower-is-better&quot; metric and
+works better with current out perf tools.</p>
+<h2 id="smoothness--jank">Smoothness / Jank</h2>
+<p>Smoothness is a measure of how consistent the throughput is. Jank during an
+interaction is defined as a change in the throughput for consecutive frames.
+To explain this further:</p>
+<p>Consider the following presented frames:</p>
+<p><strong>f1</strong>&nbsp;&nbsp;
+<strong>f2</strong>&nbsp;&nbsp;
+<strong>f3</strong>&nbsp;&nbsp;
+<strong>f4</strong>&nbsp;&nbsp;
+<strong>f5</strong>&nbsp;&nbsp;
+<strong>f6</strong>&nbsp;&nbsp;
+<strong>f7</strong>&nbsp;&nbsp;
+<strong>f8</strong>&nbsp;&nbsp;
+<strong>f9</strong></p>
+<p>Each highlighted <strong>fn</strong> indicates a frame that contained response from the
+renderer[2]. So in the above example, there were no janks, and throughput was
+100%: i.e. all the presented frames included updated content.</p>
+<p>Considering the following frames:</p>
+<p><strong>f1</strong>&nbsp;&nbsp;
+<strong>f2</strong>&nbsp;&nbsp;
+f3&nbsp;&nbsp;
+<strong>f4</strong>&nbsp;&nbsp;
+f5&nbsp;&nbsp;
+<strong>f6</strong>&nbsp;&nbsp;
+<strong>f7</strong>&nbsp;&nbsp;
+<strong>f8</strong>&nbsp;&nbsp;
+<strong>f9</strong></p>
+<p>In this case, frames <code>f3</code> and <code>f5</code> did not include any updates (either
+display-compositor was unable to submit a new frame, or the frame submitted by
+the display compositor did not include any updates from the renderer).
+Therefore, the throughput during this interaction is 78%.</p>
+<p>To explain the jank, during the first two frames <code>[f1, f2]</code>, the throughput is
+100%. Because of the subsequently missed frame <code>f3</code>, the throughput changes for
+<code>[f2, f4]</code> drops to 67%. The throughput for <code>[f4, f6]</code> is also 67%. For
+subsequent frames, the throughput goes back up to 100%. Therefore, there was a
+single jank.</p>
+<p>Consider the following two sequences:</p>
+<p><strong>f1</strong>&nbsp;&nbsp;
+<strong>f2</strong>&nbsp;&nbsp;
+<strong>f3</strong>&nbsp;&nbsp;
+<strong>f4</strong>&nbsp;&nbsp;
+f5&nbsp;&nbsp;
+f6&nbsp;&nbsp;
+f7&nbsp;&nbsp;
+f8&nbsp;&nbsp;
+<strong>f9</strong></p>
+<p><strong>f1</strong>&nbsp;&nbsp;
+f2&nbsp;&nbsp;
+<strong>f3</strong>&nbsp;&nbsp;
+f4&nbsp;&nbsp;
+<strong>f5</strong>&nbsp;&nbsp;
+f6&nbsp;&nbsp;
+<strong>f7</strong>&nbsp;&nbsp;
+f8&nbsp;&nbsp;
+<strong>f9</strong></p>
+<p>In both cases, throughput is 55%, since only 5 out of 9 frames are displayed.
+In the first sequence, there is a jank (<code>[f1, f2][f2, f3][f3, f4]</code> has 100%
+throughput, but <code>[f4, f9]</code> has a throughput of 33%). However, in the second
+sequence, there are no janks, since <code>[f1, f3]</code> <code>[f3, f5]</code> <code>[f5, f7]</code> <code>[f7, f9]</code>
+all have 67% throughput.</p>
+<p>[1]: Indirect updates in response to an event, e.g. an update from a
+setTimeout() callback from an event-handler would not be associated with that
+event.</p>
+<p>[2]: Note that the response could be either an update to the content, or a
+notification that no update is expected for that frame. For example, for a 30fps
+animation in this frame-sequence, only frames <code>f1</code> <code>f3</code> <code>f5</code> <code>f7</code> <code>f9</code> will have
+actual updates from the animation, and frames <code>f2</code> <code>f4</code> <code>f6</code> <code>f8</code> should still
+have notification from the client that no update is expected.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/graphics_metrics_definitions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/graphics_metrics_definitions.md</a>
+  </p>
+</div>

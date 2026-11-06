@@ -1,0 +1,261 @@
+<h1>Checking out and building Chromium for Mac</h1>
+<p>There are instructions for other platforms linked from the
+<a href="get_the_code">get the code</a> page.</p>
+<h2 id="instructions-for-google-employees">Instructions for Google Employees</h2>
+<p>Are you a Google employee? See
+<a href="https://goto.google.com/building-chrome">go/building-chrome</a> instead.</p>
+<h2 id="system-requirements">System requirements</h2>
+<ul>
+<li><p>A Mac, Intel or Arm.
+(<a href="https://chromium.googlesource.com/chromium/src.git/+/main/docs/mac_arm64.md">More details about Arm Macs</a>.)</p>
+</li>
+<li><p><a href="https://developer.apple.com/xcode/">Xcode</a>. Xcode comes with...</p>
+</li>
+<li><p>The macOS SDK. Run</p>
+<pre data-language="shell">$ ls `xcode-select -p`/Platforms/MacOSX.platform/Developer/SDKs</pre>
+<p>to check whether you have it, and what version you have.
+<code>mac_sdk_official_version</code> in <a href="https://github.com/chromium/chromium/blob/HEAD/build/config/mac/mac_sdk.gni">mac_sdk.gni</a>
+is the SDK version used on all the bots and for
+<a href="https://source.chromium.org/search?q=MAC_BINARIES_LABEL&amp;ss=chromium">official builds</a>,
+so that version is guaranteed to work. Building with a newer SDK usually
+works too (please fix or file a bug if it doesn&#39;t).</p>
+<p>Building with an older SDK might also work, but if it doesn&#39;t then we won&#39;t
+accept changes for making it work.</p>
+<p>The easiest way to get the newest SDK is to use the newest version of Xcode,
+which often requires using the newest version of macOS. We don&#39;t use Xcode
+itself much, so if you&#39;re know what you&#39;re doing, you can likely get the
+build working with an older version of macOS as long as you get a new
+version of the macOS SDK on it.</p>
+</li>
+<li><p>An APFS-formatted volume (this is the default format for macOS volumes).</p>
+</li>
+</ul>
+<h2 id="install-depot_tools">Install <code>depot_tools</code></h2>
+<p>Clone the <code>depot_tools</code> repository:</p>
+<pre data-language="shell">$ git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git</pre>
+<p>Add <code>depot_tools</code> to the end of your PATH (you will probably want to put this in
+your <code>~/.bash_profile</code> or <code>~/.zshrc</code>). Assuming you cloned <code>depot_tools</code> to
+<code>/path/to/depot_tools</code> (note: you <strong>must</strong> use the absolute path or Python will
+not be able to find infra tools):</p>
+<pre data-language="shell">$ export PATH=&quot;$PATH:/path/to/depot_tools&quot;</pre>
+<h2 id="get-the-code">Get the code</h2>
+<p>Create a <code>chromium</code> directory for the checkout and change to it (you can call
+this whatever you like and put it wherever you like, as long as the full path
+has no spaces):</p>
+<pre data-language="shell">$ mkdir chromium &amp;&amp; cd chromium</pre>
+<p>Run the <code>fetch</code> tool from <code>depot_tools</code> to check out the code and its
+dependencies.</p>
+<pre data-language="shell">$ caffeinate fetch chromium</pre>
+<p>Running the <code>fetch</code> with <code>caffeinate</code> is optional, but it will prevent the
+system from sleeping for the duration of the <code>fetch</code> command, which may run for
+a considerable amount of time.</p>
+<p>If you don&#39;t need the full repo history, you can save time by using
+<code>fetch --no-history chromium</code>. You can call <code>git fetch --unshallow</code> to retrieve
+the full history later.</p>
+<p>You can make this much faster by passing <code>--git-cache</code> to <code>fetch</code>, which
+seeds the checkout from a shared, prebuilt snapshot instead of cloning from
+scratch (and, unlike <code>--no-history</code>, keeps the full history):</p>
+<pre data-language="shell">$ fetch --git-cache chromium</pre>
+<p>The cache directory is chosen automatically (override with <code>$GIT_CACHE_PATH</code>).
+It mirrors every repo it fetches (~30 GB for Chromium) and is shared by all
+checkouts on the machine: working trees reference it instead of copying the
+objects, so the per-checkout <code>.git</code> stays small.</p>
+<p>Expect the command to take 30 minutes on even a fast connection, and many
+hours on slower ones.</p>
+<p>When <code>fetch</code> completes, it will have created a hidden <code>.gclient</code> file and a
+directory called <code>src</code> in the working directory. The remaining instructions
+assume you have switched to the <code>src</code> directory:</p>
+<pre data-language="shell">$ cd src</pre>
+<p><em>Optional</em>: You can also <a href="https://www.chromium.org/developers/how-tos/api-keys">install API
+keys</a> if you want your
+build to talk to some Google services, but this is not necessary for most
+development and testing purposes.</p>
+<h2 id="setting-up-the-build">Setting up the build</h2>
+<p>Chromium uses <a href="https://ninja-build.org">Ninja</a> as its main build tool along with
+a tool called <a href="https://gn.googlesource.com/gn/+/main/docs/quick_start.md">GN</a>
+to generate <code>.ninja</code> files. You can create any number of <em>build directories</em>
+with different configurations. To create a build directory:</p>
+<pre data-language="shell">$ gn gen out/Default</pre>
+<ul>
+<li>You only have to run this once for each new build directory, Ninja will
+update the build files as needed.</li>
+<li>You can replace <code>Default</code> with another name, but
+it should be a subdirectory of <code>out</code>.</li>
+<li>For other build arguments, including release settings, see <a href="https://www.chromium.org/developers/gn-build-configuration">GN build
+configuration</a>.
+The default will be a debug component build matching the current host
+operating system and CPU.</li>
+<li>For more info on GN, run <code>gn help</code> on the command line or read the
+<a href="https://gn.googlesource.com/gn/+/main/docs/quick_start.md">quick start guide</a>.</li>
+<li>Building Chromium for arm Macs requires <a href="mac_arm64">additional setup</a>.</li>
+</ul>
+<h3 id="faster-builds">Faster builds</h3>
+<p>Full rebuilds are about the same speed in Debug and Release, but linking is a
+lot faster in Release builds.</p>
+<p>Put</p>
+<pre>is_debug = false</pre>
+<p>in your <code>args.gn</code> to do a release build.</p>
+<p>Put</p>
+<pre>is_component_build = true</pre>
+<p>in your <code>args.gn</code> to build many small dylibs instead of a single large
+executable. This makes incremental builds much faster, at the cost of producing
+a binary that opens less quickly. Component builds work in both debug and
+release.</p>
+<p>Put</p>
+<pre>symbol_level = 0</pre>
+<p>in your args.gn to disable debug symbols altogether.  This makes both full
+rebuilds and linking faster (at the cost of not getting symbolized backtraces
+in gdb).</p>
+<p>Put</p>
+<pre>use_lld = false</pre>
+<p>in your <code>args.gn</code> to use Apple&#39;s linker (ld-prime) instead of LLVM&#39;s LLD.
+This is supported for local non-cross arm64 macOS builds (ARM Mac) and
+improves link speed. See
+<a href="apple_platform_linkers">Linkers for macOS and iOS builds</a>
+for more information.</p>
+<h4 id="use-remote-execution">Use Remote Execution</h4>
+<p>In addition, Google employees should use RBE, a remote execution system.
+Detailed information is available internally but the relevant gn arg is:</p>
+<ul>
+<li><code>use_remoteexec = true</code></li>
+</ul>
+<p>Google employees can visit
+<a href="https://goto.google.com/building-chrome-mac#using-remote-execution">go/building-chrome-mac#using-remote-execution</a>
+for more information. For external contributors, Siso&#39;s remote execution with
+rbe-chromium-untrusted does not support Mac builds.</p>
+<h4 id="ccache">CCache</h4>
+<p>You might also want to <a href="ccache_mac">install ccache</a> to speed up the build.</p>
+<h2 id="build-chromium">Build Chromium</h2>
+<p>Build Chromium (the &quot;chrome&quot; target) with Ninja using the command:</p>
+<pre data-language="shell">$ autoninja -C out/Default chrome</pre>
+<p>(<code>autoninja</code> is a wrapper that automatically provides optimal values for the
+arguments passed to <code>ninja</code>.)</p>
+<p>You can get a list of all of the other build targets from GN by running <code>gn ls out/Default</code> from the command line. To compile one, pass the GN label to Ninja
+with no preceding &quot;//&quot; (so, for <code>//chrome/test:unit_tests</code> use <code>autoninja -C out/Default chrome/test:unit_tests</code>).</p>
+<p>See <a href="siso_tips">Siso tips</a> too.</p>
+<h2 id="run-chromium">Run Chromium</h2>
+<p>Once it is built, you can simply run the browser:</p>
+<pre data-language="shell">$ out/Default/Chromium.app/Contents/MacOS/Chromium</pre>
+<h2 id="avoiding-system-permissions-dialogs-after-each-build">Avoiding system permissions dialogs after each build</h2>
+<p>Every time you start a new developer build, you may get two system dialogs:
+<code>Chromium wants to use your confidential information stored in &quot;Chromium Safe Storage&quot; in your keychain.</code>, and <code>Do you want the application &quot;Chromium.app&quot; to accept incoming network connections?</code>.</p>
+<p>To avoid them, you can run Chromium with these command-line flags (but of
+course beware that they will change the behavior of certain subsystems):</p>
+<pre data-language="shell">--use-mock-keychain --disable-features=DialMediaRouteProvider</pre>
+<h2 id="build-and-run-test-targets">Build and run test targets</h2>
+<p>Tests are split into multiple test targets based on their type and where they
+exist in the directory structure. To see what target a given unit test or
+browser test file corresponds to, the following command can be used:</p>
+<pre data-language="shell">$ gn refs out/Default --testonly=true --type=executable --all chrome/browser/ui/browser_unittest.cc
+//chrome/test:unit_tests</pre>
+<p>In the example above, the target is unit_tests. The unit_tests binary can be
+built by running the following command:</p>
+<pre data-language="shell">$ autoninja -C out/Default unit_tests</pre>
+<p>You can run the tests by running the unit_tests binary. You can also limit which
+tests are run using the <code>--gtest_filter</code> arg, e.g.:</p>
+<pre data-language="shell">$ out/Default/unit_tests --gtest_filter=&quot;BrowserListUnitTest.*&quot;</pre>
+<p>You can find out more about GoogleTest at its
+<a href="https://github.com/google/googletest">GitHub page</a>.</p>
+<h2 id="debugging">Debugging</h2>
+<p>Good debugging tips can be found <a href="mac/debugging">here</a>.</p>
+<h2 id="update-your-checkout">Update your checkout</h2>
+<p>To update an existing checkout, you can run</p>
+<pre data-language="shell">$ git rebase-update
+$ gclient sync</pre>
+<p>The first command updates the primary Chromium source repository and rebases
+any of your local branches on top of tip-of-tree (aka the Git branch
+<code>origin/main</code>). If you don&#39;t want to use this script, you can also just use
+<code>git pull</code> or other common Git commands to update the repo.</p>
+<p>The second command syncs dependencies to the appropriate versions and re-runs
+hooks as needed.</p>
+<h2 id="tips-tricks-and-troubleshooting">Tips, tricks, and troubleshooting</h2>
+<h3 id="using-xcode-ninja-hybrid">Using Xcode-Ninja Hybrid</h3>
+<p>While using Xcode is unsupported, GN supports a hybrid approach of using Ninja
+for building, but Xcode for editing and driving compilation.  Xcode is still
+slow, but it runs fairly well even <strong>with indexing enabled</strong>.  Most people
+build in the Terminal and write code with a text editor, though.</p>
+<p>With hybrid builds, compilation is still handled by Ninja, and can be run from
+the command line (e.g. <code>autoninja -C out/gn chrome</code>) or by choosing the <code>chrome</code>
+target in the hybrid project and choosing Build.</p>
+<p>To use Xcode-Ninja Hybrid pass <code>--ide=xcode</code> to <code>gn gen</code>:</p>
+<pre data-language="shell">$ gn gen out/gn --ide=xcode</pre>
+<p>Open it:</p>
+<pre data-language="shell">$ open out/gn/all.xcodeproj</pre>
+<p>You may run into a problem where <a href="http://YES">http://YES</a> is opened as a new tab every time
+you launch Chrome. To fix this, open the scheme editor for the Run scheme,
+choose the Options tab, and uncheck &quot;Allow debugging when using document
+Versions Browser&quot;. When this option is checked, Xcode adds
+<code>--NSDocumentRevisionsDebugMode YES</code> to the launch arguments, and the <code>YES</code>
+gets interpreted as a URL to open.</p>
+<p>If you have problems building, join us in <code>#chromium</code> on <code>irc.freenode.net</code> and
+ask there. Be sure that the
+<a href="https://build.chromium.org/buildbot/waterfall/">waterfall</a> is green and the
+tree is open before checking out. This will increase your chances of success.</p>
+<h3 id="improving-performance-of-git-commands">Improving performance of git commands</h3>
+<h4 id="increase-the-vnode-cache-size">Increase the vnode cache size</h4>
+<p><code>git status</code> is used frequently to determine the status of your checkout.  Due
+to the large number of files in Chromium&#39;s checkout, <code>git status</code> performance
+can be quite variable.  Increasing the system&#39;s vnode cache appears to help. By
+default, this command:</p>
+<pre data-language="shell">$ sysctl -a | egrep 'kern\..*vnodes'</pre>
+<p>Outputs <code>kern.maxvnodes: 263168</code> (263168 is 257 * 1024).  To increase this
+setting:</p>
+<pre data-language="shell">$ sudo sysctl kern.maxvnodes=$((512*1024))</pre>
+<p>Higher values may be appropriate if you routinely move between different
+Chromium checkouts.  This setting will reset on reboot.  To apply it at startup:</p>
+<pre data-language="shell">$ sudo tee /Library/LaunchDaemons/kern.maxvnodes.plist &gt; /dev/null &lt;&lt;EOF
+&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;
+&lt;plist version=&quot;1.0&quot;&gt;
+  &lt;dict&gt;
+    &lt;key&gt;Label&lt;/key&gt;
+      &lt;string&gt;kern.maxvnodes&lt;/string&gt;
+    &lt;key&gt;ProgramArguments&lt;/key&gt;
+      &lt;array&gt;
+        &lt;string&gt;sysctl&lt;/string&gt;
+        &lt;string&gt;kern.maxvnodes=524288&lt;/string&gt;
+      &lt;/array&gt;
+    &lt;key&gt;RunAtLoad&lt;/key&gt;
+      &lt;true/&gt;
+  &lt;/dict&gt;
+&lt;/plist&gt;
+EOF</pre>
+<p>Or edit the file directly.</p>
+<h4 id="configure-git-to-use-an-untracked-cache">Configure git to use an untracked cache</h4>
+<p>Try running</p>
+<pre data-language="shell">$ git update-index --test-untracked-cache</pre>
+<p>If the output ends with <code>OK</code>, then the following may also improve performance of
+<code>git status</code>:</p>
+<pre data-language="shell">$ git config core.untrackedCache true</pre>
+<h4 id="configure-git-to-use-fsmonitor">Configure git to use fsmonitor</h4>
+<p>You can significantly speed up git by using <a href="https://github.blog/2022-06-29-improve-git-monorepo-performance-with-a-file-system-monitor/">fsmonitor.</a>
+You should enable fsmonitor in large repos, such as Chromium and v8. Enabling
+it globally will launch many processes and probably isn&#39;t worthwhile. Be sure
+you have at least version 2.43 (fsmonitor on the Mac is broken before then). The
+command to enable fsmonitor in the current repo is:</p>
+<pre data-language="shell">$ git config core.fsmonitor true</pre>
+<h3 id="xcode-license-agreement">Xcode license agreement</h3>
+<p>If you&#39;re getting the error</p>
+<blockquote>
+<p>Agreeing to the Xcode/iOS license requires admin privileges, please re-run as
+root via sudo.</p>
+</blockquote>
+<p>the Xcode license hasn&#39;t been accepted yet which (contrary to the message) any
+user can do by running:</p>
+<pre data-language="shell">$ xcodebuild -license</pre>
+<p>Only accepting for all users of the machine requires root:</p>
+<pre data-language="shell">$ sudo xcodebuild -license</pre>
+<h3 id="exclude-checkout-from-spotlight-indexing">Exclude checkout from Spotlight indexing</h3>
+<p>Chromium&#39;s checkout contains a lot of files, and building generates many more.
+Spotlight will try to index all of those files, and uses a lot of CPU time
+doing so, especially during a build, which can slow things down.</p>
+<p>To prevent the Chromium checkout from being indexed by Spotlight, open <strong>System
+Settings</strong> -&gt; <strong>Siri &amp; Spotlight</strong> (or <strong>Spotlight</strong>), click <strong>Spotlight
+Privacy...</strong> (or <strong>Search Privacy...</strong>) at the bottom, and add your Chromium
+checkout directory to the list of excluded locations.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac_build_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mac_build_instructions.md</a>
+  </p>
+</div>

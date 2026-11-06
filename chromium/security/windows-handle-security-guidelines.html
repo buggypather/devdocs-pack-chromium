@@ -1,0 +1,75 @@
+<h1>Security guidelines for HANDLEs on Windows</h1>
+<p>TL;DR;</p>
+<ul>
+<li>Use <a href="https://source.chromium.org/chromium/chromium/src/+/main:base/win/scoped_handle.h">ScopedHandle</a>
+whenever possible.</li>
+<li>If you have to use a raw HANDLE:<ul>
+<li>Reject invalid values using <a href="https://source.chromium.org/chromium/chromium/src/+/main:base/win/windows_handle_util.h">base::win::IsPseudoHandle()</a>
+do not just check against INVALID_HANDLE_VALUE,</li>
+<li>Initialize and return nullptr on failure.</li>
+<li>Avoid storing pseudo handle values.</li>
+<li>Provide GetCurrentProcess() or GetCurrentThread() directly to Windows APIs.</li>
+</ul>
+</li>
+</ul>
+<h2 id="discussion">Discussion</h2>
+<p>Windows HANDLEs are used to represent objects such as Events, Files, Processes
+and Threads. HANDLEs are typedef’d as a pointer-sized type but Windows only uses
+32 bits (with sign extension) so that 32 and 64 bit processes can interoperate.</p>
+<p>Windows HANDLEs are generally returned by Windows APIs that create or open
+objects, and must be closed once the object is no longer in use to conserve
+system resources. HANDLEs to the same object might have different access rights
+(for instance, a process handle might only allow waiting on exit, or might allow
+full memory access). HANDLEs can also be duplicated, both within the process
+that created them (to allow code with different lifetimes to refer to the same
+underlying object), and to other processes.</p>
+<p>HANDLE has several quirks. Many Windows APIs take or return pseudo handle
+values, such as the return from ::GetCurrentProcess() or ::GetCurrentThread().
+These pseudo handle values may overlap with return values from some handle
+manipulation functions, and malicious code could send these placeholder values
+from less privileged processes.</p>
+<p>In particular, GetCurrentProcess() == INVALID_HANDLE_VALUE. Code must be very
+careful not to use these pseudo handle values accidentally. For instance, code
+might intend to open and send a file handle to a renderer, but if the file
+opening failed it might accidentally provide INVALID_HANDLE_VALUE as the source
+handle to DuplicateHandle(), resulting in a handle to the current process being
+sent to the renderer, which would be a serious security bug.</p>
+<p>In general it should not be necessary for Chromium code to directly manipulate
+Windows HANDLEs, and instead code should use abstractions such as <a href="https://source.chromium.org/chromium/chromium/src/+/main:base/files/file.h">base::File</a>.
+Chromium, via mojo, makes it easy to send appropriately wrapped objects to
+children using <a href="https://source.chromium.org/chromium/chromium/src/+/main:mojo/public/mojom/base/">mojo_base</a> wrappers.</p>
+<h1 id="guidelines">Guidelines</h1>
+<h2 id="use-scopedhandle-whenever-possible">Use ScopedHandle whenever possible</h2>
+<p>In Chromium, HANDLEs should always be owned by a <a href="https://source.chromium.org/chromium/chromium/src/+/main:base/win/scoped_handle.h">base::win::ScopedHandle</a>
+and their underlying HANDLE should only be accessed when a related Windows API
+is called. This ensures that HANDLEs are not leaked and that ownership of the
+underlying object in Chromium code is clear. ScopedHandle refuses to adopt or
+represent pseudo handle values, and will not return them from its .get()
+accessor.</p>
+<p>When duplicating a <code>ScopedHandle</code>, use <code>ScopedHandle::Duplicate()</code> rather than
+calling <code>::DuplicateHandle()</code> directly. <code>ScopedHandle::Duplicate()</code> automatically
+checks <code>is_valid()</code>, prevents pseudo-handle laundering, and returns an empty
+<code>ScopedHandle</code> if duplication fails.</p>
+<p>When adopting a HANDLE value into a base::win::ScopedHandle that another process
+duplicated into the current process (e.g. a log file handle on a command line)
+use <a href="https://source.chromium.org/chromium/chromium/src/+/main:base/win/scoped_handle.h">base::win::TakeHandleOfType()</a>
+to validate that the HANDLE is not a pseudo handle and points to a valid object
+before adopting it.</p>
+<h2 id="using-handle-in-chromium">Using HANDLE in Chromium</h2>
+<p>If you must manipulate HANDLEs directly, the following guidelines apply:</p>
+<p>Do not store pseudo handles, and instead simply call ::GetCurrentProcess() when
+you need the pseudo handle value. If you need a real handle to a process (and
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:base/process/process.h">base::Process</a>
+does not provide what you need), you must duplicate to a real HANDLE before
+adopting it.</p>
+<p>Use nullptr to represent uninitialized or invalid values. In code that manages
+its own HANDLEs use nullptr to initialize all HANDLE variables and members and
+return nullptr from any accessor that returns a raw HANDLE while the wrapper
+object is invalid. Use <a href="https://source.chromium.org/chromium/chromium/src/+/main:base/win/windows_handle_util.h">base::win::IsPseudoHandle()</a> to validate HANDLE values
+provided to constructors (do not just check handle != INVALID_HANDLE_VALUE).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/windows-handle-security-guidelines.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/windows-handle-security-guidelines.md</a>
+  </p>
+</div>

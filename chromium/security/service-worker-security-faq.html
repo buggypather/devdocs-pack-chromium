@@ -1,0 +1,263 @@
+<h1>Service Worker Security FAQ</h1>
+<p>This FAQ is specifically about service workers. Also see the <a href="faq">general security
+FAQ</a>.</p>
+<p>Like the general security FAQ, this document is a collaborative effort by many
+Chromium developers. (rsesek, estark, falken, slightlyoff, jakearchibald, evn,
+raymes, ainslie, mek, lgarron, elawrence, kinuko, palmer, your name here...)
+Last updated 12 May 2017. If you see an error or have an additional question,
+and have a Chromium account, go ahead and fix it. If you don&#39;t have a Chromium
+account, email <a href="mailto:security-dev@chromium.org">security-dev@chromium.org</a> for a fix.</p>
+<h2 id="service-workers-seem-extremely-risky-why-are-they-ok">Service Workers seem extremely risky! Why are they OK?</h2>
+<p>Service Workers (SW) are indeed powerful. They support compelling web
+applications that can run offline or with intermittent connectivity. You can
+edit documents, browse and buy from catalogs, send social media messages, write
+email, etc. even in the subway! Service Workers can make the web platform more
+viable than ever before, enabling web apps to better compete with native apps
+even while essentially retaining the browse-to-use, sandboxed nature of the
+<a href="https://www.w3.org/wiki/Open_Web_Platform">Open Web Platform</a> (OWP) that we all
+love. The rest of this FAQ will explain how the SW designers and implementers
+have mitigated the risks that necessarily come with this functionality.</p>
+<p>Service Workers are a replacement for and an improvement on the legacy
+<a href="https://developer.mozilla.org/en-US/docs/Web/HTML/Using_the_application_cache">Application Cache
+API</a>,
+which has been available in the OWP for a very long time.</p>
+<p>For more background on Service Workers, see <a href="https://github.com/w3c/ServiceWorker/blob/master/explainer.md">Service Workers
+Explained</a>.</p>
+<h2 id="do-service-workers-run-in-a-sandbox">Do Service Workers run in a sandbox?</h2>
+<p>Yes, SWs run in renderer processes. When Chrome starts a SW, it chooses a
+renderer process that is associated with the SW’s origin. If one does not exist,
+the browser creates a new one using a new
+<a href="https://cs.chromium.org/chromium/src/content/public/browser/site_instance.h"><code>SiteInstance</code></a>
+for the origin.</p>
+<h2 id="what-apis-can-service-workers-access">What APIs can Service Workers access?</h2>
+<p>The <a href="https://html.spec.whatwg.org/#apis-available-to-workers">HTML specification partially enumerates the API surface available to
+Workers</a>. See also
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/Client"><code>Client</code></a>, and
+<a href="https://w3c.github.io/ServiceWorker/#serviceworkerglobalscope-interface"><code>ServiceWorkerGlobalScope</code></a>.
+(Note that SWs do not have access to synchronous APIs.)</p>
+<p>However, other web platform specifications can add new API surface. For example,
+the Permissions API exposes a permissions attribute to workers. Generally, SWs
+have access to a subset of the web platform APIs, although there are some
+Worker- and Service Worker-specific APIs that do not make sense for in-page
+JavaScript.</p>
+<p>(<code>[Service]WorkerGlobalScope</code> is of course not necessarily a strict subset of
+<code>Window</code>, and similarly <code>WorkerNavigator</code> is not necessarily a strict subset of
+<code>Navigator</code>. And the various SW events are of course only exposed to SWs.)</p>
+<h2 id="do-service-workers-obey-the-same-origin-policy">Do Service Workers obey the same-origin policy?</h2>
+<p>Service Worker registration specifies that <a href="https://w3c.github.io/ServiceWorker/#register-algorithm">Service Workers must run in the same
+origin as their
+callers</a>.</p>
+<p>The origin comparison for finding a Service Worker registration for a request is
+<a href="https://w3c.github.io/ServiceWorker/#scope-match-algorithm">specified</a> to be to
+be a longest-prefix match of serialized URLs, including their path. (E.g.
+<code>https://example.com/</code> != <code>https://example.com.evil.com/</code>.) This specification
+gap seems fragile to us, <a href="https://github.com/w3c/ServiceWorker/issues/1118">and should be fixed to be specified and implemented as
+actual origin equality</a>, but
+doesn’t currently seem exploitable.</p>
+<p>Only <a href="https://w3c.github.io/webappsec-secure-contexts/#example-c52936fc">Secure Contexts can register or use Service
+Workers</a>.</p>
+<p>Because SWs can call <code>importScripts</code> to import scripts (from any other origin),
+it is a good idea for site operators to set a Content-Security-Policy response
+header on the ServiceWorker’s JavaScript response, instructing the browser what
+sources of script the origin considers trustworthy. That would reduce an XSS
+attacker’s ability to pull in their own code.</p>
+<h2 id="do-service-workers-live-forever">Do Service Workers live forever?</h2>
+<p>There are two concepts of “live” here. One is about the installed registration
+and one is about the running Service Worker thread.</p>
+<p>The installed registration lasts indefinitely, similar to origin-scoped storage
+like
+<a href="https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API">IndexedDB</a>. The
+browser performs an update check after any navigation using the Service Worker,
+invalidating the HTTP cache every 24 hours. Additionally, <a href="https://w3c.github.io/ServiceWorker/#dfn-use-cache">browsers will
+revalidate the HTTP cache for SW
+scripts</a> unless the site
+opts into using the cache.</p>
+<p>The browser also performs an update check whenever the SW starts and
+periodically while the worker is running, if it has not checked in the last 24
+hours (86,400 seconds, <a href="https://w3c.github.io/ServiceWorker/#handle-functional-event-algorithm">as specified in the Handle Functional Event
+algorithm</a>).</p>
+<p>The browser can terminate a running SW thread at almost any time. Chrome
+terminates a SW if the SW has been idle for 30 seconds. Chrome also detects
+long-running workers and terminates them. It does this if an event takes more
+than 5 minutes to settle, or if the worker is busy running synchronous
+JavaScript and does not respond to a ping within 30 seconds. When a SW is not
+running, Developer Tools and chrome://serviceworker-internals show its status as
+STOPPED.</p>
+<p>An exception to this is a Service Worker registered as a Payment Handler. It
+may continue running as long as its payment handler window is open. This is
+based on the assumption that users will not keep the window open
+indefinitely, making the potential risk negligible.</p>
+<h2 id="how-can-i-see-service-workers-in-chrome">How can I see Service Workers in Chrome?</h2>
+<p>You can see them in the <strong>Service Workers</strong> field in the <strong>Application</strong> tab of
+<strong>Developer Tools</strong>. You can also look at
+<a href="chrome://serviceworker-internals">chrome://serviceworker-internals</a>.</p>
+<h2 id="do-service-workers-keep-running-after-i-close-the-tab">Do Service Workers keep running after I close the tab?</h2>
+<p>If an origin has any Service Workers running, each worker will be shut down soon
+after it processes the last event. Events that can keep a worker alive include
+push notifications. (Note that the <a href="https://cs.chromium.org/chromium/src/chrome/browser/push_messaging/push_messaging_notification_manager.cc?type=cs&amp;l=270">push notifications will trigger a
+user-visible notification if the SW does not create
+one</a>,
+and they also require the person to grant the origin permission in a prompt. you
+can see that in action in this <a href="https://gauntface.github.io/simple-push-demo/">push notifications demo
+app</a>.)</p>
+<h2 id="can-attackers-use-service-workers-to-trigger-attacks-developed-after-sw-registration">Can attackers use Service Workers to trigger attacks developed after SW registration?</h2>
+<p>For example, could an attacker convince users to visit a malicious website, then
+wait for (e.g.) a V8 bug to show up in Chrome&#39;s repository, then write an
+exploit, and then somehow run that exploit on the machines of everyone who
+visited the malicious website in the last month or so?</p>
+<p>Without explicit permission from the user, the browser won&#39;t let the SW poll
+for/receive any push notification events the attacker&#39;s server may (try to)
+send, and hence the SW won&#39;t get a chance to handle the events.</p>
+<p>Similarly, you might imagine a SW that tries to use <code>importScripts</code> to
+periodically (re-)load <code>maybe-v8-payload.js</code>. But, the SW would only get to do
+that as part of an event handler. And if the SW isn&#39;t getting any events
+(because the person is not browsing or navigating to attacker.com, and because
+the person never granted attacker.com push notification permission), then it
+will never get to run its event handlers, and so again the SW won&#39;t get a chance
+to attack.</p>
+<p>If the person is currently browsing attacker.com, then the attacker doesn&#39;t gain
+any additional attack benefit from a Service Worker. They can just <code>&lt;script src=&quot;maybe-v8-payload.js&quot;&gt;</code> as usual, from the in-page JavaScript.</p>
+<h2 id="if-a-site-has-an-xss-vulnerability-can-the-attacker-permanently-compromise-that-origin-for-me">If a site has an XSS vulnerability, can the attacker permanently compromise that origin for me?</h2>
+<p>An XSS attacker can indeed register an evil SW. As before SWs, XSS is a very
+powerful mode of attack on a web origin. To mitigate the risk that an XSS attack
+will register a malicious SW, the browser requires that the SW registration URL
+come from the origin itself. Thus, to use an XSS attack to register a malicious
+SW, the attacker needs the additional capability to host their own scripts on
+the server.</p>
+<p>Here is another exploit scenario: If the page with an XSS vulnerability also has
+a JSONP endpoint, the attacker could use it to (1) bypass CSP; (2) register a
+SW; and (3) call <code>importScripts</code> to import a third-party script to persist until</p>
+<ul>
+<li>the site operators detect and remediates the issue; and</li>
+<li>users navigate to the site again while online.</li>
+</ul>
+<p>In an XSS situation, the 24 hour cache directive limit ensures that a malicious
+or compromised SW will outlive a fix to the XSS vulnerability by a maximum of 24
+hours (assuming the client is online). Site operators can shrink the window of
+vulnerability by setting lower TTLs on SW scripts. We also encourage developers
+to <a href="https://stackoverflow.com/questions/33986976/how-can-i-remove-a-buggy-service-worker-or-implement-a-kill-switch/38980776#38980776">build a kill-switch
+SW</a>.</p>
+<p>The right cleanup strategy (for this and other issues) is
+<a href="https://www.w3.org/TR/clear-site-data/">Clear-Site-Data</a>.</p>
+<p>Additionally, site operators should ignore (e.g. respond with <code>400 Bad Request</code>)
+requests that have the Service-Worker request header for domains or paths that
+the server doesn’t expect to be serving SW scripts for.</p>
+<h2 id="can-sites-opt-out-of-service-workers">Can sites opt out of Service Workers?</h2>
+<p>Sites that do not intend to serve Service Workers on particular domains or paths
+can check for and explicitly reject requests for worker scripts, by checking for
+<a href="https://w3c.github.io/ServiceWorker/#service-worker-script-request">the Service-Worker request
+header</a>.</p>
+<h2 id="how-many-sws-can-an-origin-or-chrome-itself-spawn">How many SWs can an origin, or Chrome itself, spawn?</h2>
+<p>The current specification and the current implementation in Chrome do not define
+any limits.</p>
+<h2 id="can-attackers-hide-service-worker-scripts-in-jpegs-or-other-non-script-mime-types">Can attackers &#39;hide&#39; Service Worker scripts in JPEGs or other non-script MIME types?</h2>
+<p>Can an attacker upload (for example) JPEG files to a site that supports the
+capability, and then use the uploaded files as SW scripts?</p>
+<p>The SW specification and implementation require that a SW script have the right
+JavaScript MIME type. (Additionally, as noted elsewhere in this document, server
+operators should reject SW script requests except for the exact endpoints they
+intend to serve SW scripts from.)</p>
+<h2 id="can-iframes-register-service-workers">Can iframes register Service Workers?</h2>
+<p>Yes, if and only if they are themselves secure contexts. <a href="https://w3c.github.io/webappsec-secure-contexts/#examples-framed">By
+definition</a>,
+that means that they must be nested inside secure contexts, all the way up to
+the top-level document.</p>
+<p>Service Workers registered by third-party iframes are partitioned by top-level
+site in addition to the origin of the third-party iframe, even if third-party
+cookies are blocked. See the
+<a href="https://github.com/wanderview/quota-storage-partitioning/blob/main/explainer.md">Partitioning Storage, Service Workers, and Communication APIs explainer</a>
+for more information.</p>
+<h2 id="why-doesnt-chrome-prompt-the-user-before-registering-a-service-worker">Why doesn’t Chrome prompt the user before registering a Service Worker?</h2>
+<p>The Chrome Team generally prefers to ask people about things that are
+privacy-relevant, using nouns and verbs that are simple and precise (camera,
+mic, geo-location, and so on). But we avoid asking questions about resource-use
+(caching, persistence, CPU, and so on). We’re better prepared to make those
+types of resource decisions automatically. (Consider, for example, that the HTTP
+cache, and even <a href="https://en.wikipedia.org/wiki/Gears_(software)">Google
+Gears</a> also do not/did not
+prompt the user.)</p>
+<p><a href="https://docs.google.com/presentation/d/1suzMhtvMtA11jxPUdH1jL1oPh-82rTymCnslgR3ehEE/edit#slide=id.p">An informal study by Chrome team members Rebecca Rolfe, Ben Wells, and Raymes
+Khoury</a>
+suggests that people do not generally have sufficient context to understand
+permission requests triggered by API calls from origins in iframes. It seems
+reasonable that people would similarly lack the context to understand requests
+from Service Workers.</p>
+<h2 id="what-if-i-dont-want-any-sws">What if I don&#39;t want <em>any</em> SWs?</h2>
+<p>Clearing browser data (CBD; the <strong>Clear browsing data...</strong> button in
+<strong>Settings</strong> or chrome://settings/clearBrowserData) also deletes SWs. You can
+verify that by following this test procedure:</p>
+<ol>
+<li>Visit <a href="https://gauntface.github.io/simple-push-demo/">https://gauntface.github.io/simple-push-demo/</a></li>
+<li>In a second tab, visit chrome://serviceworker-internals/ to see the ACTIVATED
+and RUNNING SW<ul>
+<li>Note that the origin/the origin&#39;s SW cannot actually send any push notifications
+until you grant it that permission</li>
+</ul>
+</li>
+<li>In a third tab, go to chrome://settings/clearBrowserData to clear browsing data;
+clear it by clicking <strong>Clear browsing data</strong></li>
+<li>Reload chrome://serviceworker-internals/ to see that the SW&#39;s status is now
+REDUNDANT and STOPPED</li>
+<li>Close the Simple Push Demo tab</li>
+<li>Reload chrome://serviceworker-internals/ to see that the SW is now gone</li>
+</ol>
+<p>You can also remove individual SW registrations with
+chrome://serviceworker-internals/.</p>
+<p>Another way to avoid SWs is to use one of the browsers that don&#39;t (yet) support
+SWs. But, eventually, the Open Web Platform will continue to evolve into a
+powerful, useful platform supporting applications that are <a href="https://paul.kinlan.me/slice-the-web/">secure, linkable,
+indexable, composable, and ephemeral</a>.
+Yes, SWs make web apps somewhat less ephemeral, but we believe the increased
+applicability of the OWP is worth it.</p>
+<p>Browser vendors are committed to ensuring the security of the OWP improves even
+as we give it new capabilities. This process happens in the open, in fora like
+<a href="https://www.w3.org/2001/tag/">W3C Technical Architecture Group</a>, <a href="https://www.w3.org/blog/2015/07/wicg/">W3C’s Web
+Platform Incubator Community Group</a>, and
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/blink-dev">blink-dev@chromium.org</a>.
+Security and privacy reviews are part of the process and we invite knowledgeable
+experts to participate in those open fora.</p>
+<h2 id="what-are-some-sw-best-practices-for-site-operators">What are some SW best practices for site operators?</h2>
+<ul>
+<li><a href="https://stackoverflow.com/questions/33986976/how-can-i-remove-a-buggy-service-worker-or-implement-a-kill-switch/38980776#38980776">Build a kill-switch SW</a>.</li>
+<li>Use <a href="https://www.w3.org/TR/clear-site-data/">Clear-Site-Data</a>.</li>
+<li>Be aware of the need for longer session lifetimes, since clients may go
+offline and SWs might need to POST cached requests after coming back
+online. <a href="https://developers.google.com/web/updates/2016/06/2-cookie-handoff">Here is one way to handle
+that</a>.</li>
+</ul>
+<h2 id="what-sw-bugs-would-qualify-for-a-bounty-under-chromes-vrp">What SW bugs would qualify for a bounty under <a href="https://www.google.com/about/appsecurity/chrome-rewards/index.html">Chrome’s VRP</a>?</h2>
+<p>If you could break one or more of the security assertions we make in this FAQ,
+that would be potentially rewardable under the Vulnerability Rewards Program
+(VRP). Here is a non-exhaustive list of examples:</p>
+<ul>
+<li>Over-long registration/lifetime (e.g. a SW able to run or stay alive even
+without incoming events to handle)</li>
+<li>Same-origin bypass or off-origin SW registration Access to APIs that</li>
+<li>require prompts, choosers, or permissions, without
+permission having been granted to the origin<ul>
+<li>Geolocation</li>
+<li>Hardware sensors</li>
+<li>Microphone, camera, media devices</li>
+<li>USB, Bluetooth</li>
+</ul>
+</li>
+</ul>
+<p>Here is <a href="https://bugs.chromium.org/p/chromium/issues/list?can=1&amp;q=Type%3DBug-Security+serviceworker&amp;colspec=ID+Pri+M+Stars+ReleaseBlock+Component+Status+Owner+Summary+OS+Modified&amp;x=m&amp;y=releaseblock&amp;cells=ids">a list of historical SW security
+bugs</a>
+in Chromium’s bug tracker.</p>
+<p>If you believe you have found a bug in the SW specification, please <a href="https://bugs.chromium.org/p/chromium/issues/entry?template=Security%20Bug">file a new
+Chromium bug using the Security
+template</a>.
+It’s a good idea to file bugs with all browser vendors that implement the buggy
+section of the spec.</p>
+<p>If you believe you have found a bug in Chrome’s implementation of SW, please
+<a href="https://bugs.chromium.org/p/chromium/issues/entry?template=Security%20Bug">file a new bug using the Security
+template</a>.
+The Chrome Security Team will triage it within 1 or 2 business days. Good bug
+reports come with minimal test cases that demonstrate the problem!</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/service-worker-security-faq.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/service-worker-security-faq.md</a>
+  </p>
+</div>

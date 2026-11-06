@@ -1,0 +1,136 @@
+<h1>Deterministic Builds</h1>
+<h1 id="deterministic-builds">Deterministic builds</h1>
+<p>Chromium&#39;s build is deterministic. This means that building Chromium at the
+same revision will produce exactly the same binary in two builds, even if
+these builds are on different machines, in build directories with different
+names, or if one build is a clobber build and the other build is an incremental
+build with the full build done at a different revision. This is a project goal,
+and we have bots that verify that it&#39;s true.</p>
+<p>Furthermore, even if a binary is built at two different revisions but none of
+the revisions in between logically affect a binary, then builds at those two
+revisions should produce exactly the same binary too (imagine a revision that
+modifies code <code>chrome/</code> while we&#39;re looking at <code>base_unittests</code>). This isn&#39;t
+enforced by bots, and it&#39;s currently not always true in Chromium&#39;s build -- but
+it&#39;s true for some binaries at least, and it&#39;s supposed to become more true
+over time.</p>
+<p>Having deterministic builds is important, among other things, so that swarming
+can cache test results based on the hash of test inputs.</p>
+<p>This document currently describes how to handle failures on the deterministic
+bots.</p>
+<p>There&#39;s also
+<a href="https://www.chromium.org/developers/testing/isolated-testing/deterministic-builds">https://www.chromium.org/developers/testing/isolated-testing/deterministic-builds</a>;
+over time all documentation over there will move to here.</p>
+<h2 id="handling-failures-on-the-deterministic-bots">Handling failures on the deterministic bots</h2>
+<p>This section describes what to do when <code>compare_build_artifacts</code> is failing on
+a bot.</p>
+<p>The deterministic bots make sure that building the same revision of chromium
+always produces the same output.</p>
+<p>To analyze the failing step, it&#39;s useful to understand what the step is doing.</p>
+<p>There are two types of checks.</p>
+<ol>
+<li><p>The full determinism check makes sure that build artifacts are independent
+of the name of the build directory, and that full and incremental builds
+produce the same output. This is done by having bots that have two build
+directories: <code>out/Release</code> does incremental builds, and <code>out/Release.2</code>
+does full clobber builds. After doing the two builds, the bot checks
+that all built files needed to run tests on swarming are identical in the
+two build directories. The full determinism check is currently used on
+Linux and Windows bots. (<code>Deterministic Linux (dbg)</code> has one more check:
+it doesn&#39;t use remote execution for the incremental build, to check that
+using remote execution doesn&#39;t affect built files either.)</p>
+</li>
+<li><p>The simple determinism check does a clobber build in <code>out/Release</code>, moves
+this to a different location (<code>out/Release.1</code>), then does another clobber
+build in <code>out/Release</code>, moves that to another location (<code>out/Release.2</code>),
+and then does the same comparison as done in the full build. Since both
+builds are done at the same path, and since both are clobber builds,
+this doesn&#39;t check that the build is independent of the name of the build
+directory, and it doesn&#39;t check that incremental and full builds produce
+the same results. This check is used on Android and macOS, but over time
+all platforms should move to the full determinism check.</p>
+</li>
+</ol>
+<h3 id="understanding-compare_build_artifacts-error-output">Understanding <code>compare_build_artifacts</code> error output</h3>
+<p><code>compare_build_artifacts</code> prints a list of all files it compares, followed by
+<code>&quot;: None</code>&quot; for files that have no difference. Files that are different between
+the two build directories are followed by <code>&quot;: DIFFERENT(expected)&quot;</code> or
+<code>&quot;: DIFFERENT(unexpected)&quot;</code>, followed by e.g. <code>&quot;different size: 195312640 != 195311616&quot;</code> if the two files have different size, or by e.g. <code>&quot;70 out of 5091840 bytes are different (0.00%)&quot;</code> if they&#39;re the same size.</p>
+<p>You can ignore lines that say <code>&quot;: None&quot;</code> or <code>&quot;: DIFFERENT(expected)&quot;</code>, these
+don&#39;t turn the step red. <code>&quot;: DIFFERENT(expected)&quot;</code> is for files that are known
+to not yet be deterministic; these are listed in
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/tools/determinism/deterministic_build_ignorelist.pyl"><code>src/tools/determinism/deterministic_build_ignorelist.pyl</code></a>.  If the
+deterministic bots turn red, you usually do <em>not</em> want to add an entry to this
+list, but figure out what introduced the nondeterminism and revert that.</p>
+<p>If only a few bytes are different, the script prints a diff of the hexdump
+of the two files. Most of the time, you can ignore this.</p>
+<p>After this list of filenames, the script prints a summary that looks like</p>
+<pre>Equals:           5454
+Expected diffs:   3
+Unexpected diffs: 60
+Unexpected files with diffs:</pre>
+<p>followed by a list of all files that contained <code>&quot;: DIFFERENT(unexpected)&quot;</code>.
+This is the most interesting part of the output.</p>
+<p>After that, the script tries to compute all build inputs of each file with
+a difference, and compares the inputs. For example, if a .exe is different,
+this will try to find all .obj files the .exe consists of, and try to compare
+these too. Nowadays, the compile step is usually deterministic, so this can
+usually be ignored too. Here&#39;s an example output:</p>
+<pre>fixed_build_dir C:\b\s\w\ir\cache\builder\src\out\Release exists. will try to use orig dir.
+Checking verifier_test_dll_2.dll.pdb difference: (1 deps)</pre>
+<h3 id="diagnosing-bot-redness">Diagnosing bot redness</h3>
+<p>Things to do, in order of involvedness and effectiveness:</p>
+<ul>
+<li><p>Look at the list of files following <code>&quot;Unexpected files with diffs:&quot;</code> and check
+if they have something in common. If the blame list on the first red build
+has a change to that common thing, try reverting it and see if it helps.
+If many, seemingly unrelated files have differences, look for changes to
+the build config (Ctrl-F &quot;.gn&quot;) or for toolchain changes (Ctrl-F &quot;clang&quot;).</p>
+</li>
+<li><p>The deterministic bots try to upload a tar archive to Google Storage.
+Use <code>gsutil.py ls gs://chrome-determinism</code> to see available archives,
+and use e.g. <code>gsutil.py cp gs://chrome-determinism/Windows\ deterministic/9998/deterministic_build_diffs.tgz .</code> to copy one archive to
+your workstation. You can then look at the diffs in more detail. See
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=985285#c6">https://bugs.chromium.org/p/chromium/issues/detail?id=985285#c6</a> for an
+example.</p>
+</li>
+<li><p>Try to reproduce the problem locally. First, set up two build directories
+with identical args.gn. Then do a full build at the last known green revision
+in the first build directory:</p>
+<pre>$ gn clean out/gn
+$ autoninja -C out/gn base_unittests</pre>
+<p>Then, sync to the first bad revision (make sure to also run <code>gclient sync</code>
+to update dependencies), do an incremental build in the
+first build directory and a full build in the second build directory, and
+run <code>compare_build_artifacts.py</code> to compare the outputs:</p>
+<pre>$ autoninja -C out/gn base_unittests
+$ gn clean out/gn2
+$ autoninja -C out/gn2 base_unittests
+$ tools/determinism/compare_build_artifacts.py \
+     --first-build-dir out/gn \
+     --second-build-dir out/gn2 \
+     --target-platform linux</pre>
+<p>This will hopefully reproduce the error, and then you can binary search
+between good and bad revisions to identify the bad commit.</p>
+</li>
+</ul>
+<p>Things <em>not</em> to do:</p>
+<ul>
+<li><p>Don&#39;t clobber the deterministic bots. Clobbering a deterministic bot will
+turn it green if build nondeterminism is caused by incremental and full
+clobber builds producing different outputs. However, this is one of the
+things we want these bots to catch, and clobbering them only removes the
+symptom on this one bot -- all CQ bots will still have nondeterministic
+incremental builds, which is (among other things) bad for caching. So while
+clobbering a deterministic bot might make it green, it&#39;s papering over issues
+that the deterministic bots are supposed to catch.</p>
+</li>
+<li><p>Don&#39;t add entries to <code>src/tools/determinism/deterministic_build_ignorelist.pyl</code>.
+Instead, try to revert commits introducing nondeterminism.</p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/deterministic_builds.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/deterministic_builds.md</a>
+  </p>
+</div>

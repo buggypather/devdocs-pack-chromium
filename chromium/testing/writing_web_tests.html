@@ -1,0 +1,574 @@
+<h1>Writing Web Tests</h1>
+<h2 id="overview">Overview</h2>
+<p>Web tests should be used to accomplish one of the following goals:</p>
+<ol>
+<li>The entire surface of Blink that is exposed to the Web should be covered by
+tests that we contribute to <a href="web_platform_tests">web-platform-tests</a>
+(WPT). This helps us avoid regressions, and helps us identify Web Platform
+areas where the major browsers don&#39;t have interoperable implementations.
+Furthermore, by contributing to projects such as WPT, we share the burden of
+writing tests with the other browser vendors, and we help all the browsers
+get better. This is very much in line with our goal to move the Web forward.</li>
+<li>When a Blink feature cannot be tested using the tools provided by WPT, and
+cannot be easily covered by
+<a href="https://cs.chromium.org/chromium/src/third_party/blink/renderer/web/tests/?q=webframetest&amp;sq=package:chromium&amp;type=cs">C++ unit tests</a>,
+the feature must be covered by web tests, to avoid unexpected regressions.
+These tests will use Blink-specific testing APIs that are only available in
+<a href="web_tests_in_content_shell">content_shell</a>.</li>
+</ol>
+<p>Note: if you are looking for a guide for the Web Platform Test, you should read
+<a href="web_platform_tests">&quot;Web platform tests&quot;</a> (WPT). This document does not
+cover WPT specific features/behaviors. <strong>The WPT is recommended today rather than
+test types mentioned below!</strong></p>
+<p>*** promo
+If you know that Blink web tests are upstreamed to other projects, such as
+<a href="https://github.com/tc39/test262">test262</a>, please update this document. Most
+importantly, our guidelines should to make it easy for our tests to be
+upstreamed. The
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/blink-dev">blink-dev mailing list</a>
+will be happy to help you harmonize our current guidelines with communal test
+repositories.</p>
+<hr>
+<h3 id="test-types">Test Types</h3>
+<p>There are four broad types of web tests, listed in the order of preference.</p>
+<ul>
+<li><em>JavaScript Tests</em> are the web test implementation of
+<a href="https://en.wikipedia.org/wiki/XUnit">xUnit tests</a>. These tests contain
+assertions written in JavaScript, and pass if the assertions evaluate to
+true.</li>
+<li><em>Reference Tests</em> render a test page and a reference page, and pass if the two
+renderings are identical, according to a pixel-by-pixel comparison. These
+tests are less robust, harder to debug, and significantly slower than
+JavaScript tests, and are only used when JavaScript tests are insufficient,
+such as when testing paint code.</li>
+<li><em>Pixel Tests</em> render a test page and compare the result against a pre-rendered
+baseline image in the repository. Pixel tests are less robust than the
+first two types, because the rendering of a page is influenced by
+many factors such as the host computer&#39;s graphics card and driver, the
+platform&#39;s text rendering system, and various user-configurable operating
+system settings. For this reason, it is common for a pixel test to have a
+different reference image for each platform that Blink is tested on, and
+the reference images are
+<a href="web_test_expectations">quite cumbersome to manage</a>. You
+should only write a pixel test if you cannot use a reference test.</li>
+<li><em>Text Tests</em> output pure text which represents the DOM tree, the DOM inner
+text, internal data structure of Blink like layout tree or graphics layer
+tree, or any custom text that the text wants to output. The test passes if the
+output matches a baseline text file in the repository. Text tests outputting
+internal data structures are used as a last resort to test the internal quirks
+of the implementation, and they should be avoided in favor of one of other
+options.</li>
+<li><em>Audio tests</em> output audio results.</li>
+</ul>
+<p>*** aside
+A JavaScript test is actually a special kind of text test, but its text
+baseline can be often omitted.</p>
+<hr>
+<p>*** aside
+A test can be a reference/pixel test and a text test at the same time.</p>
+<hr>
+<h2 id="general-principles">General Principles</h2>
+<p>Tests should be written under the assumption that they will be upstreamed
+to the WPT project. To this end, tests should follow the
+<a href="https://web-platform-tests.org/writing-tests/">WPT guidelines</a>.</p>
+<p>There is no style guide that applies to all web tests. However, some projects
+have adopted style guides, such as the
+<a href="https://www.chromium.org/blink/serviceworker/testing">ServiceWorker Tests Style guide</a>.</p>
+<p>Our <a href="web_tests_tips">document on web tests tips</a> summarizes the most
+important WPT guidelines and highlights some JavaScript concepts that are worth
+paying attention to when trying to infer style rules from existing tests. If
+you&#39;re unopinionated and looking for a style guide to follow, the document also
+suggests some defaults.</p>
+<h2 id="javascript-tests">JavaScript Tests</h2>
+<p>Whenever possible, the testing criteria should be expressed in JavaScript. The
+alternatives, which will be described in future sections, result in slower and
+less reliable tests.</p>
+<p>All new JavaScript tests should be written using the
+<a href="https://github.com/web-platform-tests/wpt/tree/master/resources">testharness.js</a>
+testing framework. This framework is used by the tests in the
+<a href="https://github.com/web-platform-tests/wpt">web-platform-tests</a> repository,
+which is shared with all the other browser vendors, so <code>testharness.js</code> tests
+are more accessible to browser developers.</p>
+<p>See the <a href="https://web-platform-tests.org/writing-tests/testharness-api.html">API documentation</a>
+for a thorough introduction to <code>testharness.js</code>.</p>
+<p>Web tests should follow the recommendations of the above documentation.
+Furthermore, web tests should include relevant
+<a href="https://web-platform-tests.org/writing-tests/css-metadata.html">metadata</a>. The
+specification URL (in <code>&lt;link rel=&quot;help&quot;&gt;</code>) is almost always relevant, and is
+incredibly helpful to a developer who needs to understand the test quickly.</p>
+<p>Below is a skeleton for a JavaScript test embedded in an HTML page. Note that,
+in order to follow the minimality guideline, the test omits the tags <code>&lt;html&gt;</code>,
+<code>&lt;head&gt;</code>, and <code>&lt;body&gt;</code>, as they can be inferred by the HTML parser.</p>
+<pre data-language="html">&lt;!doctype html&gt;
+&lt;title&gt;JavaScript: the true literal is immutable and equal to itself&lt;/title&gt;
+&lt;link rel=&quot;help&quot; href=&quot;https://tc39.github.io/ecma262/#sec-boolean-literals&quot;&gt;
+&lt;script src=&quot;/resources/testharness.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;/resources/testharnessreport.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+'use strict';
+
+// Synchronous test example.
+test(() =&gt; {
+  const value = true;
+  assert_true(value, 'true literal');
+  assert_equals(value.toString(), 'true', 'the string representation of true');
+}, 'The literal true in a synchronous test case');
+
+// Asynchronous test example.
+async_test(t =&gt; {
+  const originallyTrue = true;
+  setTimeout(t.step_func_done(() =&gt; {
+    assert_equals(originallyTrue, true);
+  }), 0);
+}, 'The literal true in a setTimeout callback');
+
+// Promise test example.
+promise_test(() =&gt; {
+  return new Promise((resolve, reject) =&gt; {
+    resolve(true);
+  }).then(value =&gt; {
+    assert_true(value);
+  });
+}, 'The literal true used to resolve a Promise');
+
+&lt;/script&gt;</pre>
+<p>Some points that are not immediately obvious from the example:</p>
+<ul>
+<li>When calling an <code>assert_</code> function that compares two values, the first
+argument is the actual value (produced by the functionality being tested), and
+the second argument is the expected value (known good, golden). The order
+is important, because the testing harness relies on it to generate expressive
+error messages that are relied upon when debugging test failures.</li>
+<li>The assertion description (the string argument to <code>assert_</code> methods) conveys
+the way the actual value was obtained.<ul>
+<li>If the expected value doesn&#39;t make it clear, the assertion description
+should explain the desired behavior.</li>
+<li>Test cases with a single assertion should omit the assertion&#39;s description
+when it is sufficiently clear.</li>
+</ul>
+</li>
+<li>Each test case describes the circumstance that it tests, without being
+redundant.<ul>
+<li>Do not start test case descriptions with redundant terms like &quot;Testing&quot;
+or &quot;Test for&quot;.</li>
+<li>Test files with a single test case should omit the test case description.
+The file&#39;s <code>&lt;title&gt;</code> should be sufficient to describe the scenario being
+tested.</li>
+</ul>
+</li>
+<li>Asynchronous tests have a few subtleties.<ul>
+<li>The <code>async_test</code> wrapper calls its function with a test case argument that
+is used to signal when the test case is done, and to connect assertion
+failures to the correct test.</li>
+<li><code>t.done()</code> must be called after all the test case&#39;s assertions have
+executed.</li>
+<li>Test case assertions (actually, any callback code that can throw
+exceptions) must be wrapped in <code>t.step_func()</code> calls, so that
+assertion failures and exceptions can be traced back to the correct test
+case.</li>
+<li><code>t.step_func_done()</code> is a shortcut that combines <code>t.step_func()</code> with a
+<code>t.done()</code> call.</li>
+</ul>
+</li>
+</ul>
+<p>*** promo
+Web tests that load from <code>file://</code> origins must currently use relative paths
+to point to
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/resources/testharness.js">/resources/testharness.js</a>
+and
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/resources/testharnessreport.js">/resources/testharnessreport.js</a>.
+This is contrary to the WPT guidelines, which call for absolute paths.
+This limitation does not apply to the tests in <code>web_tests/http</code>, which rely on
+an HTTP server, or to the tests in <code>web_tests/external/wpt</code>, which are
+imported from the <a href="https://github.com/web-platform-tests/wpt">WPT repository</a>.</p>
+<hr>
+<h3 id="wpt-supplemental-testing-apis">WPT Supplemental Testing APIs</h3>
+<p>Some tests simply cannot be expressed using the Web Platform APIs. For example,
+some tests that require a user to perform a gesture, such as a mouse click,
+cannot be implemented using Web APIs. The WPT project covers some of these cases
+via supplemental testing APIs.</p>
+<p>When writing tests that rely on supplemental testing APIs, please consider the
+cost and benefits of having the tests
+<a href="web_tests_with_manual_fallback">gracefully degrade to manual tests</a> in
+the absence of the testing APIs.</p>
+<p>*** promo
+In many cases, the user gesture is not actually necessary. For example, many
+event handling tests can use
+<a href="https://developer.mozilla.org/docs/Web/Guide/Events/Creating_and_triggering_events">synthetic events</a>.</p>
+<hr>
+<h3 id="relying-on-blink-specific-testing-apis">Relying on Blink-Specific Testing APIs</h3>
+<p>Tests that cannot be expressed using the Web Platform APIs or WPT&#39;s testing APIs
+use Blink-specific testing APIs. These APIs are only available in
+<a href="web_tests_in_content_shell">content_shell</a>, and should only be used as
+a last resort.</p>
+<p>A downside of Blink-specific APIs is that they are not as well documented as the
+Web Platform features. Learning to use a Blink-specific feature requires finding
+other tests that use it, or reading its source code.</p>
+<p>For example, the most popular Blink-specific API is <code>testRunner</code>, which is
+implemented in
+<a href="https://github.com/chromium/chromium/blob/HEAD/content/web_test/renderer/test_runner.h">content/web_test/renderer/test_runner.h</a>
+and
+<a href="https://github.com/chromium/chromium/blob/HEAD/content/web_test/renderer/test_runner.cc">content/web_test/renderer/test_runner.cc</a>.
+By skimming the <code>TestRunnerBindings::Install</code> method, we learn that the
+testRunner API is presented by the <code>.testRunner</code> etc. objects. Reading the
+<code>TestRunnerBindings::GetObjectTemplateBuilder</code> method tells us what properties
+are available on the <code>testRunner</code> object.</p>
+<p>Another popular Blink-specific API &#39;internals&#39; defined in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/renderer/core/testing/internals.idl">third_party/blink/renderer/core/testing/internals.idl</a>
+contains more direct access to blink internals.</p>
+<p>*** note
+If possible, a test using blink-specific testing APIs should be written not to
+depend on the APIs, so that it can also work directly in a browser. If the test
+does need the APIs to work, it should still check if the API is available before
+using the API. Note that though we omit the <code>window.</code> prefix when using the
+APIs, we should use the qualified name in the <code>if</code> statement:</p>
+<pre data-language="javascript">  if (window.testRunner)
+    testRunner.waitUntilDone();</pre>
+<hr>
+<p>*** note
+<code>testRunner</code> is the most popular testing API because it is also used indirectly
+by tests that stick to Web Platform APIs. The <code>testharnessreport.js</code> file in
+<code>testharness.js</code> is specifically designated to hold glue code that connects
+<code>testharness.js</code> to the testing environment. Our implementation is in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/resources/testharnessreport.js">third_party/blink/web_tests/resources/testharnessreport.js</a>,
+and uses the <code>testRunner</code> API.</p>
+<hr>
+<p>See the <a href="https://github.com/chromium/chromium/blob/HEAD/content/web_test/renderer/">content/web_test/renderer/</a> directory and
+<a href="https://trac.webkit.org/wiki/Writing%20Layout%20Tests%20for%20DumpRenderTree">WebKit&#39;s LayoutTests guide</a>
+for other useful APIs. For example, <code>eventSender</code>
+(<a href="https://github.com/chromium/chromium/blob/HEAD/content/web_test/renderer/event_sender.h">content/shell/renderer/web_test/event_sender.h</a>
+and
+<a href="https://github.com/chromium/chromium/blob/HEAD/content/web_test/renderer/event_sender.cc">content/shell/renderer/web_test/event_sender.cc</a>)
+has methods that simulate events input such as keyboard / mouse input and
+drag-and-drop.</p>
+<p>Here is a UML diagram of how the <code>testRunner</code> bindings fit into Chromium.</p>
+<p><a href="https://docs.google.com/drawings/d/1KNRNjlxK0Q3Tp8rKxuuM5mpWf4OJQZmvm9_kpwu_Wwg/edit"><img src="https://docs.google.com/drawings/u/1/d/1KNRNjlxK0Q3Tp8rKxuuM5mpWf4OJQZmvm9_kpwu_Wwg/export/svg?id=1KNRNjlxK0Q3Tp8rKxuuM5mpWf4OJQZmvm9_kpwu_Wwg&amp;pageid=p" alt="UML of testRunner bindings configuring platform implementation"></a></p>
+<h3 id="text-test-baselines">Text Test Baselines</h3>
+<p>By default, all the test cases in a file that uses <code>testharness.js</code> are expected
+to pass. However, in some cases, we prefer to add failing test cases to the
+repository, so that we can be notified when the failure modes change (e.g., we
+want to know if a test starts crashing rather than returning incorrect output).
+In these situations, a test file will be accompanied by a baseline, which is an
+<code>-expected.txt</code> file that contains the test&#39;s expected output.</p>
+<p>The baselines are generated automatically when appropriate by
+<code>run_web_tests.py</code>, which is described <a href="web_tests">here</a>, and by the
+<a href="web_test_expectations">rebaselining tools</a>.</p>
+<p>Text baselines for <code>testharness.js</code> should be avoided, as having a text baseline
+associated with a <code>testharness.js</code> test usually indicates the presence of a bug.
+For this reason, CLs that add text baselines must include a
+<a href="https://crbug.com">crbug.com</a> link for an issue tracking the removal of the
+text expectations.</p>
+<ul>
+<li>When creating tests that will be upstreamed to WPT, and Blink&#39;s current
+behavior does not match the specification that is being tested, a text
+baseline is necessary. Remember to create an issue tracking the expectation&#39;s
+removal, and to link the issue in the CL description.</li>
+<li>Web tests that cannot be upstreamed to WPT should use JavaScript to
+document Blink&#39;s current behavior, rather than using JavaScript to document
+desired behavior and a text file to document current behavior.</li>
+</ul>
+<p>*** promo
+Because of <a href="web_test_baseline_fallback">baseline fallback</a>, it may not be
+possible to <a href="https://crbug.com/1324638">represent a platform-specific all-<code>PASS</code>
+status</a> by the platform baseline&#39;s absence. In such
+rare cases, <code>blink_tool.py rebaseline-cl</code> will generate a placeholder baseline
+indicating to <code>run_web_tests.py</code> that all subtests are meant to pass:</p>
+<pre>This is a testharness.js-based test.
+All subtests passed and are omitted for brevity.
+See https://chromium.googlesource.com/chromium/src/+/HEAD/docs/testing/writing_web_tests.md#Text-Test-Baselines for details.
+Harness: the test ran to completion.</pre>
+<p><code>blink_tool.py optimize-baselines</code> will automatically remove these placeholder
+baselines once all platforms are all-<code>PASS</code>.</p>
+<hr>
+<h3 id="the-js-testjs-legacy-harness">The js-test.js Legacy Harness</h3>
+<p>*** promo
+For historical reasons, older tests are written using the <code>js-test</code> harness.
+This harness is <strong>deprecated</strong>, and should not be used for new tests.</p>
+<hr>
+<p>If you need to understand old tests, the best <code>js-test</code> documentation is its
+implementation at
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/resources/js-test.js">third_party/blink/web_tests/resources/js-test.js</a>.</p>
+<p><code>js-test</code> tests lean heavily on the Blink-specific <code>testRunner</code> testing API.
+In a nutshell, the tests call <code>testRunner.dumpAsText()</code> to signal that the page
+content should be dumped and compared against a text baseline (an
+<code>-expected.txt</code> file). As a consequence, <code>js-test</code> tests are always accompanied
+by text baselines. Asynchronous tests also use <code>testRunner.waitUntilDone()</code> and
+<code>testRunner.notifyDone()</code> to tell the testing tools when they are complete.</p>
+<h3 id="tests-that-use-an-http-server">Tests that use an HTTP Server</h3>
+<p>By default, tests are loaded as if via <code>file:</code> URLs. Some web platform features
+require tests served via HTTP or HTTPS, for example absolute paths (<code>src=/foo</code>)
+or features restricted to secure protocols.</p>
+<p>HTTP tests are those under <code>web_tests/http/tests</code> (or virtual variants). Use a
+locally running HTTP server (Apache) to run them. Tests are served off of ports
+8000 and 8080 for HTTP, and 8443 for HTTPS. If you run the tests using
+<code>run_web_tests.py</code>, the server will be started automatically. To run the server
+manually to reproduce or debug a failure:</p>
+<pre data-language="bash">cd src/third_party/blink/tools
+./run_blink_httpd.py</pre>
+<p>The web tests will be served from <code>http://127.0.0.1:8000</code>. For example, to
+run the test <code>http/tests/serviceworker/chromium/service-worker-allowed.html</code>,
+navigate to
+<code>http://127.0.0.1:8000/serviceworker/chromium/service-worker-allowed.html</code>. Some
+tests will behave differently if you go to 127.0.0.1 instead of localhost, so
+use 127.0.0.1.</p>
+<p>To kill the server, hit any key on the terminal where <code>run_blink_httpd.py</code> is
+running, or just use <code>taskkill</code> or the Task Manager on Windows, and <code>killall</code> or
+Activity Monitor on MacOS.</p>
+<p>The test server sets up an alias to the <code>web_tests/resources</code> directory. In
+HTTP tests, you can access the testing framework at e.g.
+<code>src=&quot;/resources/testharness.js&quot;</code>.</p>
+<p>TODO: Document <a href="http://wptserve.readthedocs.io/">wptserve</a> when we are in a
+position to use it to run web tests.</p>
+<h2 id="reference-tests-reftests">Reference Tests (Reftests)</h2>
+<p>Reference tests, also known as reftests, perform a pixel-by-pixel comparison
+between the rendered image of a test page and the rendered image of a reference
+page. Most reference tests pass if the two images match, but there are cases
+where it is useful to have a test pass when the two images do <em>not</em> match.</p>
+<p>Reference tests are more difficult to debug than JavaScript tests, and tend to
+be slower as well. Therefore, they should only be used for functionality that
+cannot be covered by JavaScript tests.</p>
+<p>New reference tests should follow the
+<a href="https://web-platform-tests.org/writing-tests/reftests.html">WPT reftests guidelines</a>.
+The most important points are summarized below.</p>
+<ul>
+<li>🚧 The test page declares the reference page using a
+<code>&lt;link rel=&quot;match&quot;&gt;</code> or <code>&lt;link rel=&quot;mismatch&quot;&gt;</code>, depending on whether the test
+passes when the test image matches or does not match the reference image.</li>
+<li>The reference page must not use the feature being tested. Otherwise, the test
+is meaningless.</li>
+<li>The reference page should be as simple as possible, and should not depend on
+advanced features. Ideally, the reference page should render as intended even
+on browsers with poor CSS support.</li>
+<li>Reference tests should be self-describing.</li>
+<li>Reference tests do <em>not</em> include <code>testharness.js</code>.</li>
+</ul>
+<p>🚧 Our testing infrastructure was designed for the
+<a href="https://trac.webkit.org/wiki/Writing%20Reftests">WebKit reftests</a> that Blink
+has inherited. The consequences are summarized below.</p>
+<ul>
+<li>Each reference page must be in the same directory as its associated test.
+Given a test page named <code>foo</code> (e.g. <code>foo.html</code> or <code>foo.svg</code>),<ul>
+<li>The reference page must be named <code>foo-expected</code> (e.g.,
+<code>foo-expected.html</code>) if the test passes when the two images match.</li>
+<li>The reference page must be named <code>foo-expected-mismatch</code> (e.g.,
+<code>foo-expected-mismatch.svg</code>) if the test passes when the two images do
+<em>not</em> match.</li>
+</ul>
+</li>
+<li>Multiple references and chained references are not supported.</li>
+</ul>
+<p>The following example demonstrates a reference test for
+<a href="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ol"><code>&lt;ol&gt;</code>&#39;s reversed attribute</a>.
+The example assumes that the test page is named <code>ol-reversed.html</code>.</p>
+<pre data-language="html">&lt;!doctype html&gt;
+&lt;link rel=&quot;match&quot; href=&quot;ol-reversed-expected.html&quot;&gt;
+
+&lt;ol reversed&gt;
+  &lt;li&gt;A&lt;/li&gt;
+  &lt;li&gt;B&lt;/li&gt;
+  &lt;li&gt;C&lt;/li&gt;
+&lt;/ol&gt;</pre>
+<p>The reference page, which must be named <code>ol-reversed-expected.html</code>, is below.</p>
+<pre data-language="html">&lt;!doctype html&gt;
+
+&lt;ol&gt;
+  &lt;li value=&quot;3&quot;&gt;A&lt;/li&gt;
+  &lt;li value=&quot;2&quot;&gt;B&lt;/li&gt;
+  &lt;li value=&quot;1&quot;&gt;C&lt;/li&gt;
+&lt;/ol&gt;</pre>
+<p>*** promo
+The method for pointing out a test&#39;s reference page is still in flux, and is
+being discussed on
+<a href="https://groups.google.com/a/chromium.org/d/topic/blink-dev/XsR6PKRrS1E/discussion">blink-dev</a>.</p>
+<hr>
+<h2 id="pixel-tests">Pixel Tests</h2>
+<p>A test creates an image result by default unless some <code>testRunner</code> API is
+called (e.g. <code>testRunner.dumpAsText()</code>, <code>testRunner.dumpAsLayout()</code>, see
+<a href="#text-tests">text tests</a>) to suppress the image result. A test is a
+<strong>pixel test</strong> if it creates an image result but is not a reference test.
+The image result is compared against an image baseline, which is an
+<code>-expected.png</code> file associated with the test, and the test passes if the
+image result is identical to the baseline, according to a pixel-by-pixel
+comparison.</p>
+<p>Pixel tests should still follow the principles laid out above. Pixel tests pose
+unique challenges to the desire to have <em>self-describing</em> and <em>cross-platform</em>
+tests. The
+<a href="https://web-platform-tests.org/writing-tests/rendering.html">WPT rendering test guidelines</a>
+contain useful guidance. The most relevant pieces of advice are below.</p>
+<ul>
+<li>Whenever possible, use a green paragraph / page / square to indicate success.
+If that is not possible, make the test self-describing by including a textual
+description of the desired (passing) outcome.</li>
+<li>Only use the red color or the word <code>FAIL</code> to highlight errors. This does not
+apply when testing the color red.</li>
+<li>🚧 Use the
+<a href="https://www.w3.org/Style/CSS/Test/Fonts/Ahem/README">Ahem font</a> to reduce the
+variance introduced by the platform&#39;s text rendering system. This does not
+apply when testing text, text flow, font selection, font fallback, font
+features, or other typographic information.</li>
+</ul>
+<p>*** promo
+The default size of the image result of a pixel test is 800x600px, because test
+pages are rendered in an 800x600px viewport by default. Normally pixel tests
+that do not specifically cover scrolling should fit in an 800x600px viewport
+without creating scrollbars.</p>
+<hr>
+<p>*** promo
+The recommendation of using Ahem in pixel tests is being discussed on
+<a href="https://groups.google.com/a/chromium.org/d/topic/blink-dev/XsR6PKRrS1E/discussion">blink-dev</a>.</p>
+<hr>
+<p>The following snippet includes the Ahem font in a web test.</p>
+<pre data-language="html">&lt;style&gt;
+body {
+  font: 10px Ahem;
+}
+&lt;/style&gt;
+&lt;script src=&quot;/resources/ahem.js&quot;&gt;&lt;/script&gt;</pre>
+<p>*** promo
+Tests outside <code>web_tests/http</code> and <code>web_tests/external/wpt</code> currently need
+to use a relative path to
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/resources/ahem.js">/third_party/blink/web_tests/resources/ahem.js</a></p>
+<hr>
+<h3 id="tests-that-need-to-paint-raster-or-draw-a-frame-of-intermediate-output">Tests that need to paint, raster, or draw a frame of intermediate output</h3>
+<p>A web test does not actually draw frames of output until the test exits.
+Tests that need to generate a painted frame can use <code>runAfterLayoutAndPaint()</code>
+defined in <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/resources/run-after-layout-and-paint.js">third_party/blink/web_tests/resources/run-after-layout-and-paint.js</a>
+which will run the machinery to put up a frame, then call the passed callback.
+There is also a library at
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/paint/invalidation/resources/text-based-repaint.js">third_party/blink/web_tests/paint/invalidation/resources/text-based-repaint.js</a>
+to help with writing paint invalidation and repaint tests.</p>
+<h3 id="tests-for-scrolling-animations">Tests for scrolling animations</h3>
+<p>Some web tests need to ensure animations such as middle-click auto-scroll,
+fling, etc. get performed properly. When testing in display compositor pixel
+dump mode (now the standard), the standard behavior for tests is to
+synchronously composite without rastering (to save time). However, animations
+run upon surface activation, which only happens once rasterization is performed.
+Therefore, for these tests, an additional setting needs to be set. Near the
+beginning of these tests, call <code>setAnimationRequiresRaster()</code> defined in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/resources/compositor-controls.js">third_party/blink/web_tests/resources/compositor-controls.js</a>
+which will enable full rasterization during the test.</p>
+<h2 id="text-tests">Text tests</h2>
+<p>A <strong>text test</strong> outputs text result. The result is compared against a text
+baseline which is an <code>-expected.txt</code> file associated with the test, and the
+test passes if the text result is identical to the baseline. A test isn&#39;t a
+text test by default until it calls some <code>testRunner</code> API to instruct the
+test runner to output text. A text test can be categorized based on what kind of
+information that the text result represents.</p>
+<h3 id="layout-tree-test">Layout tree test</h3>
+<p>If a test calls <code>testRunner.dumpAsLayout()</code> or
+<code>testRunner.dumpAsLayoutWithPixelResults()</code>, The text result will be a
+textual representation of Blink&#39;s
+<a href="https://developers.google.com/web/fundamentals/performance/critical-rendering-path/render-tree-construction">layout tree</a>
+(called the render tree on that page) of the main frame of the test page.
+With <code>testRunner.dumpChildFrames()</code> the text result will also include layout
+tree of child frames.</p>
+<p>Like pixel tests, the output of layout tree tests may depend on
+platform-specific details, so layout tree tests often require per-platform
+baselines. Furthermore, since the tests obviously depend on the layout tree
+structure, that means that if we change the layout tree you have to rebaseline
+each layout tree test to see if the results are still correct and whether the
+test is still meaningful. There are actually many cases where the layout tree
+output is misstated (i.e., wrong), because people didn&#39;t want to have to update
+existing baselines and tests. This is really unfortunate and confusing.</p>
+<p>For these reasons, layout tree tests should <strong>only</strong> be used to cover aspects
+of the layout code that can only be tested by looking at the layout tree. Any
+combination of the other test types is preferable to a layout tree test.
+Layout tree tests are
+<a href="https://webkit.org/blog/1456/layout-tests-practice/">inherited from WebKit</a>, so
+the repository may have some unfortunate examples of layout tree tests.</p>
+<p>The following page is an example of a layout tree test.</p>
+<pre data-language="html">&lt;!doctype html&gt;
+&lt;style&gt;
+body { font: 10px Ahem; }
+span::after {
+  content: &quot;pass&quot;;
+  color: green;
+}
+&lt;/style&gt;
+&lt;script src=&quot;/resources/ahem.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+  if (window.testRunner)
+    testRunner.dumpAsLayout();
+&lt;/script&gt;
+&lt;p&gt;&lt;span&gt;Pass if a green PASS appears to the right: &lt;/span&gt;&lt;/p&gt;</pre>
+<p>The test page produces the text result below.</p>
+<pre>layer at (0,0) size 800x600
+  LayoutView at (0,0) size 800x600
+layer at (0,0) size 800x30
+  LayoutBlockFlow {HTML} at (0,0) size 800x30
+    LayoutBlockFlow {BODY} at (8,10) size 784x10
+      LayoutBlockFlow {P} at (0,0) size 784x10
+        LayoutInline {SPAN} at (0,0) size 470x10
+          LayoutText {#text} at (0,0) size 430x10
+            text run at (0,0) width 430: &quot;Pass if a green PASS appears to the right: &quot;
+          LayoutInline {&lt;pseudo:after&gt;} at (0,0) size 40x10 [color=#008000]
+            LayoutTextFragment (anonymous) at (430,0) size 40x10
+              text run at (430,0) width 40: &quot;pass&quot;</pre>
+<p>Notice that the test result above depends on the size of the <code>&lt;p&gt;</code> text. The
+test page uses the Ahem font (introduced above), whose main design goal is
+consistent cross-platform rendering. Had the test used another font, its text
+baseline would have depended on the fonts installed on the testing computer, and
+on the platform&#39;s font rendering system. Please follow the pixel tests
+guidelines and write reliable layout tree tests!</p>
+<p>WebKit&#39;s layout tree is described in
+<a href="https://webkit.org/blog/114/webcore-rendering-i-the-basics/">a series of posts</a>
+on WebKit&#39;s blog. Some of the concepts there still apply to Blink&#39;s layout tree.</p>
+<h3 id="text-dump-test">Text dump test</h3>
+<p>If <code>testRunner.dumpAsText()</code> or <code>testRunner.dumpAsTextWithPixelResults()</code>
+is called from a test, the test will dump the text contents of the main frame
+of the tested page. With <code>testRunner.dumpChildFrames()</code> the text
+result will also include text contents of child frames. Actually a JavaScript
+test is a special kind of text dump test which can often omit the text baseline.</p>
+<p>A test can override the default text dump by calling
+<code>testRunner.setCustomTextOutput(string)</code>. The string parameter can be any
+text that the test wants to output. The [<code>internals</code> API](../../third_party/blink/renderer/core/testing/internals.idl]
+provides methods to get textual representations of internal data structures that
+can be used as the parameter of <code>testRunner.setCustomTextOutput()</code>.</p>
+<h3 id="markup-dump-test">Markup dump test</h3>
+<p>If a test calls <code>testRunner.dumpAsMarkup()</code>, the text result will be the DOM
+of the main frame of the test. With <code>testRunner.dumpChildFrames()</code> the text
+result will also include DOM of child frames.</p>
+<h2 id="audio-tests">Audio tests</h2>
+<p>If a test calls <code>testRunner.setAudioData(array_buffer)</code>, the test will
+create an audio result. The result will be compared against an audio baseline
+which is an <code>-expected.wav</code> file associated with the test, and the test passes
+if the audio result is identical to the baseline.</p>
+<h2 id="tests-that-are-both-pixelreference-tests-and-text-tests">Tests that are both pixel/reference tests and text tests</h2>
+<p>If a test calls <code>testRunner.dumpAsTextWithPixelResults()</code> or
+<code>testRunner.dumpAsLayoutWithPixelResults()</code>, the test is both a
+pixel/reference test and a text test. It will output both pixel result and text
+result.</p>
+<p>For a test that is both a pixel/reference test and a text test, both pixel and
+text results will be compared to baselines, and the test passes if each result
+matches the corresponding baseline.</p>
+<p>Many of the <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/paint/invalidation">paint invalidation tests</a>
+are of this type. The pixel results (compared against <code>-expected.png</code> or
+<code>-expected.html</code>) ensure correct rendering, and the text results (compared
+against <code>-expected.txt</code>) ensure correct compositing and raster invalidation
+(without unexpected over and under invalidations).</p>
+<p>For a layout tree test, whether you want a pixel test and/or a text test depends
+on whether you care about the visual image, the details of how that image was
+constructed, or both. It is possible for multiple layout trees to produce
+the same pixel output, so it is important to make it clear in the test
+which outputs you really care about.</p>
+<h2 id="directory-structure">Directory Structure</h2>
+<p>The <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests">web_tests directory</a> currently
+lacks a strict, formal structure. The following directories have special
+meaning:</p>
+<ul>
+<li>The <code>http/</code> directory hosts tests that require an HTTP server (see above).</li>
+<li>The <code>resources/</code> subdirectory in every directory contains binary files, such
+as media files, and code that is shared by multiple test files.</li>
+</ul>
+<p>*** note
+Some web tests consist of a minimal HTML page that references a JavaScript
+file in <code>resources/</code>. Please do not use this pattern for new tests, as it goes
+against the minimality principle. JavaScript and CSS files should only live in
+<code>resources/</code> if they are shared by at least two test files.</p>
+<hr>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/writing_web_tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/writing_web_tests.md</a>
+  </p>
+</div>

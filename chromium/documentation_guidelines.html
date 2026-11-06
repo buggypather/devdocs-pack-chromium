@@ -1,0 +1,55 @@
+<h1>Chromium Documentation Guidelines</h1>
+<p>Chromium&#39;s code base is large. Very large. Like most large places, it can be hard to find your way around if you don&#39;t already know the way. It also changes a lot. Lots of people work on Chromium and refactoring, componentization, addition
+or removal of layers, etc. means that knowledge one has can quickly get out of date.</p>
+<p>As a result, it can be hard to figure out how things are supposed to fit together. Documentation on <a href="http://dev.chromium.org/developers">dev.chromium.org</a> can be hard to navigate and harder to keep up to date. The <a href="https://sites.google.com/a/chromium.org/dev/developers/how-tos/getting-around-the-chrome-source-code">starter guide</a> is helpful, but stops at a very high-level overview. Ultimately <a href="http://codesearch.chromium.org">codesearch.chromium.org</a> is the way most people explore.</p>
+<p>This guide attempts to lay out some practices that will make it easier for newcomers to find their way around Chromium&#39;s code and for old hands to keep up with a constantly evolving code base. It works from the principle that all documentation is wrong and out of date, but in-code documentation is less so and valuable.</p>
+<h2 id="guidelines">Guidelines</h2>
+<p>In-code documentation can be categorized into three tiers:</p>
+<ul>
+<li><strong>Module / component documentation</strong>: This is documentation that tends to be found in README.md files at the root level directory of a component. The purpose of this type of documentation is to explain what a given set of related classes are for, roughly how they are structured and <em>what</em> the component is expected to be used for.</li>
+<li><strong>Interface / class documentation</strong>: This is documentation most often found in header files near class definitions. This may describe what a class or small set of classes are for and <em>how</em> they are intended to be used. It may also provide examples of usage of the class where this isn&#39;t obvious.</li>
+<li><strong>Implementation documentation</strong>: This type of documentation is found next to implementations. In C++, this will tend to be embedded in .cc files. It is meant to help a reader understand <em>how the code works</em> or explain an implementation path that might not be obvious from the code itself.</li>
+</ul>
+<p>Let&#39;s dig in a bit to how to use these types of documentation in Chromium.</p>
+<h3 id="module--component-documentation">Module / component documentation</h3>
+<p>Ok, so you&#39;re working on something big and important. Maybe it&#39;s a chunk of code that merits living in its own component in <a href="https://codesearch.chromium.org/chromium/src/components/">src/components/</a> or even directly under <a href="https://codesearch.chromium.org/chromium/src/">src/</a> itself. One day someone&#39;s going to come along and wonder what it&#39;s for and they&#39;ll discover that awesome-directory-name (breakpad, courgette, mojo, rutabaga, quick: which one of those was made up?) doesn&#39;t by itself shed a lot of light on what the code does.</p>
+<p><em><strong>Any self contained unit of code that merits a container directory should have a README.md file that describes what that component is, how it is expected to be used and provides rough outline of the code&#39;s structure.</strong></em></p>
+<p>The README.md file should be located at the root of the component directory and should be in <a href="https://chromium.googlesource.com/chromium/src/+/main/styleguide/markdown/markdown.md">markdown format</a>.</p>
+<p>The first thing in the README.md file should be a description of the component in sufficient detail that someone unfamiliar with the code will understand why it exists. It should answer the questions &quot;what does this component do?&quot; and &quot;is there any in particular I should know about it?&quot;. Some larger components (e.g. v8, mojo, etc.) may have additional up-to-date documentation on <a href="http://dev.chromium.org">dev.chromium.org</a> or elsewhere makes sense too.</p>
+<p>The second thing in the README.md file should be an outline of how it is expected to be used. For components of small to moderate size (e.g. under <a href="https://codesearch.chromium.org/chromium/src/components/">src/components/</a>), this can mean what are the main classes to care about. For larger components this can describe how to go about using the component, possibly in the form of links to external documentation (e.g.: <a href="https://codesearch.chromium.org/chromium/src/v8/README.md">src/v8/</a>).</p>
+<p>The third thing should be a lay of the land of the component, sufficient breadcrumbs for a newcomer to be able to orient themselves. This usually means at least an explanation of the subdirectories of the component and possibly a description of the major interfaces a consumer of the component will need to care about. Again for larger components this can live in external kept-up-to-date documentation where needed.</p>
+<p>The fourth thing should be historical links to design docs for the component, including early ones. These are super handy for people looking to understand why the component exists in its current form.</p>
+<p>A great example of a README.md file is <a href="https://codesearch.chromium.org/chromium/src/native_client/README.md">src/native_client/README.md</a>. There are many more examples that are waiting to be made great.</p>
+<h3 id="interface--class-documentation">Interface / class documentation</h3>
+<p>Class and function declarations in header files describe to the world how a piece of code should be used. The public interface of a class or a header file containing function declarations describe the API to the code but don&#39;t necessarily say much about how it is expected to be used. As such:</p>
+<p><em><strong>Non-trivial classes or sets of function declarations in header files should include comments with a brief description of the purpose of the class or set of functions as well as examples of expected usage.</strong></em></p>
+<p>(Good) examples:</p>
+<p><a href="https://codesearch.chromium.org/chromium/src/base/callback_list.h">https://codesearch.chromium.org/chromium/src/base/callback_list.h</a></p>
+<p><a href="https://codesearch.chromium.org/chromium/src/base/feature_list.h">https://codesearch.chromium.org/chromium/src/base/feature_list.h</a></p>
+<h3 id="implementation-documentation">Implementation documentation</h3>
+<p>Code should be as self documenting as possible, but sometimes that isn&#39;t enough. Maybe there&#39;s a tricky bit of implementation that isn&#39;t obvious. Maybe there&#39;s a clever algorithm that has a good reason it needs to be clever. A good rule of thumb is that if a code reviewer had a clarifying question about something during review and the code couldn&#39;t be simplified to answer the question then a comment is probably appropriate. Don&#39;t go nuts here though, often if code is so complicated that it needs lots of comments, then it could probably be simplified first.</p>
+<h2 id="language">Language</h2>
+<p>Be concise.</p>
+<p>Use correct grammar as much as possible.</p>
+<p>Avoid fancy or confusing language.</p>
+<p>Don&#39;t assume that readers know everything you currently know.</p>
+<h2 id="working-with-existing-code">Working with existing code</h2>
+<p>If you got this far and have some experience with Chromium&#39;s code, you&#39;ll have figured out that these guidelines are aspirational more than what the world looks like today. So what do we do when working with existing code.</p>
+<p>First off: <em><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/code_reviews.md#documentation-updates">Documentation changes can be TBRed</a></strong></em>. Even in-code changes. If you have discovered something that isn&#39;t documented, have figured out how it works and would like to pay it forward, feel free to write something down and check it in.</p>
+<p>At the component level, if you are the owner of a component that isn&#39;t documented, please add a README.md with content as per the above.</p>
+<p>If you don&#39;t own a component and figure out how it works, consider adding some notes to the component&#39;s README.md file. You don&#39;t need to be an expert to share what you do know with those who come afterwards.</p>
+<p>The same applies to class level comments and implementation comments. If you find yourself modifying code and realizing that it is… under-documented.. feel free to add some notes nearby.</p>
+<p>In general, use your judgment. Changes will NOT be blocked on requiring people to add missing documentation, but adding missing docs is a great way to make our code base healthier.</p>
+<h2 id="faq">FAQ</h2>
+<h4 id="are-these-hard-rules">Are these hard rules?</h4>
+<p><a href="https://www.youtube.com/watch?v=jl0hMfqNQ-g">Well, no</a>. This said, following these guidelines will make our code base healthier, more consistent and much easier to understand. Over time improving in-code documentation will make the whole team faster. But if a small fix is genuinely needed (it almost always isn&#39;t), then don&#39;t block on writing detailed documentation. As always: use your judgment.</p>
+<h4 id="im-not-an-expert-on-this-undocumented-code-should-i-still-add-documentation">I&#39;m not an expert on this undocumented code, should I still add documentation?</h4>
+<p>Yes! Partial documentation is much better than no documentation.</p>
+<h4 id="i-hate-writing-documentation-it-will-slow-me-down">I hate writing documentation, it will slow me down!</h4>
+<p>Chromium is big enough and complicated enough that a newcomer has to read a lot of code to figure out how things fit together. Documentation provides breadcrumbs to speed up understanding, which over time will make the whole team work more quickly. Short term execution speed is far less important than long term team velocity.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/documentation_guidelines.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/documentation_guidelines.md</a>
+  </p>
+</div>

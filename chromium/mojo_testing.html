@@ -1,0 +1,187 @@
+<h1>Testing With Mojo</h1>
+<p>This document outlines some best practices and techniques for testing code which
+internally uses a Mojo service. It assumes familiarity with the
+<a href="mojo_and_services">Mojo and Services</a> document.</p>
+<h2 id="example-code--context">Example Code &amp; Context</h2>
+<p>Suppose we have this Mojo interface:</p>
+<pre data-language="mojom">module example.mojom;
+
+interface IncrementerService {
+  Increment(int32 value) =&gt; (int32 new_value);
+}</pre>
+<p>and this C++ class that uses it:</p>
+<pre data-language="c++">class Incrementer {
+ public:
+  Incrementer();
+
+  void SetServiceForTesting(
+      mojo::PendingRemote&lt;mojom::IncrementerService&gt; service);
+
+  // The underlying service is async, so this method is too.
+  void Increment(int32_t value,
+                 IncrementCallback callback);
+
+ private;
+  mojo::Remote&lt;mojom::IncrementerService&gt; service_;
+};
+
+void Incrementer::SetServiceForTesting(
+    mojo::PendingRemote&lt;mojom::IncrementerService&gt; service) {
+  service_.Bind(std::move(service));
+}
+
+void Incrementer::Increment(int32_t value, IncrementCallback callback) {
+  if (!service_)
+    service_ = LaunchIncrementerService();
+  service_-&gt;Increment(value, std::move(callback));
+}</pre>
+<p>and we wish to swap a test fake in for the underlying IncrementerService, so we
+can unit-test Incrementer. Specifically, we&#39;re trying to write this (silly) test:</p>
+<pre data-language="c++">// Test that Incrementer correctly handles when the IncrementerService fails to
+// increment the value.
+TEST(IncrementerTest, DetectsFailureToIncrement) {
+  Incrementer incrementer;
+  FakeIncrementerService service;
+  // ... somehow use `service` as a test fake for `incrementer` ...
+
+  incrementer.Increment(0, ...);
+
+  // ... Get the result and compare it with 0 ...
+}</pre>
+<h2 id="the-fake-service-itself">The Fake Service Itself</h2>
+<p>This part is fairly straightforward. Mojo generated a class called
+mojom::IncrementerService, which is normally subclassed by
+IncrementerServiceImpl (or whatever) in production; we can subclass it
+ourselves:</p>
+<pre data-language="c++">class FakeIncrementerService : public mojom::IncrementerService {
+ public:
+  void Increment(int32_t value, IncrementCallback callback) override {
+    // Does not actually increment, for test purposes!
+    std::move(callback).Run(value);
+  }
+}</pre>
+<h2 id="async-services">Async Services</h2>
+<p>We can plug the FakeIncrementerService into our test using:</p>
+<pre data-language="c++">  mojo::Receiver&lt;IncrementerService&gt; receiver{&amp;fake_service};
+  incrementer-&gt;SetServiceForTesting(receiver.BindNewPipeAndPassRemote());</pre>
+<p>we can invoke it and wait for the response as we usually would:</p>
+<pre data-language="c++">  base::test::TestFuture test_future;
+  incrementer-&gt;Increment(0, test_future.GetCallback());
+  int32_t result = test_future.Get();
+  EXPECT_EQ(0, result);</pre>
+<p>... and all is well. However, we might reasonably want a more flexible
+FakeIncrementerService, which allows for plugging different responses in as the
+test progresses. In that case, we will actually need to wait twice: once for the
+request to arrive at the FakeIncrementerService, and once for the response to be
+delivered back to the Incrementer.</p>
+<h2 id="waiting-for-requests">Waiting For Requests</h2>
+<p>To do that, we can instead structure our fake service like this:</p>
+<pre data-language="c++">class FakeIncrementerService : public mojom::IncrementerService {
+ public:
+  void Increment(int32_t value, IncrementCallback callback) override {
+    CHECK(!HasPendingRequest());
+    last_value_ = value;
+    last_callback_ = std::move(callback);
+    if (!signal_.IsReady()) {
+      signal_-&gt;SetValue();
+    }
+  }
+
+  bool HasPendingRequest() const {
+    return bool(last_callback_);
+  }
+
+  void WaitForRequest() {
+    if (HasPendingRequest()) {
+      return;
+    }
+    signal_.Clear();
+    signal_.Wait();
+  }
+
+  void AnswerRequest(int32_t value) {
+    CHECK(HasPendingRequest());
+    std::move(last_callback_).Run(value);
+  }
+ private:
+  int32_t last_value_;
+  IncrementCallback last_callback_;
+  base::test::TestFuture signal_;
+};</pre>
+<p>That having been done, our test can now observe the state of the code under test
+(in this case the Incrementer service) while the mojo request is pending, like
+so:</p>
+<pre data-language="c++">  FakeIncrementerService service;
+  mojo::Receiver&lt;mojom::IncrementerService&gt; receiver{&amp;service};
+
+  Incrementer incrementer;
+  incrementer-&gt;SetServiceForTesting(receiver.BindNewPipeAndPassRemote());
+  incrementer-&gt;Increment(1, base::BindLambdaForTesting(...));
+
+  // This will do the right thing even if the Increment method later becomes
+  // synchronous, and exercises the same async code paths as the production code
+  // will.
+  service.WaitForRequest();
+  service.AnswerRequest(service.last_value() + 2);
+
+  // The lambda passed in above will now asynchronously run somewhere here,
+  // since the response is also delivered asynchronously by mojo.</pre>
+<h2 id="intercepting-messages-to-bound-receivers">Intercepting Messages to Bound Receivers</h2>
+<p>In some cases, particularly in browser tests, we may want to take an existing,
+bound <code>mojo::Receiver</code> and intercept certain messages to it. This allows us to:</p>
+<ul>
+<li>modify message parameters before the message is handled by the original
+implementation,</li>
+<li>modify returned values by intercepting callbacks,</li>
+<li>introduce failures, or</li>
+<li>completely re-implement the message handling logic</li>
+</ul>
+<p>To accomplish this, Mojo autogenerates an InterceptorForTesting class for each
+interface that can be subclassed to perform the interception. Continuing with
+the example above, we can include <code>incrementer_service.mojom-test-utils.h</code> and
+then use the following to intercept and replace the number to be incremented:</p>
+<pre data-language="c++">class IncrementerServiceInterceptor
+    : public mojom::IncrementerServiceInterceptorForTesting {
+ public:
+  // We'll assume RealIncrementerService implements the Mojo interface, owns the
+  // the bound mojo::Receiver, and makes it available to use via a testing
+  // method we added named `receiver_for_testing()`.
+  IncrementerServiceInterceptor(RealIncrementerService* service,
+                                int32_t value_to_inject)
+      : service_(service),
+        value_to_inject_(value_to_inject),
+        swapped_impl_(service-&gt;receiver_for_testing(), this) {}
+
+  ~IncrementerServiceInterceptor() override = default;
+
+  mojom::IncrementerService* GetForwardingInterface()
+      override {
+    return service_;
+  }
+
+  void Increment(int32_t value,
+                 IncrementCallback callback) override {
+    GetForwardingInterface()-&gt;Increment(value_to_inject_, std::move(callback));
+  }
+
+ private:
+  raw_ptr&lt;RealIncrementerService&gt; service_;
+  int32_t value_to_inject_;
+  mojo::test::ScopedSwapImplForTesting&lt;
+      mojo::Receiver&lt;mojom::IncrementerService&gt;&gt;
+      swapped_impl_;
+};</pre>
+<h2 id="ensuring-message-delivery">Ensuring Message Delivery</h2>
+<p>Both <code>mojo::Remote</code> and <code>mojo::Receiver</code> objects have a <code>FlushForTesting()</code>
+method that can be used to ensure that queued messages and replies have been
+sent to the other end of the message pipe, respectively. <code>mojo::Remote</code> objects
+also have an asynchronous version of this method call <code>FlushAsyncForTesting()</code>
+that accepts a <code>base::OnceCallback</code> that will be called upon completion. These
+methods can be particularly helpful in tests where the <code>mojo::Remote</code> and
+<code>mojo::Receiver</code> might be in separate processes.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mojo_testing.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mojo_testing.md</a>
+  </p>
+</div>

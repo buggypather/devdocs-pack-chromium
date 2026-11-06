@@ -1,0 +1,30 @@
+<h1>Clang and C++ Modules in Chromium</h1>
+<h2 id="overview">Overview</h2>
+<p>Modules in C++ have the potential to significantly speed up building Chromium.
+With textual inclusion, many headers are re-parsed over
+<a href="https://commondatastorage.googleapis.com/chromium-browser-clang/include-analysis.html">35000 times</a>
+and with modules could be reduced to the order of 10 times.</p>
+<p>Clang supports two types of modules:
+<a href="https://clang.llvm.org/docs/Modules.html">Clang header modules</a> and
+<a href="https://clang.llvm.org/docs/StandardCPlusPlusModules.html">C++20 modules</a> (also
+called Clang Modules and Standard C++ Modules). We&#39;re currently exploring Clang
+header modules because:</p>
+<ol>
+<li>Other projects (e.g. internally at Google) have had success deploying them to
+their code bases with large performance wins.</li>
+<li>They can be experimented with without rewrites to the code base or changes to
+the build system.</li>
+</ol>
+<p>We&#39;re currently enabling modules for libc++ and they can be enabled with the GN
+arg <code>use_clang_modules</code>.</p>
+<h2 id="current-limitations">Current limitations</h2>
+<h3 id="configurations">Configurations</h3>
+<p>Clang modules don&#39;t play nice with code with RTTI / exceptions depending on
+code without, and vice versa. Work is ongoing to fix this, but for now, it
+remains a problem (<a href="https://crbug.com/403415459">crbug.com/403415459</a>).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/modules.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/modules.md</a>
+  </p>
+</div>

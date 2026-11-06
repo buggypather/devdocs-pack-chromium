@@ -1,0 +1,293 @@
+<h1>Gerrit ReAuth</h1>
+<p>*** note
+<strong>Googlers:</strong></p>
+<p>If you use your @google.com account, or a @chromium.org account linked to your
+@google.com account: stop reading now (<code>gcert</code> already fulfills ReAuth
+requirements).</p>
+<p>If you aren&#39;t sure if your account is linked, follow <a href="http://go/chromium-account-support#how-can-i-check-if-my-gerrit-accounts-are-linked">the steps
+here</a>.</p>
+<p>Otherwise, read this guide, and AFTERWARDS read this for additional instructions:
+<a href="http://go/gerrit-reauth">go/gerrit-reauth</a>.</p>
+<hr>
+<h2 id="background">Background</h2>
+<p>To protect the source code integrity of Chromium and related projects, we require
+all <strong>committers</strong> who write or review code to use a security key for two-factor
+authentication on their associated Google account.</p>
+<p>This process, called ReAuth, prompts for a security key tap once every 20
+hours to obtain a fresh set of credentials for interactions with
+Gerrit. Specifically, actions requiring committer powers such as applying
+Code-Review+1 to CLs, and uploading CLs (which counts as the uploader
+self-reviewing the CL), require ReAuth.</p>
+<p>The goal of this policy is to establish a robust layer of protection against
+unauthorized access, mitigating the risk of supply chain attacks via stolen
+committer credentials.</p>
+<h2 id="overview">Overview</h2>
+<p>There are two parts to ReAuth:</p>
+<ol>
+<li>performing the security key touch to get a short lived token</li>
+<li>passing the token when authenticating to Gerrit</li>
+</ol>
+<p>These are done differently for CLI tools and the Gerrit Web UI.</p>
+<p>This guide will go over the prerequisites, the setup instructions, and what to
+expect.</p>
+<h2 id="prerequisites">Prerequisites</h2>
+<h3 id="register-security-key">Register a physical security key</h3>
+<p>You must have a physical <a href="https://www.google.com/search?q=FIDO+security+key">FIDO security
+key</a> registered with your
+Google account.</p>
+<p>To register a key or check your existing keys, go to
+<a href="https://myaccount.google.com/signinoptions/passkeys">https://myaccount.google.com/signinoptions/passkeys</a></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_key_registration.png" alt="Security key registration"></p>
+<p>The line &quot;This key can only be used with a password&quot; indicates a <strong>U2F</strong>
+security key. If the line is missing, the key is a <strong>FIDO2</strong> security key.
+Please include this info when reporting issues.</p>
+<p>*** promo
+<strong>Important Note</strong>: Passkeys and TouchID aren&#39;t supported by ReAuth. A physical security
+key is required.</p>
+<hr>
+<p><strong>If you use Firefox</strong>: You must <strong>allow</strong> the website to request &quot;extended
+information about your security key&quot; when registering your security key (refer
+to the screenshot below).
+Otherwise the key won&#39;t be usable for ReAuth (you&#39;ll see BAD_REQUEST error in
+the log). If you&#39;ve already registered the key, remove it from the security key
+list, then add it again.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_firefox_sk.png" alt="Firefox security key popup"></p>
+<h3 id="turn-on-2sv">Turn on 2SV</h3>
+<p><strong>If you’re using a Google Workspace account</strong>, make sure
+&quot;<a href="https://myaccount.google.com/signinoptions/twosv">2-Step Verification</a>&quot; is
+turned on.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_2sv.png" alt="Two-step verification"></p>
+<h3 id="correct-time-and-timezone">Correct time and timezone</h3>
+<p>Make sure your device&#39;s timezone and time are set correctly.</p>
+<p>If you’re behind a corporate network or network proxy, your system’s auto
+configured timezone might be incorrect. If this is the case, go to your system’s
+settings and set timezone and/or time manually.</p>
+<h3 id="latest-git">Latest Git</h3>
+<p>Ensure you have the latest version of Git (or at least later than 2.46.0). Use
+the package manager for your system or download from the <a href="https://git-scm.com/downloads">Git
+website</a>. (Note: if you are on Ubuntu LTS you may
+need to follow the instructions on the Git website to install from PPA)</p>
+<h3 id="latest-depot-tools">Latest depot_tools</h3>
+<p>Ensure you
+<a href="https://commondatastorage.googleapis.com/chrome-infra-docs/flat/depot_tools/docs/html/depot_tools_tutorial.html#_setting_up">have depot_tools</a>
+installed and configured on PATH.</p>
+<p>Then run:</p>
+<pre>update_depot_tools</pre>
+<h3 id="setup-cli-auth">Setup CLI authentication</h3>
+<p>You should have CLI authentication set up (these instructions are the same as
+for regular users not using ReAuth):</p>
+<p>First, you will need to be logged in to the auth tool.</p>
+<p>Check if you&#39;re already logged in:</p>
+<pre>git credential-luci info</pre>
+<p>This should print a line containing <code>email=&lt;your email&gt;</code>. If not, you&#39;ll need to
+login first:</p>
+<pre>git credential-luci login
+# Check again
+git credential-luci info</pre>
+<p>Next, you will need to configure Git to use the auth tool.  Run the
+configuration helper which will do this:</p>
+<pre>git cl creds-check --global</pre>
+<p>Please follow the prompts from the tool and resolve any issues.</p>
+<p>(For advanced Git users: you may use the <a href="https://commondatastorage.googleapis.com/chrome-infra-docs/flat/depot_tools/docs/html/depot_tools_gerrit_auth.html">manual setup
+guide</a>.
+You will be expected to debug config issues yourself.)</p>
+<h3 id="check-security-key">Linux: Check security key support</h3>
+<p>Check that your security keys are recognized by running:</p>
+<pre>luci-auth-fido2-plugin --list-devices</pre>
+<p>If the above command lists your security keys, you’re good to go.</p>
+<p>If not, you need to configure your system to grant access to security keys.</p>
+<p>The configuration steps vary by Linux distributions. We recommend following
+<a href="https://support.yubico.com/hc/en-us/articles/360013708900-Troubleshooting-using-your-YubiKey-with-Linux">Yubico’s
+guide</a>,
+which is confirmed to work on Ubuntu 24.04 LTS Desktop.</p>
+<h3 id="linux-pin-entry-program">Linux: PIN entry program</h3>
+<p>While ReAuth doesn&#39;t require PINs for security keys, your key might require them
+(either because of the manufacturer or the key configuration).</p>
+<p>On Linux, you need the <code>pinentry</code> program to input PINs. If you don&#39;t have this
+program, your security key will refuse to complete the ReAuth challenge. You
+will typically see <code>BAD_REQUEST</code> or <code>PinRequiredError</code> in the logs depending on
+the security key.</p>
+<p>For the best experience, we recommend using a <strong>GUI based pinentry</strong> program.</p>
+<p>Terminal based pinentry only works with local ReAuth. If you don&#39;t need to
+ReAuth over SSH, feel free to use one.</p>
+<p>To install a GUI-based pinentry program:</p>
+<ul>
+<li>Ubuntu, Debian: <code>sudo apt install pinentry-gnome3</code></li>
+<li>Fedora: <code>sudo dnf install pinentry-qt</code></li>
+</ul>
+<p>After installing the package, your system should default to the newly installed
+GUI-based pinentry program.</p>
+<p>You can check the current pinentry program by running:</p>
+<pre>readlink -f $( which pinentry )</pre>
+<p>The output path&#39;s suffix should be a GUI based name, such as &quot;-gnome&quot; or &quot;-qt&quot;.</p>
+<p>If the above path ends with terminal based name, such as &quot;tty&quot; or &quot;curses&quot;, set
+<code>LUCI_AUTH_PINENTRY=pinentry-gnome3</code> environment variable to override.</p>
+<h2 id="setup-and-usage">Setup and usage</h2>
+<h3 id="web-ui">Web UI</h3>
+<p>No additional setup is needed.</p>
+<p>During normal usage, when you perform actions such as voting Code-Review or
+editing commit descriptions on Gerrit Web UI, you will see a ReAuth popup once
+every 20 hours:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_ui_prompt.png" alt="Gerrit UI prompt"></p>
+<p>Click &quot;Continue&quot;. You&#39;ll be asked to touch your security key to perform ReAuth,
+after which everything will proceed as normal.</p>
+<h3 id="local-cli-tools-git-depot_tools-git-cl-upload-etc">Local CLI tools (git, depot_tools, git cl upload, etc.)</h3>
+<p>This is for performing ReAuth locally, on a machine with your security key
+inserted.</p>
+<p>Ensure you have followed all of the prerequisites, especially:</p>
+<ul>
+<li><a href="#latest-depot-tools">Latest depot_tools</a></li>
+<li><a href="#setup-cli-auth">Setup CLI auth</a></li>
+<li><a href="#check-security-key">Check security key support</a></li>
+</ul>
+<p>All of the one time setup is taken care of.</p>
+<p>For regular use, you will need to run this every 20 hours, such as at the
+beginning of your work day:</p>
+<pre>git credential-luci reauth</pre>
+<p>You will be prompted to touch your security key.</p>
+<p>You can inspect the status of your ReAuth session with:</p>
+<pre>git credential-luci info</pre>
+<h2 id="remote-cli-workflows">Remote CLI workflows</h2>
+<p>This is for when:</p>
+<ul>
+<li>You plug in a security key to a local machine</li>
+<li>You SSH or remote desktop into a remote machine</li>
+<li>You upload code to Gerrit from the remote machine</li>
+</ul>
+<p>First, make sure you have the <a href="#latest-depot-tools">latest depot_tools</a>
+installed on <strong>both local and remote</strong> machines.</p>
+<p>On the <strong>remote</strong> machine, do <a href="#setup-cli-auth">Setup CLI auth</a>.</p>
+<p>If you&#39;re using a Linux <strong>local</strong> machine (i.e. the machine with the security
+key plugged in), do <a href="#check-security-key">Check security key support</a>.</p>
+<p>Then, refer to sections below for your specific workflow.</p>
+<h3 id="im-using-a-linux-or-mac-client-i-want-to-ssh-into-linux">I’m using a Linux or Mac client, I want to SSH into Linux</h3>
+<p>Use <code>luci-auth-ssh-helper</code> to SSH into the remote machine. You can
+specify SSH options (such as port forwarding) after a double dash.</p>
+<pre>luci-auth-ssh-helper [-- ssh_options...] [user@]host</pre>
+<p>In this SSH session, run the following command to ReAuth:</p>
+<pre>git credential-luci reauth</pre>
+<p>You should be prompted to touch your security key.</p>
+<p>For the first security key touch, there might be a delay before your security
+key starts blinking. This is caused by <code>luci-auth-fido2-plugin</code> bootstrapping.</p>
+<h3 id="im-using-a-linux-or-mac-client-i-want-to-remote-desktop-into-windows">I’m using a Linux or Mac client, I want to remote desktop into Windows</h3>
+<p>You need a remote desktop client that supports WebAuthn forwarding.</p>
+<p>For example,
+<a href="https://thincast.com/en/products/client">Thincast Remote Desktop Client</a>
+(available free of charge for non-commercial use):</p>
+<ul>
+<li>On Linux, install the <strong>flatpak version</strong>
+(<a href="https://thincast.com/en/documentation/tcc/latest/index#install-linux">instructions</a>).
+Snapcraft version doesn’t work with security keys (as of 2025 August)</li>
+<li>On MacOS, download and install the universal dmg package
+(<a href="https://thincast.com/en/documentation/tcc/latest/index#install-linux">instructions</a>)</li>
+</ul>
+<p>Then, launch the Thincast remote desktop client, enable the &quot;WebAuthn&quot; option in
+<code>Local Resource &gt; Local devices and resource &gt; More…</code> (refer to screenshots
+below).</p>
+<p>Click &quot;OK&quot; to save your settings, then go back to the &quot;General&quot; tab, input the
+remote desktop server with your development machine’s hostname (or IP address)
+and user name, then click &quot;Connect&quot;.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_thincast1.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_thincast2.png" alt=""></p>
+<p>In the remote desktop session, open a command prompt (CMD), then run the
+following command to ReAuth:</p>
+<pre>git credential-luci reauth</pre>
+<p>Wait for your security key to blink, then touch it to complete ReAuth. You
+should see &quot;ReAuth succeed&quot; in the command prompt.</p>
+<p>For the first security key touch, there might be a delay before your security
+key starts blinking. This is caused by <code>luci-auth-fido2-plugin</code> bootstrapping.</p>
+<h3 id="im-using-a-windows-client-i-want-to-ssh-into-linux">I’m using a Windows client, I want to SSH into Linux</h3>
+<p>First, start <code>luci-auth-ssh-helper</code> in daemon mode on a TCP port (we use 10899
+in the example). The helper will listen for incoming ReAuth challenges.</p>
+<pre>luci-auth-ssh-helper -mode=daemon -port=10899</pre>
+<p>Then, use your SSH client and port-forward a port (here we use the same port
+number for convenience) on your remote Linux machine to the helper’s port on the
+local machine.</p>
+<p>Note, you might need to update your SSH server config to allow port-forwarding
+(if not enabled by default).</p>
+<p>If you’re using an OpenSSH client (e.g. built-in to Windows, or included in
+Git-on-Windows):</p>
+<pre>ssh -R 10899:localhost:10899 [user@]remote_host</pre>
+<p>If you’re using PuTTY, set up port forwarding on the &quot;Connection &gt; SSH &gt;
+Tunnels&quot; page in the connection dialog (see screenshot). Remember to &quot;Save&quot; your
+configuration in the &quot;Session&quot; page if you want to persist the configuration.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_putty.png" alt=""></p>
+<p>Inside your SSH session, set <code>SSH_AUTH_SOCK</code> to the forwarding port, then run
+the ReAuth command.</p>
+<pre>export SSH_AUTH_SOCK=localhost:10899
+git credential-luci reauth</pre>
+<p>Windows will prompt you to touch the security key.</p>
+<p>For the first security key touch, there might be a delay before your security
+key starts blinking. This is caused by <code>luci-auth-ssh-plugin</code> and
+<code>luci-auth-fido2-plugin</code> bootstrapping.</p>
+<p>You need to make sure <code>luci-auth-ssh-helper</code> is running on your local machine
+when you want to perform ReAuth challenges over a SSH session. For convenience,
+you can register it to start as a service on login.</p>
+<h3 id="im-using-a-windows-client-i-want-to-remote-desktop-into-windows">I’m using a Windows client, I want to remote desktop into Windows</h3>
+<p>Use the built-in Windows Remote Desktop Connection application (also known as
+<code>mstsc</code>), make sure &quot;WebAuthn (Windows Hello or security keys)&quot; is enabled in
+&quot;Show Options &gt; Local Resources &gt; More…&quot; (refer to screenshots below). Then
+connect to the remote Windows machine as usual.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_rdp1.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_rdp2.png" alt=""></p>
+<p>Then, in the remote desktop session, run the following command in command prompt
+(CMD):</p>
+<pre data-language="shell">git credential-luci reauth</pre>
+<p>Windows will prompt you to touch the security key.</p>
+<h3 id="none-of-the-above">None of the above</h3>
+<p>Remote workflows not listed above have not yet been tested.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>For all CLI issues, please set <code>LUCI_AUTH_DEBUG</code> environment variable to enable
+debug logs.</p>
+<p>In Linux / Mac, run:</p>
+<pre>export LUCI_AUTH_DEBUG=1</pre>
+<p>In Windows (CMD), run:</p>
+<pre>set LUCI_AUTH_DEBUG=1</pre>
+<p>Then, retry the failed command (e.g. <code>git credential-luci reauth</code>).</p>
+<p>When reporting issues, <strong>please be sure to include</strong>:</p>
+<ul>
+<li>The debug logs produced by setting <code>LUCI_AUTH_DEBUG</code></li>
+<li>The security key you&#39;re using (e.g. manufacturer, model, etc.)</li>
+<li>Whether the security key is registered as a <a href="#register-security-key">FIDO2 or U2F key</a></li>
+<li>The following environment variables: <code>SSH_AUTH_SOCK</code>, <code>SSH_CONNECTION</code> and
+<code>GOOGLE_AUTH_WEBAUTHN_PLUGIN</code></li>
+</ul>
+<h2 id="reporting-issues">Reporting issues</h2>
+<p>If you run into issues, please report them using this <a href="https://issues.chromium.org/issues/new?component=1456702&amp;template=2176581">bug
+template</a></p>
+<h2 id="faqs">FAQs</h2>
+<p><strong>Why can&#39;t I submit this CL?</strong></p>
+<p>There is a dialog in the Gerrit Web UI that will explain what is missing:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_explanation.png" alt=""></p>
+<p>Likely one of the committers who reviewed the CL did not do ReAuth,
+you can send them a link to the next question.</p>
+<p><strong>My Code-Review on Gerrit is missing ReAuth</strong></p>
+<p>This is caused by your Code-Review vote missing valid ReAuth credentials.</p>
+<p>You can fix this by removing and re-applying your Code-Review vote.</p>
+<p>Some users have reported cases of not getting the ReAuth popup when
+using the Gerrit website (and thus resulting in missing ReAuth
+credentials).  Please report an issue if you encounter this,
+particularly if it happens often or you can reliably reproduce it.</p>
+<p><strong>ReAuth doesn&#39;t work in <code>screen</code>, <code>tmux</code>, <code>shpool</code>, etc.</strong></p>
+<p>You need to manually set the <code>GOOGLE_AUTH_WEBAUTHN_PLUGIN</code> environment variable for
+ReAuth to work. This is in addition to the local or remote workflow instructions above.</p>
+<p>If you&#39;re a Googler, see <a href="http://go/gerrit-reauth">go/gerrit-reauth</a>.</p>
+<p>Otherwise, set the environment variable depending on your situation:</p>
+<ul>
+<li>Inside <code>screen</code>, etc., running locally:
+<code>GOOGLE_AUTH_WEBAUTHN_PLUGIN=luci-auth-fido2-plugin</code></li>
+<li>Inside <code>screen</code>, etc., running remotely with <code>luci-auth-ssh-helper</code>:
+<code>GOOGLE_AUTH_WEBAUTHN_PLUGIN=luci-auth-ssh-plugin</code></li>
+</ul>
+<p>Then run <code>git credential-luci reauth</code>.</p>
+<p><strong>Can I use other forms of 2-Step Verification (2SV)?</strong></p>
+<p>For ReAuth: No. You must use a physical security key. SMS, authenticator app,
+passkeys won&#39;t satisfy the ReAuth requirement for uploading code or code review.</p>
+<p>You can still add and use other 2SV methods to sign into your Google account for
+other purposes.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gerrit_reauth.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gerrit_reauth.md</a>
+  </p>
+</div>

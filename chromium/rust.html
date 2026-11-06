@@ -1,0 +1,140 @@
+<h1>Getting Started with Rust in Chromium</h1>
+<p>Welcome! If you&#39;re interested in learning more about how to use Rust as a
+Chromium developer, you&#39;re in the right place.</p>
+<p>Rust support in Chromium is still growing, so your best resource is the
+<a href="https://moma.corp.google.com/team/1387596644314">Rust-in-Chrome team</a>
+(internal link). We&#39;re
+the folks responsible for building and maintaining Chromium&#39;s Rust
+infrastructure, and we&#39;re always happy to help out people who want to use Rust
+in their work -- it is quite literally our job to make your lives easier.</p>
+<h2 id="contacting-us">Contacting us</h2>
+<p>If you have questions or an idea about how to use Rust in your work, we&#39;d be
+more than happy to provide advice and support.</p>
+<h2 id="external-resources">External Resources</h2>
+<p>The best ways to reach us are at
+<a href="https://groups.google.com/a/chromium.org/g/rust-dev"><code>rust-dev@chromium.org</code></a>,
+or in the <a href="https://chromium.slack.com/archives/C01T3EWCJ9Z"><code>#rust</code> channel</a>
+on the <a href="https://www.chromium.org/developers/slack/">Chromium Slack</a>.</p>
+<h2 id="team-resources-internal">Team Resources (internal)</h2>
+<p>For Google employees, there are several internal resources you can use as well.
+If you want to contact the team as a whole, feel free to send a message to
+<a href="mailto:rust-in-chrome@google.com">rust-in-chrome@google.com</a> or join the
+<a href="https://chat.google.com/room/AAAAk1UCFGg?cls=7">Chrome + Rust chatroom</a>.
+However, we also have spaces dedicated to getting started with
+Rust:</p>
+<ul>
+<li>A chatroom
+(<a href="https://goto.google.com/rust-in-chrome-questions">go/rust-in-chrome-questions</a>).</li>
+<li>Regular office hours
+(<a href="https://goto.google.com/rust-in-chrome-office-hours">go/rust-in-chrome-office-hours</a>). There are
+no signups, so feel free to drop in to the call at any time!</li>
+</ul>
+<h2 id="faq">FAQ</h2>
+<ul>
+<li>Q: Do I need approval to use Rust in Chromium?<ul>
+<li>A: Nope! Rust is considered just another tool; you may choose to use it
+at your own discretion, and only need acceptance from code owners as usual.</li>
+</ul>
+</li>
+<li>Q: How do I get my Rust code reviewed?<ul>
+<li>A: Code should be reviewed by the local owners. Since Rust is still growing,
+the Rust-in-Chrome team is happy to provide reviews and advice on the
+linguistic portion of the CL, but owner reviews are still needed to ensure
+the code is doing the right things in the first place.</li>
+</ul>
+</li>
+<li>Q: Are there any restrictions on <code>unsafe</code> Rust?<ul>
+<li>A: The short answer is no. We encourage you to avoid it whenever possible,
+but you can opt in to unsafe rust at your own discretion by adding
+<code>allow_unsafe = true</code> to your build target. See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/unsafe.md">//docs/rust/unsafe.md</a> for
+more information.</li>
+</ul>
+</li>
+<li>Q: How should I set myself up for Rust development?<ul>
+<li>A: We recommend using VSCode with the
+<a href="https://github.com/rust-lang/rust-analyzer">rust-analyzer</a> extension. See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/dev_experience_tips_and_tricks.md">//docs/rust/dev_experience_tips_and_tricks.md</a>
+for more information, and
+see <a href="#build-system-setup">below</a> for information about getting your files
+hooked into the build system.</li>
+</ul>
+</li>
+<li>Q: How do I interoperate with C++ code?<ul>
+<li>A: Our standard tool is <a href="https://cxx.rs/">cxx</a>. We also support
+<a href="https://crubit.rs/">Crubit</a> for calling Rust from C++ (with some
+limitations; see <a href="rust/crubit"><code>crubit/README.md</code></a> for details).
+An alternative if you&#39;re implementing a service in Rust is to use
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mojo_and_services.md">Mojo</a> as a communication method, which avoids
+the need for direct interop. See <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/ffi.md">//docs/rust/ffi.md</a>
+for more information.</li>
+</ul>
+</li>
+<li>Q: How should I test my code?<ul>
+<li>A: Chromium uses <code>gtest</code> for Rust code, using the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/testing/rust_gtest_interop/README.md"><code>//testing/rust_gtest_interop</code></a>
+library to integrate into existing testing binaries
+(<a href="https://source.chromium.org/chromium/chromium/src/+/main:mojo/public/rust/mojom_value_parser/test/test_parser.rs;l=184;drc=9aa422077f4e230885819bb84625b69e34457271">example</a>). Unlike most Rust project, we
+do not support <code>#[cfg(test)]</code>-style testing.</li>
+</ul>
+</li>
+<li>Q: Can I use unstable compiler features?<ul>
+<li>A: Generally, no. Since the features could change or be removed without
+warning, you need approval from the Rust in Chrome team to use unstable
+features in your code. See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/unstable_rust_feature_usage.md">//docs/rust/unstable_rust_feature_usage.md</a>
+for more information.</li>
+</ul>
+</li>
+</ul>
+<h2 id="build-system-setup">Build system setup</h2>
+<h3 id="first-party-rust-libraries">First-party Rust libraries</h3>
+<p>If you want to create your own Rust library inside of Chromium, use the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:build/rust/rust_static_library.gni"><code>rust_static_library</code></a>
+GN template (not the built-in <code>rust_library</code>) to integrate properly into the
+Chromium build and get the correct compiler options
+(<a href="https://source.chromium.org/chromium/chromium/src/+/main:mojo/public/rust/mojom_value_parser/BUILD.gn;l=7;drc=eb1f279735a9a332e78f612be01094998ff7a31d">example</a>).
+Internally, this will generate a Rust crate with a mangled name based on the
+name of the GN target (to ensure crate names are globally unique).</p>
+<p>To use that crate from Chromium code, import it using the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/build/rust/chromium_prelude/"><code>chromium::import!</code> macro</a>, which is
+automatically available in all Chromium code
+(<a href="https://source.chromium.org/chromium/chromium/src/+/main:mojo/public/rust/bindings/message.rs;l=10;drc=d2824a250977087bf00316da7fb6f3e822f6c52e">example</a>).
+The standard library and crates from <code>//third_party/rust</code> do not use mangled
+names, so <code>chromium::import!</code> is not necessary for them.</p>
+<p>Your IDE (or coding agent) may suggest <code>use mangled_crate_name::foo;</code>, but
+please use <code>chromium::import!</code> instead to avoid depending on the mangling scheme.</p>
+<h2 id="third-party-rust-libraries">Third-party Rust libraries</h2>
+<h3 id="cratesio">crates.io</h3>
+<p>See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/rust/README-importing-new-crates.md"><code>//third_party/rust/README-importing-new-crates.md</code></a>
+for instructions on how to import a crate from <a href="https://crates.io">https://crates.io</a> into Chromium.</p>
+<p>The crates will get updated semi-automatically through the process described in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/tools/crates/create_update_cl.md"><code>//tools/crates/create_update_cl.md</code></a>.</p>
+<p>These libraries use the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:build/rust/cargo_crate.gni"><code>cargo_crate</code></a>
+GN template.</p>
+<h3 id="other-libraries">Other libraries</h3>
+<p>Third-party Rust libraries that are not distributed through <a href="https://crates.io">crates.io</a> should live outside of <code>//third_party/rust</code>.
+Such libraries will typically depend on <code>//third_party/rust</code> crates
+and use <code>//build/rust/*.gni</code> templates, but there is no other Chromium
+tooling to import such libraries or keep them updated.
+For examples, see <code>//third_party/crabbyavif</code> or
+<code>//third_party/cloud_authenticator</code>.</p>
+<h2 id="additional-resources">Additional Resources</h2>
+<p>The other documents in this folder (<code>//docs/rust</code>) contain a variety of
+information about using Rust in Chromium, including both advice and our
+policies. However, they are more useful as a reference once you&#39;re familiar
+with the language.</p>
+<p>If you want to learn more about Rust on your own, Google maintains a free
+<a href="https://google.github.io/comprehensive-rust/">Rust course</a>. The course outline
+and &quot;slides&quot; are available to everyone, and they alone can be very helpful. If
+you&#39;re a Google employee, you can also see if there are any instructor-led
+courses scheduled
+(<a href="https://goto.google.com/comprehensive-rust">go/comprehensive-rust</a>).</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/README.md</a>
+  </p>
+</div>

@@ -1,0 +1,87 @@
+<h1>Static Initializers</h1>
+<p>Some background on the original decision to ban static initializers:</p>
+<p><a href="http://neugierig.org/software/chromium/notes/2011/08/static-initializers.html">http://neugierig.org/software/chromium/notes/2011/08/static-initializers.html</a></p>
+<p>Note: Another name for static initializers is &quot;global constructors&quot;.</p>
+<h1 id="how-static-initializers-are-checked">How Static Initializers are Checked</h1>
+<ul>
+<li>For Linux, Mac and iOS:<ul>
+<li>The expected count is stored in <a href="https://source.chromium.org/chromium/chromium/src/+/main:testing/scripts/check_static_initializers.py">//testing/scripts/check_static_initializers.py</a></li>
+</ul>
+</li>
+<li>For Android:<ul>
+<li>The expected count is stored in <a href="https://cs.chromium.org/chromium/src/chrome/android/static_initializers.gni">//chrome/android/static_initializers.gni</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="removing-static-initializers">Removing Static Initializers</h2>
+<p>Common fixes include:</p>
+<ul>
+<li>Add constexpr.</li>
+<li>Move global variable to be a static variable within a function that returns
+it, often wrapped in <code>base::NoDestructor</code>.</li>
+</ul>
+<h2 id="listing-static-initializers">Listing Static Initializers</h2>
+<h3 id="option-1---dump-static-initializerspy">Option 1 - dump-static-initializers.py</h3>
+<p>For Linux:</p>
+<pre>tools/linux/dump-static-initializers.py out/Release/chrome</pre>
+<p>For Android:</p>
+<pre># Build with: is_official_build=true is_chrome_branded=true
+# This will dump the list of SI's only when they don't match the expected
+# number in static_initializers.gni (this is what the bots use).
+ninja chrome/android:check_chrome_static_initializers
+# or, to dump directly:
+tools/linux/dump-static-initializers.py out/Release/lib.unstripped/libmonochrome.so</pre>
+<h3 id="option-2---ask-compiler-to-report-them">Option 2 - Ask compiler to report them</h3>
+<p>If the source of the new initializers is not obvious from Step 1, you can ask the
+compiler to pinpoint the exact source line.</p>
+<ol>
+<li>Edit <a href="https://cs.chromium.org/chromium/src/build/config/BUILDCONFIG.gn">//build/config/BUILDCONFIG.gn</a>
+and add <code>&quot;//build/config/compiler:wglobal_constructors&quot;</code> to <code>default_compiler_configs</code></li>
+<li>Remove the config from the <code>configs</code> in <code>//base:base</code></li>
+<li>Set GN arg <code>treat_warnings_as_errors=false</code></li>
+<li>Compile and look for warnings <strong>from the files identified by step 1</strong> (may want to pipe ninja output to a file).</li>
+</ol>
+<p>*** note
+The compiler warning triggers for every static initializer that exists
+<em>before optimization</em>. We care only about those that survive optimization.
+More details in <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1136086">crbug/1136086</a>.</p>
+<hr>
+<ul>
+<li>For more information about <code>diagnose_bloat.py</code>, refer to its <a href="https://chromium.googlesource.com/chromium/src/+/main/tools/binary_size/README.md#diagnose_bloat.py">README.md</a></li>
+<li>List of existing static initializers documented in <a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/android/static_initializers.gni">static_initializers.gni</a></li>
+</ul>
+<h3 id="option-3---manual-verification">Option 3 - Manual Verification</h3>
+<p>You can manually go through the steps that <code>dump-static-initializers.py</code> does.</p>
+<ol>
+<li>Locate the address range of the .init_array section with:</li>
+</ol>
+<pre>$ third_party/llvm-build/Release+Asserts/bin/llvm-readelf \
+    --hex-dump=.init_array out/Release/lib.unstripped/libmonochrome.so
+Hex dump of section '.init_array':
+0x04064624 294a1a02 154acb00 79d3be01 894c1a02 )J...J..y....L..</pre>
+<ul>
+<li><code>0x04064624</code> is the location of <code>.init_array</code>.</li>
+<li>The other four entries are addresses of functions <strong>in little endian</strong>.</li>
+</ul>
+<ol start="2">
+<li>Convert the address into a function name with:</li>
+</ol>
+<pre># Reverse hex pairs to account for endianness.
+$ third_party/llvm-build/Release+Asserts/bin/llvm-symbolizer \
+    --functions -e out/Release/lib.unstripped/libmonochrome.so 0x021a4a29
+_GLOBAL__I_000101
+./../../buildtools/third_party/libc++/trunk/src/iostream.cpp:0:0</pre>
+<ol start="3">
+<li>If any <code>.init_array</code> slots are zero, that means they their address is exists
+within the relocation table. To find the address:</li>
+</ol>
+<pre># Use the location of &quot;.init_array&quot; printed in step 1, plus an offset for subsequent slots.
+$ third_party/llvm-build/Release+Asserts/bin/llvm-readelf \
+    --relocations out/Release/lib.unstripped/libmonochrome.so | grep 0x04064624
+03dfb7b0  00000017 R_ARM_RELATIVE                    0</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/static_initializers.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/static_initializers.md</a>
+  </p>
+</div>

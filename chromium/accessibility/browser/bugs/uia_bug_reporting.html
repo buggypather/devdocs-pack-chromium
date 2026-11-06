@@ -1,0 +1,24 @@
+<h1>UIA Bug Reporting</h1>
+<p>UI Automation (UIA) is now enabled by default for most Windows users in Chromium. The only exception is users on older versions of JAWS that still force the legacy IA2 path. For more info, see the feature flag <code>DisableUiaProviderWhenJawsIsRunning</code>.</p>
+<p>This guide explains how to confirm whether an issue is caused by the UIA provider and how to file the bug correctly.</p>
+<h2 id="1-check-whether-the-issue-depends-on-uia">1. Check whether the issue depends on UIA</h2>
+<p>Test the behavior with UIA explicitly enabled and disabled. Launch the browser from the command line using:</p>
+<pre>--enable-features=UiaProvider
+--disable-features=UiaProvider</pre>
+<h3 id="example">Example:</h3>
+<pre>C:\&lt;path-to-chrome&gt;\chrome.exe --disable-features=UiaProvider</pre>
+<p>The browser must be restarted after toggling these flags; the feature state does not update at runtime.</p>
+<p>If the bug reproduces only when UIA is enabled, it’s likely UIA-specific.</p>
+<h2 id="2-filing-the-bug">2. Filing the bug</h2>
+<p>If the issue is confirmed to be UIA-specific:</p>
+<ul>
+<li>Prefix the bug title with “UIA”.</li>
+<li>Use the <code>Chromium &gt; UI &gt; Accessibility</code> component (or use <a href="https://issues.chromium.org/issues/new?component=1457135&amp;template=2012357">this link</a> to create the bug on the right component directly)</li>
+</ul>
+<p>This ensures the report is routed quickly to the correct owners.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/bugs/uia_bug_reporting.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/bugs/uia_bug_reporting.md</a>
+  </p>
+</div>

@@ -1,0 +1,208 @@
+<h1>Internationalized Domain Names (IDN) in Google Chrome</h1>
+<h2 id="background">Background</h2>
+<p>Many years ago, domains could only consist of the Latin letters A to Z, digits,
+and a few other characters. <a href="https://en.wikipedia.org/wiki/Internationalized_domain_name">Internationalized Domain Names
+(IDNs)</a> were
+created to better support non-Latin alphabets for web users around the globe.</p>
+<p>Different characters from different (or even the same!) languages can look very
+similar. We’ve seen
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=683314">reports</a> of
+proof-of-concept attacks. These are called <a href="https://en.wikipedia.org/wiki/IDN_homograph_attack">homograph
+attacks</a>. For example, the
+Latin &quot;a&quot; looks a lot like the Cyrillic &quot;а&quot;, so someone could register
+<code>http://ebаy.com</code> (using Cyrillic &quot;<code>а</code>&quot;), which could be confused for
+<code>http://ebay.com</code>. This is a limitation of how URLs are displayed in browsers in
+general, not a specific bug in Chrome.</p>
+<p>In a perfect world, domain registrars would not allow these confusable domain
+names to be registered. Some domain registrars do exactly that, mostly by
+restricting the characters allowed, but many do not. To better protect against
+these attacks, browsers display some domains in
+<a href="https://en.wikipedia.org/wiki/Punycode">punycode</a> (looks like <code>xn--...</code>)
+instead of the original IDN, according to their own IDN policies.</p>
+<p>This is a challenging problem space. Chrome has a global user base of billions
+of people around the world, many of whom are not viewing URLs with Latin
+letters. We want to prevent confusion, while ensuring that users across
+languages have a great experience in Chrome. Displaying either punycode or a
+visible security warning on too wide of a set of URLs would hurt web usability
+for people around the world.</p>
+<p>Chrome and other browsers try to balance these needs by implementing IDN
+policies in a way that allows IDN to be shown for valid domains, but protects
+against confusable homograph attacks.</p>
+<p>Chrome&#39;s IDN policy is one of several tools that aim to protect users.
+<a href="https://safebrowsing.google.com/">Google Safe Browsing</a> continues to help
+protect over two billion devices every day by showing warnings to users when
+they attempt to navigate to dangerous or deceptive sites or download dangerous
+files. Password managers continue to remember which domain password logins are
+for, and won’t automatically fill a password into a domain that is not the
+exactly correct one.</p>
+<h2 id="how-idn-works">How IDN works</h2>
+<p>IDNs were devised to support arbitrary Unicode characters in hostnames in a
+backward-compatible way. This works by having user agents transform hostnames
+containing non-ASCII Unicode characters into an ASCII-only hostname, which can
+then be sent on to DNS servers. This is done by encoding each domain label into
+its punycode representation. This representation includes a four-character
+prefix (<code>xn--</code>) and then the unicode translated to ASCII Compatible Encoding
+(ACE). For example, <code>http://öbb.at</code> is transformed to <code>http://xn--bb-eka.at</code>.</p>
+<h2 id="google-chromes-idn-policy">Google Chrome&#39;s IDN policy</h2>
+<p>Since Chrome 51, Chrome uses an IDN display policy that does not take into
+account the language settings (the Accept-Language list) of the browser. A
+<a href="https://wiki.mozilla.org/IDN_Display_Algorithm#Algorithm">similar strategy</a> is
+used by Firefox.</p>
+<p>Google Chrome decides if it should show Unicode or punycode for each domain
+label (component) of a hostname separately. To decide if a component should be
+shown in Unicode, Google Chrome uses the following algorithm:</p>
+<ol>
+<li><p>Convert each component stored in the ACE to Unicode per <a href="http://unicode.org/reports/tr46/#Processing">UTS 46 transitional
+processing</a> (<code>ToUnicode</code>).</p>
+</li>
+<li><p>If there is an error in <code>ToUnicode</code> conversion (e.g. contains <a href="http://unicode.org/cldr/utility/list-unicodeset.jsp?a=%5B%3Auts46%3Ddisallowed%3A%5D&amp;abb=on&amp;g=&amp;i=">disallowed
+characters</a>,
+<a href="https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/uidna_8h.html#a0411cd49bb5b71852cecd93bcbf0ca2da390a6b3d9844a1dcc1f99fb1ae478ecf">starts with a combining
+mark</a>,
+or <a href="https://unicode-org.github.io/icu-docs/apidoc/released/icu4c/uidna_8h.html#a0411cd49bb5b71852cecd93bcbf0ca2da8a9311811fb0f3db1644ac1a88056370">violates BiDi
+rules</a>),
+show punycode.</p>
+</li>
+<li><p>If there is a character in a label not belonging to <a href="http://unicode.org/cldr/utility/list-unicodeset.jsp?a=%5B%3AIdentifierStatus%3DAllowed%3A&amp;abb=on&amp;g=&amp;i=">Characters allowed in
+identifiers</a>
+per <a href="http://www.unicode.org/reports/tr39/#Identifier_Status_and_Type">Unicode Technical Standard 39 (UTS
+39)</a>, show
+punycode.</p>
+</li>
+<li><p>If any character in a label belongs to <a href="https://unicode.org/cldr/utility/list-unicodeset.jsp?a=%5B%5Cu01CD-%5Cu01DC%5D+%5B%5Cu1c80-%5Cu1c8f%5D++%5B%5Cu1e90-%5Cu1e9b%5D++%5B%5Cu1f00-%5Cu1fff%5D++%5B%5Cua640-%5Cua69f%5D-%5B%5Cua720-%5Cua72f%5D+%5B%5Cu0338+%5Cu058a+%5Cu2010+%5Cu2019+%5Cu2027+%5Cu30a0+%5Cu02bb+%5Cu02bc+%5D&amp;abb=on&amp;g=&amp;i=">the disallowed
+list</a>,
+show punycode.</p>
+</li>
+<li><p>If the component uses characters drawn from multiple scripts, it is subject
+to a script mixing check based on <a href="http://www.unicode.org/reports/tr39/#Restriction_Level_Detection">&quot;Highly Restrictive&quot; profile of UTS
+39</a> with an
+additional restriction on Latin. If the component fails the check, show the
+component in punycode.</p>
+</li>
+</ol>
+<ul>
+<li>Latin, Cyrillic or Greek characters cannot be mixed with each other</li>
+<li>Latin characters in the ASCII range can be mixed ONLY with Chinese (Han,
+Bopomofo), Japanese (Kanji, Katakana, Hiragana), or Korean (Hangul, Hanja)</li>
+<li>Han (CJK Ideographs) can be mixed with Bopomofo</li>
+<li>Han can be mixed with Hiragana and Katakana</li>
+<li>Han can be mixed with Korean Hangul</li>
+</ul>
+<ol start="6">
+<li><p>If two or more numbering systems (e.g. European digits + Bengali digits) are
+mixed, show punycode.</p>
+</li>
+<li><p>If there are any invisible characters (e.g. a sequence of the same combining
+mark or a sequence of Kana combining marks), show punycode.</p>
+</li>
+<li><p>If there are any characters used in an unusual way, show punycode. E.g.
+<a href="https://unicode.org/cldr/utility/character.jsp?a=00B7"><code>LATIN MIDDLE DOT (·)</code></a>
+used outside <a href="https://en.wiktionary.org/wiki/ela_geminada">ela geminada</a>.</p>
+</li>
+<li><p>Test the label for <a href="http://unicode.org/reports/tr39/#Mixed_Script_Confusables">mixed script confusable per UTS
+39</a>. If mixed script
+confusable is detected, show punycode.</p>
+</li>
+<li><p>Test the label for <a href="http://unicode.org/reports/tr39/#Whole_Script_Confusables">whole script
+confusables</a>: If all
+the letters in a given label belong to a set of whole-script-confusable letters
+in one of the <a href="https://cs.chromium.org/chromium/src/components/url_formatter/spoof_checks/idn_spoof_checker.cc?type=cs&amp;q=kWholeScriptConfusables&amp;sq=package:chromium">whole-script-confusable
+scripts</a>
+and if the hostname doesn&#39;t have a corresponding
+<a href="https://cs.chromium.org/chromium/src/components/url_formatter/spoof_checks/idn_spoof_checker.h?type=cs&amp;q=allowed_tlds">allowed top-level-domain</a>
+for that script, show punycode.
+<strong>Example for Cyrillic:</strong>
+The first label in hostname <code>аррӏе.com</code> (<code>xn--80ak6aa92e.com</code>) is all <a href="https://unicode.org/cldr/utility/list-unicodeset.jsp?a=%5B%D0%B0%D1%8B%D1%81%D4%81%D0%B5%D4%8D%D2%BB%D1%96%D1%8E%D0%BA%D1%98%D3%8F%D0%BC%D0%BE%D1%80%D4%97%D4%9B%D1%95%D1%82%D4%9D%D1%85%D1%83%D1%8A%D1%8C%D2%BD%D0%BF%D0%B3%D1%B5%D1%A1%5D&amp;g=gc&amp;i=">Cyrillic
+letters that look like Latin letters</a>
+<strong>AND</strong> the TLD (<code>com</code>) is not Cyrillic <strong>AND</strong> the TLD is not one of the TLDs
+known to host a large number of Cyrillic domains (e.g. <code>ru</code>, <code>su</code>, <code>pyc</code>, <code>ua</code>).
+Show it in punycode.</p>
+</li>
+<li><p>If the label contains only <a href="https://cs.chromium.org/chromium/src/components/url_formatter/spoof_checks/idn_spoof_checker.cc?type=cs&amp;q=IsDigitLookalike">digits and digit
+spoofs</a>,
+show punycode.</p>
+</li>
+<li><p>If the label matches a <a href="https://cs.chromium.org/chromium/src/components/url_formatter/spoof_checks/idn_spoof_checker.cc?type=cs&amp;g=0&amp;l=422">dangerous
+pattern</a>,
+show punycode.</p>
+</li>
+<li><p>If the <a href="http://unicode.org/reports/tr39/#def-skeleton">skeleton</a> of the
+registrable part of a hostname is identical to one of the top domains after
+removing diacritic marks and mapping each character to its spoofing skeleton
+(e.g. <code>www.googlé.com</code> with <code>é</code> in place of <code>e</code>), show punycode.</p>
+</li>
+</ol>
+<p>Otherwise, show Unicode.</p>
+<p>This is implemented by <code>IDNToUnicodeOneComponent()</code> and <code>IsIDNComponentSafe()</code>
+in
+<a href="https://cs.chromium.org/search/?q=components/url_formatter/url_formatter.cc"><code>components/url_formatter/url_formatter.cc</code></a>
+and <code>IDNSpoofChecker</code> class in
+<a href="https://cs.chromium.org/chromium/src/components/url_formatter/spoof_checks/idn_spoof_checker.cc"><code>components/url_formatter/spoof_checks/idn_spoof_checker.cc</code></a>.</p>
+<h2 id="additional-protections">Additional Protections</h2>
+<p>In addition to the spoof checks above, Chrome also implements a full page
+security warning to protect against lookalike URLs. You can find an example of 
+this warning at <code>chrome://interstitials/lookalike</code>. This warning blocks main
+frame navigations that involve lookalike URLs, either as a direct navigation or
+as part of a redirect.</p>
+<p>The algorithm to show this warning is as follows:</p>
+<ol>
+<li><p>If the scheme of the navigation is not <code>http</code> or <code>https</code>, allow
+the navigation.</p>
+</li>
+<li><p>If the navigation is a redirect, check the redirect chain. If the redirect
+chain is safe, allow the navigation. (See Defensive Registrations section for
+details).</p>
+</li>
+<li><p>If the hostname of the navigation has at least a medium site engagement
+score, allow the navigation. Site engagement score is assigned to sites by the
+<a href="https://www.chromium.org/developers/design-documents/site-engagement">Site Engagement
+Service</a>.</p>
+</li>
+<li><p>If the hostname of the navigation is in
+<a href="https://cs.chromium.org/chromium/src/components/url_formatter/spoof_checks/top_domains/domains.list"><code>domains.list</code></a>,
+allow the navigation.</p>
+</li>
+<li><p>If the user previously allowed the hostname of the navigation by clicking
+&quot;Ignore&quot; in the warning, allow the navigation. Currently, user decisions are
+stored per tab, so navigating to the same site in a new tab may show the
+warning.</p>
+</li>
+<li><p>If the hostname has the same skeleton as a recently engaged site or a top 500
+domain, block the navigation and show the warning.</p>
+</li>
+</ol>
+<p>All of these checks are done locally on the client side.</p>
+<h3 id="defensive-registrations">Defensive Registrations</h3>
+<p>Domain owners can sometimes register multiple versions of their domains, such
+as the ASCII and IDN versions, to improve user experience and prevent potential
+spoofs. We call these supplementary domains defensive registrations.</p>
+<p>In some cases, Chrome&#39;s lookalike warning may flag and block navigations to
+these domains:</p>
+<ul>
+<li>If one of the sites is in <code>domains.list</code> but the other isn&#39;t, the latter will
+be blocked. </li>
+<li>If the user engaged with one of the sites but not the other, the latter will
+be blocked.</li>
+</ul>
+<h3 id="avoiding-a-lookalike-warning-on-your-site">Avoiding a lookalike warning on your site</h3>
+<p><strong>Domain owners can avoid the &quot;Did you mean&quot; warning by redirecting their
+defensive registrations to their canonical domain.</strong></p>
+<p><strong>Example</strong>: If you own both <code>example.com</code> and <code>éxample.com</code> and the majority of
+your traffic is to <code>example.com</code>, you can fix the warning by redirecting
+<code>éxample.com</code> to <code>example.com</code>. The lookalike warning logic considers this a
+safe redirect and allows the navigation. If you must also redirect <code>http</code>
+navigations to <code>https</code>, do this in a single redirect such as
+<code>http://éxample.com -&gt; https://example.com</code>. Use HTTP 301 or HTTP 302
+redirects, the lookalike warning ignores meta redirects.</p>
+<h2 id="reporting-security-bugs">Reporting Security Bugs</h2>
+<p>We reward certain cases of IDN spoofs according to <a href="https://www.google.com/about/appsecurity/chrome-rewards/index.html">Chrome&#39;s Vulnerability
+Reward Program</a>
+policies. Please see <a href="https://docs.google.com/document/d/1_xJz3J9kkAPwk3pma6K3X12SyPTyyaJDSCxTfF8Y5sU/edit?usp=sharing">this
+document</a>
+before reporting a security bug.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/idn.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/idn.md</a>
+  </p>
+</div>

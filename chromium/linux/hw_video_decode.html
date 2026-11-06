@@ -1,0 +1,73 @@
+<h1>Enabling hardware  decode codepaths on linux</h1>
+<p><strong>This document is deprecated. See
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:docs/gpu/vaapi.md">vaapi.md</a>
+instead.</strong></p>
+<p>Hardware acceleration of video decode on Linux is
+<a href="https://crbug.com/137247">unsupported</a> in Chrome for user-facing builds. During
+development (targeting other platforms) it can be useful to be able to trigger
+the code-paths used on HW-accelerated platforms (such as CrOS and win7) in a
+linux-based development environment. Here&#39;s one way to do so, with details based
+on a gprecise setup.</p>
+<ul>
+<li><p>Install pre-requisites: On Ubuntu Precise, at least, this includes:</p>
+<pre data-language="shell">sudo apt-get install libtool libvdpau1 libvdpau-dev</pre>
+</li>
+<li><p>Install and configure <a href="http://cgit.freedesktop.org/libva/">libva</a></p>
+<pre data-language="shell">DEST=${HOME}/apps/libva
+cd /tmp
+git clone git://anongit.freedesktop.org/libva
+cd libva
+git reset --hard libva-1.2.1
+./autogen.sh &amp;&amp; ./configure --prefix=${DEST}
+make -j32 &amp;&amp; make install</pre>
+</li>
+<li><p>Install and configure the
+<a href="http://cgit.freedesktop.org/vaapi/vdpau-driver">VDPAU</a> VAAPI driver</p>
+<pre data-language="shell">DEST=${HOME}/apps/libva
+cd /tmp
+git clone git://anongit.freedesktop.org/vaapi/vdpau-driver
+cd vdpau-driver
+export PKG_CONFIG_PATH=${DEST}/lib/pkgconfig/:$PKG_CONFIG_PATH
+export LIBVA_DRIVERS_PATH=${DEST}/lib/dri
+export LIBVA_X11_DEPS_CFLAGS=-I${DEST}/include
+export LIBVA_X11_DEPS_LIBS=-L${DEST}/lib
+export LIBVA_DEPS_CFLAGS=-I${DEST}/include
+export LIBVA_DEPS_LIBS=-L${DEST}/lib
+make distclean
+unset CC CXX
+./autogen.sh &amp;&amp; ./configure --prefix=${DEST} --enable-debug
+find . -name Makefile |xargs sed -i 'sI/usr/lib/xorg/modules/driversI${DEST}/lib/driIg'
+sed -i -e 's/_(\(VAEncH264VUIBufferType\|VAEncH264SEIBufferType\));//' src/vdpau_dump.c
+make -j32 &amp;&amp; rm -f ${DEST}/lib/dri/{nvidia_drv_video.so,s3g_drv_video.so} &amp;&amp; make install</pre>
+</li>
+<li><p>Add to args.gn:</p>
+<ul>
+<li><code>target_os = &quot;chromeos&quot;</code> to link in <code>VaapiVideoDecodeAccelerator</code></li>
+<li><code>proprietary_codecs = true</code> and <code>ffmpeg_branding = &quot;Chrome&quot;</code> to
+allow Chrome to play h.264 content, which is the only codec
+VAVDA knows about today.</li>
+</ul>
+</li>
+<li><p>Rebuild chrome</p>
+</li>
+<li><p>Run chrome with <code>LD_LIBRARY_PATH=${HOME}/apps/libva/lib</code> in the environment,
+and with the <code>--no-sandbox</code> command line flag.</p>
+</li>
+<li><p>If things don&#39;t work, a Debug build (to include D*LOG&#39;s) with
+<code>--vmodule=*content/common/gpu/media/*=10,gpu_video*=1</code> might be
+enlightening.</p>
+</li>
+</ul>
+<p>** note
+NOTE THIS IS AN UNSUPPORTED CONFIGURATION AND LIKELY TO BE BROKEN AT ANY
+POINT IN TIME
+**</p>
+<p>This page is purely here to help developers targeting supported HW <code>&lt;video&gt;</code>
+decode platforms be more effective. Do not expect help if this setup fails to
+work.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/hw_video_decode.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/hw_video_decode.md</a>
+  </p>
+</div>

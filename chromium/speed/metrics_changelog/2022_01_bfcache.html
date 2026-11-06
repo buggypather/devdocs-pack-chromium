@@ -1,0 +1,17 @@
+<h1>Cumulative Layout Shift Changes in Chrome 97</h1>
+<h3 id="bfcache-rollout-causes-big-cls-improvements-across-the-web">BFCache rollout causes big CLS improvements across the web</h3>
+<p>Chrome broadly rolled out the <a href="https://web.dev/bfcache">BFCache</a> in January 2022.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>For page loads which are restored from BFCache instead of being fully loaded on
+a back/forward navigation, any layout shifts which occur during page load are
+skipped. This can result in big improvements for sites with layout shifts during
+page load.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>The BFCache was widely rolled out in January 2022.
+The CrUX report included this update starting with the January 2022 report.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2022_01_bfcache.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2022_01_bfcache.md</a>
+  </p>
+</div>

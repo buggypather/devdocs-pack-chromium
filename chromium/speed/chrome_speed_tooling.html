@@ -1,0 +1,33 @@
+<h1>Speed Operations: Speed Tooling</h1>
+<p>TL: <a href="mailto:dberris@chromium.org">dberris@chromium.org</a><br>
+Team: <a href="mailto:simonhatch@chromium.org">simonhatch@chromium.org</a>, <a href="mailto:dberris@chromium.org">dberris@chromium.org</a><br>
+TPM: <a href="mailto:ushesh@chromium.org">ushesh@chromium.org</a><br></p>
+<h2 id="mission">Mission</h2>
+<p>The mission of the Chrome Speed Tooling team is to develop the tools and
+infrastructure necessary for teams to detect, help diagnose, and follow through
+on performance regressions in Chrome. We accomplish this through a set of
+interconnected tools, which process data from the Chrome Benchmarking Team and
+automate the Chrome Speed Releasing workflow:</p>
+<ul>
+<li>The <a href="https://chromeperf.appspot.com">Chrome Performance Dashboard</a> stores
+over 4 million performance timeseries, and monitors hundreds of thousands
+of them for performance regressions. It integrates with Chrome&#39;s bug
+tracker for follow-through.</li>
+<li>Most of our automated builds take too long to get performance data on every
+revision, so we have <a href="bisects">bisect bots</a> to narrow down regressions.
+These bots also support running performance try jobs on unsubmitted CLs.</li>
+<li>Whether a performance test is run locally or in the lab, right now or last
+year, we want to make it easy to understand and share the results. We
+develop <a href="https://chromium.googlesource.com/catapult/+/refs/heads/main/docs/histogram-set-json-format.md">data formats</a>
+and user interfaces that make it easy to dig deeply into performance
+regressions.</li>
+</ul>
+<p>Here is a diagram of how our tooling fits into the chromium performance
+continuous build:
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/images/speed_operations.png" alt="Speed Continuous Build"></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/chrome_speed_tooling.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/chrome_speed_tooling.md</a>
+  </p>
+</div>

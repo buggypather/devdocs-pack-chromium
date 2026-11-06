@@ -1,0 +1,144 @@
+<h1>Running Web Platform Tests with runwpttests.py</h1>
+<p><code>run_web_tests.py</code> runs web tests with content shell through <a href="https://chromium.googlesource.com/chromium/src/+/main/content/web_test/browser/test_info_extractor.h">protocol mode</a>.
+See <a href="web_tests">web_tests.md</a> for details.
+<code>run_wpt_tests.py</code> is a WebDriver-based alternative that can run <a href="web_platform_tests">web platform
+tests</a> with <a href="https://chromium.googlesource.com/chromium/src/+/main/chrome">Chrome</a>, <a href="https://chromium.googlesource.com/chromium/src/+/main/headless">headless shell</a>, Chrome Android, and WebView.
+This document explains how to use <code>run_wpt_tests.py</code> in these scenarios.</p>
+<h2 id="running-web-platform-tests-for-desktop-platforms">Running Web Platform Tests for Desktop Platforms</h2>
+<p>On Linux, macOS, and Windows, <code>run_wpt_tests.py</code> supports testing with <a href="https://chromium.googlesource.com/chromium/src/+/main/chrome">Chrome</a>
+or <a href="https://chromium.googlesource.com/chromium/src/+/main/headless">headless shell</a>.
+Chrome is closer to the binary Google ships to end users, but is generally
+slower.
+Headless shell is a lightweight alternative that suffices for testing features
+implemented entirely in Blink.</p>
+<h3 id="running-tests-locally">Running Tests Locally</h3>
+<p>First, you will need to build the <code>blink_tests</code> target as you were running web tests
+before. This will build <code>headless_shell</code>, <code>chrome</code>, <code>chromedriver</code>, <code>content_shell</code>
+and all other needed binaries to run web tests and WPTs.</p>
+<pre data-language="bash">autoninja -C out/Default blink_tests</pre>
+<p>Once the build is done, running tests is very similar to how you would run
+tests with <code>run_web_tests.py</code>.
+For example, to run all tests under <code>external/wpt/html/dom</code>, run:</p>
+<pre data-language="bash">third_party/blink/tools/run_wpt_tests.py --target=Default --product=headless_shell external/wpt/html/dom</pre>
+<p><code>--product</code> (or <code>-p</code>) selects which browser to test with.
+Supported values are:</p>
+<ul>
+<li><code>headless_shell</code> (default if <code>--product</code> is not specified)</li>
+<li><code>chrome</code></li>
+<li><code>chrome_android</code> (aliased as <code>clank</code>; see
+<a href="#Running-Web-Platform-Tests-on-Android">additional instructions</a>)</li>
+<li><code>android_webview</code> (aliased as <code>webview</code>; see
+<a href="#Running-Web-Platform-Tests-on-Android">additional instructions</a>)</li>
+</ul>
+<p>Also, consider using <code>-v</code> to get browser logs.
+It can be provided multiple times to increase verbosity.</p>
+<p><code>run_wpt_tests.py --help</code> shows a full description of <code>run_wpt_tests.py</code>&#39;s CLI,
+which resembles that of <code>run_web_tests.py</code>.</p>
+<h3 id="running-tests-in-cqci">Running Tests in CQ/CI</h3>
+<p>To satisfy different testing requirements, WPT coverage in CQ/CI is partitioned
+between suites that target different <code>//content</code> embedders:</p>
+<table>
+<thead>
+<tr>
+<th>Suite Name</th>
+<th>Browser Under Test</th>
+<th>Harness</th>
+<th>Tests Run</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>headless_shell_wpt_tests</code></td>
+<td><code>headless_shell</code></td>
+<td><code>run_wpt_tests.py</code></td>
+<td>The default test suite for WPTs if not specified otherwise.</td>
+</tr>
+<tr>
+<td><code>chrome_wpt_tests</code></td>
+<td><code>chrome --headless=new</code></td>
+<td><code>run_wpt_tests.py</code></td>
+<td>Tests that depend on the <code>//chrome</code> layer. Can be slow, so prefer <code>headless_shell</code> testing if possible.</td>
+</tr>
+<tr>
+<td><code>blink_wpt_tests</code></td>
+<td><code>content_shell --run-web-tests</code></td>
+<td><code>run_web_tests.py</code></td>
+<td>Tests under <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/web_tests/wpt_internal">internal WPTs</a> plus any public WPTs not migrated yet.</td>
+</tr>
+</tbody></table>
+<p>To avoid redundant coverage, each WPT should run in exactly one suite listed
+above.
+The <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/web_tests/TestLists/chrome.filter"><code>chrome.filter</code></a> file lists tests that <code>chrome_wpt_tests</code> should run,
+and that <code>headless_shell_wpt_tests</code> and <code>blink_wpt_tests</code> should skip.
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/web_tests/TestLists/content_shell.filter"><code>content_shell.filter</code></a> file lists tests that currently run in <code>blink_wpt_tests</code>,
+and will be removed once it only contains tests under <code>wpt_internal</code>. Tests
+not listed in either file run in <code>headless_shell_wpt_tests</code> by default.</p>
+<p>*** note
+Running tests in <code>blink_wpt_tests</code> is discouraged because <code>run_web_tests.py</code>
+doesn&#39;t drive tests through standard WebDriver endpoints.
+This can cause <code>blink_wpt_tests</code> results to diverge from the Chrome results
+published to <a href="https://wpt.fyi/results/?label=experimental&amp;label=master&amp;aligned">wpt.fyi</a>. We should generally not add new tests to
+content_shell.filter.</p>
+<hr>
+<h3 id="test-expectations-and-baselines">Test Expectations and Baselines</h3>
+<p>To suppress failures, <code>run_wpt_tests.py</code> uses the <a href="web_test_expectations">same <code>*-expected.txt</code> and
+TestExpectations files</a> that <code>run_web_tests.py</code> uses.</p>
+<h3 id="running-webdriver-tests-with-chrome">Running webdriver tests with Chrome</h3>
+<p><a href="https://web-platform-tests.org/writing-tests/wdspec.html">wdspec tests</a> are a subset of WPT that verifies conformance to the WebDriver
+specification.
+<code>run_wpt_tests.py</code> can run wdspec tests like any other WPT:</p>
+<pre data-language="bash">third_party/blink/tools/run_wpt_tests.py -t Default -p chrome \
+  external/wpt/webdriver/tests/classic/find_element/find.py</pre>
+<p>On the bots, the <code>webdriver_wpt_tests</code> suite runs wdspec tests separately from
+the other WPT types.
+The <code>linux-blink-rel</code> builder can provide results for rebaselining.</p>
+<h2 id="running-web-platform-tests-on-android">Running Web Platform Tests on Android</h2>
+<p>See <a href="run_web_platform_tests_on_android">here</a> for Android specific instructions.</p>
+<h2 id="debugging-support">Debugging Support</h2>
+<h3 id="per-test-tracing">Per-Test Tracing</h3>
+<p>The <code>--enable-per-test-tracing</code> option will record <a href="https://www.chromium.org/developers/how-tos/trace-event-profiling-tool/">trace events</a> for each test.
+One use case is to record JavaScript bindings used:</p>
+<ol>
+<li><p>Build <code>blink_tests</code> with the GN arg <code>extended_tracing_enabled=true</code>.</p>
+</li>
+<li><p>Run the desired tests with <code>--enable-per-test-tracing=blink.bindings</code>.</p>
+</li>
+<li><p>Locate trace files written to
+<code>//out/$target/layout-test-results/**/*-trace.json</code>.
+They&#39;re also downloadable from the <a href="web_tests_addressing_flake#Understanding-builder-results">results viewer</a>:
+  <img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/wpt_results_viewer_trace.png" alt="Trace link in results viewer"></p>
+</li>
+<li><p>Open the desired trace files <a href="https://ui.perfetto.dev/">in Perfetto</a>:
+  <img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/wpt_bindings_trace.png" alt="WPT trace opened in Perfetto"></p>
+</li>
+</ol>
+<h3 id="text-based-debuggers">Text-Based Debuggers</h3>
+<p>To interactively debug WPTs, prefix the <code>run_wpt_tests.py</code> command with
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/tools/debug_renderer"><code>debug_renderer</code></a> to attach a debugger to a desired renderer.</p>
+<p>For other use cases, see <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/debugging.md">these debugging tips</a>.</p>
+<h2 id="faq">FAQ</h2>
+<ul>
+<li>Do headless shell and Chrome support MojoJS bindings?<ul>
+<li>Yes.
+<code>run_wpt_tests.py</code> enables the <code>MojoJS</code> and <code>MojoJSTest</code> features and
+serves <code>//out/&lt;target&gt;/gen/</code> as <code>/gen/</code> in wptserve.
+However, in the public WPT suite, testdriver.js APIs must be backed by
+fully-specified testing APIs (preferably implemented with WebDriver or
+alternatively with MojoJS). Tests that rely on unspecified testing APIs
+cannot be put in WPT, but may live in chromium&#39;s own wpt_internal.
+See <a href="https://github.com/web-platform-tests/rfcs/issues/172">https://github.com/web-platform-tests/rfcs/issues/172</a> for additional
+discussion.</li>
+</ul>
+</li>
+</ul>
+<h2 id="known-issues">Known Issues</h2>
+<p>The <a href="https://issues.chromium.org/hotlists/6224346"><code>wptrunner-migration</code>
+hostlist</a> tracks test results
+where headless shell and content shell differ.
+For runner bugs and feature requests, please file <a href="https://issues.chromium.org/issues/new?component=1456928&amp;template=1923166">an issue against
+<code>Blink&gt;Infra</code></a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/run_web_platform_tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/run_web_platform_tests.md</a>
+  </p>
+</div>

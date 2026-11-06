@@ -1,0 +1,179 @@
+<h1>The architecture of Browser/ChromeOS code</h1>
+<h2 id="overview">Overview</h2>
+<p>We want to have clean code, good architecture, and clear ownership to ensure
+everybody can efficiently deliver high quality products. Toward this goal, this
+document discusses how code in the Chromium git repository is and should be
+architected between the browser and ChromeOS code.</p>
+<h2 id="background">Background</h2>
+<p>Originally, ChromeOS was just the Linux Chrome browser with a few extra
+additions for UI system management. As such, and to keep the system requirements
+very low, the entire ChromeOS UI was built into the Chrome &quot;browser&quot; process.
+Over time, ChromeOS has gotten substantially more sophisticated and capable.
+Many important services run in separate processes, services, or VMs, but most of
+the UI still runs in the main browser process.</p>
+<p>The Lacros project aimed to separate the Linux processes and the software
+releases between the browser and the OS shell by shipping the Chrome web browser
+as a standalone app which could be updated independently of ChromeOS. Lacros
+communicated between the Chrome browser and ChromeOS via an IPC interface called
+crosapi. However, the Lacros project has been deprioritized and relevant code is
+in the process of being deprecated and deleted.</p>
+<h3 id="definitions">Definitions</h3>
+<ul>
+<li><p><strong>Browser:</strong> General term referring to a process with web browsing capabilities.</p>
+</li>
+<li><p><strong>Ash:</strong> The ChromeOS system UI. In this document, this term is used broadly
+to include most of the non-browser UI features including the app launcher, the
+system tray and notifications, the window manager, the system compositor, and
+the login UI.</p>
+</li>
+<li><p><strong>Lacros (deprecate, being deleted):</strong> The ChromeOS-specific browser that does
+not include Ash. This is similar to the Linux browser but with ChromeOS-
+specific features and integrations.</p>
+</li>
+<li><p><strong>Ash Browser:</strong> The &quot;classic&quot; (non-Lacros) ChromeOS software that includes
+Ash and the browser in one process.</p>
+</li>
+<li><p><strong>Browser code:</strong> Code required to build a browser. This includes
+platform-specific integrations with the host OS rather than just the
+cross-platform parts. For ChromeOS, this includes many important ChromeOS
+browser features but does not include anything considered &quot;Ash.&quot;</p>
+</li>
+<li><p><strong>OS code:</strong> Any ChromeOS-specific code that isn’t &quot;browser code.&quot; This is
+mostly Ash when referring to code in the Chromium repository.</p>
+</li>
+<li><p><strong>Shared code:</strong> Code used in both browser and OS code including <code>//base</code>,
+<code>//mojo</code>, <code>//ui</code>, and some components.</p>
+</li>
+</ul>
+<h2 id="desired-state">Desired state</h2>
+<p><em>This section describes the long-term architectural goal rather than the current
+state or the current requirements. See below for what to do for current work.</em></p>
+<p>The desired end-state is that &quot;browser code&quot; (including ChromeOS-specific
+browser features) and &quot;OS code&quot; have a clear separation. Communication between
+these layers should be done using well-defined APIs. Function calls in the code
+happen &quot;down&quot; the stack from the browser to the OS, and any calls &quot;up&quot; from the
+OS to the browser happen via events, observers, and callbacks configured by the
+browser layers.</p>
+<p>Shared code like <code>//views</code> may have ChromeOS-specific parts and take
+contributions from anyone, but the Browser and OS teams should agree that the
+code is appropriate for such sharing.</p>
+<p>In this desired state:</p>
+<ul>
+<li><p>The <code>//chrome</code> directory is for the implementation of the Chrome browser. It
+should not have any OS code in it (for example, <code>//chrome/browser/ash</code> is
+undesirable) and OS code should not call directly into <code>//chrome</code> code outside
+of the above-mentioned callbacks.</p>
+</li>
+<li><p>The <code>//content</code> directory is the API for building a web browser. Even though
+Ash does use web technology for rendering many things, it is not itself a web
+browser and there should be no OS code in this directory or calling directly
+into it.</p>
+</li>
+<li><p>Browser code should only call into OS code through well-defined APIs (e.g.,
+extension APIs). This provides a conceptual separation between browser and OS
+concerns.</p>
+</li>
+</ul>
+<p>Not all parts of the product fit neatly into the browser and OS layers, with
+extensions and apps being big examples. How web page embedding should be done
+from Ash is an area of active design and there is not currently good guidance
+for this. In these less well-defined areas, work toward as clear a separation as
+practical given the current state and the long-term requirements of that
+component.</p>
+<h2 id="current-policies">Current policies</h2>
+<p>New features should be designed to adhere to the &quot;desired state&quot; as closely as
+practical. However, it is currently not possible to implement all functionality
+in Ash according to that state:</p>
+<ul>
+<li><p>Some functionality (e.g., the <code>Profile</code> or <code>BrowserContext</code> classes) are only
+available in <code>//chrome</code> or <code>//content</code>, and there are no clear alternatives
+to use.</p>
+</li>
+<li><p>Legacy code still has significant <code>//chrome</code> dependencies and has not been
+migrated away from this state.</p>
+</li>
+</ul>
+<p>Thus, we must be pragmatic about implementing Ash features in the meantime,
+using the following guidance:</p>
+<ul>
+<li><p>Any new Ash functionality should add its core functionality outside of
+<code>//chrome</code>.</p>
+<ul>
+<li>In this context, &quot;core&quot; functionality includes the primary business logic of
+a feature.</li>
+<li>Guidance on where this code should exist:<ul>
+<li><strong>Ash-only code which is not system UI:</strong> <code>//chromeos/ash/components</code></li>
+<li><strong>Ash-only system UI code:</strong> <code>//ash</code></li>
+<li><strong>Shared by both Ash and Lacros:</strong><ul>
+<li><em>UI code:</em> <code>//chromeos/ui</code></li>
+<li><em>Non-UI code:</em> <code>//chromeos/components</code></li>
+<li><strong>NOTE:</strong> Lacros is in the process of being deprecated. Do not add any
+new Lacros code.</li>
+</ul>
+</li>
+<li><strong>Shared between ChromeOS (i.e., ash-chrome) and other platforms:</strong>
+<code>//components</code></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>For code which must depend on <code>//chrome</code>, push logic down lower in the
+dependency graph as much as possible, and only implement a thin wrapper in
+<code>//chrome</code>. With this pattern, the code in <code>//chrome</code> is mostly &quot;glue&quot; or
+initialization code, which will minimize the effort required in the future to
+break these dependencies completely.</p>
+<ul>
+<li>Example 1: Phone Hub&#39;s <a href="https://source.chromium.org/chromium/chromium/src/+/main:chromeos/ash/components/phonehub/browser_tabs_model_provider.h;drc=2a153c1bc9f24cae375eee3cc875903866997918"><code>BrowserTabsModelProvider</code></a>
+is declared in <code>//chromeos/ash/components</code> alongside related code logic, but
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ash/phonehub/browser_tabs_model_provider_impl.h;drc=fe132eeb21687c455d695d6af346f15454828d01"><code>BrowserTabsModelProviderImpl</code></a>
+(in <code>//chrome</code>) implements the interface using a <code>//chrome</code> dependency.</li>
+<li>Example 2: Phone Hub&#39;s <a href="https://source.chromium.org/chromium/chromium/src/+/main:chromeos/ash/components/phonehub/phone_hub_manager_impl.h;drc=6b2b6f5aa258a1616fab24634c4e9477cfef5daf"><code>PhoneHubManagerImpl</code></a>
+is declared in <code>//chromeos/ash/components</code> and has dependencies outside of
+<code>//chrome</code>, but the concrete implementations of some of these components are
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/keyed_service/core/keyed_service.h;drc=d23075f3066f6aab6fd5f8446ea5dde3ebff1097"><code>KeyedService</code></a>s
+requiring <code>//chrome</code>. In this case, <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ash/phonehub/phone_hub_manager_factory.h;drc=d23075f3066f6aab6fd5f8446ea5dde3ebff1097"><code>PhoneHubManagerFactory</code></a>
+instantiates <a href="https://source.chromium.org/chromium/chromium/src/+/main:chromeos/ash/components/phonehub/phone_hub_manager_impl.h;drc=6b2b6f5aa258a1616fab24634c4e9477cfef5daf"><code>PhoneHubManagerImpl</code></a>
+in <code>//chrome</code> (serving as a thin wrapper around the dependencies), but the
+vast majority of logic is lower in the dependency graph.</li>
+</ul>
+</li>
+<li><p>A few common <code>//chrome</code> dependencies that may be able to be broken easily:</p>
+<ul>
+<li>Instead of using <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/profiles/profile_keyed_service_factory.h;drc=77a7a02b1822640e35cac72c0ddd7af7275eeb9b"><code>ProfileKeyedServiceFactory</code></a>
+(in <code>//chrome</code>), consider using <a href="https://source.chromium.org/chromium/chromium/src/+/main:components/keyed_service/content/browser_context_keyed_service_factory.h;drc=371515598109bf869e1acbe5ea67813fc1a4cc3d"><code>BrowserContextKeyedServiceFactory</code></a>
+(in <code>//components</code>) instead.</li>
+<li>Instead of using a <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/profiles/profile.h;l=308-311;drc=3f4203f7dca2f7e804f30cfa783e24f90acd9059"><code>Profile</code></a>
+(in <code>//chrome</code>) to access user prefs, consider using
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/user_manager/user.h;l=127-131;drc=e49b1aec9585b0a527c24502dd4b0ee94b142c3c"><code>User::GetProfilePrefs()</code></a>
+(in <code>//components</code>) instead.</li>
+</ul>
+</li>
+<li><p>For any new code added in <code>//chrome/browser/ash</code>, a <code>DEPS</code> file must be created
+which explicitly declares <code>//chrome</code> dependencies. People residing in
+<code>//chrome/OWNERS</code> can help suggest alternatives to these dependencies if
+possible when reviewing the code which adds this new <code>DEPS</code> file. See
+<a href="http://b/332805865">b/332805865</a> for more details.</p>
+</li>
+</ul>
+<p>If you need advice to help you make a decision regarding your design, please
+reach out to <a href="mailto:ash-chrome-refactor@google.com">ash-chrome-refactor@google.com</a> for feedback.</p>
+<h2 id="path-forward">Path forward</h2>
+<p>The current policy aims to stop accumulating more undesirable OS/browser
+dependencies while acknowledging there is a large amount of legacy code that
+does not follow the guidelines. The team is moving toward the desired state
+using the following approach outlined in go/ash-chrome-refactor:</p>
+<ul>
+<li>Ensure that all Ash code in <code>//chrome</code> is defined using granular BUILD.gn
+files. Each directory should define its own build targets and list dependencies
+explicitly.<ul>
+<li>See <a href="https://crbug.com/335314438">https://crbug.com/335314438</a>, <a href="https://crbug.com/351889236">https://crbug.com/351889236</a>.</li>
+</ul>
+</li>
+<li>...more to come as the Ash //chrome Refactor makes progress.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/chromeos/code.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/chromeos/code.md</a>
+  </p>
+</div>

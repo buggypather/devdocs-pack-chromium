@@ -1,0 +1,137 @@
+<h1>Trusted Types on WebUI</h1>
+<h2 id="what-is-trusted-types">What is Trusted Types?</h2>
+<p><a href="https://web.dev/trusted-types/">Trusted Types</a> is a defense in depth
+mitigation for DOM-based Cross Site Scripting attacks. Trusted Types
+introduces a runtime type system for dangerous sinks (e.g. <code>elem.innerHTML</code>,
+<code>eval</code>, <code>scriptElem.src</code>, etc), and only allows Trusted Types (i.e.
+<code>TrustedHTML</code>, <code>TrustedScript</code>, or <code>TrustedScriptURL</code>) as an assignment to those
+sinks.</p>
+<p>While <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP">CSP</a> in general
+tries to mitigate the exploitability of an injection by only allowing certain
+script to be executed (via allow-list of host, nonce, hash, etc), Trusted Types
+provides a way to enforce validation for all injections. This is ideal because
+without Trusted Types, any other resources such as CSS, image, video, audio, etc
+can be injected by default in WebUI pages, which could cause other types of bugs
+in the WebUI renderer such as memory corruption bugs.</p>
+<h2 id="how-can-i-trusted-type-my-code">How can I &quot;Trusted Type&quot; my code?</h2>
+<p><strong>Note: If your JS code will also run on Chromium for iOS (i.e. WebKit), you
+should have an if statement to check the Trusted Types support before using
+methods/properties under <code>window.trustedTypes</code> :</strong></p>
+<pre data-language="ts">if (window.trustedTypes) {
+  // Trusted Types is supported, let's use Trusted Types 😎
+  elem.innerHTML = trustedTypes.emptyHTML;
+} else {
+  // Trusted Types is NOT supported 😔
+  elem.innerHTML = '';
+}</pre>
+<h3 id="change-empty-string-assignment-to-dangerous-sinks">Change empty string assignment to dangerous sinks</h3>
+<p>Example code:</p>
+<pre data-language="ts">document.body.innerHTML = '';</pre>
+<p>This will be a Trusted Types violation because the value we are assigning to
+a dangerous sink is not a Trusted Type.
+This can be converted to:</p>
+<pre data-language="ts">document.body.innerHTML = trustedTypes.emptyHTML;</pre>
+<p>There is also <code>trustedTypes.emptyScript</code> to clear script contents.</p>
+<h3 id="change-text-assignment-to-dangerous-sinks">Change text assignment to dangerous sinks</h3>
+<p>Example code:</p>
+<pre data-language="ts">document.body.innerHTML = 'Hello Guest!';</pre>
+<p>Because this is just a text assignment, this can be converted to:</p>
+<pre data-language="ts">document.body.textContent = 'Hello Guest!';</pre>
+<h3 id="change-html-assignment-to-dangerous-sinks">Change HTML assignment to dangerous sinks</h3>
+<h4 id="use-template-element">Use <em>template</em> element</h4>
+<p>Example code:</p>
+<pre data-language="ts">document.body.innerHTML = '&lt;div&gt;&lt;p&gt;' + loadTimeData.getString('foo') + '&lt;/p&gt;
+&lt;/div&gt;';</pre>
+<p>This can be converted by adding <em>template</em> element to HTML file:</p>
+<pre data-language="html">&lt;template id=&quot;foo-template&quot;&gt;
+  &lt;div&gt;
+    &lt;p&gt;&lt;/p&gt;
+  &lt;/div&gt;
+&lt;/template&gt;</pre>
+<p>And then adding following JS code to JS file:</p>
+<pre data-language="ts">// body might already have some contents, so let's clear those first 😊
+document.body.innerHTML = trustedTypes.emptyHTML;
+
+const temp = document.querySelector('#foo-template').cloneNode(true).content;
+temp.querySelector('p').textContent = loadTimeData.getString('foo');
+document.body.appendChild(temp);</pre>
+<h4 id="use-dom-apis">Use DOM APIs</h4>
+<p>In cases where you don&#39;t have control over the HTML file (e.g. converting common
+JS libraries), you can use DOM APIs.
+Example code:</p>
+<pre data-language="ts">document.body.innerHTML += '&lt;p&gt;' + loadTimeData.getString('foo') + '&lt;/p&gt;';</pre>
+<p>And then adding following JS code to JS file:</p>
+<pre data-language="ts">const p = document.createElement('p');
+p.textContent = loadTimeData.getString('foo');
+document.body.appendChild(p);</pre>
+<h4 id="use-trustedtypescreatepolicy">Use <code>trustedTypes.createPolicy</code></h4>
+<p>If you don&#39;t have control of the HTML file and use of DOM APIs isn&#39;t ideal for
+readability, you can [use <code>trustedTypes.createPolicy</code>]
+(<a href="https://web.dev/trusted-types/#create-a-trusted-type-policy">https://web.dev/trusted-types/#create-a-trusted-type-policy</a>).
+Example code:</p>
+<pre data-language="ts">document.body.innerHTML = '&lt;div class=&quot;tree-row&quot;&gt;' +
+    '&lt;span class=&quot;expand-icon&quot;&gt;&lt;/span&gt;' +
+    '&lt;span class=&quot;tree-label-icon&quot;&gt;&lt;/span&gt;' +
+    '&lt;span class=&quot;tree-label&quot;&gt;&lt;/span&gt;' +
+    '&lt;/div&gt;' +
+    '&lt;div class=&quot;tree-children&quot; role=&quot;group&quot;&gt;&lt;/div&gt;';</pre>
+<p>This can be converted to:</p>
+<pre data-language="ts">const htmlString = '&lt;div class=&quot;tree-row&quot;&gt;' +
+    '&lt;span class=&quot;expand-icon&quot;&gt;&lt;/span&gt;' +
+    '&lt;span class=&quot;tree-label-icon&quot;&gt;&lt;/span&gt;' +
+    '&lt;span class=&quot;tree-label&quot;&gt;&lt;/span&gt;' +
+    '&lt;/div&gt;' +
+    '&lt;div class=&quot;tree-children&quot; role=&quot;group&quot;&gt;&lt;/div&gt;';
+
+const staticHtmlPolicy = trustedTypes.createPolicy(
+    'foo-static', {createHTML: () =&gt; htmlString});
+
+// Unfortunately, a string argument to createHTML is required.
+// https://github.com/w3c/webappsec-trusted-types/issues/278
+document.body.innerHTML = staticHtmlPolicy.createHTML('');</pre>
+<p>This case also requires changes in C++, as we need to allow the <code>foo-static</code>
+Trusted Type policy (created above in <code>trustedTypes.createPolicy</code>) in the CSP
+header.</p>
+<pre data-language="c++">source-&gt;OverrideContentSecurityPolicy(
+    network::mojom::CSPDirectiveName::TrustedTypes,
+    &quot;trusted-types foo-static;&quot;);</pre>
+<h3 id="change-script-url-assignment-to-dangerous-sinks">Change script URL assignment to dangerous sinks</h3>
+<p>Example code:</p>
+<pre data-language="ts">const script = document.createElement('script');
+script.src = 'chrome://resources/foo.js';
+document.body.appendChild(script);</pre>
+<p>This can be converted to:</p>
+<pre data-language="ts">const staticUrlPolicy = trustedTypes.createPolicy(
+    'foo-js-static',
+    {createScriptURL: () =&gt; 'chrome://resources/foo.js'});
+
+const script = document.createElement('script');
+// Unfortunately, a string argument to createScriptURL is required.
+// https://github.com/w3c/webappsec-trusted-types/issues/278
+script.src = staticUrlPolicy.createScriptURL('');
+document.body.appendChild(script);</pre>
+<p>This case also requires changes in C++, as we need to allow the <code>foo-js-static</code>
+Trusted Type policy (created above in <code>trustedTypes.createPolicy</code>) in the CSP
+header.</p>
+<pre data-language="c++">source-&gt;OverrideContentSecurityPolicy(
+    network::mojom::CSPDirectiveName::TrustedTypes,
+    &quot;trusted-types foo-js-static;&quot;);</pre>
+<h2 id="how-to-disable-trusted-types">How to disable Trusted Types?</h2>
+<p>In case there is no way to support Trusted Types in a WebUI page, you can
+disable Trusted Types with following code:</p>
+<pre data-language="c++">source-&gt;DisableTrustedTypesCSP();</pre>
+<h2 id="how-to-add-a-test-for-trusted-types-on-a-webui-page">How to add a test for Trusted Types on a WebUI page?</h2>
+<p>You can add your WebUI page to <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/webui/chrome_url_data_manager_browsertest.cc;l=194;drc=de8ade0753244ff6d1ef20cb2a38fe292fe9ba0a">this list</a> and it will check
+for Trusted Types violations on your WebUI page.</p>
+<h2 id="sample-cls">Sample CLs</h2>
+<ol>
+<li><a href="https://crrev.com/c/2245937">Remove innerHTML usage in chrome://interstitials</a></li>
+<li><a href="https://crrev.com/c/2236992">Trusted Type various WebUI</a></li>
+<li><a href="https://crrev.com/c/2208950">Trusted Type WebRTC internals</a></li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webui/trusted_types_on_webui.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webui/trusted_types_on_webui.md</a>
+  </p>
+</div>

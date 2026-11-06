@@ -1,0 +1,140 @@
+<h1>Native Relocations</h1>
+<h2 id="what-are-they">What are they?</h2>
+<ul>
+<li>They tell the runtime linker a list of addresses to post-process after
+loading the executable into memory.</li>
+<li>There are several types of relocations, but &gt;99% of them are &quot;relative&quot;
+relocations and are created any time a global symbol or compile-time
+initialized static local is initialized with the address of something, and
+the compiler cannot optimize away the relocation (e.g. for pointers where
+not all uses are visible, or for values that are passed to functions that
+are not inlined).</li>
+</ul>
+<p>Examples of things that require relative relocations:</p>
+<pre data-language="C++">// Pointer to yourself.
+extern const void* const kUserDataKey = &amp;kUserDataKey;
+// Array of pointers.
+extern const char* const kMemoryDumpAllowedArgs[] = {&quot;dumps&quot;, nullptr};
+// Array of structs that contain one or more pointers.
+extern const std::string_view kStrings[] = {&quot;one&quot;, &quot;two&quot;};</pre>
+<p>Vtables are arrays of function pointers, and so require relative relocations.
+However, on some Chrome platforms we use a non-standard ABI that uses offsets
+rather than pointers in order to remove the relocations overhead
+(<a href="https://crbug.com/589384">crbug/589384</a>).</p>
+<h3 id="linux--android-relocations-elf-format">Linux &amp; Android Relocations (ELF Format)</h3>
+<ul>
+<li>Relocations are stored in sections named: <code>.rel.dyn</code>, <code>.rel.plt</code>,
+<code>.rela.dyn</code>, or <code>.rela.plt</code>.</li>
+<li>Relocations are stored in sections of type: <code>REL</code>, <code>RELA</code>, [<code>APS2</code>][APS2], or
+<a href="https://maskray.me/blog/2021-10-31-relative-relocations-and-relr"><code>RELR</code></a>.<ul>
+<li><code>REL</code> is default for arm32. It uses two words to per relocation: <code>address</code>,
+<code>flags</code>.</li>
+<li><code>RELA</code> is default for arm64. It uses three words per relocation: <code>address</code>,
+<code>flags</code>, <code>addend</code>.</li>
+<li><a href="https://maskray.me/blog/2021-10-31-relative-relocations-and-relr"><code>RELR</code></a> is what Android and [Chrome OS use]. It encodes only
+relative relocations and uses a bitmask to do so (which works well since
+all symbols that require relocations live in <code>.data.rel.ro</code>).</li>
+</ul>
+</li>
+</ul>
+<h3 id="windows-relocations-pe-format">Windows Relocations (PE Format)</h3>
+<ul>
+<li>For PE files, relocations are stored in the <a href="https://docs.microsoft.com/en-us/windows/win32/debug/pe-format#the-reloc-section-image-only"><code>.reloc</code> section</a>.</li>
+<li>Each relocation is stored using 2 bytes. Each <code>.reloc</code> section has a small
+overhead as well.</li>
+<li>64-bit executables have fewer relocations thanks to the ability to use
+RIP-relative (instruction-relative) addressing.</li>
+</ul>
+<h2 id="why-do-they-matter">Why do they matter?</h2>
+<h3 id="binary-size">Binary Size</h3>
+<ul>
+<li>On Linux, relocations are stored very inefficiently.<ul>
+<li>As of Oct 2019:<ul>
+<li>Chrome on Linux has a <code>.rela.dyn</code> section of more than 14MiB!</li>
+<li>With [<code>RELR</code>], this drops to 60kb.</li>
+<li>Chrome on Windows (x64) has <code>.relocs</code> sections that sum to 620KiB.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="memory-overhead">Memory Overhead</h3>
+<ul>
+<li>On Windows, relocations are applied by the kernel during page faults. There
+is therefore <a href="https://devblogs.microsoft.com/oldnewthing/20160413-00/?p=93301">almost no memory overhead</a> from relocations, as the memory they
+are applied to is still considered &quot;clean&quot; memory and shared between
+processes.</li>
+<li>On Linux and Android, memory with relocations cannot be loaded read-only and
+result in dirty memory. 99% of these symbols live in <code>.data.rel.ro</code>, which as
+of Oct 2019 is ~6.5MiB on Linux and ~2MiB on Android. <code>.data.rel.ro</code> is data
+that <em>would</em> have been put into <code>.rodata</code> and mapped read-only if not for the
+required relocations. The memory does not get written to after it&#39;s
+relocated, so the linker makes it read-only once relocations are applied (but
+by that point the damage is done and we have the dirty pages).<ul>
+<li>On Linux, we share this overhead between processes via the <a href="linux/zygote">zygote</a>.</li>
+<li><a href="android_native_libraries#relro-sharing">On Android</a>, we share this overhead between processes by
+loading the shared library at the same address in all processes, and then
+<code>mremap</code> onto shared memory to dedupe after-the-fact.</li>
+</ul>
+</li>
+</ul>
+<h3 id="start-up-time">Start-up Time</h3>
+<ul>
+<li>On Windows, relocations are applied just-in-time, and so their overhead is
+both small and difficult to measure.</li>
+<li>On other platforms, the runtime linker applies all relocations upfront.</li>
+<li>On a Pixel 4a, it&#39;s about 15ms.</li>
+<li>On Linux, it&#39;s <a href="linux/zygote">closer to 20ms</a>.</li>
+</ul>
+<h2 id="how-do-i-see-them">How do I see them?</h2>
+<pre data-language="sh"># For ELF files:
+third_party/llvm-build/Release+Asserts/bin/llvm-readelf --relocs out/Release/libmonochrome.so
+
+# For PE files:
+python tools\win\pe_summarize.py out\Release\chrome.dll</pre>
+<h2 id="can-i-avoid-them">Can I avoid them?</h2>
+<p>It&#39;s not practical to avoid them altogether, but there are times when you can be
+smart about them.</p>
+<p>For Example:</p>
+<pre data-language="c++">// The following uses 2 bytes of padding for each smaller string but creates no relocations.
+// Total size overhead: 4 * 5 = 20 bytes.
+const char kArr[][5] = {&quot;as&quot;, &quot;ab&quot;, &quot;asdf&quot;, &quot;fi&quot;};
+
+// The following requires no string padding, but uses 4 relocatable pointers.
+// Total size overhead:
+//   Linux 64-bit: (8 bytes per pointer + 24 bytes per relocation) * 4 entries + 14 bytes of char = 142 bytes
+//   Windows 64-bit: (8 bytes per pointer + 2 bytes per relocation) * 4 entries + 14 bytes of char = 54 bytes
+//   CrOS 64-bit: (8 bytes per pointer + ~0 bytes per relocation) * 4 entries + 14 bytes of char = ~46 bytes
+//   Android 32-bit: (4 bytes per pointer + ~0 bytes per relocation) * 4 entries + 14 bytes of char = ~30 bytes
+const char * const kArr2[] = {&quot;as&quot;, &quot;ab&quot;, &quot;asdf&quot;, &quot;fi&quot;};</pre>
+<p>Notes:</p>
+<ul>
+<li>String literals (but not char arrays) are de-duped with others in the binary,
+so it is possible that the second example above might use 14 fewer bytes.</li>
+<li>Not all string literals require relocations. Which ones require them depends
+on the ABI. Generally, All global variables that are initialized to the
+address of something require them.</li>
+</ul>
+<p>Here&#39;s a simpler example:</p>
+<pre data-language="c++">// No pointer, no relocation. Just 5 bytes of character data.
+extern const char kText[] = &quot;asdf&quot;;
+
+// Requires pointer, relocation, and character data.
+// In most cases there is no advantage to pointers for strings.
+// When not &quot;extern&quot;, the compiler can often figure out how to avoid the relocation.
+extern const char* const kText = &quot;asdf&quot;;</pre>
+<p>Another thing to look out for:</p>
+<ul>
+<li>Large data structures with relocations that you don&#39;t need random access to,
+or which are seldom needed.<ul>
+<li>For such cases, it might be better to store the data encoded and then
+decode when required.</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/native_relocations.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/native_relocations.md</a>
+  </p>
+</div>

@@ -1,0 +1,401 @@
+<h1>Chrome Media Router</h1>
+<h2 id="introduction">Introduction</h2>
+<p><em>TODO: Update with integration with Remote Playback API</em></p>
+<p>The media router is a component in Chrome responsible for matching clients that
+wish to render media or URLs (<em>media sources</em>) on devices and endpoints capable
+of rendering that content (<em>media sinks</em>). When a media source is linked with a
+<em>media sink</em>, a <em>media route</em> is created that allows two-way messaging between
+the source and the sink. The media route allows the application to negotiate a
+peer-to-peer media streaming session with the media sink via messaging (e.g.,
+via <a href="http://www.webrtc.org/">WebRTC</a> or <a href="https://cs.chromium.org/chromium/src/components/mirroring/">Cast Streaming</a>),
+aka &quot;mirroring.&quot; The media route can also be used to request the remote display
+to render a URL without an associated peer-to-peer media streaming session, aka
+&quot;flinging&quot;. The media route can be terminated at user or browser request,
+which denies access to the media sink from the application.</p>
+<p>The Web <a href="http://w3c.github.io/presentation-api/">Presentation API</a> allows a Web
+application to request display of Web content on a secondary (wired, or
+wireless) screen. The content may be rendered locally and streamed to the
+display or rendered remotely. The Web application controls the content by
+two-way messaging.</p>
+<p>Note that the non-Blink parts of the media router will be implemented only in
+desktop Chrome and ChromeOS. Presentation API functionality will be implemented
+in Chrome for Android using analogous platform components such as the <a href="https://developer.android.com/guide/topics/media/mediarouteprovider.html">Android
+Media Route Provider
+framework</a>.</p>
+<p><em>TODO: Add material on 1-UA mode, or add a separate document</em></p>
+<p>Offscreen rendering, capture, and streaming of WebContents (required for full
+Presentation API support) will be covered in a separate design document.</p>
+<h2 id="objectives">Objectives</h2>
+<p>The objectives of this project:</p>
+<ul>
+<li><p>Allow use of media sinks from a multitude of clients, including: Web
+applications via the Presentation API;
+Chrome apps; the browser itself; and the Chrome OS system shell.</p>
+</li>
+<li><p>Support mirroring locally rendered content to external screens, including
+on-screen and off-screen tabs, Chrome apps windows, and the system desktop.</p>
+</li>
+<li><p>Support &quot;flinging&quot; HTML5 documents to remote devices capable of rendering
+them.</p>
+</li>
+<li><p>Support the <a href="https://developers.google.com/cast/docs/reference/chrome/">Cast Chrome Sender
+SDK</a> on desktop and
+Android without any user installed extensions.</p>
+</li>
+<li><p>Allow new types of media sinks to be added to Chrome by implementing
+additional Media Route Providers.</p>
+</li>
+</ul>
+<p>The following are non-goals but may be objectives for future work:</p>
+<ul>
+<li><p>Multicast of local content to multiple sinks at once.</p>
+</li>
+<li><p>Support for third party media route providers in Javascript or
+run-time installation of media route providers.</p>
+</li>
+<li><p>Support for sinks that are not primarily intended to render media.</p>
+</li>
+</ul>
+<h2 id="overview">Overview</h2>
+<p>The media router consists of four distinct components:</p>
+<ol>
+<li><p>The Chrome Media Router is a browser service exposed in-process via C++ API
+and is exposed to other processes via a set of two Mojo interfaces: the
+Presentation interface and the Media Router API interface. Its job is to field
+requests from clients for media sink availability, media route
+construction/destruction, and media route control via messaging. It also
+controls the Media Router Dialog and delegates many functions to the Media
+Router component extension.</p>
+</li>
+<li><p><em>TODO: update</em> The Media Router extension is an external component extension
+responsible for direct interaction with media sinks. The component extension
+will initially support use of <a href="http://www.google.com/cast/">Cast</a> and
+<a href="http://www.dial-multiscreen.org/">DIAL</a> devices with more types of sinks to be
+added over time. The component extension interacts with the Chrome Media Router
+via the Media Router API Mojo service, and uses some chrome.* platform APIs,
+such as chrome.dial, chrome.cast.channel, and chrome.mdns to implement network
+level interaction with Cast and DIAL devices.</p>
+</li>
+<li><p>Users interact with the Chrome Media Router through the Media Router
+Dialog. This dialog allows users to choose the destination media sink
+for new media routes and view and stop active media routes. It may be pulled up
+by the user clicking the Cast icon in the browser toolbar, or at the request of
+a Web application via the Presentation API.  It is implemented in Views.</p>
+</li>
+<li><p>The PresentationService mojo interface acts as a bridge between the Chrome
+Media Router and the Blink implementations of the Presentation API (<a href="https://code.google.com/p/chromium/issues/detail?id=412331">launch
+bug</a>).</p>
+</li>
+</ol>
+<h2 id="architecture">Architecture</h2>
+<p>The following diagram illustrates the architecture of the components described above.</p>
+<p><em>TODO: update diagram</em></p>
+<p><a href="https://www.chromium.org/developers/design-documents/media-router/Chrome%20Media%20Router%20Architecture%20%281%29.png?attredirects=0"><img src="https://www.chromium.org/_/rsrc/1423182643815/developers/design-documents/media-router/Chrome%20Media%20Router%20Architecture%20%281%29.png" alt=""></a></p>
+<h3 id="chrome-media-router">Chrome Media Router</h3>
+<p>The Chrome Media Router is a browser-resident service that serves as a
+media-protocol-agnostic platform for parties interested in media routing. It
+provides its clients with a set of APIs for media routing related queries and
+operations, including:</p>
+<ul>
+<li><p>Register for notifications when a sink is available that can render a media
+source. (Media sources are represented as URIs and can represent local media
+or remotely hosted content.)</p>
+</li>
+<li><p>Request routing of media for that source, which will show the user the media
+router dialog to select a compatible sink. If the user selects a sink, the
+media route is returned to the application to allow it to control media
+playback.</p>
+</li>
+<li><p>Accept media control actions from the Media Router Dialog for an active media
+route and forwarding them to the associated route provider.</p>
+</li>
+<li><p>Send and receive arbitrary (string) messages between the application the media
+sink.</p>
+</li>
+<li><p>Terminate media routes, and notify the client and media route provider when
+that happens.</p>
+</li>
+</ul>
+<p>The Chrome Media Router, itself, does not directly interact with media
+sinks. <em>TODO: update</em> Instead it delegates these requests and responses to a
+media route provider in the component extension. The Chrome Media Router will
+contain bookkeeping of established routes, pending route requests, and other
+related resources, so it does not have to request this information from the
+route provider each time.</p>
+<p>The following pseudocode describes how a client of the Chrome Media Router
+(through its C++ API) would use it to initiate and control a media sharing
+session.</p>
+<h3 id="media-router-api-example">Media Router API Example</h3>
+<p><em>TODO: update or remove</em></p>
+<pre>MediaRouter* media_router = MediaRouterImpl::GetInstance();
+
+// Find out what screens are capable of rendering, e.g. www.youtube.com
+MediaSource youtube_src = MediaSource::ForPresentationUrl(&quot;http://www.youtube.com&quot;);
+
+// MyMediaSinksObserver should override MediaSinksObserver::OnSinksReceived to
+// handle updates to the list of screens compatible with youtube_src
+MediaSinksObserver* my_observer = new MyMediaSinksObserver(youtube_src);
+media_router-&gt;RegisterObserver(my_observer);
+
+// Ask the user to pick a screen from the list passed to my_observer and
+// capture the sink_id (code not shown)
+
+// Request routing of media for that source.  |callback| is passed a
+// MediaRouteResponse&amp; that contains a MediaRoute result if successful.
+media_router-&gt;StartRouteRequest(youtube_src, sink_id, callback);
+
+// The MediaRoute can be used to post messages to the sink.
+media_router-&gt;PostMessage(media_route.media_route_id, &quot;some data&quot;, &quot;optional_extra_data_json&quot;);
+
+// The MediaRoute can be closed which signals the sinkto terminate any remote
+// app or media streaming session.
+media_router-&gt;CloseRoute(media_route.media_route_id);`</pre>
+<p>The Media Router interacts with the component extension via a Mojo service, the
+Media Router API, that exposes functionality whose implementation is delegated
+to the extension.</p>
+<h3 id="media-router-api-mojo-interface">Media Router API Mojo Interface</h3>
+<p><em>TODO: Update or replace with link</em></p>
+<pre>// Interface for sending messages from the MediaRouter (MR) to the Media
+// Router Provider Manager (MRPM).
+
+interface MediaRouterApiClient {
+  // Signals the media route manager to route the media located
+  // at |source_urn| to |sink_id|.
+  RequestRoute(int64 request_id, string source, string sink_id);
+
+  // Signals the media route manager to close the route specified by |route_id|.
+  CloseRoute(string route_id);
+
+  // Signals the media route manager to start querying for sinks
+  // capable of displaying |source|.
+  AddMediaSinksQuery(string source);
+
+  // Signals the media route manager to stop querying for sinks
+  // capable of displaying |source|.
+  RemoveMediaSinksQuery(string source);
+
+  // Sends |message| with optional |extra_info_json| via the media route
+  // |media_route_id|.
+  // |extra_info_json| is an empty string if no extra info is provided.
+  PostMessage(string media_route_id, string message, string extra_info_json);
+};
+
+// Interface for sending messages from the MRPM to the MR.
+[Client=MediaRouterApiClient]
+interface MediaRouterApi {
+  // Called when the provider manager is ready.
+  OnProviderManagerReady(string extension_id);
+
+  // Called when the Media Route Manager receives a new list of sinks.
+  OnSinksReceived(string source,
+                  array&lt;MediaSink&gt; sinks,
+                  array&lt;MediaRoute&gt; routes);
+
+   // Called after a MediaRoute is established.
+  OnRouteResponseReceived(int64 request_id, MediaRoute route);
+
+  // Called when route establishment fails.
+  OnRouteResponseError(int64 request_id, string error_text);
+};</pre>
+<h3 id="media-router-component-extension">Media Router Component Extension</h3>
+<p><em>TODO: update to discuss in-browser MRPs and Mirroring Service</em></p>
+<p>The component extension manages discovery of and network interaction with
+individual media sinks. For the purposes of this discussion a sink is a
+LAN-connected device that speaks the Cast or DIAL protocol, but in theory it
+could be any other type of endpoint that supports media rendering and two-way
+messaging. The extension consists of three types of components:</p>
+<ul>
+<li><p>Media Route Providers: Each provider is a Javascript bundle that knows how to
+find and communicate with a specific type of media sink. It communicates
+with the media sink using HTTP/XHR or via device-specific network protocols
+(e.g., Cast Channel and Cast Streaming).</p>
+</li>
+<li><p>Media Route Provider Manager: This is responsible for dispatching requests
+from the Chrome Media Router to individual providers. It also registers
+providers on startup.</p>
+</li>
+<li><p>Mirroring Service: If a media source is requested that represents the tab or
+desktop contents, this service acts on the behalf of the application to
+initiate the mirroring session. This is handled internally to the component
+extension and is not exposed to the rest of the browser, it appears to be
+just another media route.</p>
+</li>
+</ul>
+<p>The component extension is written in JavaScript and includes code for multiple
+media route providers.  Initially Media Route Providers will be implemented for
+Cast and DIAL devices with others to follow. Over time media route providers
+that do not rely on proprietary protocols will be implemented in the Chromium
+repository.</p>
+<p>As an external component, the extension is installed on the initial run of the
+browser. It is built around an event page so it registers itself with the Media
+Router, registers itself with discovery APIs to be notified of display
+availability, and then suspends. The component extension will only be active
+when there are applications with pending sink availability requests or media
+routes, or when there is active network traffic between the extension and a
+media sink.</p>
+<p>There are several modules to the extension that are loaded on-demand. The main
+event page bundles are a few hundred kb. The extension is updated on the Chrome
+release cycle with a branch made a week or two after the Chrome branch point.</p>
+<h2 id="tabdesktop-mirroring">Tab/Desktop Mirroring</h2>
+<p><em>TODO: update with discussion of C++ MirroringService</em></p>
+<p>Tab and desktop mirroring will request routing of a media source with URN like
+urn:google:tab:3 representing tab contents. When the component extension
+receives a request to route this source, the media route provider manager will
+query route providers to enumerate sinks that can render streamed tab
+contents. Once a sink is selected by the user, the mirroring service will create
+the appropriate MediaStream using the chrome.tabCapture extension API. The
+MediaStream will then be passed to a Cast Streaming or WebRTC session depending
+on the preferred protocol of the selected sink. When the media route is
+terminated, the associated streaming session and media capture are also
+terminated. A similar approach will be used for desktop mirroring but using
+chrome.desktopCapture instead.</p>
+<h1 id="presentation-api">Presentation API</h1>
+<p><em>TODO: Discuss 1-UA mode</em>
+<em>TODO: Update for Onion Soup</em></p>
+<p>Media routing of Web content will primarily be done through the Presentation
+API. Some media sinks (e.g. Cast) can render a subset of Web content natively,
+or render an equivalent app experience (e.g., via DIAL). For generic Web
+documents, we plan on rendering it in an offscreen WebContents and then using
+the Tab Mirroring approach outlined above. The design of the offscreen rendering
+capability will be added later to this document.</p>
+<p>The Presentation API implementation in Blink will live in content/ and will
+operate on the frame level. It will delegate the calls to the embedder&#39;s Media
+Router implementation (Android Media Router / Chrome Media Router for Android /
+Chrome, respectively) via a common PresentationServiceDelegate interface. A
+draft Mojo interface follows (not yet complete):</p>
+<h2 id="presentationservice-mojo-interface">PresentationService mojo interface</h2>
+<p><em>TODO: Update or replace with link</em></p>
+<pre>interface PresentationService {
+  // Returns the last screen availability state if it’s changed since the last
+  // time the method was called. The client has to call this method again when
+  // handling the result (provided via Mojo callback) to get the next update
+  // about the availability status.
+  // May start discovery of the presentation screens. The implementation might
+  // stop discovery once there are no active calls to GetScreenAvailability.
+  // |presentation_url| can be specified to help the implementation to filter
+  // out incompatible screens.
+  GetScreenAvailability(string? presentation_url) =&gt; (bool available);
+
+  // Called when the frame no longer listens to the
+  // |availablechange| event.
+   OnScreenAvailabilityListenerRemoved();
+};</pre>
+<p><em>TODO: Update table with current flow, or remove this section</em></p>
+<p>Here is how the presentation API will roughly map to Chrome Media Router API:</p>
+<p><strong>Presentation API</strong></p>
+<p><strong>Chrome Media Router</strong></p>
+<p>Adding onavailablechange listener</p>
+<p>RegisterObserver(), with result propagated back to the RenderFrame / Presentation API.</p>
+<p>startSession</p>
+<p>Opens Media Router Dialog (via MediaRouterDialogController) -&gt; User action -&gt; StartRouteRequest()</p>
+<p>joinSession</p>
+<p>StartRouteRequest()</p>
+<p>postMessage</p>
+<p>PostMessage()</p>
+<p>close</p>
+<p>CloseRoute()</p>
+<p>Adding onmessage listener</p>
+<p>RegisterMessageObserver() (tentative)</p>
+<p>Adding onstatechange listener</p>
+<p>RegisterRouteStateChangeObserver() (tentative)</p>
+<h2 id="media-router-dialog">Media Router Dialog</h2>
+<p>End user control of media routing is done through the Media Router Dialog. The
+media router dialog is implemented in Views.</p>
+<p>The Media Router Dialog is activated by clicking on the Cast icon, which is
+always available to the user. The Cast icon appears in the toolbar action menu
+when there is an active media route, or when the user chooses to pin the icon
+there permanently.</p>
+<hr>
+<p><em>TODO: Update screenshot</em></p>
+<p><a href="https://www.chromium.org/developers/design-documents/media-router/media_router_overflow.jpg?attredirects=0"><img src="https://www.chromium.org/_/rsrc/1418943120195/developers/design-documents/media-router/media_router_overflow.jpg" alt=""></a></p>
+<p>Clicking on the Cast icon brings up a menu of available media sinks that are
+compatible with the current content. For Web documents not using the
+Presentation API, these will include sinks that can render tab or desktop
+capture. For Web documents, it will include media sinks compatible with the URL
+requested to be presented through the Presentation API.</p>
+<hr>
+<p><em>TODO: Update screenshot</em></p>
+<p><a href="https://www.chromium.org/developers/design-documents/media-router/media_router_screen_selector.jpg?attredirects=0"><img src="https://www.chromium.org/_/rsrc/1418944081776/developers/design-documents/media-router/media_router_screen_selector.jpg" alt=""></a></p>
+<hr>
+<h2 id="offscreen-rendering">Offscreen Rendering</h2>
+<p><em>TODO: Add notes about off-screen rendering.</em></p>
+<h1 id="security">Security</h1>
+<p><em>TODO: Update to discuss sandboxing of in-browser MRPs.</em></p>
+<p>The entire project should be security reviewed from a holistic and architectural
+perspective. Specific security-related aspects:</p>
+<ul>
+<li>The Chrome Media Router will be designed to have a minimal processing of the
+URIs and messages passed through it (perhaps only checking for syntactic
+validity).</li>
+<li>The Media Router Dialog will allow the MRPs to inject custom
+content into it, so for example, the inline controls for a game can differ
+from those for a movie. This content will be rendered out-of-process in an
+<extensionview> to prevent any escalation of privileges from compromised
+content.</li>
+<li>The individual platform APIs used by the component extension MRPs
+(chrome.dial, chrome.mdns, chrome.cast.channel, chrome.cast.streaming) have
+been security reviewed previously.</li>
+</ul>
+<h1 id="contact">Contact</h1>
+<ul>
+<li><a href="mailto:media-dev@chromium.org">media-dev@chromium.org</a></li>
+</ul>
+<h1 id="code-location">Code location</h1>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>chrome/browser/media/router</code></td>
+<td>Main implementation, in-browser MRPs</td>
+</tr>
+<tr>
+<td><code>chrome/common/media_router</code></td>
+<td>Mojo definitions, shared impl</td>
+</tr>
+<tr>
+<td><code>chrome/browser/ui/media_router/</code></td>
+<td>Media Router icon, dialog</td>
+</tr>
+<tr>
+<td><code>chrome/browser/ui/views/media_router/</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>content/browser/presentation/</code></td>
+<td>Browser impl of Presentation API</td>
+</tr>
+<tr>
+<td><code>third_party/blink/renderer/modules/presentation/</code></td>
+<td>Blink impl of Presentaton API</td>
+</tr>
+</tbody></table>
+<h1 id="history">History</h1>
+<table>
+<thead>
+<tr>
+<th>Date</th>
+<th>Author</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>6-Feb-2015</td>
+<td><a href="mailto:mfoltz@chromium.org">mfoltz@chromium.org</a></td>
+<td>Initial publication</td>
+</tr>
+<tr>
+<td>8-Jul-2019</td>
+<td><a href="mailto:mfoltz@chromium.org">mfoltz@chromium.org</a></td>
+<td>Converted to markdown, obsolete material removed.</td>
+</tr>
+</tbody></table>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/media/media_router.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/media/media_router.md</a>
+  </p>
+</div>

@@ -1,0 +1,232 @@
+<h1>Android Testing in Chromium</h1>
+<h2 id="test-types">Test Types</h2>
+<ul>
+<li><strong><a href="android_gtests">gtests</a></strong>: For writing unit tests in C++. Most tests are cross-platform.</li>
+<li><strong>Browser Tests</strong>: Built on top of gtest. Used to write integration tests.</li>
+<li><strong><a href="android_robolectric_tests">Robolectric</a></strong>: JUnit tests that run on the host machine by emulating (or
+mocking) Android APIs.</li>
+<li><strong><a href="android_instrumentation_tests">Instrumentation Tests</a></strong>: JUnit tests that run on devices / emulators.<ul>
+<li><strong>Unit Instrumentation Tests</strong>: Unit tests that do not require
+initializing the Content layer. These use <a href="https://source.chromium.org/chromium/chromium/src/+/main:base/test/android/javatests/src/org/chromium/base/test/BaseActivityTestRule.java">BaseActivityTestRule</a> often
+using <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/android/javatests/src/org/chromium/ui/test/util/BlankUiTestActivity.java">BlankUiTestActivity</a>.</li>
+<li><strong>Integration Instrumentation Tests</strong>: Instrumentation tests that require
+initializing the Content layer to test a certain feature in the end-to-end
+flow. These typically use more specialized test rules such as
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/shell/android/javatests/src/org/chromium/content_shell_apk/ContentShellActivityTestRule.java">ContentShellActivityTestRule</a> or <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/test/android/javatests/src/org/chromium/chrome/test/ChromeActivityTestRule.java">ChromeActivityTestRule</a>.</li>
+</ul>
+</li>
+</ul>
+<h2 id="device-setup">Device Setup</h2>
+<h3 id="physical-device-setup">Physical Device Setup</h3>
+<h4 id="root-access">Root Access</h4>
+<p>Running tests requires root access, which requires using a userdebug build on
+your device.</p>
+<p>To use a userdebug build, see
+<a href="https://source.android.com/setup/build/running.html">Running Builds</a>. Googlers
+can refer to <a href="https://goto.google.com/flashdevice">this page</a>.</p>
+<p>If you can&#39;t run &quot;adb root&quot;, you will get an error when trying to install
+the test APKs like &quot;adb: error: failed to copy&quot; and
+&quot;remote secure_mkdirs failed: Operation not permitted&quot; (use &quot;adb unroot&quot; to
+return adb to normal).</p>
+<h4 id="adb-debugging">ADB Debugging</h4>
+<p>The adb executable exists within the Android SDK:</p>
+<pre data-language="shell">third_party/android_sdk/public/platform-tools/adb</pre>
+<p>In order to allow the ADB to connect to the device, you must enable USB
+debugging:</p>
+<ul>
+<li>Developer options are hidden by default. To unhide them:<ul>
+<li>Go to &quot;About phone&quot;</li>
+<li>Tap 10 times on &quot;Build number&quot;</li>
+<li>The &quot;Developer options&quot; menu will now be available.</li>
+<li>Check &quot;USB debugging&quot;.</li>
+<li>Un-check &quot;Verify apps over USB&quot;.</li>
+</ul>
+</li>
+</ul>
+<h4 id="screen">Screen</h4>
+<p>You <strong>must</strong> ensure that the screen stays on while testing: <code>adb shell svc power stayon usb</code> Or do this manually on the device: Settings -&gt; Developer options -&gt;
+Stay Awake.</p>
+<p>If this option is greyed out, stay awake is probably disabled by policy. In that
+case, get another device or log in with a normal, unmanaged account (because the
+tests will break in exciting ways if stay awake is off).</p>
+<h4 id="disable-verify-apps">Disable Verify Apps</h4>
+<p>You may see a dialog like <a href="http://www.samsungmobileusa.com/simulators/ATT_GalaxyMega/mobile/screens/06-02_12.jpg">this
+one</a>,
+which states, <em>Google may regularly check installed apps for potentially harmful
+behavior.</em> This can interfere with the test runner. To disable this dialog, run:</p>
+<pre data-language="shell">adb shell settings put global package_verifier_enable 0</pre>
+<h3 id="using-emulators">Using Emulators</h3>
+<p>Running tests on emulators is the same as <a href="#Running-Tests">on device</a>. Refer to
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_emulator.md">android_emulator.md</a> for setting up emulators.</p>
+<h2 id="building-tests">Building Tests</h2>
+<p>If you&#39;re adding a new test file, you&#39;ll need to explicitly add it to a gn
+target. If you&#39;re adding a test to an existing file, you won&#39;t need to make gn
+changes, but you may be interested in where your test winds up. In either case,
+here are some guidelines for where a test belongs:</p>
+<h3 id="c">C++</h3>
+<p>C++ test files typically belong in <code>&lt;top-level directory&gt;_unittests</code> (e.g.
+<code>base_unittests</code> for <code>//base</code>). There are a few exceptions -- browser tests are
+typically their own target (e.g. <code>content_browsertests</code> for <code>//content</code>, or
+<code>browser_tests</code> for <code>//chrome</code>), and some unit test suites are broken at the
+second directory rather than the top-level one.</p>
+<h3 id="java">Java</h3>
+<p>Java test files vary a bit more widely than their C++ counterparts:</p>
+<ul>
+<li>Instrumentation test files -- i.e., tests that will run on a device --
+typically belong in either <code>&lt;top-level directory&gt;_javatests</code> or <code>&lt;top-level directory&gt;_test_java</code>. Regardless, they&#39;ll wind up getting packaged into one
+of a few test APKs:<ul>
+<li><code>webview_instrumentation_test_apk</code> for anything in <code>//android_webview</code></li>
+<li><code>content_shell_test_apk</code> for anything in <code>//content</code> or below</li>
+<li><code>chrome_public_test_apk</code> for most things in <code>//chrome</code></li>
+</ul>
+</li>
+<li>JUnit or Robolectric test files -- i.e., tests that will run on the host --
+typically belong in <code>&lt;top-level directory&gt;_junit_tests</code> (e.g.
+<code>base_junit_tests</code> for <code>//base</code>), though here again there are cases
+(particularly in <code>//components</code>) where suites are split at the second
+directory rather than the top-level one.</li>
+</ul>
+<p>Once you know what to build, just do it like you normally would build anything
+else, e.g.: <code>ninja -C out/Release chrome_public_test_apk</code></p>
+<h3 id="determining-test-target">Determining Test Target</h3>
+<p>If you do not know what target a test file belongs to, you can use
+<code>//tools/autotest.py</code> to figure it out fo you:</p>
+<pre data-language="sh"># Builds relevant test target and then runs the test:
+tools/autotest.py -C &lt;output directory&gt; TestClassName</pre>
+<h2 id="running-tests">Running Tests</h2>
+<p>All functional tests should be runnable via the wrapper scripts generated at
+build time:</p>
+<pre data-language="sh">&lt;output directory&gt;/bin/run_&lt;target_name&gt; [options]</pre>
+<p>Note that tests are sharded across all attached devices unless explicitly told
+to do otherwise by <code>-d/--device</code>.</p>
+<p>The commands used by the buildbots are printed in the logs. Look at
+<a href="https://build.chromium.org/">https://build.chromium.org/</a> to duplicate the same test command as a particular
+builder.</p>
+<h3 id="listing-available-tests">Listing Available Tests</h3>
+<p>Use <code>--list-tests</code> to list what tests are available.</p>
+<pre data-language="sh"># Prints out all available tests:
+&lt;output directory&gt;/bin/run_&lt;target_name&gt; --list-tests
+
+# Prints out all available tests that match a filter:
+&lt;output directory&gt;/bin/run_&lt;target_name&gt; --list-tests -f &quot;*MyFilter*&quot;</pre>
+<h3 id="install_failed_container_error-or-install_failed_insufficient_storage">INSTALL_FAILED_CONTAINER_ERROR or INSTALL_FAILED_INSUFFICIENT_STORAGE</h3>
+<p>If you see this error when the test runner is attempting to deploy the test
+binaries to the AVD emulator, you may need to resize your userdata partition
+with the following commands:</p>
+<pre data-language="shell"># Resize userdata partition to be 1G
+resize2fs android_emulator_sdk/sdk/system-images/android-25/x86/userdata.img 1G
+
+# Set filesystem parameter to continue on errors; Android doesn't like some
+# things e2fsprogs does.
+tune2fs -e continue android_emulator_sdk/sdk/system-images/android-25/x86/userdata.img</pre>
+<h3 id="adbcommandfailederror-failed-to-stat-remote-object">AdbCommandFailedError: failed to stat remote object</h3>
+<p>There&#39;s a known issue (<a href="https://crbug.com/1094062">https://crbug.com/1094062</a>) where the unit test binaries can fail on
+Android R and later: if you see this error, try rerunning on an Android version
+with API level &lt;= 29 (Android &lt;= Q).</p>
+<h2 id="symbolizing-crashes">Symbolizing Crashes</h2>
+<p>Crash stacks are logged and can be viewed using <code>adb logcat</code>. To symbolize the
+traces, define <code>CHROMIUM_OUTPUT_DIR=$OUTDIR</code> where <code>$OUTDIR</code> is the argument you
+pass to <code>ninja -C</code>, and pipe the output through
+<code>third_party/android_platform/development/scripts/stack</code>. If
+<code>$CHROMIUM_OUTPUT_DIR</code> is unset, the script will search <code>out/Debug</code> and
+<code>out/Release</code>. For example:</p>
+<pre data-language="shell"># If you build with
+ninja -C out/Debug chrome_public_test_apk
+# You can run:
+adb logcat -d | third_party/android_platform/development/scripts/stack
+
+# If you build with
+ninja -C out/android chrome_public_test_apk
+# You can run:
+adb logcat -d | CHROMIUM_OUTPUT_DIR=out/android third_party/android_platform/development/scripts/stack
+# or
+export CHROMIUM_OUTPUT_DIR=out/android
+adb logcat -d | third_party/android_platform/development/scripts/stack</pre>
+<h2 id="robolectric-tests">Robolectric Tests</h2>
+<p>JUnit tests are Java unittests running on the host instead of the target device.
+They are faster to run and therefore are recommended over instrumentation tests
+when possible.</p>
+<p>The JUnits tests are usually following the pattern of <em>target</em>_junit_tests,
+for example, <code>content_junit_tests</code> and <code>chrome_junit_tests</code>.</p>
+<p>When adding a new JUnit test, the associated <code>BUILD.gn</code> file must be updated.
+For example, adding a test to <code>chrome_junit_tests</code> requires to update
+<code>chrome/android/BUILD.gn</code>.</p>
+<pre data-language="shell"># Build the test suite.
+ninja -C out/Default chrome_junit_tests
+
+# Run the test suite.
+out/Default/bin/run_chrome_junit_tests
+
+# Run a subset of tests. You might need to pass the package name for some tests.
+out/Default/bin/run_chrome_junit_tests -f &quot;org.chromium.chrome.browser.media.*&quot;</pre>
+<h3 id="debugging">Debugging</h3>
+<p>Similar to <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_debugging_instructions.md#debugging-java">debugging apk targets</a>:</p>
+<pre data-language="shell">out/Default/bin/run_chrome_junit_tests --wait-for-java-debugger
+out/Default/bin/run_chrome_junit_tests --wait-for-java-debugger  # Specify custom port via --debug-socket=9999</pre>
+<h2 id="gtests">Gtests</h2>
+<pre data-language="shell"># Build a test suite
+ninja -C out/Release content_unittests
+
+# Run a test suite
+out/Release/bin/run_content_unittests [-vv]
+
+# Run a subset of tests and enable some &quot;please go faster&quot; options:
+out/Release/bin/run_content_unittests --fast-local-dev -f &quot;ByteStreamTest.*&quot;</pre>
+<h2 id="instrumentation-tests">Instrumentation Tests</h2>
+<p>In order to run instrumentation tests, you must leave your device screen ON and
+UNLOCKED. Otherwise, the test will timeout trying to launch an intent.
+Optionally you can disable screen lock under Settings -&gt; Security -&gt; Screen Lock
+-&gt; None.</p>
+<p>Next, you need to build the app, build your tests, and then run your tests
+(which will install the APK under test and the test APK automatically).</p>
+<p>Examples:</p>
+<p>ContentShell tests:</p>
+<pre data-language="shell"># Build the tests:
+ninja -C out/Release content_shell_test_apk
+
+# Run the test suite:
+out/Release/bin/run_content_shell_test_apk [-vv]
+
+# Run a subset of tests and enable some &quot;please go faster&quot; options:
+out/Release/bin/run_content_shell_test_apk --fast-local-dev -f &quot;*TestClass*&quot;</pre>
+<p>Android WebView tests:</p>
+<p>See <a href="https://chromium.googlesource.com/chromium/src/+/main/android_webview/docs/test-instructions.md">WebView&#39;s instructions</a>.</p>
+<p>In order to run a subset of tests, use -f to filter based on test class/method
+or -A/-E to filter using annotations.</p>
+<p>More Filtering examples:</p>
+<pre data-language="shell"># Run a specific test class
+out/Debug/bin/run_content_shell_test_apk -f &quot;AddressDetectionTest.*&quot;
+
+# Run a specific test method
+out/Debug/bin/run_content_shell_test_apk -f AddressDetectionTest#testAddressLimits
+
+# Run a subset of tests by size (Smoke, SmallTest, MediumTest, LargeTest,
+# EnormousTest)
+out/Debug/bin/run_content_shell_test_apk -A Smoke
+
+# Run a subset of tests by annotation, such as filtering by Feature
+out/Debug/bin/run_content_shell_test_apk -A Feature=Navigation</pre>
+<p>You might want to add stars <code>*</code> to each as a regular expression, e.g.
+<code>*</code>AddressDetectionTest<code>*</code></p>
+<h3 id="debugging-1">Debugging</h3>
+<p>Similar to <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/android_debugging_instructions.md#debugging-java">debugging apk targets</a>:</p>
+<pre data-language="shell">out/Debug/bin/run_content_shell_test_apk --wait-for-java-debugger</pre>
+<h3 id="deobfuscating-java-stacktraces">Deobfuscating Java Stacktraces</h3>
+<p>If running with <code>is_debug=false</code>, Java stacks from logcat need to be fixed up:</p>
+<pre data-language="shell">build/android/stacktrace/java_deobfuscate.py out/Release/apks/ChromePublicTest.apk.mapping &lt; stacktrace.txt</pre>
+<p>Any stacks produced by test runner output will already be deobfuscated.</p>
+<h2 id="running-blink-web-tests">Running Blink Web Tests</h2>
+<p>See <a href="web_tests">Web Tests</a>.</p>
+<h2 id="running-telemetry-perf-tests">Running Telemetry (Perf) Tests</h2>
+<p>See <a href="https://chromium.googlesource.com/catapult/+/HEAD/telemetry/README.md">Telemetry</a>.</p>
+<h2 id="running-gpu-tests">Running GPU tests</h2>
+<p>(e.g. the &quot;Android Debug (Nexus 7)&quot; bot on the chromium.gpu waterfall)</p>
+<p>See <a href="https://www.chromium.org/developers/testing/gpu-testing">https://www.chromium.org/developers/testing/gpu-testing</a> for details. Use
+<code>--browser=android-content-shell</code>. Examine the stdio from the test invocation on
+the bots to see arguments to pass to <code>src/content/test/gpu/run_gpu_test.py</code>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_test_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_test_instructions.md</a>
+  </p>
+</div>

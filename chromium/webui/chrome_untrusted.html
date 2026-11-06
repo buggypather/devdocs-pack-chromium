@@ -1,0 +1,124 @@
+<h1>chrome-untrusted:// FAQ</h1>
+<h2 id="what-is-untrustworthy-content">What is “untrustworthy content”?</h2>
+<p>In this context, untrustworthy content is content that comes from untrustworthy sources, e.g. an image downloaded from the internet, a PDF file provided by the user, etc. Code is also considered “content” in this case.</p>
+<p>In general, content coming from the network is considered untrustworthy, regardless of the source and transport protocol.</p>
+<p>Examples of trustworthy content include, the contents of <code>chrome://version</code> which are populated entirely within the browser process, the contents of <code>chrome://about</code> which is a hardcoded list of URLs, etc.</p>
+<h2 id="what-is-chrome-untrusted">What is chrome-untrusted://?</h2>
+<p>It is a new scheme which can be used to serve resources bundled with Chrome and that process untrustworthy content. It has the usual protections provided to <code>chrome://</code>, e.g. process isolation, but it won’t be default-granted extra capabilities that are default-granted to <code>chrome://</code>.</p>
+<p>The <code>-untrusted</code> suffix indicates that the <a href="webui_explainer">WebUI</a> processes untrustworthy content. For example, rendering an image provided by users, parsing a PDF file, etc.</p>
+<p>The <code>-untrusted</code> suffix does not mean the web page is designed to do malicious things, or users should not trust it. Instead, the <code>-untrusted</code> suffix is to signal to us, Chromium developers, that this page will process untrustworthy content, and should be assumed to be compromised, much like an ordinary renderer process.</p>
+<h2 id="why-do-we-need-chrome-untrusted">Why do we need chrome-untrusted://?</h2>
+<h3 id="separate-fully-trusted-webuis-and-untrustworthy-ones">Separate fully trusted WebUIs and untrustworthy ones</h3>
+<p><code>chrome-untrusted://</code> acts as a technical and semantic boundary between fully-trusted WebUIs and untrustworthy WebUIs.</p>
+<p>Technical because developers can use <code>chrome-untrusted://</code> to separate their WebUIs into two origins e.g. <code>chrome://media-app</code> and <code>chrome-untrusted://media-app</code> with access to different capabilities, resources, etc.</p>
+<p>Semantic because it indicates to chromium developers and security reviewers that a WebUI is meant to process untrustworthy content and shouldn’t be granted dangerous capabilities.</p>
+<h3 id="chrome-is-too-powerful-to-process-untrustworthy-content">chrome:// is too powerful to process untrustworthy content</h3>
+<p>Historically, <code>chrome://</code> pages have been built with the assumption that they are an extension to the browser process, so <code>chrome://</code> web pages are granted special capabilities not granted to ordinary web pages. For example, all <code>chrome://</code> pages can use Web APIs like camera and mic without requesting permission.</p>
+<p>Some WebUIs would like to be able to process untrustworthy content, but granting these capabilities to a <code>chrome://</code> page would violate the <a href="../security/rule-of-2">rule of 2</a>:</p>
+<ul>
+<li>a <code>chrome://</code> page is considered an extension to the browser process</li>
+<li>the renderer is written in an unsafe programming language (C++).</li>
+<li>running in an privileged context:</li>
+</ul>
+<p>By using <code>chrome-untrusted://</code> we put the untrustworthy content into a sandboxed and non-privileged environment (an ordinary renderer, with no dangerous capabilities). This brings us back to safety, a compromised <code>chrome-untrusted://</code> page is no worse than an ordinary web page.</p>
+<p><code>chrome-untrusted://</code> re-uses a lot of the code that backs <code>chrome://</code> pages, so it doesn’t impose a big maintenance burden; even then, our hope is to one day remove all default granted capabilities based on the <code>chrome://</code> scheme to the point that the difference between <code>chrome://</code> and <code>chrome-untrusted://</code> WebUIs is just a semantic one (see previous point).</p>
+<h2 id="when-is-it-appropriate-to-use-chrome-untrusted">When is it appropriate to use chrome-untrusted://?</h2>
+<p><code>chrome-untrusted://</code> is usually used for implementing privilege separation so that processing untrustworthy content e.g. parsing JSON, displaying an image, running code from the network, etc. is done in an unprivileged context.</p>
+<p>Today, the main use case is when we want to have code that ships with Chrome work with untrustworthy content that comes over the network.</p>
+<h2 id="can-i-use-js_library_from_url">Can I use $js_library_from_url?</h2>
+<p>Yes. “Content” in this context also includes code.</p>
+<h2 id="do-we-grant-any-extra-capabilities-to-chrome-untrusted">Do we grant any extra capabilities to chrome-untrusted://?</h2>
+<p>Yes, but not by default and with some caveats.</p>
+<p>Any team that requires extra capabilities granted to <code>chrome-untrusted://</code> should consult with the security team to ensure they are non-dangerous. In this context, we consider non-dangerous any API that we would expose to the renderer process, e.g. UMA.</p>
+<p>We recommend using Mojo to expose APIs to <code>chrome-untrusted://</code>. Mojo for <code>chrome-untrusted://</code> works similarly to how it works for <code>chrome://</code> with a few key differences:</p>
+<ul>
+<li>Unlike <code>chrome://</code> pages, <code>chrome-untrusted://</code> pages don&#39;t get access to all renderer exposed Mojo interfaces by default. Use <code>PopulateChromeWebUIFrameInterfaceBrokers</code> to expose WebUI specific interfaces to your WebUI. See <a href="https://crrev.com/c/3138688/5/chrome/browser/chrome_browser_interface_binders.cc">this CL</a> for example.</li>
+<li>The exposed interface has a different threat model: a compromised <code>chrome-untrusted://</code> page could try to exploit the interface (e.g. sending malformed messages, closing the Mojo pipe).</li>
+</ul>
+<p>When exposing extra capabilities to <code>chrome-untrusted://</code>, keep in mind:</p>
+<ul>
+<li>Don&#39;t grant any capabilities that we wouldn&#39;t grant to a regular renderer. For example, don&#39;t expose unrestricted access to Bluetooth devices, but expose a method that opens a browser-controlled dialog where the user chooses a device.</li>
+<li>What you received (from the WebUI page) is untrustworthy. You must sanitize and verify its content before processing.</li>
+<li>What you send (to the WebUI page) could be exfiltrated to the Web. Don&#39;t send sensitive information (e.g. user credentials). Only send what you actually need.</li>
+<li>The difference in Mojo interface lifetimes could lead to use-after-free bugs (e.g. a page reloads itself when it shouldn&#39;t). We recommend you create and reinitialize the interface on each page load (using <a href="https://source.chromium.org/chromium/chromium/src/+/main:content/public/browser/web_ui_controller.h;l=54?q=WebUIPrimaryPageChanged&amp;ss=chromium">WebUIPrimaryPageChanged</a>), and have the JavaScript bind the interface on page load.</li>
+</ul>
+<p>We also recommend using Mojo to communicate between parent and child frames whenever possible. See <a href="https://crrev.com/c/3222406">this CL</a> for example.</p>
+<p>You should only use <code>postMessage()</code> when transferring objects unsupported by Mojo. For example, Media App uses <code>postMessage()</code> to pass a read-only <a href="https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API"><code>FileSystemHandle</code></a> file handle to <code>chrome-untrusted://media-app</code> from its parent <code>chrome://media-app</code>.</p>
+<p>We encourage teams to engage with <a href="https://source.chromium.org/chromium/chromium/src/+/main:ipc/SECURITY_OWNERS">SECURITY_OWNERS</a> early and get the reviews required.</p>
+<h2 id="can-chrome-untrusted-be-the-main-document-or-does-it-need-to-be-embedded-in-a-chrome-page">Can chrome-untrusted:// be the main document or does it need to be embedded in a <code>chrome://</code> page?</h2>
+<p>Yes, <code>chrome-untrusted://</code> can be the main document, although the most common case is for a <code>chrome://</code> page to embed a <code>chrome-untrusted://</code> subframe.</p>
+<p>That said, the <code>chrome-untrusted://</code> scheme is an implementation detail of the WebUI and should never be shown to users. This should be factored into account when deciding whether or not to use <code>chrome-untrusted://</code> as the main document.</p>
+<h2 id="how-do-i-use-chrome-untrusted">How do I use chrome-untrusted://?</h2>
+<h3 id="create-a-standalone-chrome-untrusted-webui">Create a standalone chrome-untrusted:// WebUI</h3>
+<ol>
+<li>Create a class overriding <code>ui::WebUIConfig</code> and another one overriding <code>ui::UntrustedWebUIController</code></li>
+</ol>
+<p><code>WebUIConfig</code> contains properties for the <code>chrome-untrusted://</code> page i.e. the host and scheme. In the future, this might also contain other properties like permissions or resources.</p>
+<p><code>UntrustedWebUIController</code> register the resources for the page.</p>
+<pre data-language="cpp">const char kUntrustedExampleHost[] = &quot;untrusted-example&quot;;
+const char kUntrustedExampleURL[] = &quot;chrome-untrusted://untrusted-example&quot;;
+
+class UntrustedExampleUIConfig : public content::WebUIConfig {
+ public:
+  UntrustedExampleUIConfig()
+    // Set scheme and host.
+    : WebUIConfig(content::kChromeUIUntrustedScheme, kUntrustedExampleHost) {}
+  ~UntrustedExampleUIConfig() override = default;
+
+  std::unique_ptr&lt;content::WebUIController&gt; CreateWebUIController(
+      content::WebUI* web_ui) override {
+    return std::make_unique&lt;UntrustedExampleUI&gt;(web_ui);
+  }
+};
+
+class UntrustedExampleUI : public ui::UntrustedWebUIController {
+ public:
+  UntrustedExampleUI::UntrustedExampleUI(content::WebUI* web_ui)
+    : ui::UntrustedWebUIController(web_ui) {
+
+    // Create a URLDataSource and add resources.
+    auto* untrusted_source =
+      content::WebUIDataSource::CreateAndAdd(
+          web_ui-&gt;GetWebContents()-&gt;GetBrowserContext(), kUntrustedExampleURL);
+    untrusted_source-&gt;AddResourcePath(...);
+  }
+
+  UntrustedExampleUI(const UntrustedExampleUI&amp;) = delete;
+  UntrustedExampleUI&amp; operator=(const UntrustedExampleUI&amp;) = delete;
+
+  UntrustedExampleUI::~UntrustedExampleUI() = default;
+};</pre>
+<ol start="2">
+<li>Register the WebUIConfig</li>
+</ol>
+<p>Add the <code>WebUIConfig</code> to the appropriate list of WebUIConfigs in <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/webui/chrome_untrusted_web_ui_configs.cc"><code>chrome_untrusted_web_ui_configs</code></a>.</p>
+<pre data-language="cpp">register_config(std::make_unique&lt;chromeos::UntrustedExampleUIConfig&gt;());</pre>
+<ol start="3">
+<li>If needed, implement and register the necessary Mojo interfaces. See <a href="https://crrev.com/c/3138688/5/chrome/browser/chrome_browser_interface_binders.cc">this CL</a> for example.</li>
+</ol>
+<h3 id="embed-chrome-untrusted-in-chrome-webuis">Embed chrome-untrusted:// in chrome:// WebUIs</h3>
+<p>Developers can embed <code>chrome-untrusted://</code> iframes in <code>chrome://</code> pages. <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2037186">Example CL</a>.</p>
+<p>The general steps are:</p>
+<ol>
+<li>Create a WebUIConfig and UntrustedWebUIController to register the resources for the <code>chrome-untrusted://</code> page.</li>
+<li>Allow the <code>chrome://</code> WebUI to embed the corresponding <code>chrome-untrusted://</code> WebUI.</li>
+</ol>
+<pre data-language="cpp">untrusted_data_source-&gt;AddFrameAncestor(kWebUIPageURL)</pre>
+<ol start="3">
+<li>Make <code>chrome-untrusted://</code> requestable by the main <code>chrome://</code> WebUI.</li>
+</ol>
+<pre data-language="cpp">web_ui-&gt;AddRequestableScheme(content::kChromeUIUntrustedScheme)</pre>
+<ol start="4">
+<li>Allow the <code>chrome://</code> WebUI to embed chrome-untrusted://.</li>
+</ol>
+<pre data-language="cpp">trusted_data_source-&gt;OverrideContentSecurityPolicy(
+    “frame-src ” + kUntrustedExampleURL);</pre>
+<ol start="5">
+<li>Add communication mechanism to <code>chrome-untrusted://</code> frames. For example, <a href="https://crrev.com/c/3222406">using Mojo</a>, or <code>postMessage</code> the JavaScript object is not supported by Mojo.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webui/chrome_untrusted.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webui/chrome_untrusted.md</a>
+  </p>
+</div>

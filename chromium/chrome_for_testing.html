@@ -1,0 +1,106 @@
+<h1>Chrome for Testing Differences</h1>
+<p>This document summarizes the functional and behavioral differences introduced
+when Chrome is built with the <code>BUILDFLAG(CHROME_FOR_TESTING)</code> and
+<code>BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)</code> build flags. The latter enables
+Google Chrome for Testing specific branding. This affects application icons,
+installation paths (e.g., for native messaging hosts and enterprise policies),
+and enables proprietary media codecs (e.g., H.264, AAC, MP3). Without it Chrome
+for Testing acts like Chromium for Testing.</p>
+<h3 id="1-configuration">1. Configuration</h3>
+<p>Chrome for Testing can be configured by supplying a JSON configuration file
+using the <code>--chrome-for-testing-config</code> command line switch. Refer to
+<a href="chrome_for_testing/chrome_for_testing_configuration">docs/chrome_for_testing/chrome_for_testing_configuration.md</a>
+for more details.</p>
+<h3 id="2-startup--configuration">2. Startup &amp; Configuration</h3>
+<ul>
+<li><strong>Required Components Loading</strong>: Chrome for Testing (CfT) relies on a
+dedicated JSON configuration loaded during early browser initialization via
+<code>chrome_for_testing::LoadConfig()</code>.</li>
+<li><strong>Startup Synchronization</strong>: It injects custom synchronization logic into
+<code>ChromeBrowserMainParts</code>. The browser explicitly blocks and delays regular
+startup until all &quot;required components&quot; specified in the CfT config are
+installed or updated to the current version.</li>
+<li><strong>Component Updates Policy</strong>: By default, automatic component updates are
+disabled (<code>kComponentUpdatesEnabledByDefault</code> is forced to false).</li>
+</ul>
+<h3 id="3-user-data-directory">3. User Data Directory</h3>
+<p>Chrome for Testing stores its profile and browser state in a dedicated
+user data directory location different from standard Chrome user data
+directory location. This prevents test profiles from interfering with
+day-to-day browser data. Details regarding exact path locations for each
+platform can be found in
+<a href="user_data_dir">docs/user_data_dir.md</a>.</p>
+<h3 id="4-enterprise-policies">4. Enterprise Policies</h3>
+<p>Chrome for Testing stores enterprise policies in a location different from
+standard Chrome enterprise policies location. Details regarding lookup behavior
+and specifics are covered in
+<a href="enterprise/policies">docs/enterprise/policies.md</a>.</p>
+<h3 id="5-user-interface--infobars">5. User Interface &amp; Infobars</h3>
+<ul>
+<li><strong>InfoBar Management</strong>:<ul>
+<li>CfT shows a non removable &quot;Chrome for Testing&quot; informational banner near
+the top of browser windows.</li>
+<li>Non interactive infobars (those not requiring user response) can be
+suppressed using the <code>--disable-infobars</code> command line switch.</li>
+</ul>
+</li>
+<li><strong>User Education &amp; Choice Screens</strong>:<ul>
+<li>Disables all User Education components and In-Product Help (IPH)
+prompts by default.</li>
+<li>Disables the &quot;Search Engine Choice&quot; dialog workflow that mandates
+selecting a default search engine upon first launch.</li>
+<li><em>Note: These behaviors can be explicitly restored via keys in the JSON
+configuration if desired.</em></li>
+</ul>
+</li>
+</ul>
+<h3 id="6-virtual-clipboard">6. Virtual Clipboard</h3>
+<p>Chrome for Testing supports an optional process-specific virtual clipboard which
+operates independently from the system clipboard. This isolation helps to
+keep test execution hermetic.</p>
+<p><em>Note: Virtual clipboard needs to be explicitly enabled in the JSON
+configuration.</em></p>
+<h3 id="7-system-integration--operating-system-specifics">7. System Integration &amp; Operating System Specifics</h3>
+<ul>
+<li><strong>Default Browser Disallowance</strong>: Chrome for Testing rejects any attempt to
+register itself as the OS default web browser or scheme client. The
+<code>GetDefaultWebClientSetPermission()</code> method always returns
+<code>SET_DEFAULT_NOT_ALLOWED</code>.</li>
+<li><strong>macOS Automation Optimizations</strong>:<ul>
+<li>Suppresses the automatic &quot;Install from Disk Image&quot; (DMG) prompt that
+ordinarily occurs when running from a mounted volume.</li>
+<li>Completely strips the <code>CodeSignCloneManager</code> functionality. This
+mechanism prepares seamless path migration for silent macOS updates,
+which is redundant and overhead for an automated testing executable.</li>
+</ul>
+</li>
+</ul>
+<h3 id="8-devtools--debugging">8. DevTools &amp; Debugging</h3>
+<ul>
+<li><strong>Debug Information Persistence</strong>: Explicitly enables local stack traces
+and crash dumps even in Official branding builds, maintaining a better
+debugging experience that usually relies on developer-only builds.</li>
+<li><strong>DevTools Integration</strong>: Hardcodes internal states in
+<code>ChromeContentBrowserClient</code> to treat the session configuration as actively
+managed by a DevTools client and passes <code>&amp;isChromeForTesting=true</code>
+upstream to the inspector frontend interface.</li>
+</ul>
+<h3 id="9-direct-automated-behavior-switches">9. Direct Automated Behavior Switches</h3>
+<ul>
+<li><strong>Sign-In Automation</strong>: Implements the
+<code>--enterprise-signin-dialog-behavior-for-testing</code> switch. This enables
+testing infrastructure to auto-answer and auto-approve enterprise profile
+creation dialogs (e.g., <code>&quot;accept-new-profile&quot;</code>, <code>&quot;accept-link-data&quot;</code>, or
+<code>&quot;cancel&quot;</code>) without requiring physical UI interaction or Selenium/CDP
+scripts.</li>
+</ul>
+<h3 id="10-pre-built-binaries">10. Pre-built Binaries</h3>
+<p>Pre-built Chrome for Testing binaries are available across all the supported
+desktop platforms and Chrome/Chromium channels. You can access them via the
+<a href="https://googlechromelabs.github.io/chrome-for-testing">Chrome for Testing dashboard</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/chrome_for_testing/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/chrome_for_testing/README.md</a>
+  </p>
+</div>

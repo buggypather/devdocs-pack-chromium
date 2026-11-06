@@ -1,0 +1,15 @@
+<h1>First Input Delay Changes in M75</h1>
+<h2 id="changes-in-chrome-75">Changes in Chrome 75</h2>
+<p>Prior to Chrome 75, on mobile devices, pointer events which did not have an associated event handler were filtered from the first input delay metric. As of M75, these events are now included. More details can be found in the <a href="http://crbug.com/914500">bug for this change</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>These changes will affect the data reported in <a href="https://developers.google.com/web/tools/chrome-user-experience-report">Chrome User Experience Report</a>.</p>
+<p>This change affects metrics on the <strong>Android</strong> platform only. The impact on a site&#39;s metrics will vary based on whether the site had handlers for pointer events (sites with handlers were unaffected) and the performance of hardware users access the site with.</p>
+<p>At the median, Chrome overall saw about a <strong>150ms increase</strong>, and at the 99th percentile, about a <strong>50ms increase</strong>. Sites not handling pointer events should expect a change within that range.</p>
+<h2 id="when-did-the-change-take-place">When did the change take place?</h2>
+<p>The change went live to users around July 20, 2019.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2019_07_fid.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2019_07_fid.md</a>
+  </p>
+</div>

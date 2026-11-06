@@ -1,0 +1,44 @@
+<h1>Python script to compute an extension list using Takeout API</h1>
+<h2 id="setup-access-to-api">Setup Access to API</h2>
+<p>Before using CBCM Takeout API you will need to do some initial setup:</p>
+<ol>
+<li>Enable the Admin SDK API (if not already enabled) in the Google Developer
+Console by following this
+<a href="https://console.developers.google.com/apis/api/admin.googleapis.com/overview?project=_">link</a>
+and selecting the project on which you wish to enable the API.</li>
+<li>Create a service account and have the necessary service account keys for
+this service account. You can follow
+<a href="https://developers.google.com/admin-sdk/directory/v1/guides/delegation">this</a>
+for creating a service account and getting the service account keys. You
+must grant the service account the &quot;Service Account User&quot; role on the
+permissions during creation.</li>
+<li>The client ID for this service account will need to be authorized for the
+OAuth scopes listed below in the Admin Console under Security -&gt; Advanced
+settings -&gt; Manage API client access. On this page, the Client ID
+corresponds to the Unique ID of your service account. You will need to
+authorize the client ID for the scope:<ul>
+<li><a href="https://www.googleapis.com/auth/admin.directory.device.chromebrowsers.readonly">https://www.googleapis.com/auth/admin.directory.device.chromebrowsers.readonly</a></li>
+</ul>
+</li>
+</ol>
+<h2 id="running-the-script">Running the Script</h2>
+<p>You can download the scripts <a href="https://github.com/chromium/chromium/blob/HEAD/docs/enterprise/extension_query.py">here</a> (or <a href="https://github.com/chromium/chromium/blob/HEAD/docs/enterprise/extension_query_py2.py">here</a>
+for a python 2.7 compatible version).</p>
+<p>With the service account keys, you can now run the script which uses Google API
+Client Libraries to make the necessary queries to the API. The script requires
+that both the service account keys you downloaded from the developers console as
+well as the e-mail of an admin user in your domain that is allowed to access the
+data you wish to query.</p>
+<p>You can run the script from the command-line:</p>
+<pre data-language="sh">python extension_query.py --service_account_key_path &lt;service_account_key_file&gt; --admin_email &lt;admin_email&gt;</pre>
+<p>(also: <code>python extension_query.py --help</code> for a reminder of the
+argument names)</p>
+<h2 id="example-data-output">Example Data output</h2>
+<p>Here is an example of what that data will look like:
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/enterprise/extension_query_sample.png" alt="Sample Results"></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/extension_query_script.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/enterprise/extension_query_script.md</a>
+  </p>
+</div>

@@ -1,0 +1,16 @@
+<h1>First Contentful Paint Changes in M94</h1>
+<h2 id="changes-in-chrome-94">Changes in Chrome 94</h2>
+<p>In Chrome 94, we make sure that paint timing is not triggered by content that is not visible
+due to being under the effect of an <code>opacity: 0</code> style. This increases the accuracy of the
+FCP metric as it is less likely to be triggered when no content is actually visible.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/3057290">Source code for this change</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>Some sites may see their FCP values increase.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 94 is currently scheduled to be released the week of September 21, 2021.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_07_fcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2021_07_fcp.md</a>
+  </p>
+</div>

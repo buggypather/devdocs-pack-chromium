@@ -1,0 +1,250 @@
+<h1>Updater History Event Schema</h1>
+<p>This document describes the JSON schema for events recorded by the updater. Each</p>
+<p>event is a record of an updater action. Events are serialized as JSON objects in
+a JSONL file (one object per line).</p>
+<h2 id="required-fields">Required Fields</h2>
+<p>The schema indicates that some fields are <code>required</code>, to clarify this indicates
+that:</p>
+<ol>
+<li>A compliant serialization implementation will refuse messages which do not contain all required fields.</li>
+<li>Deserialization process may consider a message missing one or more required fields as ill-formed, but need not reject the message when data recovery is best-effort.</li>
+</ol>
+<h2 id="base-event-properties">Base Event Properties</h2>
+<p>All events share a common set of base properties:</p>
+<p>| Property        | Type    | Description                                                                                                                                                                                     | Required |
+|-:---------------|-:-------|-:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-:--------|
+| <code>eventType</code>     | string  | The type of event being recorded. See the <em>Event Types</em> section below for possible values.                                                                                                      | Yes      |
+| <code>eventId</code>       | string  | A unique identifier for the event. For events with a duration, this ID links the <code>START</code> and <code>END</code> records.                                                                                     | Yes      |
+| <code>deviceUptime</code>  | string  | The uptime of the device in integer microseconds.                                                                                                                                               | Yes      |
+| <code>pid</code>           | integer | The process ID of the updater instance that emitted the event.                                                                                                                                  | Yes      |
+| <code>processToken</code>  | string  | A per-process random value to discriminate between processes with the same PID due to OS-reuse.                                                                                                 | Yes      |
+| <code>bound</code>         | string  | Indicates if the record marks the beginning (<code>START</code>), end (<code>END</code>), or an instantaneous event (<code>INSTANT</code>). Defaults to <code>INSTANT</code>.                                                               | No       |
+| <code>errors</code>        | array   | An array of error objects encountered during the event. Each object has: <code>category</code> (integer), <code>code</code> (integer), <code>extracode1</code> (integer). An empty array has the same meaning as an unset array. | No       |</p>
+<h2 id="event-types">Event Types</h2>
+<p>The specific details of an event are determined by its <code>eventType</code> and <code>bound</code>.
+The schema defines the following event types:</p>
+<h3 id="install-application-installation"><code>INSTALL</code>: Application Installation</h3>
+<ul>
+<li><strong>Description:</strong> Recorded when an application installation starts or
+completes.</li>
+<li><strong>Bounds:</strong><ul>
+<li><code>START</code>:<ul>
+<li><code>appId</code> (string, required): The ID of the application being installed.</li>
+</ul>
+</li>
+<li><code>END</code>: No specific properties.<ul>
+<li><code>version</code> (string): The version of the application that the updater tried
+to install.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="uninstall-application-uninstallation"><code>UNINSTALL</code>: Application Uninstallation</h3>
+<ul>
+<li><strong>Description:</strong> Recorded when an application uninstallation starts or
+completes.</li>
+<li><strong>Bounds:</strong><ul>
+<li><code>START</code>:<ul>
+<li><code>appId</code> (string, required): The ID of the application being uninstalled.</li>
+<li><code>version</code> (string, required): The version of the application being
+uninstalled.</li>
+<li><code>reason</code> (string, required): Enum: <code>”UNINSTALLED”</code>, <code>”USER_NOT_AN_OWNER”</code>,
+<code>”NO_APPS_REMAIN”</code>, <code>”NEVER_HAD_APPS”</code>.</li>
+</ul>
+</li>
+<li><code>END</code>: No specific properties.</li>
+</ul>
+</li>
+</ul>
+<h3 id="qualify-updater-qualification"><code>QUALIFY</code>: Updater Qualification</h3>
+<ul>
+<li><strong>Description:</strong> Recorded when the updater starts or completes its
+self-qualification process to become the active version.</li>
+<li><strong>Bounds:</strong><ul>
+<li><code>START</code>: No specific properties.</li>
+<li><code>END</code>:<ul>
+<li><code>qualified</code> (boolean): Whether the updater version successfully qualified.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="activate-updater-activation"><code>ACTIVATE</code>: Updater Activation</h3>
+<ul>
+<li><strong>Description:</strong> Recorded when the updater starts or completes its activation
+process.</li>
+<li><strong>Bounds:</strong><ul>
+<li><code>START</code>: No specific properties.</li>
+<li><code>END</code>:<ul>
+<li><code>activated</code> (boolean, required): Whether the running updater version was
+activated.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="persisted_data-persisted-data-snapshot"><code>PERSISTED_DATA</code>: Persisted Data Snapshot</h3>
+<ul>
+<li><strong>Description:</strong> Records a snapshot of data persisted by the updater, such as
+application registrations and policy states. This is an <code>INSTANT</code> event.</li>
+<li><strong>Properties:</strong><ul>
+<li><code>eulaRequired</code> (boolean, required): Whether a user responsible for this
+system needs to accept a EULA.</li>
+<li><code>lastChecked</code> (string): Timestamp of the last successful update check (RFC
+3339 date-time).</li>
+<li><code>lastStarted</code> (string): Timestamp of the last time the updater ran its
+periodic tasks (RFC 3339 date-time).</li>
+<li><code>registeredApps</code> (array): A list of applications registered with the
+updater. Each item is an object with:<ul>
+<li><code>appId</code> (string, required): The app&#39;s unique identifier.</li>
+<li><code>version</code> (string, required): The registered version of the app.</li>
+<li><code>cohort</code> (string): The cohort assignment of the app.</li>
+<li><code>brandCode</code> (string): The brand code of the app.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="post_request-http-post-request"><code>POST_REQUEST</code>: HTTP Post Request</h3>
+<ul>
+<li><strong>Description:</strong> Recorded when an HTTP POST request is initiated or completed.</li>
+<li><strong>Bounds:</strong><ul>
+<li><code>START</code>:<ul>
+<li><code>request</code> (string, required): The base64-encoded HTTP request body.</li>
+</ul>
+</li>
+<li><code>END</code>:<ul>
+<li><code>response</code> (string): The base64-encoded HTTP response body.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="load_policy-load-policy"><code>LOAD_POLICY</code>: Load Policy</h3>
+<ul>
+<li><strong>Description:</strong> Recorded when the updater begins or finishes computing the
+effective enterprise policy set.</li>
+<li><strong>Bounds:</strong><ul>
+<li><code>START</code>: No specific properties.</li>
+<li><code>END</code>:<ul>
+<li><code>policySet</code> (object): The enterprise policy set. See the <em>Policy Set</em>
+section below.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="update-application-update-check"><code>UPDATE</code>: Application Update Check</h3>
+<ul>
+<li><strong>Description:</strong> Recorded when the updater starts or finishes an update
+check/process for an application.</li>
+<li><strong>Bounds:</strong><ul>
+<li><code>START</code>:<ul>
+<li><code>appId</code> (string): The ID of the application being checked.</li>
+<li><code>priority</code> (string): Enum: <code>&quot;BACKGROUND&quot;</code>, <code>&quot;FOREGROUND&quot;</code>.</li>
+</ul>
+</li>
+<li><code>END</code>:<ul>
+<li><code>nextVersion</code> (string): The version of the application which the updater
+tried to update to.</li>
+<li><code>updateStates</code> (array): A sequence of details on the state of an update.
+Each item is an object with:<ul>
+<li><code>deviceUptime</code> (string): The uptime of the system when the state change
+was observed in integer microseconds.</li>
+<li><code>state</code> (string, required): The state of the update. Enum: possible
+values are the upper snake case UpdaterState::State enum labels defined
+in UpdateService. Includes <code>&quot;UPDATED&quot;</code>, <code>&quot;NO_UPDATE&quot;</code>, and
+<code>&quot;UPDATE_ERROR&quot;</code>.</li>
+</ul>
+</li>
+<li><code>result</code> (string): The value returned by the completion callback of the
+update operation as a result of the non-blocking invocation of the service
+functions. Enum: possible values are the upper snake case
+UpdaterState::Result enum labels defined in UpdateService. Includes
+<code>&quot;SUCCESS&quot;</code> and <code>&quot;UPDATE_IN_PROGRESS&quot;</code>.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="updater_process-updater-process-lifetime"><code>UPDATER_PROCESS</code>: Updater Process Lifetime</h3>
+<ul>
+<li><strong>Description:</strong> Recorded when an updater process starts or terminates.</li>
+<li><strong>Bounds:</strong><ul>
+<li><code>START</code>:<ul>
+<li><code>commandLine</code> (string): The full command line of the updater process
+invocation.</li>
+<li><code>timestamp</code> (string): The system time when the event began (RFC 3339
+date-time).</li>
+<li><code>updaterVersion</code> (string): The version of the updater.</li>
+<li><code>scope</code> (string): The scope in which the updater is running. Enum:
+<code>&quot;USER&quot;</code>, <code>&quot;SYSTEM&quot;</code>.</li>
+<li><code>osPlatform</code> (string): The operating system platform.</li>
+<li><code>osVersion</code> (string): The operating system version.</li>
+<li><code>osArchitecture</code> (string): The architecture of the operating system.</li>
+<li><code>updaterArchitecture</code> (string): The architecture of the updater binary.</li>
+<li><code>deviceUptime</code> (string): The uptime of the system in integer microseconds.</li>
+<li><code>parentPid</code> (integer): The parent process id, which allows the process
+tree of the updater to be reconstructed.</li>
+</ul>
+</li>
+<li><code>END</code>: No specific properties.<ul>
+<li><code>exitCode</code> (integer): The exit code of the process.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="app_command-app-command-invocation"><code>APP_COMMAND</code>: App Command Invocation</h3>
+<ul>
+<li><strong>Description:</strong> Recorded when an app command is invoked by the updater.</li>
+<li><strong>Bounds:</strong><ul>
+<li><code>START</code>:<ul>
+<li><code>appId</code> (string, required): The ID of the app owning the command.</li>
+<li><code>commandLine</code> (string): The full command line used to invoke the app
+command.</li>
+</ul>
+</li>
+<li><code>END</code>:<ul>
+<li><code>exitCode</code> (integer): The exit code of the app command.</li>
+<li><code>output</code> (string): The output generated by the app command.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="common-complex-types">Common Complex Types</h2>
+<h3 id="policy-set">Policy Set</h3>
+<ul>
+<li><strong>Description:</strong> Represents the enterprise policy set governing the updater&#39;s
+behavior.</li>
+<li><strong>Properties:</strong><ul>
+<li><code>policiesByName</code> (object, required): An object mapping policy names to their
+details. Each value in this map is an object with:<ul>
+<li><code>valuesBySource</code> (object, required): Policy values provided by different
+sources. Values are of arbitrary type. Potential keys include:<ul>
+<li><code>default</code>: The built-in default value.</li>
+<li><code>externalConstants</code>: Value from external constants file (test only).</li>
+<li><code>platform</code>: Value from OS policy manager (e.g., Group Policy, Managed
+Preferences).</li>
+<li><code>cloud</code>: Value from cloud service.</li>
+</ul>
+</li>
+<li><code>prevailingSource</code> (string, required): A indicating which key within
+<code>valuesBySource</code> contains the authoritative value used by the updater
+(e.g., <code>platform</code>).</li>
+</ul>
+</li>
+<li><code>policiesByAppId</code> (object, required): An object mapping application
+identifiers to per-app policy sets. Each value in this map is an object with
+the same structure as <code>policiesByName</code>, as defined above.</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updater/history_log.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updater/history_log.md</a>
+  </p>
+</div>

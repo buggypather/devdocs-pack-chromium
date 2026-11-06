@@ -1,0 +1,278 @@
+<h1>Testing In Chromium</h1>
+<p>Testing is an essential component of software development in Chromium,
+it ensures Chrome is behaving as we expect, and is critical to find bugs and
+regressions at early stage.</p>
+<p>This document covers the high level overview of testing in Chromium,
+including what type of tests we have, what&#39;s the purpose for each test type,
+what tests are needed for new features etc.</p>
+<h2 id="test-types">Test Types</h2>
+<p>There are several different types of tests in Chromium to serve different purposes,
+some types of test are running on multiple platforms, others are specific
+for one platform.</p>
+<ul>
+<li><strong><a href="https://github.com/google/googletest">gtest</a></strong> is Google&#39;s C++ test framework,
+which helps you write better C++ tests in Chromium.
+gtest is test framework for unit tests in Chromium and browser tests are built on top of it.</li>
+<li><strong><a href="https://chromium.googlesource.com/website/+/HEAD/site/developers/testing/browser-tests/index.md">Browser Tests</a></strong> is built on top of gtest, and it is used to write integration tests
+and e2e tests in Chromium.</li>
+<li><strong><a href="web_tests">Web Tests</a> (formerly known as &quot;Layout Tests&quot; or &quot;LayoutTests&quot;)</strong>
+is used by Blink to test many components, including but not
+limited to layout and rendering. In general, web tests involve loading pages
+in a test renderer (<code>content_shell</code>) and comparing the rendered output or
+JavaScript output against an expected output file.
+Web Tests are required to launch new W3C API support in Chromium.</li>
+<li><strong><a href="android_robolectric_tests">Robolectric</a></strong> is build on top of JUnit 4. It emulates Android APIs so
+that tests can be run on the host machine instead of on devices / emulators.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_instrumentation_tests.md">Instrumentation Tests</a></strong> are JUnit tests that run on devices / emulators.</li>
+<li><strong><a href="https://github.com/google/EarlGrey">EarlGrey</a></strong> is the integration testing framework used by Chromium for iOS.</li>
+<li><strong><a href="https://chromium.googlesource.com/catapult/+/HEAD/telemetry/README.md">Telemetry</a></strong> is the performance testing framework used by Chromium.
+It allows you to perform arbitrary actions on a set of web pages and
+report metrics about it.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/testing/libfuzzer/README.md">Fuzzer Tests</a></strong> is used to uncover potential security &amp; stability problems in Chromium.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromiumos/platform/tast/+/HEAD/README.md">Tast</a></strong> is a test framework for system integration tests on Chrome OS.</li>
+</ul>
+<p>The following table shows which types of test works on which platforms.</p>
+<table>
+<thead>
+<tr>
+<th align="left"></th>
+<th align="left">Linux</th>
+<th align="left">Windows</th>
+<th align="left">Mac</th>
+<th align="left">Android</th>
+<th align="left">iOS</th>
+<th align="left">CrOS</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">gtest(C++)</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+</tr>
+<tr>
+<td align="left">Browser Tests(C++)</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Web Tests(HTML, JS)</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Telemetry(Python)</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left"></td>
+<td align="left">√</td>
+</tr>
+<tr>
+<td align="left">Robolectric(Java)</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">√</td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Instrumentation Tests(Java)</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">√</td>
+<td align="left"></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">EarlGrey</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">√</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">Fuzzer Tests(C++)</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left">√</td>
+<td align="left"></td>
+<td align="left">√</td>
+</tr>
+<tr>
+<td align="left">Tast(Golang)</td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left"></td>
+<td align="left">√</td>
+</tr>
+</tbody></table>
+<p>*** note
+<strong>Browser Tests Note</strong></p>
+<p>Only subset of browser tests are enabled on Android:</p>
+<ul>
+<li>components_browsertests</li>
+<li>content_browsertests</li>
+</ul>
+<p>Other browser tests are not supported on Android yet. <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=611756">crbug/611756</a>
+tracks the effort to enable them on Android.</p>
+<hr>
+<p>*** note
+<strong>Web Tests Note</strong></p>
+<p>Web Tests were enabled on Android K before, but it is disabled on Android platform now,
+see <a href="https://groups.google.com/a/chromium.org/forum/#!topic/blink-dev/338WKwWPbPI/discussion">this thread</a> for more context.</p>
+<hr>
+<p>*** note
+<strong>Tast Tests Note</strong></p>
+<p>Tast tests are written, maintained and gardened by ChromeOS engineers.</p>
+<p>ChromeOS tests that Chrome engineers support should be (re)written in the following priority order:</p>
+<ul>
+<li>unit tests</li>
+<li>linux_chromeos browser_tests</li>
+<li>linux_chromeos interactive_ui_tests</li>
+<li><a href="http://go/crosier">Crosier tests</a></li>
+</ul>
+<p>When a Tast test fails:</p>
+<ul>
+<li>If the change is written by a ChromeOS engineer, the ChromeOS <a href="http://go/cros-gardening">gardener</a> can revert it.</li>
+<li>Otherwise the ChromeOS gardener can revert the Chrome-authored change accompanied by a test from the supported frameworks above or manual repro steps that a Chrome engineer can run under <a href="../chromeos_build_instructions#Chromium-OS-on-Linux-linux_chromeos">linux_chromeos</a> (preferable) or using Simple Chrome VM <a href="https://chromium.googlesource.com/chromiumos/docs/+/HEAD/simple_chrome_workflow.md">instructions</a>.</li>
+<li>If the above is not possible, the ChromeOS gardener or ChromeOS feature owner should inform the author about the failure, and the author uses their best judgment on whether to revert, fix on trunk, or let ChromeOS engineers update the test (e.g. if test needs an update or if the test is just testing internal implementation details of Chrome but doesn&#39;t break user functionality).</li>
+</ul>
+<hr>
+<h2 id="general-principles">General Principles</h2>
+<ul>
+<li>All the tests in Chromium running on CQ and main waterfall should be hermetic and stable.</li>
+<li>Add unit tests along with the code in same changelist instead of adding tests in future,
+it is most likely no one will add tests later.</li>
+<li>Write enough unit tests to have good <a href="code_coverage">code coverage</a>,
+since they are fast and stable.</li>
+<li>Don&#39;t enable tests with external dependencies on CQ and main waterfall,
+e.g. tests against live sites.
+It is fine to check in those tests, but only run them on your own bots.</li>
+<li>Eventually, all tests should implement the
+<a href="test_executable_api">Test Executable API</a> command line interface.</li>
+</ul>
+<h2 id="what-tests-are-needed-for-new-features">What tests are needed for new features</h2>
+<ul>
+<li><strong>Unit Tests</strong> are needed no matter where the code is for your feature.
+It is the best practice to add the unit tests
+when you add new code or update existing code in the same changelist,
+check out <a href="code_coverage_in_gerrit">Code Coverage in Gerrit</a>
+for the instruction about how to see the code coverage in Gerrit.</li>
+<li><strong>Browser Tests</strong> are recommended for integration tests and e2e tests.
+It will be great if you add browser tests to cover the major user
+cases for your feature, even with some mocking.</li>
+<li><strong><a href="web_tests">Web Tests</a></strong> are required if you plan to launch new W3C APIs in Chrome.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/android_instrumentation_tests.md">Instrumentation Tests</a></strong> are recommended for features on Android, you only
+need to write instrumentation features
+if your feature is supported on Android for integration tests or e2e tests.</li>
+<li><strong>EarlGrey Tests</strong> are recommended for iOS only.</li>
+<li><strong><a href="https://chromium.googlesource.com/catapult/+/HEAD/telemetry/README.md">Telemetry</a> benchmarking or stories</strong> are needed if existing telemetry
+benchmarks or stories can&#39;t cover the performance for your feature,
+you need to either add new story, but reuse existing metrics or
+add new benchmarks for your feature. Talk to benchmarking team first
+before start to add Telemetry benchmarks or stories.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/testing/libfuzzer/README.md">Fuzzer Tests</a></strong> are recommended if your feature adds user facing APIs
+in Chromium, it is recommended to write fuzzer tests to detect the security issue.</li>
+</ul>
+<p>Right now, code coverage is the only way we have to measure test coverage.
+The following is the recommended thresholds for different code coverage levels:</p>
+<ul>
+<li><blockquote>
+<p>level 1(improving): &gt;0%</p>
+</blockquote>
+</li>
+<li><blockquote>
+<p>level 2(acceptable): 60%</p>
+</blockquote>
+</li>
+<li><blockquote>
+<p>level 3(commendable): 75%</p>
+</blockquote>
+</li>
+<li><blockquote>
+<p>level 4(exemplary): 90%</p>
+</blockquote>
+</li>
+</ul>
+<p>Go to <a href="https://analysis.chromium.org/coverage/p/chromium">code coverage dashboard</a> to check the code coverage for your project.</p>
+<h2 id="how-to-write-new-tests">How to write new tests</h2>
+<ul>
+<li><a href="https://github.com/google/googletest/blob/main/docs/primer.md#simple-tests">Simple gtests</a></li>
+<li>[Writing JUnit tests]</li>
+<li>[Writing Browser Tests]</li>
+<li>[Writing Instrumentation Tests]</li>
+<li>[Writing EarlGrey Tests]</li>
+<li>[Writing Telemetry Benchmarks/Stories]</li>
+<li><a href="writing_web_tests">Writing Web Tests</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/testing/libfuzzer/getting_started.md#write-fuzz-target">Write Fuzz Target</a></li>
+</ul>
+<blockquote>
+<p>TODO: add the link to the instruction about how to enable new tests in CQ and main waterfall</p>
+</blockquote>
+<h2 id="how-to-run-tests">How to run tests</h2>
+<h3 id="run-tests-locally">Run tests locally</h3>
+<ul>
+<li><a href="#Run-gtest-locally">Run gtest locally</a></li>
+<li>[Run browser tests locally]</li>
+<li><a href="android_test_instructions#Running-Tests">Run tests on Android</a>
+It includes the instructions to run gTests, JUnit tests and Instrumentation tests on Android.</li>
+<li><a href="../ios/testing#running-tests-from-xcode">Run EarlGrey tests locally</a></li>
+<li><a href="web_tests#running-web-tests">Run Web Tests locally</a></li>
+<li><a href="https://chromium.googlesource.com/catapult/+/HEAD/telemetry/docs/run_benchmarks_locally.md">Telemetry: Run benchmarks locally</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/testing/libfuzzer/getting_started.md#build-and-run-fuzz-target-locally">Run fuzz target locally</a></li>
+</ul>
+<h4 id="run-gtest-locally">Run gtest locally</h4>
+<p>Before you can run a gtest, you need to build the appropriate launcher target
+that contains your test, such as <code>blink_unittests</code>:</p>
+<pre data-language="bash">autoninja -C out/Default blink_unittests</pre>
+<p>To run specific tests, rather than all tests in a launcher, pass
+<code>--gtest_filter=</code> with a pattern. The simplest pattern is the full name of a
+test (SuiteOrFixtureName.TestName), but you can use wildcards:</p>
+<pre data-language="bash">out/Default/blink_unittests --gtest_filter='Foo*'</pre>
+<p>Use <code>--help</code> for more ways to select and run tests.</p>
+<h3 id="run-tests-remotelyon-swarming">Run tests remotely(on Swarming)</h3>
+<p>See <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/tools/utr/README.md">UTR - The Universal Test Runner</a>.</p>
+<h2 id="how-to-debug-tests">How to debug tests</h2>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/android_debugging_instructions.md">Android Debugging Instructions</a></li>
+<li><a href="chromeos_debugging_tips">Chrome OS Debugging Tips</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/testing/web_tests.md#Debugging-Web-Tests">Debugging Web Tests</a></li>
+</ul>
+<h2 id="how-to-deal-with-flaky-tests">How to deal with flaky tests</h2>
+<p>Go to <a href="https://luci-analysis.appspot.com/">LUCI Analysis</a> to find reports about flaky tests in your projects.</p>
+<ul>
+<li><a href="gtest_flake_tips">Addressing Flaky GTests</a></li>
+<li><a href="web_tests_addressing_flake">Addressing Flaky Web Tests</a></li>
+<li><a href="web_platform_tests_addressing_flake">Addressing Flaky WPTs</a></li>
+</ul>
+<p>If you cannot fix a flaky test in a short timeframe, disable it first to reduce
+development pain for other and then fix it later. &quot;<a href="https://www.chromium.org/developers/tree-sheriffs/sheriff-details-chromium#TOC-How-do-I-disable-a-flaky-test-">How do I disable a flaky
+test</a>&quot; has instructions on how to disable a flaky test.</p>
+<h2 id="other">Other</h2>
+<p>Tests are not configured to upload metrics, such as UMA, UKM or crash reports.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/testing_in_chromium.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/testing_in_chromium.md</a>
+  </p>
+</div>

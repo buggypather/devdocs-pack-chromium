@@ -1,0 +1,58 @@
+<h1>DIP to Screen/Screen to DIP Conversion</h1>
+<h2 id="overview">Overview</h2>
+<p>Converting positions and rectangles in screen physical pixels to screen DIPs
+(device-independent pixels) in Chromium -- and vice versa -- is handled
+differently on Windows compared to other platforms. This difference is due to
+Windows&#39; historical challenges with handling displays of DPIs higher than 96 and
+ the need to deal with multiple DPI displays.</p>
+<h2 id="windows">Windows</h2>
+<p>On Windows, the process involves dealing with monitor physical coordinates and
+mapping them into Chrome&#39;s DIP (Device Independent Pixels) coordinates. The key
+points in this conversion process are as follows:</p>
+<ol>
+<li><p><strong>Monitor Tree:</strong> <code>DisplayInfosToScreenWinDisplays</code> reasons over monitors as
+a tree using the primary monitor as the root. All monitors touching this root
+are considered children.</p>
+</li>
+<li><p><strong>Connected Components:</strong> This approach presumes that all monitors are
+connected components. Windows restricts the layout of monitors to connected
+components, except when DPI virtualization is happening. In the case of DPI
+virtualization, scaling is relative to the (0, 0) point.</p>
+</li>
+<li><p><strong>Overlap Handling:</strong> There can be cases where a scaled display may have
+insufficient room to lay out its children. In these cases, a DIP point could map
+to multiple screen points due to overlap. The first discovered screen point will
+take precedence.</p>
+</li>
+</ol>
+<h2 id="other-platforms">Other Platforms</h2>
+<p>On other platforms, such as macOS and Linux, the display information received
+from the OS is already adjusted for display scaling. This makes it easier to
+convert between screen coordinates and screen DIPs by simply multiplying or
+dividing by the current screen&#39;s display scale factor.</p>
+<h2 id="how-to-use">How to Use</h2>
+<ul>
+<li><p><strong>Windows:</strong></p>
+<ul>
+<li>The conversion of screen DIPs to screen coordinates is handled by the
+<code>ScreenWin</code> class (<code>ui/display/win/screen_win.cc</code>). This class takes into
+account the monitor tree, connected components, and overlap handling when
+converting coordinates.</li>
+<li>Example:
+<code>display::win::GetScreenWin()-&gt;DIPToScreenRect(GetParentHWND(), dip_bounds)</code> will
+convert a screen DIP rect to a screen physical one.</li>
+</ul>
+</li>
+<li><p><strong>Other Platforms:</strong></p>
+<ul>
+<li>You can convert physical coordinates to DIPs and vice versa by multiplying
+or dividing by the current screen&#39;s display scale factor.</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/display/display_conversion.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/display/display_conversion.md</a>
+  </p>
+</div>

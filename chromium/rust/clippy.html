@@ -1,0 +1,147 @@
+<h1>Clippy in Chromium</h1>
+<h2 id="how-to-run-clippy-lints-against-rust-code-in-chromium">How to run Clippy lints against Rust code in Chromium</h2>
+<p>When building locally, Clippy is disabled by default to avoid adding build
+overhead to Chromium engineers primarily working with C, C++, or Java.</p>
+<p>However, Clippy warnings are enforced by the CQ. Therefore, it is strongly
+recommended that engineers working with Rust code enable Clippy warnings by
+setting  <code>enable_rust_clippy = true</code> in their <code>args.gn</code>.</p>
+<p>Doing so allows you to fix Clippy warnings as they occur, rather than waiting to
+discover them until after uploading a CL and running it through the CQ.  It also
+lets you verify that you&#39;ve fixed all the problems when rebuilding locally.</p>
+<h2 id="chromium-policy">Chromium policy</h2>
+<p>Chromium has a relaxed, non-strict Clippy policy.
+Clippy is a tool that hopefully helps to improve the quality of Chromium code,
+but ultimately we trust the judgement of Chromium engineers.</p>
+<ul>
+<li>We hope that <em>most</em> Clippy violations
+point out actual opportunities for improving the code
+(e.g. catching common mistakes, teaching idiomatic Rust patterns, etc.).</li>
+<li>If a Clippy lint doesn’t seem useful in a certain scenario,
+then use your best judgement
+and feel free to suppress the lint using the <code>#[allow(...)]</code> macro.<ul>
+<li>We recommend leaving a short comment
+that will help future readers understand
+why the lint was suppressed.</li>
+<li>We recommend consulting with the
+<a href="https://groups.google.com/u/1/a/chromium.org/g/security">@security team</a>
+before suppressing <code>unsafe</code>-related lints like
+<a href="https://rust-lang.github.io/rust-clippy/master/index.html?search=safe#missing_safety_doc"><code>clippy::missing_safety_doc</code></a>
+or
+<a href="https://rust-lang.github.io/rust-clippy/master/index.html?search=safe#undocumented_unsafe_blocks"><code>clippy::clippy::undocumented_unsafe_blocks</code></a>.</li>
+<li>We recommend applying suppression to a single item,
+but it is okay to suppress at a module, or crate level if it makes sense
+(e.g. if all functions in a given test module
+have to violate a certain lint)</li>
+</ul>
+</li>
+<li>If a Clippy lint is frequently suppressed, then
+one option on the table is
+disabling the lint globally in Chromium - please talk with
+<a href="https://groups.google.com/a/google.com/g/chrome-rust">@chrome-rust</a>
+if you find yourself oftentimes disabling a particular lint.</li>
+</ul>
+<p>For a list of Clippy lints that apply by default to Chromium targets please
+see the <code>//build/config/compiler:default_clippy_lints</code> target.</p>
+<h2 id="known-issues">Known issues</h2>
+<ul>
+<li><a href="https://crbug.com/472338477">https://crbug.com/472338477</a>: Can&#39;t invoke Clippy on a proc-macro crate</li>
+<li><a href="https://github.com/rust-lang/rust-clippy/issues/16317">https://github.com/rust-lang/rust-clippy/issues/16317</a>:
+<code>clippy::missing_safety_doc</code> triggers on <code>cxx::bridge</code>-generated code
+(<a href="https://source.chromium.org/chromium/chromium/src/+/main:mojo/public/rust/sequences/cxx.rs;l=24-25;drc=3abf739f4b711e4339c793af95ab482ca3a6c7fc">Example <code>#[allow(...)]</code> used as a workaround</a>)</li>
+</ul>
+<h2 id="clippy-coverage-in-chromium-cqci">Clippy coverage in Chromium CQ/CI</h2>
+<p>Clippy is enabled on a subset of CQ bots:
+<code>android-arm64-rel</code>,
+<code>linux-chromeos-rel</code>,
+<code>linux-rel</code>,
+<code>mac-rel</code>,
+<code>win-rel</code>.</p>
+<p>TODO(<a href="https://crbug.com/41484295">https://crbug.com/41484295</a>): Add other bots and target platforms
+if additional code needs to be covered by Clippy (<code>ios-simulator</code>?).</p>
+<h2 id="future-work">Future work</h2>
+<p>Next steps:</p>
+<ul>
+<li>Figure out how Chromium-specific lints can be added</li>
+<li>Consider opting into additional lints.  Examples:<ul>
+<li><a href="https://rust-lang.github.io/rust-clippy/master/index.html#undocumented_unsafe_blocks"><code>undocumented_unsafe_blocks</code></a></li>
+<li><a href="https://rust-lang.github.io/rust-clippy/master/index.html?groups=restriction#multiple_unsafe_ops_per_block"><code>multiple_unsafe_ops_per_block</code></a></li>
+</ul>
+</li>
+</ul>
+<h2 id="automatically-applying-fix-suggestions">Automatically applying fix suggestions</h2>
+<h3 id="ide-integration">IDE integration</h3>
+<p>TODO: See if/how this works + write this section.</p>
+<h3 id="command-line">Command-line</h3>
+<p>When build fails because of Clippy, then
+a note toward the end spells out a command
+for using <code>build/rust/apply_fixes.py</code>
+to apply machine-applicable fix suggestions
+from this particular Clippy invocation.</p>
+<p>Example:</p>
+<pre>$ autoninja -C out/rel ...
+...
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --&gt; ../../third_party/blink/renderer/core/xml/parser/xml_ffi.rs:271:33
+    |
+271 |                 q_name.push_str(&amp;pref);
+    |                                 ^^^^^ help: change this to: `pref`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+    = note: `-D clippy::needless-borrow` implied by `-D clippy::style`
+    = help: to override `-D clippy::style` add `#[allow(clippy::needless_borrow)]`
+
+error: aborting due to 1 previous error
+
+NOTE: See `//docs/rust/clippy.md` for more Clippy info.
+NOTE: To apply machine-applicable fix suggestions (if any) run: build/rust/apply_fixes.py out/rel clippy-driver obj/third_party/blink/renderer/core/xml_ffi.rustflags.json
+...
+
+$ build/rust/apply_fixes.py out/rel clippy-driver obj/third_party/blink/renderer/core/xml_ffi.rustflags.json
+Invoking clippy-driver to repro the build problem...
+Looking for machine-applicable fixes...
+Applying fixes to `../../third_party/blink/renderer/core/xml/parser/xml_ffi.rs`...
+  Applying a fix on line 271...
+
+$ git diff
+diff --git a/third_party/blink/renderer/core/xml/parser/xml_ffi.rs b/third_party/blink/renderer/core/xml/parser/xml_ffi.rs
+index 707c74bf87784..b02eaf1266d2c 100644
+--- a/third_party/blink/renderer/core/xml/parser/xml_ffi.rs
++++ b/third_party/blink/renderer/core/xml/parser/xml_ffi.rs
+@@ -268,7 +268,7 @@ fn attributes_next&lt;'a&gt;(
+         match &amp;name.prefix {
+             Some(pref) =&gt; {
+                 let mut q_name = String::with_capacity(pref.len() + 1 + name.local_name.len());
+-                q_name.push_str(&amp;pref);
++                q_name.push_str(pref);
+                 q_name.push(':');
+                 q_name.push_str(&amp;name.local_name);
+                 attribute_view.as_mut().Populate(</pre>
+<h2 id="implementation-detail-when-exactly-does-clippy-run">Implementation detail: When exactly does Clippy run?</h2>
+<p>When <code>enable_rust_clippy = true</code> then by default each Rust target
+(e.g. <code>rust_static_library(&quot;foo&quot;)</code>) will have a
+<a href="https://gn.googlesource.com/gn/+/main/docs/reference.md#var_validations"><code>validations</code></a>
+dependency edge to an <code>action(&quot;foo_clippy&quot;)</code> target.
+This means that <code>foo_clippy</code> will be invoked whenever <code>foo</code> is built (when
+<code>ninja</code> is asked to build <code>foo</code> directly or when <code>foo</code> is transitively needed).
+OTOH, targets that depend on <code>foo</code> will not be blocked waiting for completion
+of <code>foo_clippy</code>.</p>
+<p>If you want to minimize overhead of Clippy even further, you can consider
+setting <code>enable_rust_clippy_eager = false</code>.  This removes the <code>validations</code>
+dependency edge described above, so that building <code>foo</code> no longer triggers
+<code>foo_clippy</code>.  This mode is discouraged, because it means that Clippy failures
+will go undetected until a full build (e.g. until CQ).  Nevertheless, this mode
+may be useful when wanting to quickly iterate on code.</p>
+<h2 id="references">References</h2>
+<ul>
+<li>Tracking bug: <a href="https://crbug.com/41484295/dependencies">https://crbug.com/41484295/dependencies</a></li>
+<li>Initial design doc:
+<a href="https://docs.google.com/document/d/1waxby3UnWPhU_CjKFQlQGUTMmkb0qTZK2gYwqo4KPd0/edit?usp=sharing">&quot;Clippy in Chromium&quot;</a></li>
+<li>Technical deep dive:
+<a href="https://docs.google.com/document/d/1Ki9gwPv43p4G65cYoaPOdv3GIqHNpYHAPsXNp0Zdmjk/edit?usp=sharing">&quot;Clippy in Chromium: dep edge&quot;</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/clippy.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/clippy.md</a>
+  </p>
+</div>

@@ -1,0 +1,452 @@
+<h1>Checking out and building Chromium for iOS</h1>
+<p>There are instructions for other platforms linked from the
+<a href="../get_the_code">get the code</a> page.</p>
+<h2 id="instructions-for-google-employees">Instructions for Google Employees</h2>
+<p>Are you a Google employee? See
+<a href="https://goto.google.com/building-chrome">go/building-chrome</a> instead.</p>
+<h2 id="system-requirements">System requirements</h2>
+<!-- LINT.IfChange --><ul>
+<li>A 64-bit Mac capable of running the required version of Xcode.</li>
+<li><a href="https://developer.apple.com/xcode">Xcode</a> 26.0 or higher.</li>
+</ul>
+<!-- LINT.ThenChange(//ios/build/chrome_build.gni) --><p>Note: after installing Xcode, you need to install
+the iOS simulator. This is required as part of the build, see
+<a href="https://developer.apple.com/documentation/xcode/downloading-and-installing-additional-xcode-components">this document</a>
+to add iOS Platform Support.</p>
+<h2 id="install-depot_tools">Install <code>depot_tools</code></h2>
+<p>Clone the <code>depot_tools</code> repository:</p>
+<pre data-language="shell">$ git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git</pre>
+<p>You need to add the directory where you checked out <code>depot_tools</code> to your
+<code>PATH</code> to make the <code>gclient</code> commands available. It is also recommended to
+add the <code>depot_tools/python-bin</code> directory to your <code>PATH</code> to get access to
+a recent version of python3 (the version shipped by default on macOS tends
+to be quite old which can lead to build failure).</p>
+<p>To do that, edit your shell login script (e.g. <code>~/.bash_profile</code>, <code>~/.zprofile</code>)
+and add the following line at the end (assuming you&#39;ve checked out <code>depot_tools</code>
+in your <code>HOME</code> directory):</p>
+<pre data-language="shell">export PATH=&quot;$HOME/depot_tools:$HOME/depot_tools/python-bin:$PATH&quot;</pre>
+<p>You may need to run <code>gclient status</code> to force an update of <code>depot_tools</code>
+before the <code>python3</code> command work once you&#39;ve updated your <code>PATH</code>.</p>
+<p>You can omit <code>$HOME/depot_tools/python-bin</code> if you already have a recent
+version of python installed and you manually manage it (but this may lead
+to unexpected build failures).</p>
+<h2 id="get-the-code">Get the code</h2>
+<p>Create a <code>chromium</code> directory for the checkout and change to it (you can call
+this whatever you like and put it wherever you like, as
+long as the full path has no spaces):</p>
+<pre data-language="shell">$ mkdir chromium &amp;&amp; cd chromium</pre>
+<p>Run the <code>fetch</code> tool from <code>depot_tools</code> to check out the code and its
+dependencies.</p>
+<pre data-language="shell">$ fetch ios</pre>
+<p>If you don&#39;t want the full repo history, you can save a lot of time by
+adding the <code>--no-history</code> flag to <code>fetch</code>.</p>
+<p>You can make this much faster by passing <code>--git-cache</code> to <code>fetch</code>, which
+seeds the checkout from a shared, prebuilt snapshot instead of cloning from
+scratch (and, unlike <code>--no-history</code>, keeps the full history):</p>
+<pre data-language="shell">$ fetch --git-cache ios</pre>
+<p>The cache directory is chosen automatically (override with <code>$GIT_CACHE_PATH</code>).
+It mirrors every repo it fetches (~30 GB for Chromium) and is shared by all
+checkouts on the machine: working trees reference it instead of copying the
+objects, so the per-checkout <code>.git</code> stays small.</p>
+<p>Expect the command to take 30 minutes on even a fast connection, and many
+hours on slower ones.</p>
+<p>When <code>fetch</code> completes, it will have created a hidden <code>.gclient</code> file and a
+directory called <code>src</code> in the working directory. The remaining instructions
+assume you have switched to the <code>src</code> directory:</p>
+<pre data-language="shell">$ cd src</pre>
+<p><em>Optional</em>: You can also <a href="https://www.chromium.org/developers/how-tos/api-keys">install API
+keys</a> if you want your
+build to talk to some Google services, but this is not necessary for most
+development and testing purposes.</p>
+<h2 id="setting-up-the-build">Setting up the build</h2>
+<p>Since the iOS build is a bit more complicated than a desktop build, we provide
+<code>ios/build/tools/setup-gn.py</code>, which will create four appropriately configured
+build directories under <code>out</code> for Release and Debug device and simulator
+builds, and generates an appropriate Xcode project (<code>out/build/all.xcodeproj</code>)
+as well.</p>
+<p>More information about <a href="xcode_tips">developing with Xcode</a>. <em>Xcode project
+is an artifact, any changes made in the project itself will be ignored.</em></p>
+<p>You can customize the build by editing a file called <code>.setup-gn</code> (create it if
+it does not exist). It can be stored in two locations:</p>
+<ul>
+<li><code>$HOME/.setup-gn</code> (the settings will be applied to all Chromium checkouts).</li>
+<li>The directory above <code>src/</code> (i.e. the directory containing your <code>.gclient</code>)
+for checkout-specific settings.</li>
+</ul>
+<p>Look at <code>src/ios/build/tools/setup-gn.config</code> for available configuration
+options.</p>
+<p>From this point, you can either build from Xcode or from the command line using
+<code>autoninja</code>. <code>setup-gn.py</code> creates sub-directories named
+<code>out/${configuration}-${platform}</code>, so for a <code>Debug</code> build for simulator use:</p>
+<pre data-language="shell">$ autoninja -C out/Debug-iphonesimulator gn_all</pre>
+<p>(<code>autoninja</code> is a wrapper that automatically provides optimal values for the
+arguments passed to <code>ninja</code>.)</p>
+<p>Tips: See <a href="../siso_tips">Siso tips</a>.</p>
+<p>Note: The <code>setup-gn.py</code> script needs to run every time one of the <code>BUILD.gn</code>
+files is updated (either by you or after rebasing). If you forget to run it,
+the list of targets and files in the Xcode solution may be stale. You can run
+the script directly or use either <code>gclient sync</code> or <code>gclient runhooks</code> which
+will run <code>setup-gn.py</code> for you as part of the update hooks.</p>
+<p>You can add a custom hook to <code>.gclient</code> file to configure <code>setup-gn.py</code> to
+be run as part of <code>gclient runhooks</code>. In that case, your <code>.gclient</code> file
+would look like this:</p>
+<pre>solutions = [
+  {
+    &quot;name&quot;        : &quot;src&quot;,
+    &quot;url&quot;         : &quot;https://chromium.googlesource.com/chromium/src.git&quot;,
+    &quot;deps_file&quot;   : &quot;DEPS&quot;,
+    &quot;managed&quot;     : False,
+    &quot;custom_deps&quot; : {},
+    &quot;custom_vars&quot; : {},
+    &quot;custom_hooks&quot;: [{
+      &quot;name&quot;: &quot;setup_gn&quot;,
+      &quot;pattern&quot;: &quot;.&quot;,
+      &quot;action&quot;: [
+        &quot;python3&quot;,
+        &quot;src/ios/build/tools/setup-gn.py&quot;,
+      ]
+    }],
+    &quot;safesync_url&quot;: &quot;&quot;,
+  },
+]
+target_os = [&quot;ios&quot;]
+target_os_only = True</pre>
+<p>You can also follow the manual instructions on the
+<a href="../mac_build_instructions">Mac page</a>, but make sure you set the
+GN arg <code>target_os=&quot;ios&quot;</code>.</p>
+<h3 id="faster-builds">Faster builds</h3>
+<p>This section contains some things you can change to speed up your builds,
+sorted so that the things that make the biggest difference are first.</p>
+<h4 id="use-remote-execution">Use Remote Execution</h4>
+<p>Google employees should use RBE, a remote execution system. Detailed
+information is available internally but the relevant gn arg is:</p>
+<ul>
+<li><code>use_remoteexec = true</code></li>
+</ul>
+<p>Google employees can visit
+<a href="https://goto.google.com/building-chrome-mac#using-remote-execution">go/building-chrome-mac#using-remote-execution</a>
+for more information. For external contributors, Siso&#39;s remote execution with
+rbe-chromium-untrusted does not support iOS builds.</p>
+<h2 id="building-for-device">Building for device</h2>
+<p>To be able to build and run Chromium and the tests for devices, you need to
+have an Apple developer account (a free one will work) and the appropriate
+provisioning profiles, then configure the build to use them.</p>
+<h3 id="code-signing-identity">Code signing identity</h3>
+<p>Please refer to the Apple documentation on how to get a code signing identity
+and certificates. You can check that you have a code signing identity correctly
+installed by running the following command.</p>
+<pre data-language="shell">$ xcrun security find-identity -v -p codesigning
+  1) 0123456789ABCDEF0123456789ABCDEF01234567 &quot;iPhone Developer: someone@example.com (XXXXXXXXXX)&quot;
+     1 valid identities found</pre>
+<p>If the command output says you have zero valid identities, then you do not
+have a code signing identity installed and need to get one from Apple. If
+you have more than one identity, the build system may select the wrong one
+automatically, and you can use the <code>ios_code_signing_identity</code> gn variable
+to control which one to use by setting it to the identity hash, e.g. to
+<code>&quot;0123456789ABCDEF0123456789ABCDEF01234567&quot;</code>.</p>
+<h3 id="mobile-provisioning-profiles">Mobile provisioning profiles</h3>
+<p>Once you have the code signing identity, you need to decide on a prefix
+for the application bundle identifier. This is controlled by the gn variable
+<code>ios_app_bundle_id_prefix</code> and usually corresponds to a reversed domain name
+(the default value is <code>&quot;org.chromium&quot;</code>).</p>
+<p>You then need to request provisioning profiles from Apple for your devices
+for the following bundle identifiers to build and run Chromium with these
+application extensions:</p>
+<ul>
+<li><code>${prefix}.chrome.ios.dev</code></li>
+<li><code>${prefix}.chrome.ios.dev.CredentialProviderExtension</code></li>
+<li><code>${prefix}.chrome.ios.dev.IntentsExtension</code></li>
+<li><code>${prefix}.chrome.ios.dev.OpenExtension</code></li>
+<li><code>${prefix}.chrome.ios.dev.ShareExtension</code></li>
+<li><code>${prefix}.chrome.ios.dev.WidgetKitExtension</code></li>
+</ul>
+<p>All these certificates need to have the &quot;App Groups&quot;
+(<code>com.apple.security.application-groups</code>) capability enabled for
+the following groups:</p>
+<ul>
+<li><code>group.${prefix}.chrome</code></li>
+<li><code>group.${prefix}.common</code></li>
+</ul>
+<p>The <code>group.${prefix}.chrome</code> is only shared by Chromium and its extensions
+to share files and configurations while the <code>group.${prefix}.common</code> is shared
+with Chromium and other applications from the same organisation and can be used
+to send commands to Chromium.</p>
+<p><code>${prefix}.chrome.ios.dev</code> and
+<code>${prefix}.chrome.ios.dev.CredentialProviderExtension</code> need the AutoFill
+Credential Provider Entitlement, which corresponds to the key
+<code>com.apple.developer.authentication-services.autofill-credential-provider</code>.</p>
+<p><code>${prefix}.chrome.ios.dev</code> additionally needs the
+<code>com.apple.developer.kernel.extended-virtual-addressing</code> entitlement when
+running on a real device.</p>
+<h3 id="mobile-provisioning-profiles-for-tests">Mobile provisioning profiles for tests</h3>
+<p>In addition to that, you need a different provisioning profile for each
+test application. Those provisioning profile will have a bundle identifier
+matching the following pattern <code>${prefix}.gtest.${test-suite-name}</code> where
+<code>${test-suite-name}</code> is the name of the test suite with underscores changed
+to dashes (e.g. <code>base_unittests</code> app will use <code>${prefix}.gtest.base-unittests</code>
+as bundle identifier).</p>
+<p>To be able to run the EarlGrey tests on a device, you&#39;ll need two provisioning
+profiles for EarlGrey and OCHamcrest frameworks:</p>
+<ul>
+<li><code>${prefix}.test.OCHamcrest</code></li>
+<li><code>${prefix}.test.EarlGrey</code></li>
+</ul>
+<p>In addition to that, then you&#39;ll need one additional provisioning profile for
+the XCTest module too. It must match the pattern:
+<code>${prefix}.gtest.${test-suite-name}-module</code>.</p>
+<h3 id="other-applications">Other applications</h3>
+<p>Other applications like <code>ios_web_shell</code> usually will require mobile provisioning
+profiles with bundle identifiers that may usually match the following pattern
+<code>${prefix}.${application-name}</code> and may require specific capabilities.</p>
+<p>Generally, if the mobile provisioning profile is missing then the code signing
+step will fail and will print the bundle identifier of the bundle that could not
+be signed on the command line, e.g.:</p>
+<pre data-language="shell">$ autoninja -C out/Debug-iphoneos ios_web_shell
+ninja: Entering directory `out/Debug-iphoneos'
+FAILED: ios_web_shell.app/ios_web_shell ios_web_shell.app/_CodeSignature/CodeResources ios_web_shell.app/embedded.mobileprovision
+python ../../build/config/apple/codesign.py code-sign-bundle -t=iphoneos -i=0123456789ABCDEF0123456789ABCDEF01234567 -e=../../build/config/ios/entitlements.plist -b=obj/ios/web/shell/ios_web_shell ios_web_shell.app
+Error: no mobile provisioning profile found for &quot;org.chromium.ios-web-shell&quot;.
+ninja: build stopped: subcommand failed.</pre>
+<p>Here, the build is failing because there are no mobile provisioning profiles
+installed that could sign the <code>ios_web_shell.app</code> bundle with the identity
+<code>0123456789ABCDEF0123456789ABCDEF01234567</code>. To fix the build, you&#39;ll need to
+request such a mobile provisioning profile from Apple.</p>
+<p>You can inspect the file passed via the <code>-e</code> flag to the <code>codesign.py</code> script
+to check which capabilities are required for the mobile provisioning profile
+(e.g. <code>src/build/config/ios/entitlements.plist</code> for the above build error,
+remember that the paths are relative to the build directory, not to the source
+directory).</p>
+<p>If the required capabilities are not enabled on the mobile provisioning profile,
+then it will be impossible to install the application on a device (Xcode will
+display an error stating that &quot;The application was signed with invalid
+entitlements&quot;).</p>
+<h2 id="building-blink-for-ios">Building Blink for iOS</h2>
+<p>The iOS build supports compiling the blink web platform. To compile blink
+set a gn arg in your <code>.setup-gn</code> file. Note the blink web platform is
+experimental code and should only be used for analysis.</p>
+<pre>[gn_args]
+use_blink = true
+ios_content_shell_bundle_identifier=&quot;REPLACE_YOUR_BUNDLE_IDENTIFIER_HERE&quot;
+ios_chromium_bundle_id=&quot;REPLACE_YOUR_BUNDLE_IDENTIFIER_HERE&quot;</pre>
+<p>Note that only certain targets support blink. <code>content_shell</code> and <code>chrome</code>
+being the most useful.</p>
+<pre data-language="shell">$ autoninja -C out/Debug-iphonesimulator content_shell chrome</pre>
+<h2 id="blink-for-tvos-builds-and-running">Blink for tvOS builds and running</h2>
+<p>Note: To build Blink for tvOS, make sure that the tvOS SDK and the tvOS
+simulator are installed on your system.</p>
+<p>Blink for tvOS is an experimental project that aims to port Blink to Apple tvOS.
+Due to platform limitations, specifically because tvOS does not support
+multi-process applications, Blink for tvOS runs in a single-process mode only.
+As a result, there is no security isolation, since all content runs within the
+same process. Therefore, it is intended solely for loading trusted content.
+Please note that this project is still under development and considered
+unstable.</p>
+<p>tvOS is an iOS-based platform, and within the Chromium project, it is treated as
+a variant of the iOS build. As such, the same setup instructions used for iOS
+also apply to tvOS.</p>
+<p>If you use the <code>setup-gn.py</code> script as described above, it will automatically
+create <code>out/${configuration}-appletvsimulator</code> and
+<code>out/${configuration}-appletvos</code> directories with the appropriate GN arguments.</p>
+<p>If you would like to set your build up manually, the following GN arguments are
+required:</p>
+<pre>target_os=&quot;ios&quot;
+target_platform=&quot;tvos&quot;
+use_blink=true</pre>
+<p>Currently, tvOS supports only a limited set of targets, with <code>content_shell</code>
+being the most useful one. Note that <code>chrome</code> is not a supported target.</p>
+<p>The <code>iossim</code> tool also supports tvOS via the <code>-x tvos</code> argument. You can run a
+debug build of <code>content_shell</code>:</p>
+<pre data-language="shell">$ out/Debug-appletvsimulator/iossim -d 'Apple TV' -s '18.4' -x tvos \
+  out/Debug-appletvsimulator/content_shell.app</pre>
+<h2 id="running-apps-from-the-command-line">Running apps from the command line</h2>
+<p>Any target that is built and runs on the bots (see <a href="#Troubleshooting">below</a>)
+should run successfully in a local build. To run in the simulator from the
+command line, you can use <code>iossim</code>. For example, to run a debug build of
+<code>Chromium</code>:</p>
+<pre data-language="shell">$ out/Debug-iphonesimulator/iossim -i out/Debug-iphonesimulator/Chromium.app</pre>
+<p>Note that <code>iossim</code> does not automatically launch the Simulator. This must be
+done manually <em>after</em> running <code>iossim</code>.</p>
+<h3 id="passing-arguments">Passing arguments</h3>
+<p>Arguments needed to be passed to the test application through <code>iossim</code>, such as
+<code>--gtest_filter=SomeTest.FooBar</code> should be passed through the <code>-c</code> flag:</p>
+<pre data-language="shell">$ out/Debug-iphonesimulator/iossim -i \
+    -c &quot;--gtest_filter=SomeTest.FooBar --gtest_repeat=3&quot; \
+    out/Debug-iphonesimulator/base_unittests.app</pre>
+<h3 id="running-earlgrey-tests">Running EarlGrey tests</h3>
+<p>EarlGrey tests are run differently than other test targets, as there is an
+XCTest bundle that is injected into the target application. Therefore you must
+also pass in the test bundle:</p>
+<pre data-language="shell">$ out/Debug-iphonesimulator/iossim -i \
+    out/Debug-iphonesimulator/ios_chrome_ui_egtests.app \
+    out/Debug-iphonesimulator/ios_chrome_ui_egtests.app/PlugIns/ios_chrome_ui_egtests_module.xctest</pre>
+<h3 id="running-web-tests-on-blink-for-ios">Running Web Tests on Blink for iOS</h3>
+<p>The current Blink for iOS only supports running Web Tests on the simulator
+environment now. Before you run the web tests, you need to build the blink_tests
+target to get content_shell and all of the other needed binaries for the
+simulator test environment.</p>
+<pre data-language="shell">$ autoninja -C out/Debug-iphonesimulator blink_tests</pre>
+<p>When the blink_tests target is complete you can then run the test runner script
+(third_party/blink/tools/run_web_tests.py) as below. See <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/testing/web_tests.md">Web Tests</a> document
+for more information.</p>
+<pre data-language="shell">$ third_party/blink/tools/run_web_tests.py -t Debug-iphonesimulator \
+    --platform ios --verbose</pre>
+<h3 id="running-web-tests-on-blink-for-tvos">Running Web Tests on Blink for tvOS</h3>
+<p>Blink for tvOS currently supports running Web Tests only in the simulator
+environment. To prepare the simulator test environment, first build the
+blink_tests target, which provides content_shell and the other required
+binaries.</p>
+<pre data-language="shell">$ autoninja -C out/Debug-appletvsimulator blink_tests</pre>
+<p>When the blink_tests target is complete you can then run the test runner script
+(third_party/blink/tools/run_web_tests.py) as below. See <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/testing/web_tests.md">Web Tests</a> document
+for more information.</p>
+<p>Once the build is complete, use
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/tools/run_web_tests.py">run_web_tests.py</a>
+to run the Web Tests on the tvOS simulator. For additional information about
+Web Tests, see the
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/testing/web_tests.md">Web Tests</a>
+document.</p>
+<pre data-language="shell">$ third_party/blink/tools/run_web_tests.py -t Debug-appletvsimulator \
+    --platform tvos --verbose</pre>
+<h3 id="running-on-specific-simulator">Running on specific simulator</h3>
+<p>By default, <code>iossim</code> will pick an arbitrary simulator to run the tests. If
+you want to run them on a specific simulator, you can use <code>-d</code> to pick the
+simulated device and <code>-s</code> to select the iOS version.</p>
+<p>For example, to run the tests on a simulated iPhone 6s running iOS 10.0,
+you would invoke <code>iossim</code> like this.</p>
+<pre data-language="shell">$ out/Debug-iphonesimulator/iossim -i -d 'iPhone 6s' -s '10.0' \
+    out/Debug-iphonesimulator/base_unittests.app</pre>
+<p>Please note that by default only a subset of simulator devices are installed
+with Xcode. You may have to install additional simulators in Xcode (or even
+an older version of Xcode) to be able to run on a specific configuration.</p>
+<p>Go to &quot;Preferences &gt; Components&quot; tab in Xcode to install other simulator images
+(this is the location the setting is in Xcode 9.2; it may be different in other
+version of the tool).</p>
+<h3 id="remote-debugging-with-devtools-on-blink-for-ios">Remote debugging with DevTools (on Blink for iOS)</h3>
+<p>Developers are able to remotely use DevTools in a host machine (e.g. Mac) and
+inspect <code>content_shell</code> for development.</p>
+<p>On the simulator, one just needs to pass the <code>--remote-debugging-port=9222</code>
+argument for <code>content_shell</code> and in the host machine access it via
+<code>chrome://inspect</code>. It is possible to change the default port listening (9222)
+and configure another one via the  &quot;Configure…&quot; button and then &quot;Target
+discovery settings&quot; dialog.</p>
+<p>To use DevTools in the remote device it is necessary to also pass the remote
+debugging address argument to <code>content-shell</code> so any address could bind for
+debugging: <code> --remote-debugging-address=0.0.0.0 --remote-debugging-port=9222</code>.
+Then in the host machine one needs to configure the IP address of the device in
+the &quot;Target discovery settings&quot; dialog e.g. <code>192.168.0.102:9222</code>.</p>
+<h2 id="update-your-checkout">Update your checkout</h2>
+<p>To update an existing checkout, you can run</p>
+<pre data-language="shell">$ git rebase-update
+$ gclient sync</pre>
+<p>The first command updates the primary Chromium source repository and rebases
+any of your local branches on top of tip-of-tree (aka the Git branch
+<code>origin/main</code>). If you don&#39;t want to use this script, you can also just use
+<code>git pull</code> or other common Git commands to update the repo.</p>
+<p>The second command syncs dependencies to the appropriate versions and re-runs
+hooks as needed.</p>
+<h2 id="tips-tricks-and-troubleshooting">Tips, tricks, and troubleshooting</h2>
+<p>Remember that the Xcode project you interact with while working on Chromium is a
+build artifact, generated from the <code>BUILD.gn</code> files. Do not use it to add new
+files; instead see the procedures for <a href="working_with_files">working with
+files</a>.</p>
+<p>If you have problems building, you can join us on
+<a href="https://www.chromium.org/developers/slack/">Slack</a> or one of our <a href="https://www.chromium.org/developers/technical-discussion-groups/">mailing
+lists</a>.</p>
+<h3 id="debugging">Debugging</h3>
+<p>To help with deterministic builds, and to work with remote execution, the path
+to source files in debugging symbols are relative to source directory. To allow
+Xcode
+to find the source files, you need to ensure to have an <code>~/.lldbinit-Xcode</code>
+file with the following lines into it (substitute {SRC} for your actual path
+to the root of Chromium&#39;s sources):</p>
+<pre>script sys.path[:0] = ['{SRC}/tools/lldb']
+script import lldbinit</pre>
+<p>This will also allow you to see the content of some of Chromium types in the
+debugger like <code>std::u16string</code>, ... If you want to use <code>lldb</code> directly, name
+the file <code>~/.lldbinit</code> instead of <code>~/.lldbinit-Xcode</code>.</p>
+<p>Note: if you are using <code>ios/build/tools/setup-gn.py</code> to generate the Xcode
+project, the script also generate an <code>.lldbinit</code> file next to the project and
+configure Xcode to use that file instead of the global one.</p>
+<h3 id="changing-the-version-of-xcode">Changing the version of Xcode</h3>
+<p>To change the version of Xcode used to build Chromium on iOS, please follow
+the steps below:</p>
+<ol>
+<li><p>Launch the new version of Xcode.app.</p>
+<p>This is required as Xcode may need to install some components into
+the system before the new version can be used from the command-line.</p>
+</li>
+<li><p>Reboot your computer.</p>
+<p>This is required as some of Xcode components are daemons that are not
+automatically stopped when updating Xcode, and command-line tools will
+fail if the daemon version is incompatible (usually <code>actool</code> fails).</p>
+</li>
+<li><p>Run <code>gn gen</code>.</p>
+<p>This is required as the <code>ninja</code> files generated by <code>gn</code> encodes some
+information about Xcode (notably the path to the SDK, ...) that will
+change with each version. It is not possible to have <code>ninja</code> re-run
+<code>gn gen</code> automatically when those changes unfortunately.</p>
+<p>If you have a downstream chekout, run <code>gclient runhooks</code> instead of
+<code>gn gen</code> as it will ensure that <code>gn gen</code> will be run automatically
+for all possible combination of target and configuration from within
+Xcode.</p>
+</li>
+</ol>
+<p>If you skip some of those steps, the build may occasionally succeed, but
+it has been observed in the past that those steps are required in the
+vast majority of the situation. Please save yourself some painful build
+debugging and follow them.</p>
+<p>If you use <code>xcode-select</code> to switch between multiple version of Xcode,
+you will have to follow the same steps.</p>
+<h3 id="improving-performance-of-git-commands">Improving performance of git commands</h3>
+<h4 id="increase-the-vnode-cache-size">Increase the vnode cache size</h4>
+<p><code>git status</code> is used frequently to determine the status of your checkout.  Due
+to the large number of files in Chromium&#39;s checkout, <code>git status</code> performance
+can be quite variable.  Increasing the system&#39;s vnode cache appears to help.
+By default, this command:</p>
+<pre data-language="shell">$ sysctl -a | egrep kern\..*vnodes</pre>
+<p>Outputs <code>kern.maxvnodes: 263168</code> (263168 is 257 * 1024).  To increase this
+setting:</p>
+<pre data-language="shell">$ sudo sysctl kern.maxvnodes=$((512*1024))</pre>
+<p>Higher values may be appropriate if you routinely move between different
+Chromium checkouts.  This setting will reset on reboot, the startup setting can
+be set in <code>/etc/sysctl.conf</code>:</p>
+<pre data-language="shell">$ echo kern.maxvnodes=$((512*1024)) | sudo tee -a /etc/sysctl.conf</pre>
+<p>Or edit the file directly.</p>
+<h4 id="configure-git-to-use-an-untracked-cache">Configure git to use an untracked cache</h4>
+<p>Try running</p>
+<pre data-language="shell">$ git update-index --test-untracked-cache</pre>
+<p>If the output ends with <code>OK</code>, then the following may also improve performance of
+<code>git status</code>:</p>
+<pre data-language="shell">$ git config core.untrackedCache true</pre>
+<h4 id="configure-git-to-use-fsmonitor">Configure git to use fsmonitor</h4>
+<p>You can significantly speed up git by using <a href="https://github.blog/2022-06-29-improve-git-monorepo-performance-with-a-file-system-monitor/">fsmonitor.</a>
+You should enable fsmonitor in large repos, such as Chromium and v8. Enabling
+it globally will launch many processes and probably isn&#39;t worthwhile. Be sure
+you have at least version 2.43 (fsmonitor on the Mac is broken before then). The
+command to enable fsmonitor in the current repo is:</p>
+<pre data-language="shell">$ git config core.fsmonitor true</pre>
+<h3 id="xcode-license-agreement">Xcode license agreement</h3>
+<p>If you&#39;re getting the error</p>
+<blockquote>
+<p>Agreeing to the Xcode/iOS license requires admin privileges, please re-run as
+root via sudo.</p>
+</blockquote>
+<p>the Xcode license hasn&#39;t been accepted yet which (contrary to the message) any
+user can do by running:</p>
+<pre data-language="shell">$ xcodebuild -license</pre>
+<p>Only accepting for all users of the machine requires root:</p>
+<pre data-language="shell">$ sudo xcodebuild -license</pre>
+<h3 id="exclude-checkout-from-spotlight-indexing">Exclude checkout from Spotlight indexing</h3>
+<p>Chromium&#39;s checkout contains a lot of files, and building generates many more.
+Spotlight will try to index all of those files, and uses a lot of CPU time
+doing so, especially during a build, which can slow things down.</p>
+<p>To prevent the Chromium checkout from being indexed by Spotlight, open <strong>System
+Settings</strong> -&gt; <strong>Siri &amp; Spotlight</strong> (or <strong>Spotlight</strong>), click <strong>Spotlight
+Privacy...</strong> (or <strong>Search Privacy...</strong>) at the bottom, and add your Chromium
+checkout directory to the list of excluded locations.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ios/build_instructions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ios/build_instructions.md</a>
+  </p>
+</div>

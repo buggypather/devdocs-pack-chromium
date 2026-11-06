@@ -1,0 +1,59 @@
+<h1>Chromium UI Frontline Triage Procedures and Policy</h1>
+<h2 id="filing-new-issues">Filing New Issues</h2>
+<h3 id="steps">Steps</h3>
+<ol start="0">
+<li>Read and follow the <a href="https://chromium.googlesource.com/chromium/src/+/main/CODE_OF_CONDUCT.md">Chromium Code of Conduct</a>.</li>
+<li>File your issue on <a href="http://crbug.com/">http://crbug.com/</a>.<ul>
+<li>Required: Repro Steps</li>
+<li>Preferred: Screenshots</li>
+<li>Optional: Video Repro (Please keep brief and to the point)</li>
+</ul>
+</li>
+<li>Add the label Hotlist-DesktopUIConsider.</li>
+<li>Find an appropriate component.</li>
+</ol>
+<h3 id="consideration-deadline">Consideration Deadline</h3>
+<p>Issues must be marked Hotlist-DesktopUIConsider by Wednesday 5:00p PT for
+consideration for that week.</p>
+<h2 id="weekly-triage-process">Weekly Triage Process</h2>
+<ol>
+<li>After the consideration deadline, query for all Hotlist-DesktopUIConsider
+bugs.</li>
+<li>For each bug, perform the following:<ol>
+<li>Assess Priority<ul>
+<li>P0: Emergency, must be fixed now or before the next Canary. Mark with a
+ReleaseBlock label for the nearest build that does not have the
+issue.</li>
+<li>P1: Bug most users will hit. Mark with a ReleaseBlock label.<ul>
+<li>Mark ReleaseBlock-Dev if the issue impacts a core scenario (like
+scrolling).</li>
+<li>Mark ReleaseBlock-Beta if the issue impacts a secondary scenario.</li>
+<li>Mark ReleaseBlock-Stable if Chrome should never ship with this issue.</li>
+</ul>
+</li>
+<li>P2 - Bug that many users may hit and/or has a reasonable workaround.</li>
+<li>P3 - Bug that few users will hit.</li>
+</ul>
+</li>
+<li>Schedule a milestone.</li>
+<li>Assign to relevant area owner:<ul>
+<li>Omnibox: jdonneley@</li>
+<li>Top Chrome: dfried@</li>
+<li>UI Platform: robliao@</li>
+<li>WebUI: dpapad@</li>
+</ul>
+</li>
+</ol>
+</li>
+<li>Once all bugs are triaged, remove the Hotlist-DesktopUIConsider label and add
+Hotlist-DesktopUITriaged.</li>
+</ol>
+<h2 id="periodic-review-at-milestone-branch">Periodic Review at Milestone Branch</h2>
+<p>For all Hotlist-DesktopUITriaged bugs, reassess priority and milestone using the
+above standards.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/frontline_triage.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/frontline_triage.md</a>
+  </p>
+</div>

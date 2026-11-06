@@ -1,0 +1,30 @@
+<h1>Test Wrapper API</h1>
+<p>In order to simplify the calling conventions for tests that we run on our
+continuous integration system, we require them to follow a simple API
+convention. For a given GN label //X:Y and build directory //Z in a checkout
+(e.g., //url:url_unittests and //out/Release), we expect there to be:</p>
+<pre>* A file `$Z/$Y.runtime_deps` containing a list of files needed to run
+  the test (in the format produced by `gn desc //Z //X:Y runtime_deps`,
+  which is a newline-separated list of paths relative to Z)
+* An executable file `$Z/bin/run_$Y` which does everything needed to set
+  up and run the test with all of the appropriate flags. This will usually
+  be a vpython script.
+* (on Windows) A file `$Z/bin/run_$Y.bat` file that will turn around
+  and invoke the corresponding run_$ vpython script.</pre>
+<p>If you create a directory snapshot with the files listed in the .runtime_deps
+file, cd to $Z, and run bin/run_$Y, then the test should run to completion
+successfully.</p>
+<p>The script file MUST honor the <code>GTEST_SHARD_INDEX</code> and <code>GTEST_TOTAL_SHARDS</code>
+environment variables as documented in
+<a href="test_executable_api">the Test Executable API</a> and SHOULD conform to
+the Test Executable API in other respects (i.e., honor the
+<code>--isolated-script-test-filter</code> arg and other command line flags specified
+in that API).</p>
+<p>TODO(crbug.com/40564748): Convert everything to the Test Executable API, and
+change the above SHOULD to a MUST.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/test_wrapper_api.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/test_wrapper_api.md</a>
+  </p>
+</div>

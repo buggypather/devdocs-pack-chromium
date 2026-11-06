@@ -1,0 +1,200 @@
+<h1>Navigation Concepts</h1>
+<p>This documentation covers a set of important topics to understand related to
+navigation. For a timeline of how a given navigation proceeds, see <a href="navigation">Life of a
+Navigation</a>.</p>
+<h2 id="same-document-and-cross-document-navigations">Same-Document and Cross-Document Navigations</h2>
+<p>Chromium defines two types of navigations based on whether the navigation
+results in a new document or not. A <em>cross-document</em> navigation is one that
+results in creating a new document to replace an existing document. This is
+the type of navigation that most users are familiar with. A <em>same-document</em>
+navigation does not create a new document, but rather keeps the same document
+and changes state associated with it. A same-document navigation does create a
+new session history entry, even though the same document remains active. This
+can be the result of one of the following cases:</p>
+<ul>
+<li>Navigating to a fragment within an existing document (e.g.
+<code>https://foo.com/1.html#fragment</code>).</li>
+<li>A document calling the <code>history.pushState()</code> or <code>history.replaceState()</code> APIs.</li>
+<li>A new document created via <code>document.open()</code>, which may change the URL to
+match the document that initiated the call (possibly from another frame).</li>
+<li>A session history navigation that stays in the same document, such as going
+back/forward to an existing entry for the same document.</li>
+</ul>
+<h2 id="browser-initiated-and-renderer-initiated-navigations">Browser-Initiated and Renderer-Initiated Navigations</h2>
+<p>Chromium also defines two types of navigations based on which process started
+the navigation: <em>browser-initiated</em> and <em>renderer-initiated</em>. This distinction
+is useful when making decisions about navigations, for example whether an
+ongoing navigation needs to be cancelled or not when a new navigation is
+starting. It is also used for some security decisions, such as whether to
+display the target URL of the navigation in the address bar or not.</p>
+<p>Browser-initiated navigations are more trustworthy, as they are usually in
+response to a user interaction with the UI of the browser, such as the address
+bar or bookmarks. These have higher privileges, such as the ability to navigate
+to <code>file://</code> or <code>chrome://</code> URLs.</p>
+<p>Renderer-initiated navigations originate in the renderer process (e.g., via a
+link click or Javascript code). Some renderer-initiated navigations may still be
+considered <em>user-initiated</em> if they were performed with a <a href="https://mustaqahmed.github.io/user-activation-v2/">user
+activation</a> (e.g., links),
+while others are not user-initiated (e.g., script navigations).</p>
+<p>Renderer-initiated navigations are considered less trustworthy and are <a href="special_case_urls#chrome_and-os_urls">not
+allowed to target privileged URLs</a>.
+This is important for security: allowing web content to navigate to <code>file://</code>,
+<code>chrome://</code>, or other such URLs would pose a medium severity risk of privilege
+escalation (e.g., creating a stepping stone of opening a file to access its
+contents via another bug) or privacy concerns (e.g., leaking their presence or
+contents via side channel attacks).</p>
+<h2 id="last-committed-pending-and-visible-urls">Last Committed, Pending, and Visible URLs</h2>
+<p>Many features care about the URL or Origin of a given document, or about a
+pending navigation, or about what is showing in the address bar. These are all
+different concepts with different security implications, so be sure to use the
+correct value for your use case.</p>
+<p>See <a href="security/origin-vs-url">Origin vs URL</a> when deciding whether to check
+the Origin or URL. In many cases that care about the security context, Origin
+should be preferred.</p>
+<p>The <em>last committed</em> URL or Origin represents the document that is currently in
+the frame, regardless of what is showing in the address bar. This is almost
+always what should be used for feature-related state, unless a feature is
+explicitly tied to the address bar (e.g., padlock icon). This is empty if no
+navigation is ever committed. e.g. if a tab is newly open for a navigation but
+then the navigation got cancelled. See
+<code>RenderFrameHost::GetLastCommittedOrigin</code> (or URL) and
+<code>NavigationController::GetLastCommittedEntry</code>.</p>
+<p>The <em>pending</em> URL exists when a main frame navigation has started but has not
+yet committed. This URL is only sometimes shown to the user in the address bar;
+see the description of visible URLs below. Features should rarely need to care
+about the pending URL, unless they are probing for a navigation they expect to
+have started. See <code>NavigationController::GetPendingEntry</code>.</p>
+<p>The <em>visible</em> URL is what the address bar displays. This is carefully managed to
+show the main frame&#39;s last committed URL in most cases, and the pending URL in
+cases where it is safe and unlikely to be abused for a <em>URL spoof attack</em> (where
+an attacker is able to display content as if it came from a victim URL). In
+general, the visible URL is:</p>
+<ul>
+<li>The pending URL for browser-initiated navigations like typed URLs or
+bookmarks, excluding session history navigations. This becomes empty if the
+navigation is cancelled.</li>
+<li>The last committed URL for renderer-initiated navigations, where an attacker
+might have control over the contents of the document and the pending URL.
+This is also used when there is no ongoing navigations, and it is empty when
+no navigation is ever committed.</li>
+<li>A renderer-initiated navigation&#39;s URL is only visible while pending if it
+opens in a new unmodified tab (so that an unhelpful <code>about:blank</code> URL is not
+displayed), but only until another document tries to access the initial empty
+document of the new tab. For example, an attacker window might open a new tab
+to a slow victim URL, then inject content into the initial <code>about:blank</code>
+document as if the slow URL had committed. If that occurs, the visible URL
+reverts to <code>about:blank</code> to avoid a URL spoof scenario. Once the initial
+navigation commits in the new tab, pending renderer-initiated navigation URLs
+are no longer displayed.</li>
+</ul>
+<h2 id="virtual-urls">Virtual URLs</h2>
+<p>Virtual URLs are a way for features to change how certain URLs are displayed to
+the user (whether visible or committed). They are generally implemented using
+BrowserURLHandlers. Examples include:</p>
+<ul>
+<li>View Source URLs, where the <code>view-source:</code> prefix is not present in the
+actual committed URL.</li>
+<li>DOM Distiller URLs, where the original URL is displayed to the user rather
+than the more complex distiller URL.</li>
+</ul>
+<h2 id="redirects">Redirects</h2>
+<p>Navigations can redirect to other URLs in two different ways.</p>
+<p>A <em>server redirect</em> happens when the browser receives a 300-level HTTP response
+code before the document commits, telling it to request a different URL,
+possibly cross-origin. The new request will usually be an HTTP GET request,
+unless the redirect is triggered by a 307 or 308 response code, which preserves
+the original request method and body. Server redirects are managed by a single
+NavigationRequest. No document is committed to session history, but the original
+URL remains in the redirect chain.</p>
+<p>In contrast, a <em>client redirect</em> happens after a document has committed, when
+the HTML in the document instructs the browser to request a new document (e.g.,
+via meta tags or JavaScript). Blink classifies the navigation as a client
+redirect based partly on how much time has passed. In this case, a session
+history item is created for the redirecting document, but it gets replaced when
+the actual destination document commits. A separate NavigationRequest is used
+for the second navigation.</p>
+<h2 id="concurrent-navigations">Concurrent Navigations</h2>
+<p>Many navigations can be in progress simultaneously. In general, every frame is
+considered independent and may have its own navigations(s), with each tracked by
+a NavigationRequest. Within a frame, it is possible to have multiple concurrent
+navigations:</p>
+<ul>
+<li><strong>A cross-document navigation waiting for its final response (at most one per
+frame).</strong> The NavigationRequest is owned by FrameTreeNode during this stage,
+which can take several seconds. Some special case navigations do not use a
+network request and skip this stage (e.g., <code>about:blank</code>, <code>about:srcdoc</code>,
+MHTML).</li>
+<li><strong>A queue of cross-document navigations that are between &quot;ready to commit&quot;
+and &quot;commit,&quot; while the browser process waits for a commit acknowledgement
+from the renderer process.</strong> While rare, it is possible for multiple
+navigations to be in this stage concurrently if the renderer process is slow.
+The NavigationRequests are owned by the RenderFrameHost during this stage,
+which is usually short-lived.</li>
+<li><strong>Same-document navigations.</strong> These can be:<ul>
+<li>Renderer-initiated (e.g., <code>pushState</code>, fragment link click). In this case,
+the browser process creates and destroys a NavigationRequest in the same
+task.</li>
+<li>Browser-initiated (e.g., omnibox fragment change). In this case, the
+browser process creates a NavigationRequest owned by the RenderFrameHost
+and immediately tells the renderer to commit.</li>
+</ul>
+</li>
+</ul>
+<p>Note that the navigation code is not re-entrant. Callers must not start a new
+navigation while a call to <code>NavigateWithoutEntry</code> or
+<code>NavigateToExistingPendingEntry</code> is on the stack, to avoid a CHECK that guards
+against use-after-free for <code>pending_entry_</code>.</p>
+<h2 id="rules-for-canceling-navigations">Rules for Canceling Navigations</h2>
+<p>We generally do not want an abusive page to prevent the user from navigating
+away, such as by endlessly starting new navigations that interrupt or cancel the
+user&#39;s attempts. Generally, a new navigation will cancel an existing one in a
+frame, but we make the following exception: a renderer-initiated navigation is
+ignored iff there is an ongoing browser-initiated navigation and the new
+navigation lacks a user activation. (This is implemented in
+<code>Navigator::ShouldIgnoreIncomingRendererRequest</code>.) See also the <a href="history_manipulation_intervention">History
+Manipulation Intervention</a> for other
+mitigations against trapping a user on a page.</p>
+<p>NavigationThrottles also have an ability to cancel navigations when desired by a
+feature. Keep in mind that it is <strong>not safe to simulate a redirect by canceling
+a navigation and starting a new one</strong>, since this may lose relevant context from
+the original navigation (e.g., ReloadType, CSP state, Sec-Fetch-Metadata state,
+redirect chain, etc), and it will lead to unexpected observer events and metrics
+(e.g., extra navigation starts, inflated numbers of canceled navigations, etc).
+Feature authors that want to simulate redirects may want to consider using a
+URLLoaderRequestInterceptor instead.</p>
+<h2 id="error-pages">Error Pages</h2>
+<p>There are several types of error pages that can be displayed when a navigation
+is not successful.</p>
+<p>The server can return a custom error page, such as a 400 or 500 level HTTP
+response code page. These pages are rendered much like a successful navigation
+to the site (and go into an appropriate process for that site), but the error
+code is available and <code>NavigationHandle::IsErrorPage()</code> is true.</p>
+<p>If the navigation fails to get a response from the server (e.g., the DNS lookup
+fails), then Chromium will display an error page. For main frames, this error
+page will be in a special error page process, not affiliated with any site or
+containing any untrustworthy content from the web. In these failed cases,
+NetErrorHelperCore may try to reload the URL at a later time (e.g., if a network
+connection comes back online), to load the document in an appropriate process.</p>
+<p>If instead the navigation is blocked (e.g., by an extension API or a
+NavigationThrottle), then Chromium will similarly display an error page in a
+special error page process. However, in blocked cases, Chromium will not attempt
+to reload the URL at a later time.</p>
+<h2 id="interstitial-pages">Interstitial Pages</h2>
+<p>Interstitial pages are implemented as committed error pages. (Prior to
+<a href="https://crbug.com/448486">issue 448486</a>, they were implemented as overlays,
+which are <a href="security/overlay-policy">no longer allowed</a>.)
+The original in-progress navigation is canceled when the interstitial is
+displayed, and Chromium repeats the navigation if the user chooses to proceed.</p>
+<p>Note that some interstitials can be shown after a page has committed (e.g., when
+a subresource load triggers a Safe Browsing error). In this case, Chromium
+navigates away from the original page to the interstitial page, with the intent
+of replacing the original NavigationEntry. However, the original NavigationEntry
+is preserved in <code>NavigationControllerImpl::entry_replaced_by_post_commit_error_</code>
+in case the user chooses to dismiss the interstitial and return to the original
+page.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/navigation_concepts.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/navigation_concepts.md</a>
+  </p>
+</div>

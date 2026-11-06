@@ -1,0 +1,164 @@
+<h1>You’ve just been assigned a security bug…</h1>
+<p>If you have just been assigned a security bug, <strong>don’t panic!</strong> Security bugs
+are a fact of life in Chromium, and the project has a team of people and robust
+processes to help analyze and get security issues fixed. This document is meant
+to help Chromium developers handle their first (few) security bug(s). You may
+also want to review the <a href="life-of-a-security-issue">Life of a Security Issue</a>
+to understand how you as a developer fit into the larger security bug life
+cycle.</p>
+<p>Chromium has <a href="severity-guidelines">public commitments</a> to fix security issues
+within certain timeframes. Please treat security issues as high-priority
+interrupts to your work, especially if they are <strong>High Severity (S1)</strong> (P1) or
+<strong>Critical Severity (S0)</strong> (P0). However, the expectation is that you handle
+security issues within your normal working hours, not after-hours, weeknights,
+or on vacation. Everyone shares the responsibility of keeping our users safe!</p>
+<h2 id="validate-then-fix-the-issue">Validate then fix the issue</h2>
+<h3 id="validate-the-issue-before-working-on-a-fix">Validate the issue before working on a fix</h3>
+<p>Before working on a security issue you can require that it meets our <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/vrp-faq.md#Best-Practices-for-Security-Bug-Reporting">reporting
+guidelines</a>.</p>
+<p>The report must:</p>
+<ul>
+<li>Include a self-contained reproduction case (or video*) attached to the report</li>
+<li>Attach a complete, fully symbolized, ASAN or MTE stack trace</li>
+<li>Be short and concise</li>
+<li>Attach patches that simulate a compomised renderer as a <code>.diff</code> file</li>
+</ul>
+<p>The report must not:</p>
+<ul>
+<li>Only provide patched browser or unittests</li>
+<li>Run Chrome in a python or <code>.sh</code> harness, or drive Chrome with CDP</li>
+<li>Patch non-renderer code</li>
+<li>Host reproduction cases on external urls</li>
+</ul>
+<p>If the report does not meet these basic criteria you are <em>encouraged</em> to close
+it as <code>Not Reproducible</code>.</p>
+<h3 id="close-the-issue-if-it-is-not-actionable">Close the issue if it is not actionable</h3>
+<p>If the issue does not meet Chrome security reporting guidelines you should close
+it and request the reporter resubmit it after making improvements. You do not
+have to dig through a poorly written report, or search for commandline arguments
+in a shell script. The information you need must be present and easy to find,
+if it is not, you should close the issue as WontFix - Not Reproducible. Use the
+following template if it is helpful:</p>
+<pre data-language="markdown">This report does not include the information we require to reproduce and
+investigate a security bug and will be closed.
+
+If you can provide:
+  * [.. what is missing ..]
+
+please open a new report that follows our reporting guidelines.
+
+https://chromium.googlesource.com/chromium/src/+/HEAD/docs/security/vrp-faq.md#Best-Practices-for-Security-Bug-Reporting.</pre>
+<h3 id="reproduce-the-issue">Reproduce the issue</h3>
+<p>If the report, on the surface, is valid, move on to reproduce the issue, or read
+the traces from the reproduction robots. If it is a UI issue, try the steps the
+reporter suggested. Upload your own traces and commandlines to the issue to help
+future developers test and validate your work on the issue. This will help you
+test that the issue has been fixed by your CLs later.</p>
+<h3 id="participate-in-the-discussion-on-the-issue">Participate in the discussion on the issue</h3>
+<p>Some bugs involve discussion with the reporter and/or members of the security
+team. For example, the issue may be in a feature or system that the shepherd is
+not well-equipped to reproduce, and they may ask you for help in determining if
+the bug is valid. The shepherd may also try to determine if the bug is mitigated,
+meaning that the security impact is smaller or greater than described by the
+reporter. As the developer, you may have questions about certain preconditions
+assumed by the reporter. We encourage you to interact with the reporter and the
+shepherd, directly in the issue tracker, as much as you need in order to identify
+and fix the issue.</p>
+<p>Please do <em>not</em> adjust any of the <a href="security-labels">security metadata</a> on the
+bug (namely the <strong>Severity</strong> field and <strong>Security_Impact</strong> hotlists). If you think a
+bug is not a security issue or its severity should be downgraded, discuss it with
+the security team and let them adjust the metadata. However, you can adjust the
+<strong>Found In</strong> field if you know the versions a bug affects.</p>
+<h3 id="fix-the-bug">Fix the bug</h3>
+<p>This is the normal part of the job! Write a fix and a regression test, upload
+the CL, and get it reviewed by the appropriate code owner. The shepherd who
+assigned you the bug does not need to be included on the CL. Once the CL has
+landed, please <a href="https://groups.google.com/a/chromium.org/g/chromium-dev/c/JNJdU-dnjTk/m/4jXI96pdAgAJ"><em>immediately</em> mark the bug as
+<strong>Fixed</strong></a>.
+That status change will kick off the security team’s automation to ensure the
+fix is released to users in a timely fashion.</p>
+<p>A word on CL descriptions: Do not hide or obscure the fact that the CL is fixing
+a security bug; it is okay to mention that the CL fixes a use-after-free.
+However, the best CL description isn’t “[component] Fix uaf” – it is better to
+describe <em>what</em> lifetimes are being corrected, as well as the faulty underlying
+assumption that led to the bug. As an example, <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2167426">this
+CL</a> fixes a
+use-after-free and describes the lifetime issue and change.</p>
+<h3 id="merge-the-fix">Merge the fix</h3>
+<p>After the bug has been marked <strong>Fixed</strong>, automation (or a member of the security
+team) will request merge to the applicable release branches using child bugs of
+the initial issue. Please respond to these quickly and merge to release branches
+to ensure that fixes reach people using Chrome as fast as possible.</p>
+<h3 id="think-about-patterns">Think about patterns</h3>
+<p>After the reported bug has been fixed and possibly merged, consider if the same
+bug may exist in other places. For example:</p>
+<ul>
+<li>If you fixed one instance of using <code>base::Unretained</code> in an unsafe manner,
+check the surrounding code for other usages that may be unsafe.</li>
+<li>If you converted an incorrect <code>DCHECK</code> to an early return or <code>CHECK</code>, look for
+similar incorrect <code>DCHECKs</code>.</li>
+<li>If there was an integer overflow, look at other arithmetic operations and
+consider using base/numerics/.</li>
+</ul>
+<h2 id="summary">Summary</h2>
+<p><strong>Do:</strong></p>
+<ul>
+<li>CC additional subject-matter-experts to the bug</li>
+<li>Have a productive discussion in the bug issue comments</li>
+<li>Fix the bug as quickly as you can in your normal working hours</li>
+<li>Set the bug’s status to <strong>Fixed</strong> as soon as the CL lands</li>
+<li>Merge the CLs to the appropriate branches after receiving merge approval</li>
+<li>See also our <a href="checklist">top security things checklist</a></li>
+</ul>
+<p><strong>Don’t:</strong></p>
+<ul>
+<li>Panic</li>
+<li>Communicate with the reporter about the issue outside of the bug tracker</li>
+<li>Adjust the <a href="security-labels">security labels</a> like the <strong>Severity</strong> field
+or <strong>Security_Impact</strong> hotlists.</li>
+</ul>
+<h2 id="faqs">FAQs</h2>
+<h3 id="i-need-some-help-from-the-security-team">I need some help from the Security team?</h3>
+<p>If you need help from the security team please ask your question on the issue
+and add the <a href="https://issues.chromium.org/hotlists/8699168">Chrome Security Klaxon</a>
+hotlistid:8699168 for our oncall to see and respond to. Please do not assign to
+security@ or individual security team members.</p>
+<p>If you&#39;d prefer to ask on chat: Googlers can join go/chrome-security-questions
+and all project members can join #security on the Chromium Slack.</p>
+<h3 id="why-was-i-assigned-can-i-send-to-it-someone-else">Why was I assigned? Can I send to it someone else?</h3>
+<p>Incoming security bugs are analyzed and triaged by a robot (the Chrome Security
+Sheepdog) based on OWNERS, recent commits and OOO status when available. Your
+first responsibility is to ensure you are the right assignee, or if the issue
+should properly be handled by someone else. Please quickly take a look at the
+issue and make this determination. If you are the wrong person, please CC folks
+that should be involved, and assign to one of them if the code and stacks on the
+bug point towards a better owner.</p>
+<p>Try not to simply unassign yourself as this will produce work for another human,
+but if you have no idea (or are leaving the project) you can unassign yourself
+and the bug will enter the shepherd’s queue. Remember that people cannot see
+security issues unless they are CC&#39;d in. (Feel free to CC people in!)</p>
+<p>Critical, High and Medium severity security issues must be assigned to someone,
+this is Chromium policy, so if you feel you are the wrong assignee try not to
+simply remove yourself, instead work to find an alternative assignee.</p>
+<h3 id="my-team-has-a-triage-rotation-or-oncall-can-we-assign-new-security-issues-ourselves">My team has a triage rotation or oncall can we assign NEW security issues ourselves?</h3>
+<p>In general: no. Chromium is too complex to have different security processes for
+every component or directory. Managing security SLOs requires issues have owners
+and we cannot relax that for every team.</p>
+<p>The robots can use an oncall or rotation tool to preferentially assign new
+security issues in a component to the current oncaller. Googlers can contact the
+product security team (go/sheepdog-feedback) to set this up for your component.</p>
+<p>Large teams with a proven record of quickly fixing security issues may implement
+a <a href="delegated-triage">delegated triage</a> process with the agreement of the
+Chrome security team.</p>
+<h3 id="we-cannot-work-on-the-issue-immediately-can-we-mark-it-as-new-to-mark-it-as-available">We cannot work on the issue immediately, can we mark it as NEW to mark it as available?</h3>
+<p>Security issues must be owned by a person who is responsible for fixing or
+tracking updates to the issue, and Chrome&#39;s processes for enforcing SLOs are
+based on issues being assigned to people. For example, the issue reporter might
+provide new information and this could be missed if the issue is not assigned.
+Security issues with Low (S3) severity do not have SLOs and may be unassigned.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/security-issue-guide-for-devs.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/security-issue-guide-for-devs.md</a>
+  </p>
+</div>

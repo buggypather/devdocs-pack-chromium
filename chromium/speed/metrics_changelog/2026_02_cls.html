@@ -1,0 +1,47 @@
+<h1>Cumulative Layout Shift Changes in Chrome 145</h1>
+<h2 id="layout-instability-attribution-reports-in-css-pixels">Layout Instability attribution reports in CSS pixels</h2>
+<p>Prior to Chrome 145, the Layout Instability API reported attribution data
+(<code>prevRect</code> and <code>currentRect</code> in <code>LayoutShift</code> entries) in physical pixels,
+which varied based on the device&#39;s <code>devicePixelRatio</code>. Starting in Chrome 145,
+these rectangles are now reported in CSS pixels for consistency with other
+web platform APIs like <code>getBoundingClientRect()</code>.</p>
+<p>This change makes layout shift data easier to visualize, debug, and combine
+across devices and tools, as CSS pixels are the standard unit used throughout
+the web platform for layout measurements.</p>
+<p>The specification change was merged in <a href="https://github.com/WICG/layout-instability/pull/125">WICG/layout-instability#125</a>.</p>
+<p>The source code changes can be seen in the following CLs:</p>
+<ul>
+<li>Implementation: <a href="https://crrev.com/c/6624567">crrev.com/c/6624567</a></li>
+<li>Flag promotion: <a href="https://issues.chromium.org/issues/399058544">Bug 399058544</a></li>
+</ul>
+<h3 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h3>
+<p>This change affects the <strong>units</strong> used to report layout shift attribution data,
+not the actual CLS score values. The shift scores themselves remain unchanged.</p>
+<p>Sites and tools that consume <code>LayoutShift</code> attribution data (primarily Real User
+Monitoring and analytics tools) will need to update their processing logic if
+they were assuming physical pixels. Tools that visualize layout shifts on top
+of page screenshots will need to account for CSS pixels when positioning overlays.</p>
+<p>For most use cases, CSS pixels are more intuitive and easier to work with than
+physical pixels.</p>
+<h3 id="when-were-users-affected">When were users affected?</h3>
+<p>Chrome 145 reached stable users in February 2026.</p>
+<hr>
+<h2 id="sort-layoutshiftsources-array-by-per-source-impact-area">Sort LayoutShift.sources array by per-source impact area</h2>
+<p>Starting in Chrome 145, the <code>sources</code> array on <code>LayoutShift</code> performance entries is sorted in descending order by each element&#39;s impact area (largest first).</p>
+<p>Previously, <code>LayoutShift.sources</code> returned up to five attribution sources in an arbitrary order. Diagnostics tooling and RUM analytics scripts had to iterate through the sources to calculate and find the primary element responsible for the shift.</p>
+<p>Sorting guarantees that <code>entry.sources[0]</code> always represents the element with the largest impact area, matching Cumulative Layout Shift calculation semantics.</p>
+<p>The specification change was merged in <a href="https://github.com/WICG/layout-instability/pull/126">WICG/layout-instability#126</a>.
+The source code change can be seen in <a href="https://chromium-review.googlesource.com/c/chromium/src/+/7196706">crrev.com/c/7196706</a>.</p>
+<h3 id="how-does-this-affect-a-sites-metrics-1">How does this affect a site&#39;s metrics?</h3>
+<ul>
+<li><strong>No change to CLS scores</strong>: Total layout shift scores remain unchanged.</li>
+<li><strong>Simplified debugging &amp; RUM attribution</strong>: Profilers and analytics libraries can directly access <code>entry.sources[0]</code> to identify the top layout shift culprit without manual geometric sorting.</li>
+</ul>
+<h3 id="when-were-users-affected-1">When were users affected?</h3>
+<p>Chrome 145 reached stable users in February 2026.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_02_cls.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2026_02_cls.md</a>
+  </p>
+</div>

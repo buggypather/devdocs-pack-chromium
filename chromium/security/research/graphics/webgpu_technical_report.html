@@ -1,0 +1,848 @@
+<h1>WebGPU Technical Report</h1>
+<p>Authors: <a href="mailto:tiszka@chromium.org">tiszka@chromium.org</a>,
+<a href="mailto:bookholt@chromium.org">bookholt@chromium.org</a>,
+<a href="mailto:mattdr@chromium.org">mattdr@chromium.org</a></p>
+<h2 id="chrome-graphics-as-seen-by-attackers">Chrome Graphics as Seen By Attackers</h2>
+<p>In this document we outline how WebGPU works through the mind of an attacker,
+our vulnerability research methodologies, and our thought processes in some of
+the more difficult research areas. There are many interesting portions of Chrome
+graphics that we omitted from review to keep scope manageable. While our primary
+focus was WebGPU, we did explore a few attack surfaces shared by other graphics
+features. We will interleave background information on WebGPU with descriptions
+of the important bugs we found. We hope this report will give the security
+community a deeper understanding of the shape of vulnerabilities we may come to
+expect with the addition of WebGPU, along with a lens into the vulnerabilities
+we might encounter in the future.</p>
+<p>The graphics stack has long been an area of interest for Chrome Security. Before
+we dive into WebGPU internals, consider the diagram below showing a simplified
+view of the Chrome graphics architecture.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--nb3icxsvqik.png" alt="image"></p>
+<p>Show above: Attackers&#39; perspective of Chrome graphics.</p>
+<p>The Chrome process model uses sandboxing to create layered security boundaries
+between untrusted content from the web and protected user data. However, the
+rapid evolution and high complexity of Chrome&#39;s accelerated graphics features
+coupled with their need to interface directly with drivers in the kernel, as
+well as their implementation in memory-unsafe languages mean bugs in graphics
+code are especially useful for bypassing Chrome sandbox boundaries. Furthermore,
+although Chrome sets the industry standard for rapidly fixing security bugs and
+quickly shipping updates to users, the presence and exposure of code supported
+by third parties creates challenges to getting fixes to users rapidly that can
+lengthen the period when a vulnerability may be viable for exploitation,
+reducing the cost attackers must bear to sustain a capability.</p>
+<h2 id="enter-webgpu">Enter WebGPU</h2>
+<p>WebGPU entered Origin Trial in mid-2022 marking the first time web developers
+and users got to experience the new features. Coincidentally, the Chrome
+Offensive Security team decided to look into WebGPU as our first major
+research target.</p>
+<p>According to the <a href="https://www.w3.org/TR/webgpu/">WebGPU spec</a>, &quot;WebGPU exposes
+an API for performing operations, such as rendering and computation, on a
+Graphics Processing Unit&quot;. Unlike WebGL, its predecessor that set out with
+similar goals, WebGPU isn&#39;t an existing native API ported to the Web; WebGPU is
+a new API designed to surface the functionality of existing graphics APIs like
+Vulkan, Metal, and Direct3D. In the context of this document we will only be
+discussing Vulkan as it is ubiquitously reachable on every platform that WebGPU
+supports either through the GPU rendering pipeline or the software rendering
+pipeline.</p>
+<p>WebGPU introduces two unique attack surfaces to Chrome that will come with their
+own challenges:</p>
+<ul>
+<li>the WebGPU API Implementation which was added to the GPU process &amp; renderer
+process; and</li>
+<li>the WGSL shader compiler added to the GPU process</li>
+</ul>
+<p>While they are related and shader compilation is accessible via web-exposed
+APIs, they pose two unique challenges so we will dig into both attack surfaces
+separately.</p>
+<p>To give you the big picture first, the diagram below shows the slice of the
+Chrome graphics stack required for WebGPU. While WebGPU has many pieces and
+inter-connections, we omitted a great many notable portions of Chrome&#39;s graphics
+attack surface, including WebGL, Skia, Canvas2D, Widevine DRM, and video
+decoding for the sake of avoiding complexity explosion.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--25zv8cth637j.png" alt="image"></p>
+<p>Shown above: The full Chrome WebGPU stack.</p>
+<h2 id="webgpu-api">WebGPU API</h2>
+<p>The <strong>WebGPU</strong> API is exposed via JavaScript which calls into <strong>Dawn</strong>, the
+library within Chrome that implements WebGPU.</p>
+<p><strong>Dawn</strong> is separated into two different libraries: <strong>Dawn Wire</strong> and <strong>Dawn
+Native</strong>. <strong>Dawn Wire</strong> is a client-server implementation of <strong>WebGPU</strong>. When a
+WebGPU API call is made from JavaScript the request is serialized in the
+renderer process using the <strong>Dawn Wire Client</strong>, the serialized blob is passed
+to the GPU process using WebGPU extensions to the Chrome GPU Command Buffer
+(<a href="https://source.chromium.org/chromium/chromium/src/+/main:gpu/command_buffer/service/webgpu_decoder_impl.cc;l=1768;drc=34ba1d95a41c614308175e932a2b121018891bbf"><code>WebGPUDecoderImpl</code></a>)
+, and then deserialized in the GPU process by <strong>Dawn Wire Server</strong>. <strong>Dawn Wire
+Server</strong> then calls into <strong>Dawn Native</strong> which is the &quot;native&quot; implementation of
+WebGPU that wraps the underlying platform&#39;s GPU APIs.</p>
+<p>This portion of the review focused on the WebGPU API implementation from
+<strong>Blink</strong> to <strong>Dawn Backends</strong>. We also chose to scope our review to Dawn&#39;s
+<strong>Vulkan Backend</strong> because it is reachable on every WebGPU platform and it is
+the only platform that&#39;s fuzzable with ClusterFuzz since most of the Vulkan
+Backend code can be exercised without a physical GPU.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--6mue8ablsri.png" alt="image"></p>
+<p>Shown above: The subset of the Chrome WebGPU stack we focused on during this
+portion of the review, with out-of-scope portions de-emphasized in white.</p>
+<h3 id="finding-incorrect-state-tracking-in-dawn-native-leads-to-uaf">Finding: Incorrect State Tracking in Dawn Native leads to UAF</h3>
+<blockquote>
+<p><em><strong>tl;dr - Systemic Concerns</strong></em></p>
+<p>Dawn has a pattern where objects hold a raw pointer to reference counted
+objects, assuming a reference is held elsewhere. This assumption can easily
+break with future changes to the code as we&#39;ve seen in the browser process
+with Mojo handlers. Dawn should discourage this pattern to reduce
+use-after-free bugs.</p>
+</blockquote>
+<p>Interacting with WebGPU begins with requesting an <code>adapter</code> which is an object
+wrapping a single instance of WebGPU and then a <code>device</code> which is a logical
+instantiation of the <code>adapter</code>.</p>
+<pre data-language="js">const gpuAdapter = await navigator.gpu.requestAdapter();
+const gpuDevice = await gpuAdapter.requestDevice();
+
+/* Call WebGPU APIs */
+let buffer = gpuDevice.createBuffer();</pre>
+<p>As shown in the picture below, under the covers, <code>gpuDevice.createBuffer</code>
+creates an Oilpan managed <strong>WebGPU Buffer</strong> object in Blink that holds a raw
+pointer and a reference to a <strong>Dawn Wire Client Object</strong>.</p>
+<p>This <strong>Dawn Wire Client Object</strong>, which lives in the renderer process, holds a
+reference to a <strong>Dawn Wire Server Object</strong>, which lives in the GPU process,
+implicitly incrementing and decrementing the reference count by sending a
+<code>wgpuCreateObject</code> on construction and <code>wgpuDestroyObject</code> on destruction over
+IPC to the GPU process.</p>
+<p>This <strong>Dawn Wire Server Object</strong> holds a reference to the <strong>Dawn Native
+Object</strong>. Finally, the <strong>Dawn Native Object</strong> holds a raw pointer to the
+underlying Vulkan Object (or other graphics API platform object on non-Vulkan
+platforms.)</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--dxtg69vpyxl.jpg" alt="image"></p>
+<p>Through this long chain of reference counted objects we hold a pointer to a
+resource in the <strong>Usermode Graphics Driver (UMD)</strong> through our Oilpan managed
+<code>gpuBuffer</code> object in JavaScript. This is a lot of state to track!</p>
+<p>Interestingly, this means that it&#39;s possible to drop references and free objects
+in the GPU process from an uncompromised renderer by garbage collecting the
+corresponding WebGPU object in the renderer process.</p>
+<pre data-language="js">const gpuAdapter = await navigator.gpu.requestAdapter();
+const gpuDevice = await gpuAdapter.requestDevice();
+
+let buffer = gpuDevice.createBuffer();
+buffer = null;
+gc();</pre>
+<p>Under the covers, the destruction of an Oilpan object drops a reference to its
+Dawn Wire Client object which when destructed sends a <code>wgpuDestroyObject</code> IPC
+command to the GPU process.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--y3qar9s40vd.jpg" alt="image"></p>
+<p>Situations can arise where multiple objects within Dawn Native hold references
+to the same object, so this destruction won&#39;t actually free the Dawn Native
+Buffer.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--m5a1m5mf2h.jpg" alt="image"></p>
+<p>When we began auditing these references we checked for many of the &quot;classic&quot;
+reference counting implementation issues. For example, sending multiple
+<code>wgpuDestroyObject</code> commands from a compromised renderer does not allow the
+compromised renderer to decrement the reference indefinitely. Reference counted
+objects use <a href="https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/dawn/src/dawn/common/RefCounted.cpp;l=69;drc=76be2f9f117654f3fe4faa477b0445114fccedda">64 bit integers
+</a>for
+tracking on all architectures which prevents integer overflow style bugs.
+However, we did come across instances where raw pointers were being held without
+taking a reference to the reference counted pointer.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--x4oroth0usm.jpg" alt="image"></p>
+<h4 id="whats-happening-inside-webgpu">What&#39;s happening inside WebGPU?</h4>
+<p>WebGPU gives developers an API to queue up operations and then run them in
+batches using modern graphics APIs. Under the hood, a lot goes on to make this
+work. The diagram below shows the simplified life cycle of creating and running
+a compute shader.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--gms7nqwczp.png" alt="image"></p>
+<p>The Dawn Native <code>GPUCommandBuffer</code> object, created by the step highlighted in
+<span style="background-color:blue">Blue</span>, holds a pre-recorded set of
+commands that can then be executed at an arbitrary time. Herein lies the magic
+of WebGPU! It&#39;s possible to queue up thousands of GPU compute jobs and execute
+them asynchronously.</p>
+<blockquote>
+<p><strong><em>Note</em></strong>: The WebGPU
+<a href="https://www.w3.org/TR/webgpu/#gpucommandbuffer"><code>GPUCommandBuffer</code></a> is
+completely unrelated to the Chrome <a href="https://www.chromium.org/developers/design-documents/gpu-command-buffer">GPU Command
+Buffer</a>.
+This is an unfortunate name collision. The <code>GPUCommandBuffer</code> is a WebGPU object
+and the Chrome GPU Command Buffer is a mechanism for communicating over shared
+memory with the GPU process.</p>
+</blockquote>
+<pre data-language="js">const commandEncoder = device.createCommandEncoder();
+
+// Encode commands for copying buffer to buffer.
+commandEncoder.copyBufferToBuffer(
+  source_buffer, /* source buffer */
+  0, /* source offset */
+  dest_buffer, /* destination buffer */
+  0, /* destination offset */
+  10 /* size */
+);
+
+// Create a GPUCommandBuffer
+const gpuCommandBuffer = commandEncoder.finish();
+...
+// Execute the GPU commands asynchronously
+device.queue.submit([gpuCommandBuffer, gpuCommandBuffer]);</pre>
+<p>The same interface is used to create <strong>compute pipelines</strong>. These pipelines
+facilitate shader execution and create <code>GPUComputePassEncoder</code> objects which
+hold references to objects - <code>GPUBuffer</code>s, <code>GPUTexture</code>s, etc - that the GPU
+compute shaders will be modifying during execution.</p>
+<pre data-language="js">const commandEncoder = device.createCommandEncoder();
+
+const passEncoder = commandEncoder.beginComputePass();
+passEncoder.setPipeline(computePipeline);
+passEncoder.dispatchWorkgroups(1, 1);
+passEncoder.end();
+
+
+const gpuCommand = commandEncoder.finish();
+...
+// Execute the GPU commands asynchronously
+device.queue.submit([gpuCommand, gpuCommand]);</pre>
+<p>Under the covers, the <code>GPUCommandBuffer</code> holds references to <strong>Dawn Native</strong>
+objects (in the example above the <code>source_buffer</code> and <code>dest_buffer</code>). A lot can
+happen during execution of a sequence of commands within the <code>GPUCommandBuffer</code></p>
+<ul>
+<li><code>wgpuDispatchWorkGroups</code> is used to execute shaders, <code>wgpuCopyBufferToBuffer</code>
+is used to copy one GPU buffer&#39;s content to another, <code>wgpuSetBindGroup</code> can be
+used to change the bindings that a compute job is executing on - so it&#39;s very
+important that the objects the <code>GPUCommandBuffer</code> holds references to are not
+de-allocated until after the execution of the compute pipeline.</li>
+</ul>
+<p>However, there are areas in <strong>Dawn</strong> where the code holds raw pointers with the
+assumption that a reference is already held to an object such as at [1] in the
+excerpt below.</p>
+<pre data-language="cpp">// Used to track operations that are handled after recording.
+// Currently only tracks semaphores, but may be used to do barrier coalescing in the future.
+struct CommandRecordingContext {
+    ...
+    // External textures that will be eagerly transitioned just before VkSubmit.
+    // The textures are kept alive by the CommandBuffer so they don't need to be Ref-ed.
+    std::set&lt;Texture*&gt; externalTexturesForEagerTransition;
+
+    std::set&lt;Buffer*&gt; mappableBuffersForEagerTransition; // [1]
+    ...
+};</pre>
+<h4 id="the-bug">The Bug</h4>
+<p>Herein lies a bug, and likely a bug pattern that could cause issues in the
+future. An assumption was made that raw pointers could not be added to
+<code>mappableBuffersForEagerTransition</code> outside of <code>GPUCommandBuffer</code> execution. The
+code also assumes that references would not be dropped within <code>GPUCommandBuffer</code>
+execution.</p>
+<p>Within Buffer initialization, there was a branch that called the function
+<code>ClearBuffer</code> [1] if the size of the buffer being created was unaligned.</p>
+<pre data-language="cpp">MaybeError Buffer::Initialize(bool mappedAtCreation) {
+  if (device-&gt;IsToggleEnabled(Toggle::LazyClearResourceOnFirstUse) &amp;&amp; !mappedAtCreation) {
+    uint32_t paddingBytes = GetAllocatedSize() - GetSize();
+    if (paddingBytes &gt; 0) {
+      CommandRecordingContext* recordingContext = device-&gt;GetPendingRecordingContext();
+      // [1]
+      ClearBuffer(recordingContext, 0, clearOffset, clearSize);
+    }
+  }
+}</pre>
+<p>The <code>ClearBuffer</code> call leads to many other state changing effects and function
+calls. One of those code paths adds a Buffer&#39;s raw pointer to
+<code>mappableBuffersForEagerTransition</code>.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--umacwcr8c1p.jpg" alt="image"></p>
+<p>This <code>TrackResourceAndGetResourceBarrier</code> call occurs outside of WebGPU
+<code>GPUCommandBuffer</code> command execution, which is unexpected, so the only other
+reference to the <strong>Dawn Native Buffer</strong> is the reference from the renderer
+process.</p>
+<p>From here it was possible to drop all other references to the <strong>Dawn Native
+Buffer</strong> object in the GPU process held from the renderer process by garbage
+collecting the WebGPU JavaScript buffer object, leading to a use-after-free the
+next time <code>mappableBuffersForEagerTransition</code> was iterated.</p>
+<p>Pointer lifetimes are difficult to get right. Taking a closer look at this
+vulnerability we see that there are other raw pointers. These <em>appeared</em> to be
+safe, but they could easily be turned into vulnerabilities by future changes to
+<strong>Dawn</strong>.</p>
+<pre data-language="cpp">// Used to track operations that are handled after recording.
+// Currently only tracks semaphores, but may be used to do barrier coalescing in the future.
+struct CommandRecordingContext {
+    ...
+    // External textures that will be eagerly transitioned just before VkSubmit.
+    // The textures are kept alive by the CommandBuffer so they don't need to be Ref-ed.
+    std::set&lt;Texture*&gt; externalTexturesForEagerTransition;
+
+-    std::set&lt;Buffer*&gt; mappableBuffersForEagerTransition;
++    std::set&lt;Ref&lt;Buffer&gt;&gt; mappableBuffersForEagerTransition;
+
+    ...
+};</pre>
+<p>As the diff above shows, the fix was to add reference counting to accurately
+track the Buffer life cycle. It appears that this vulnerability was introduced
+because assumptions were made about <code>Buffer</code> lifetimes based on the earlier
+comment about <code>GPUTexture</code> lifetimes. This shows us a problem: even when this
+pattern is used <ins>correctly</ins>, it may too easily encourage other
+<ins>incorrect</ins> uses. It is hard to verify that the raw pointers in
+<code>externalTexturesForEagerTransition</code> aren&#39;t vulnerable in a similar way. It is
+probably safer to avoid raw pointers altogether when working with <strong>Dawn Native
+Objects</strong>.</p>
+<h3 id="finding-unexpected-state-change-before-callback-leads-to-uaf">Finding: Unexpected State Change Before Callback leads to UAF</h3>
+<blockquote>
+<p><em><strong>tl;dr - Systemic Concerns</strong></em></p>
+<p>WebGPU implements callbacks in the GPU process.Similar patterns in Mojo and
+JavaScript have consistently caused high severity issues in Chrome over the
+years. We believe a high bar of scrutiny should be applied to changes within
+existing <strong>Dawn</strong> callback handlers and for any new callback handlers being
+added to <strong>Dawn</strong>. Increasing complexity in this area would likely have a high
+cost to Chrome Security.</p>
+</blockquote>
+<p>WebGPU was built to offload work from the CPU to the GPU. GPU execution is
+asynchronous, so WebGPU was built to be entirely asynchronous. In the bug above
+we learned that Dawn <code>GPUCommandBuffer</code> execution can execute
+<code>GPUComputePipelines</code>. For example, <code>GPUComputePipelines</code> contain shader
+programs that have no guarantees on when they terminate.</p>
+<pre>// WGSL Script
+fn main() {
+  loop {}
+}</pre>
+<p>GPU Drivers implement Fences to signal the completion of GPU work. These Fences
+are polled on every logical <code>wgpuTick</code> within <strong>Dawn</strong>. Once the work on the GPU
+completes, <strong>Dawn</strong> will execute a callback in the GPU process that will then
+change state within the GPU process and send any results to the renderer process
+using <strong>Dawn Wire</strong>.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--vcq2rype4h7.jpg" alt="image"></p>
+<p>This creates a point of reentrancy during callback execution in <code>wgpuTick</code> when
+the pending callbacks are executed. State can change in unexpected ways during
+callback execution within <code>wgpuTick</code> and state can change in unexpected ways
+before callback execution. This creates room for bugs similar to the classic
+Javascript engine callback bugs that we&#39;ve seen in the
+<a href="https://googleprojectzero.blogspot.com/2019/04/virtually-unlimited-memory-escaping.html">browser</a>
+and <a href="https://tiszka.com/blog/CVE_2021_21225.html">renderer</a> processes.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--594gh2o328e.jpg" alt="image"></p>
+<p>Luckily, as of May 2023, there aren&#39;t that many asynchronous calls in WebGPU and
+these callbacks do not introduce unbounded re-entrancy (i.e. it is not possible
+to call <code>ApiTick</code> within an <code>ApiTick</code>).</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--suavcw9636c.jpg" alt="image"></p>
+<h4 id="the-bug-1">The Bug</h4>
+<p>The bug we&#39;re looking at occurred because of an unexpected state change between
+callback registration and callback execution. WebGPU registers a callback
+handler that executes whenever an error is encountered.</p>
+<pre data-language="cpp">void Server::SetForwardingDeviceCallbacks(ObjectData&lt;WGPUDevice&gt;* deviceObject) {
+    ...
+    mProcs.deviceSetUncapturedErrorCallback(
+        deviceObject-&gt;handle,
+        [](WGPUErrorType type, const char* message, void* userdata) {
+            DeviceInfo* info = static_cast&lt;DeviceInfo*&gt;(userdata);
+            info-&gt;server-&gt;OnUncapturedError(info-&gt;self, type, message);
+        },
+        deviceObject-&gt;info.get()); // [1.a]
+    ...
+}</pre>
+<p>A raw pointer to the <code>WGPUDevice</code>&#39;s <strong>Object&#39;s</strong> <code>userdata</code> is fetched and
+passed to the callback [1.a], which later stores the saved pointer into
+<code>mUncapturedErrorUserdata</code> [1.b].</p>
+<pre data-language="cpp">void DeviceBase::APISetUncapturedErrorCallback(wgpu::ErrorCallback callback, void* userdata) {
+    if (IsLost()) { // [2]
+        return;
+    }
+    FlushCallbackTaskQueue();
+    mUncapturedErrorCallback = callback;
+    mUncapturedErrorUserdata = userdata; // [1.b]
+}</pre>
+<p>When a Dawn Wire Server <code>GPUDevice</code> object is freed, <code>mUncapturedErrorCallback</code>
+is set to null.</p>
+<pre data-language="cpp">void Server::ClearDeviceCallbacks(WGPUDevice device) {
+    ...
+    mProcs.deviceSetUncapturedErrorCallback(device, nullptr, nullptr);
+    ...
+}</pre>
+<p>However if the Device is put into a &quot;Lost&quot; state [2] after 1.a and before 1.b
+when the <code>ClearDeviceCallbacks</code> is called it will not be nulled out, leading to
+a dangling pointer. This creates room for an attacker to send a
+<code>wgpuBufferDestroy</code> command to Dawn Wire Server before the callback is executed.</p>
+<pre data-language="cpp">void DeviceBase::APISetUncapturedErrorCallback(wgpu::ErrorCallback callback, void* userdata) {
+    if (IsLost()) { // [2]
+        return;
+    }
+    FlushCallbackTaskQueue();
+    mUncapturedErrorCallback = callback;
+    mUncapturedErrorUserdata = userdata; // [1.b]
+}</pre>
+<p>After that the attacker can clear all references to the <code>WGPUDevice</code>, freeing
+the userdata leading to a dangling pointer. On the next <code>wgpuTick</code>, if an error
+callback is invoked it will lead to <code>mUncapturedErrorUserdata</code> being
+dereferenced, causing a use-after-free (UAF).</p>
+<p>This leads to the proof of concept below that uses the trick we mentioned
+earlier where Garbage Collected objects created from JavaScript in the renderer
+process can be used to drop a single reference to a Dawn Wire Server object in
+the GPU process, opening the door for the use-after-free.</p>
+<pre data-language="js">async function trigger() {
+    let adapter1 = await self.navigator.gpu.requestAdapter({
+        forceFallbackAdapter: true
+    });
+    let device1 = await adapter1.requestDevice();
+
+    // Request a second device.
+    let adapter2 = await self.navigator.gpu.requestAdapter({
+        forceFallbackAdapter: true
+    });
+
+    let buffer1 = device1.createBuffer(
+        { mappedAtCreation: false,
+          size: 128, usage:
+          GPUBufferUsage.UNIFORM });
+
+    // Set Device::mState to State::kDestroyed.
+    device1.destroy();
+
+    // Trigger an error by unmapping a buffer on a destroyed device,
+    // which queues up an error callback
+    buffer1.unmap();
+
+    // Trigger GC to drop the renderer's reference to device, and free it
+    buffer1 = null;
+    adapter1 = null;
+    device1 = null;
+    try { new ArrayBuffer(31 * 1024 * 1024 * 1024); } catch(e) {}
+
+    // Flush. Trigger UAF.
+    await adapter2.requestDevice();
+}</pre>
+<h3 id="finding-multiple-vulnerabilities-in-webgpu-use-of-gpu-command-buffer">Finding: Multiple vulnerabilities in WebGPU use of GPU Command Buffer</h3>
+<blockquote>
+<p><em><strong>Our Concerns - The Short Version</strong></em></p>
+<p>The Chrome Command Buffer is prone to input validation issues, has many legacy
+undocumented footguns, and is difficult to fuzz effectively. Manual auditing is
+currently the best way to discover bugs in this area of the codebase. Snapshot
+fuzzing could help solve this problem.</p>
+</blockquote>
+<p><strong>Dawn Wire</strong> is a serialization/deserialization library. <strong>Dawn Wire</strong> does not
+implement IPC mechanisms that can be used to transfer data between processes in
+Chrome. Instead, within Chrome, <strong>Dawn Wire</strong> is built on top of the existing
+<a href="https://www.chromium.org/developers/design-documents/gpu-command-buffer/">Chrome Command
+Buffer</a>
+architecture to facilitate inter-process communication between the Renderer and
+GPU processes. One of the WebGPU-specific GPU Command Buffer <a href="https://source.chromium.org/chromium/chromium/src/+/main:gpu/command_buffer/service/webgpu_decoder_impl.cc;l=1768;drc=34ba1d95a41c614308175e932a2b121018891bbf">IPC
+handlers</a>
+receives serialized <strong>Dawn Wire</strong> data over shared memory and deserializes and
+executes it using <strong>Dawn Wire Server.</strong></p>
+<pre data-language="cpp">error::Error WebGPUDecoderImpl::HandleDawnCommands(...) {
+  if (!wire_server_-&gt;HandleCommands(shm_commands, size)) {
+    return error::kLostContext;
+  }
+  ...
+}</pre>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--ttzz54pb83l.jpg" alt="image"></p>
+<p>WebGPU improved on the <code>GLES2CommandBuffer</code> implementation in many ways. For
+example, the <code>GLES2CommandBuffer</code> has been plagued with
+time-of-check/time-of-use (TOCTOU) <a href="https://crbug.com/1422594">vulnerabilities</a>
+<a href="https://crbug.com/597636">that</a> <a href="https://crbug.com/597625">come</a>
+<a href="https://crbug.com/468936">with</a> working directly on shared memory that can be
+concurrently modified by a compromised renderer process. In direct response to
+this bug class, the WebGPU usage of the Chrome GPU Command Buffer and Dawn Wire
+Server always copy shared memory passed from the renderer process into a static
+heap-allocated buffer within the deserializer in the GPU process, before calling
+into <strong>Dawn Native</strong>.</p>
+<p>There are still a few other footguns to avoid when building on top of the Chrome
+GPU Command Buffer abstraction. <a href="https://crbug.com/1373314">The</a>
+<a href="https://crbug.com/1340654">vulnerabilities</a>
+<a href="https://crbug.com/1393177">discovered</a> <a href="https://crbug.com/1314754">in</a>
+<a href="https://crbug.com/1406115">the</a> WebGPU usage of the <strong>Chrome GPU Command
+Buffer</strong> so far are good examples; such as not holding a <code>scoped_ptr</code> reference
+to a <code>TransferBuffer</code> while holding a raw_ptr to its shared memory and not
+validating buffer offsets/sizes received from a compromised renderer process.</p>
+<p>While these vulnerabilities are in WebGPU&#39;s implementation within Chrome, they
+are not unique to WebGPU.  The <strong>Chrome GPU Command Buffer</strong> had similar issues
+in 2013, and it is notoriously difficult to fuzz effectively, so we will likely
+introduce similar bugs that reach stable with future abstractions that build on
+the <strong>Chrome GPU Command Buffer</strong>.</p>
+<h3 id="more-bugs-and-notes-on-webgpu-implementation-complexity">More Bugs and Notes on WebGPU Implementation Complexity</h3>
+<ul>
+<li><p><strong>WebGPU</strong> was the first web-exposed user to back an <code>ArrayBuffer</code> with a
+raw pointer. This led to <a href="https://crbug.com/1336014">some</a>
+<a href="https://crbug.com/1326210">issues</a>.</p>
+</li>
+<li><p>The <strong>WebGPU</strong> specification states the <code>getMappedRange()</code> method returns an
+<code>ArrayBuffer</code>. Within Chrome, this <code>ArrayBuffer</code> is backed by shared memory.
+Concurrent modification of <code>ArrayBuffer</code> backing stores has led to
+<a href="https://crbug.com/1174582">multiple</a> security vulnerabilities. Fortunately,
+it is not possible to modify the shared memory in the GPU process after the
+<code>ArrayBuffer</code> is created. However, if that ever becomes possible in the
+future it will be a security vulnerability.</p>
+<ul>
+<li>Interestingly, this also means that we have a well-defined way to
+compromise an uncompromised renderer that is colluding with a
+compromised GPU process.</li>
+</ul>
+</li>
+<li><p>Google do not control the underlying <strong>Vulkan</strong> implementation in the
+various third party <strong>Usermode Graphics Driver</strong> that <strong>Dawn</strong> calls into.
+Usermode Graphics Driver complexity could reach a point where it becomes
+indefensible.</p>
+</li>
+<li><p>Vulkan, Metal, and D3d are inherently insecure APIs. Dawn has the hefty
+responsibility of validating user input before calling into these APIs.</p>
+</li>
+<li><p>The current <strong>Dawn</strong> fuzzers -
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/dawn/src/dawn/fuzzers/DawnWireServerFuzzer.cpp">DawnWireServerFuzzer</a>
+and
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/dawn/src/dawn/fuzzers/lpmfuzz/">DawnLPMFuzzer</a></p>
+<ul>
+<li>fuzz the <strong>Dawn</strong> wire byte stream, and therefore all of the validation
+and everything the validation is protecting.</li>
+</ul>
+</li>
+<li><p><strong>Dawn</strong> will one day be multithreaded, first as a standalone library and
+then within Chrome. This will increase its complexity.</p>
+</li>
+</ul>
+<h2 id="webgpu-shaders">WebGPU Shaders</h2>
+<p>This section focuses on the portions of WebGPU that ingest and process shaders.
+Refer again to the high level picture below for an illustration of the
+components of interest in this section.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--fci4atgmk2e.png" alt="image"></p>
+<p>Show above: The subset of the Chrome WebGPU stack we focused on during this
+portion of the review, with out-of-scope portions de-emphasized in white.</p>
+<p>There is not much information out there about threats facing Chrome&#39;s existing
+shader compilers for <strong>WebGL</strong> shaders, or how Chrome currently defends against
+them. <strong>WebGPU</strong> introduced a new shader compiler pipeline that is defended in a
+similar manner.</p>
+<p>WebGPU moves away from WebGL&#39;s GLSL shader language entirely and implements
+<strong>WGSL</strong>, a re-imagined high level shading language for the web.
+<strong><a href="https://dawn.googlesource.com/tint">Tint</a></strong> is Google&#39;s translator for
+<strong>WGSL</strong>. <strong>Tint</strong> compiles <strong>WGSL</strong> into a platform dependent intermediate
+language - <strong>SPIR-V</strong>, <strong>HLSL</strong>, <strong>MSL</strong> -  that the underlying Usermode
+Graphics Drivers will further compile.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/dawn_wgsl_pipeline.png" alt="image"></p>
+<p>With the addition of <strong>WebGPU</strong>, Chrome now has two front-end compilers in the
+GPU process that can compile some high-level language into <strong>SPIR-V</strong>: the
+<strong>ANGLE Translator</strong> for WebGL shaders (not discussed here) and <strong>Tint</strong> for
+WebGPU shaders. Interestingly, the <strong>SPIR-V</strong> emitted by <strong>Tint</strong> is not the
+same subset of <strong>SPIR-V</strong> emitted by the <strong>ANGLE Translator</strong>. However, both
+compilers end up passing their emitted <strong>SPIR-V</strong> to the same underlying
+<strong>Usermode Graphics Drivers</strong> for further backend compilation.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--ct2njhd1x14.png" alt="image"></p>
+<h3 id="integer-overflow-in-swiftshader-jit-leads-to-out-of-bounds-readwrite">Integer Overflow in SwiftShader JIT leads to out-of-bounds read/write</h3>
+<blockquote>
+<p><em><strong>tl;dr - Systemic Concerns</strong></em></p>
+<p>Vulnerabilities in the <strong>SwiftShader JIT</strong> compiler aren&#39;t being fixed in the
+<strong>SwiftShader</strong> codebase. Instead they are fixed by translating away code
+patterns using the higher-level front end compilers like the <strong>ANGLE
+Translator</strong>. This has led to bug variants. Furthermore, ANGLE and Tint
+sanitization happens on a representation of shaders that is distinct from the
+representation used by SwiftShader and Usermode Graphics Drivers, creating
+gaps in protection coverage. Finally, Chrome now has two front-end compilers
+that pass compiled code to <strong>SwiftShader</strong> for further compilation making this
+even more precarious.</p>
+</blockquote>
+<p>We did dig into <strong>SwiftShader&#39;s</strong> shader execution pipeline. <strong>SwiftShader</strong>
+emulates an entire GPU stack - the <strong>Vulkan</strong> Implementation within the
+<strong>Usermode Graphics Drivers</strong>, shader compiler within the <strong>Usermode Graphics
+Drivers</strong>, and the GPU hardware these call into - all on the CPU.</p>
+<p>GPUs make heavy use of parallel shader computation. <strong>SwiftShader</strong> implemented
+a <strong>SPIR-V JIT compiler</strong> to reach <em>near-GPU</em> speeds that compiles to various
+architectures (x86, x64, arm, arm64). After shader compilation, the JITTed code
+is executed on multiple threads to emulate a GPU executing shaders.</p>
+<h4 id="swiftshaders-jit">SwiftShader&#39;s JIT</h4>
+<p><strong>SwiftShader&#39;s</strong> JIT compiler is built on the Reactor API which acts as a
+domain specific language and interface to the underlying JIT compiler. Reactor
+emits LLVM-like IR which is then ingested by the JIT compiler backend for
+Reactor,
+<a href="https://swiftshader.googlesource.com/SwiftShader/+/refs/heads/master/docs/Subzero.md">Subzero</a>.</p>
+<h4 id="the-bug-2">The Bug</h4>
+<p>The vulnerability is a classic integer overflow within a <strong>SubZero</strong>
+optimization that collates multiple
+<a href="https://llvm.org/docs/LangRef.html#alloca-instruction"><code>alloca</code></a> instructions
+into a single <code>alloca</code> instruction.</p>
+<pre data-language="cpp">void Cfg::sortAndCombineAllocas(CfgVector&lt;InstAlloca *&gt; &amp;Allocas,
+                                uint32_t CombinedAlignment, InstList &amp;Insts,
+                                AllocaBaseVariableType BaseVariableType) {
+ uint32_t CurrentOffset = 0; // [1]
+ for (Inst *Instr : Allocas) {
+   auto *Alloca = llvm::cast&lt;InstAlloca&gt;(Instr);
+   uint32_t Alignment = std::max(Alloca-&gt;getAlignInBytes(), 1u);
+   auto *ConstSize =
+       llvm::dyn_cast&lt;ConstantInteger32&gt;(Alloca-&gt;getSizeInBytes());
+   uint32_t Size = Utils::applyAlignment(ConstSize-&gt;getValue(), Alignment);
+   CurrentOffset += Size; // [2]
+ }
+ uint32_t TotalSize =
+    Utils::applyAlignment(CurrentOffset, CombinedAlignment);
+
+ Operand *AllocaSize = Ctx-&gt;getConstantInt32(TotalSize);
+ InstAlloca *CombinedAlloca =
+ InstAlloca::create(
+    this,
+    BaseVariable,
+    AllocaSize,
+    CombinedAlignment
+ ); // [3]
+ ...
+}</pre>
+<p><code>CurrentOffset</code> is a 32 bit unsigned integer declared at [1]. By supplying a
+SPIR-V shader that generates enough large <code>alloca</code> nodes, it&#39;s possible for the
+repeated addition at [2] to overflow the 32-bit unsigned integer, leading to an
+undersized <code>alloca</code> node being generated at [3].</p>
+<p><code>alloca</code> instructions are later lowered to stack allocations for the actual
+variables in the shader program. Reading and writing into an undersized stack
+allocation will lead to out-of-bounds reads/writes.</p>
+<h4 id="swiftshader-jit-bugs-reachable-from-webgpu-and-webgl">SwiftShader JIT Bugs: Reachable from WebGPU and WebGL</h4>
+<p>As we mentioned earlier, both <strong>WebGPU</strong> and <strong>WebGL</strong> shaders are compiled to
+<strong>SPIR-V</strong> in <strong>Vulkan</strong> environments. SwiftShader implements the <strong>Vulkan</strong>
+Graphics API.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--utbsiqyq43e.jpg" alt="image"></p>
+<p>We found a bug, but there are many many layers to dig through to figure out if
+the bug is reachable. The <strong>ANGLE Translator</strong> will emit an
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/angle/src/common/spirv/spirv_instruction_builder_autogen.cpp;l=567;drc=bec40d7684688eaf8a5ca4747341dcea4243c996"><code>spv::Op::OpVariable</code></a>
+SPIR-V instruction whenever it encounters a variable declaration within the
+WebGL SL it is compiling. <strong>Tint</strong> will also emit an
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/dawn/src/tint/writer/spirv/builder.cc;l=835;drc=9543f74739118a853dd5e5a46297f5442c3352f8"><code>spv::Op::OpVariable</code></a>
+<strong>SPIR-V</strong> instruction whenever it encounters a variable declaration within the
+WGSL it is compiling.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--hummy4droud.png" alt="image"></p>
+<p>When the <strong>SwiftShader SPIR-V compiler</strong> encounters the
+<a href="https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/swiftshader/src/Pipeline/SpirvShader.cpp;l=1768;drc=004227a1fc7355a9080146c2621d072bd2327701"><code>spv::Op::OpVariable</code></a>
+instruction it will generate a Variable IR.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--xef89t24uli.jpg" alt="image"></p>
+<p>Whenever this Variable IR is being converted from Reactor IR into Subzero IR it
+calls into
+<a href="https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/swiftshader/src/Reactor/Reactor.cpp;l=106;drc=004227a1fc7355a9080146c2621d072bd2327701"><code>allocateStackVariable()</code></a>
+which emits a SubZero InstAlloca instruction.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--i5ooq44jbrq.jpg" alt="image"></p>
+<pre data-language="cpp">Value *Nucleus::allocateStackVariable(Type *t, int arraySize)
+{
+	Ice::Type type = T(t);
+	int typeSize = Ice::typeWidthInBytes(type);
+	int totalSize = typeSize * (arraySize ? arraySize : 1);
+
+	auto bytes = Ice::ConstantInteger32::create(
+             ::context, Ice::IceType_i32, totalSize);
+	auto address = ::function-&gt;makeVariable(T(getPointerType(t)));
+	auto alloca =
+          Ice::InstAlloca::create(::function, address, bytes, typeSize); // [4]
+	::function-&gt;getEntryNode()-&gt;getInsts().push_front(alloca);
+
+	return V(address);
+}</pre>
+<p><code>allocateStackVariable()</code> generates the <strong>SubZero</strong> <code>InstAlloca</code> IR instruction
+that <code>sortAndCombineAllocas</code> incorrectly optimizes.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--86bdvm4zaei.jpg" alt="image"></p>
+<p>When the assembly emitted by <strong>SubZero</strong> is executed on the CPU and the
+undersized allocation is read/written to, it leads to out-of-bounds memory
+accesses.</p>
+<h4 id="the-fix">The Fix</h4>
+<p>Similar to other bugs in shader compilers, this vulnerability is prevented by
+the front-end compilers and no changes were made to <strong>SwiftShader</strong>. For those
+who don&#39;t follow the bug tracker closely, looking closer at the
+<a href="https://chromium-review.googlesource.com/c/angle/angle/+/4377639">fix</a> this is
+a <a href="https://chromium-review.googlesource.com/c/angle/angle/+/4377639">variant</a> of
+a <a href="https://chromium-review.googlesource.com/c/angle/angle/+/3023033">variant</a>.
+Integer overflows keep popping up in shader compilers and
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/angle/src/compiler/translator/ValidateTypeSizeLimitations.cpp;l=34;drc=d0ee0197ddff25fe1a9876511c07542ac483702d"><code>ValidateTypeSizeLimitations()</code></a>
+is being used to further restrict the maximum size of variables within shaders
+to prevent these vulnerabilities. It&#39;s unclear if this strategy will prevent
+more variants from popping up in <strong>SwiftShader</strong>; <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1431761#c14">especially now that
+<strong>WebGPU</strong> will also need to make similar fixes in their front-end
+compiler.</a></p>
+<blockquote>
+<p><em><strong>Note</strong></em>: When <strong>Tint</strong> emits an <code>OpVariable</code> it also emits an
+<a href="https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpConstantNull"><code>OpConstantNull</code></a>
+SPIR-V instruction. The <code>OpConstantNull</code> instruction causes SwiftShader, and any
+other <strong>SPIR-V</strong> compiler, to zero-initialize variables allocations. <a href="https://crbug.com/1431761">As noted
+in the bug</a>, it prevents the bug from triggering in a
+convenient amount of time on WebGPU. This is an interesting inconsistency
+between the two front-end compilers. We are also actively investigating if the
+<strong>ANGLE Translator&#39;s</strong> lack of <code>OpConstantNull</code> leads to infoleaks. The
+<strong>WebGPU</strong> team is considering a <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1431761#c14">separate
+fix</a> for this
+bug.</p>
+</blockquote>
+<h3 id="more-bugs-and-notes-on-shader-compiler-complexity">More Bugs and Notes on Shader Compiler Complexity</h3>
+<ul>
+<li><p>The front-end shader compilers - ANGLE Translator and Tint - break Chrome&#39;s
+<a href="https://chromium.googlesource.com/chromium/src/+/master/docs/security/rule-of-2.md">Rule of
+Two</a>
+on platforms like Android, where the GPU process is un-sandboxed <strong>and</strong>
+parses complex attacker-controlled shaders as input. In addition, backend
+shader compilers in the Usermode Graphics Drivers have a high complexity,
+are closed source, and are evolving targets that are continuously adding new
+optimizations and functionality.</p>
+</li>
+<li><p><strong>WGSL Shader Compilers</strong> are more expressive in general than <strong>WebGL SL
+shader compilers</strong>. Notably, <strong>WGSL</strong> supports both dynamic sized arrays and
+runtime-sized arrays which introduces complexity when handling. There is
+state tracking within Dawn to ensure that object types don&#39;t change between
+executions of the JIT compiler. However as complexity increases in both
+<strong>Dawn</strong> and <strong>Tint</strong> this could become harder to manage and lead to bugs.</p>
+</li>
+<li><p>We are currently fixing bugs in SwiftShader by making fixes in the front-end
+compilers. <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1431761#c14">This is likely a risky way to fix these
+vulnerabilities</a>
+and leads to situations where variants can easily slip through the cracks.</p>
+</li>
+<li><p>We believe that Chrome owning the entire front-end compilation component in
+<strong>Tint</strong> is a net-positive win for security. The less attack surface we pass
+on to the Usermode Graphics Drivers the better.</p>
+</li>
+<li><p>We did not spend time digging into speculative execution vulnerabilities.
+However, we would be surprised if there are no Spectre gadgets in
+SwiftShader.</p>
+</li>
+<li><p>SwiftShader unifies the GPU process attack surface, and enables exploits
+that are reachable through the <strong>Vulkan</strong> API on all platforms. We
+encouraged the <strong>WebGPU</strong> team to consider shipping the
+<code>forceFallbackAdapter</code> adapter option behind a runtime flag.</p>
+</li>
+<li><p>We have not yet audited what any of this means at the Kernel level. We don&#39;t
+know what shader compiler execution looks like on a GPU and what the shape
+of a vulnerability in that area would look like.</p>
+</li>
+</ul>
+<h2 id="summary-of-findings">Summary of Findings</h2>
+<p>WebGPU introduces a significant amount of attack surface to Chrome&#39;s GPU process
+both through the core WebGPU implementation which lives in <strong>Dawn</strong>, the
+<strong>WebGPU extensions to the GPU Command Buffer</strong>, and transitively through the
+third party Usermode Graphics Drivers and everything below.</p>
+<p>The vulnerabilities in the document are meant to showcase attack surfaces and
+patterns that demonstrate further complexity will likely lead to more
+vulnerabilities.</p>
+<p>WebGPU invested a significant amount of effort on validating renderer supplied
+input before calling into drivers and reference counting pointers. This
+investment paid off – we found precisely zero &quot;low-hanging&quot; vulnerabilities in
+Dawn.</p>
+<p>WebGPU also introduces a large amount of attack surface through the compilation
+and execution of shader compilers in Chrome&#39;s privileged GPU process in
+<strong>Tint</strong>, third party <strong>Usermode Graphics Drivers</strong>, and <strong>SwiftShader</strong>.</p>
+<p>WebGPU has invested a significant amount of effort on fuzzing <strong>Tint</strong>. However
+the fuzzing only targets the parsers and lexers within <strong>Tint</strong> and doesn&#39;t
+exercise the code in SwiftShader or on <strong>Usermode Graphics Drivers</strong>. There is
+room for Chrome to invest in fuzzing shader compilers with syntactically and
+semantically correct code in the same way that we fuzz V8 with Fuzzilli to
+exercise code in <strong>SwiftShader&#39;s</strong> <strong>JIT</strong> compiler. Like V8, shader compilers
+will have bugs that are unfuzzable. Chrome Security will need to continue
+manually auditing shader compiler implementations to correctly assess risk and
+reduce bug density.  Furthermore, where we lack access to source code, such as
+third party <strong>Usermode Graphics Drivers</strong>, expanding fuzzing support is our only
+feasibly scalable approach to mitigating the risk of third party code within the
+Chrome GPU process.</p>
+<h3 id="systemic-concerns">Systemic Concerns</h3>
+<p>We found many one-off vulnerabilities in WebGPU during this exercise, and we
+found some bugs that hinted at future problem areas:</p>
+<ul>
+<li><p><strong>Dawn use-after-frees</strong>: Dawn has a pattern where objects hold a raw
+pointer to reference counted objects, assuming a reference is held
+elsewhere. This assumption can easily break with future changes to the code
+as we&#39;ve seen in the browser process with Mojo handlers. Dawn should
+discourage this pattern to reduce use-after-free bugs.</p>
+</li>
+<li><p><strong>Dawn Callbacks</strong>: WebGPU implements callbacks in the GPU process. Similar
+patterns in Mojo and JavaScript have consistently caused high severity
+issues in Chrome over the years. We believe a high bar of scrutiny should be
+applied to changes within existing <strong>WebGPU</strong> callback handlers and for any
+new callback handlers being added to <strong>Dawn</strong>. Increasing complexity in this
+area would likely have a high cost to Chrome Security.</p>
+</li>
+<li><p><strong>Chrome Command Buffer</strong>: The Chrome Command Buffer is prone to input
+validation issues, has many undocumented legacy footguns, and is difficult
+to fuzz effectively because feature coverage requires (a) a harness that
+supports Chrome in multi-process mode, (b) a stateful generator that can
+leverage context across test cases, and (c) can sometimes also require
+execution on a host with a physical GPU. Snapshot fuzzing may be useful to
+address some of these challenges, although manual auditing is currently the
+best way to discover bugs in this area of the codebase.</p>
+</li>
+<li><p><strong>SwiftShader JIT</strong>: Vulnerabilities in the <strong>SwiftShader JIT compiler</strong>
+aren&#39;t being fixed in the <strong>SwiftShader</strong> codebase. Instead they are fixed
+by translating away code patterns using the higher-level front end compilers
+like the <strong>ANGLE Translator</strong>. This has led to bug variants. Furthermore,
+<strong>ANGLE</strong> and <strong>Tint</strong> sanitization happens on a representation of shaders
+that is distinct from the representation used by <strong>SwiftShader</strong> and
+<strong>Usermode Graphics Drivers</strong>, creating gaps in protection coverage.
+Finally, Chrome now has two front-end compilers that pass compiled code to
+<strong>SwiftShader</strong> for further compilation making this strategy more
+precarious.</p>
+</li>
+</ul>
+<h2 id="glossary-chrome-security-gpu-terminology">Glossary: Chrome Security GPU Terminology</h2>
+<p>The security relevance of GPU terms is hard to track. Here are a lot of them in
+one place.</p>
+<ul>
+<li><p><strong>Dawn Wire</strong>: Client-Server implementation of
+<a href="https://github.com/webgpu-native/webgpu-headers/blob/main/webgpu.h"><code>webgpu.h</code></a>.</p>
+<ul>
+<li><strong>Dawn Wire Client</strong>: Lives in the renderer process.</li>
+<li><strong>Dawn Wire Server</strong>: Lives in the GPU process</li>
+</ul>
+</li>
+<li><p><strong>Dawn Native</strong>: Core implementation of WebGPU that calls into the Dawn
+backends.</p>
+</li>
+<li><p><strong>Dawn Backends</strong>: Wrappers around the System Graphics Apis that Dawn Native
+needs to call into (Vulkan, Metal, &amp; DirectX3D).</p>
+</li>
+<li><p><strong>Tint:</strong> Google&#39;s OSS implementation of WGSL. Compiles WGSL to SPIRV, MSL,
+HLSL, &amp; DXIL. Mostly a front-end compiler as of May 23, 2023.</p>
+</li>
+<li><p><strong>ANGLE</strong>: Google&#39;s OSS implementation of OpenGL.</p>
+</li>
+<li><p><strong>ANGLE Translator</strong>: Google&#39;s OSS implementation of WebGL SL. Compiles
+WebGL SL to GLSL or SPIR-V.</p>
+</li>
+<li><p><strong>SwiftShader</strong>: Vulkan implementation and SPIR-V compiler built to run
+directly on the CPU. Emulates an entire GPU as well. Does so with JIT
+compiled SIMD shader compiler execution.</p>
+</li>
+<li><p><strong>SwiftShader JIT Compiler</strong>: SwiftShader compiles SPIR-V shaders to
+X86/Arm/aarch64/etc using PNACL&#39;s old JIT compiler, SubZero.</p>
+</li>
+<li><p><strong>D3D12</strong>:  Direct3D 12, Microsoft&#39;s newest System Graphics API. Implemented
+in Usermode Graphics Driver.</p>
+</li>
+<li><p><strong>OpenGL</strong>:  WebGL is built on OpenGL. Implemented in Usermode Graphics
+Driver. SwiftShader no longer</p>
+</li>
+<li><p><strong>Vulkan</strong>: Systems Graphics API on Linux (and some Windows devices™).
+WebGPU is built on top of Vulkan.</p>
+<ul>
+<li>WebGL can be run with a Vulkan backend natively. Currently enabled on
+50%  is built on top of Vulkan on 50% of Linux Desktop devices through a
+finch experiment.</li>
+<li>WebGL on SwiftShader uses the Vulkan backend on every platform.</li>
+<li>WebGPU on Linux uses Vulkan for 100% of Linux Desktop and Android
+devices</li>
+<li>WebGPU on SwiftShader uses the Vulkan backend on every platform.</li>
+</ul>
+</li>
+<li><p><strong>Metal</strong>: Systems Graphics API on Mac.</p>
+</li>
+<li><p><strong>DXIL</strong>:  DirectX Intermediate Language, essentially LLVM IR for shaders
+for D3D12</p>
+</li>
+<li><p><strong>HLSL</strong>:  High Level Shading Language, Direct3D&#39;s shading language
+(including D3D12).</p>
+</li>
+<li><p><strong>MSL</strong>:  Metal Shading Language (shading language that runs on apple
+hardware).</p>
+</li>
+<li><p><strong>SPIR-V</strong>: Standard Portable Intermediate Representation - Vulkan. An SSA
+form bytecode shading language used for Vulkan. Both WebGL and WebGPU
+compile to SPIR-V on Vulkan.</p>
+</li>
+<li><p><strong>WGSL</strong>: WebGPU Shading Language. WebGL&#39;s successor.</p>
+</li>
+<li><p><strong>GLSL</strong>: OpenGL Shading Language.</p>
+</li>
+<li><p><strong>WebGL SL</strong>: WebGL Shader language. A subset of GLSL that is safe for the
+web. Compiled and sanitized by the ANGLE translator.</p>
+</li>
+<li><p><strong>Usermode Graphics Driver (UMD)</strong>: A shared library that ships with a
+kernel graphics driver (think Arm, Nvidia, AMD, Qualcomm). This is where
+shader compilation happens. This is where the system graphics APIs are
+implemented. SwiftShader emulates an entire GPU, so it is a Usermode
+Graphics Driver and more.</p>
+</li>
+<li><p><strong>GPU Command Buffer</strong>: High level abstraction for transferring data over
+shared memory to the GPU process. Both the renderer process and browser
+process use various command buffers to do GPU operations in Chrome.</p>
+</li>
+<li><p><strong>WebGPU use of GPU Command Buffer (<code>WebGPUDecoderImpl</code>)</strong>: An extension of
+the Chrome GPU Command Buffer abstraction that is used for transferring Dawn
+Wire data between the Renderer and GPU processes.</p>
+</li>
+<li><p><strong>Dawn Native <code>GPUCommandBuffer</code></strong>: An object within Dawn that has a name
+collision with the legacy Chrome GPU Command Buffer abstraction. They are
+not related.</p>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/research/graphics/webgpu_technical_report.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/research/graphics/webgpu_technical_report.md</a>
+  </p>
+</div>

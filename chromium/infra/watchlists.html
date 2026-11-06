@@ -1,0 +1,48 @@
+<h1>Watchlists</h1>
+<h2 id="what-are-watchlists">What are watchlists?</h2>
+<p>A watchlist is a mechanism that allows a developer (a &quot;watcher&quot;) to watch over
+portions of code that the watcher is interested in. A watcher will be cc-ed on
+changes that modify that portion of code, thereby giving that watcher an
+opportunity to make comments on chromium-review.googlesource.com even before the
+change is committed.</p>
+<h2 id="syntax">Syntax</h2>
+<p>Watchlists are defined using a <code>WATCHLISTS</code> file, which resides at the root of a
+repository. A typical <code>WATCHLISTS</code> file looks like:</p>
+<pre>{
+  'WATCHLIST_DEFINITIONS': {
+    'valgrind': {
+      'filepath': 'tools/valgrind/',
+    },
+    'mac': {
+      'filepath': 'cocoa|\.mm$|(_mac|_posix)\.(cc|h)$',
+    },
+  },
+  'WATCHLISTS': {
+    'valgrind': ['nirnimesh@chromium.org', 'dank@chromium.org'],
+  },
+}</pre>
+<p>In this case, watchlists named <code>valgrind</code> and <code>mac</code> are defined in
+<code>WATCHLIST_DEFINITIONS</code> and their corresponding watchers declared in
+<code>WATCHLISTS</code>.</p>
+<p>In the example above, whenever a new changeset is created that refers to any
+file in <code>tools/valgrind/</code>, the <code>&#39;valgrind&#39;</code> watchlist will be triggered and
+<code>nirnimesh@chromium.org</code> &amp; <code>dank@chromium.org</code> will be cc-ed to the changeset
+for review. A regular expression can be used as the matching pattern. Matches
+are determined using python&#39;s <code>re.search()</code> function call, so matching <code>A_WORD</code>
+is the same as matching <code>.*A_WORD.*</code>.</p>
+<p>Each name in <code>WATCHLISTS</code> must be defined first in <code>WATCHLIST_DEFINITIONS</code>.</p>
+<p>Watchlist processing takes place on Gerrit with the &quot;Watchlists&quot; analyzer and is
+non-binding; that is, an approval from that watcher is not needed for commit. It
+merely gives the watcher an opportunity to make comments, if any.</p>
+<h2 id="editing-watchlists">Editing Watchlists</h2>
+<p>You create new watchlists or add yourself to existing watchlists by editing the
+WATCHLISTS file at the base of the repository.</p>
+<p>It&#39;s advisable to run <code>watchlists.py</code> to verify that your new rules work.</p>
+<p>Example (from src):</p>
+<pre>python third_party/depot_tools/watchlists.py PATH/TO/FILE1 PATH/TO/FILE2 ....</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/infra/watchlists.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/infra/watchlists.md</a>
+  </p>
+</div>

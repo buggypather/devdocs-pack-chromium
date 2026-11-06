@@ -1,0 +1,53 @@
+<h1>Graphical Debugging Aid for Chromium Views</h1>
+<h2 id="introduction">Introduction</h2>
+<p>A simple debugging tool exists to help visualize the views tree during
+debugging. It consists of 4 components:</p>
+<ol>
+<li>The function <code>views::PrintViewGraph()</code> (in the file
+<code>ui/views/debug_utils.h</code>),</li>
+<li>a custom debugger command</li>
+</ol>
+<ul>
+<li>For GDB, see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gdbinit.md">gdbinit</a>,</li>
+<li>For LLDB, use <code>tools/lldb/lldb_viewg.py</code></li>
+<li>For other debuggers, it should be relatively easy to adapt the
+above scripts.</li>
+</ul>
+<ol>
+<li>the graphViz package (<a href="http://www.graphviz.org/">http://www.graphviz.org/</a> - downloadable for Linux,
+Windows and Mac), and</li>
+<li>an SVG viewer (<em>e.g.</em> Chrome).</li>
+</ol>
+<h2 id="details">Details</h2>
+<p>To use the tool,</p>
+<ol>
+<li>Make sure you have &#39;dot&#39; installed (part of graphViz),</li>
+<li>run gdb/lldb on your build and<ol>
+<li>For GDB see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gdbinit.md">gdbinit</a>,</li>
+<li>For LLDB <code>command script import tools/lldb/lldb_viewg.py</code> (this can
+be done automatically in <code>.lldbinit</code>),</li>
+</ol>
+</li>
+<li>stop at any breakpoint inside class <code>View</code> (or any derived class), and</li>
+<li>type <code>viewg</code> at the gdb prompt.</li>
+</ol>
+<p>This will cause the current view, and any descendants, to be described in a
+graph which is stored as <code>~/state.svg</code> (Windows users may need to modify the
+script slightly to run under CygWin). If <code>state.svg</code> is kept open in a browser
+window and refreshed each time <code>viewg</code> is run, then it provides a graphical
+representation of the state of the views hierarchy that is always up to date.</p>
+<p>It is easy to modify the gdb script to generate PDF in case viewing with evince
+(or other PDF viewer) is preferred.</p>
+<p>If you don&#39;t use gdb or lldb, you may be able to adapt the script to work with
+your favorite debugger. The gdb script invokes</p>
+<pre>views::PrintViewGraph(this)</pre>
+<p>on the current object, returning <code>std::string</code>, whose contents must then be
+saved to a file in order to be processed by dot.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/graphical_debugging_aid_chromium_views.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/graphical_debugging_aid_chromium_views.md</a>
+  </p>
+</div>

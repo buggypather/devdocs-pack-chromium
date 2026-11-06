@@ -1,0 +1,133 @@
+<h1>compile-size Builder</h1>
+<h2 id="about">About</h2>
+<p>The <code>compile-size</code> trybot measures and prevents unexpected growth in the size of
+the C++ compiler input size, which closely <a href="https://docs.google.com/document/d/1mb4XadoSqaqNZivcKpvMVfXZVXR41uP0wPC79GtDYr8/edit">correlates</a> with time
+spent in the build.</p>
+<h2 id="overview">Overview</h2>
+<p>This builder does the following:</p>
+<ol>
+<li>With the CL and without the CL applied:<ol>
+<li>Builds <code>chrome</code> on Linux</li>
+<li>Queries siso for build deps and commands</li>
+<li>Generates a compile size report broken down by TU (translation unit)</li>
+</ol>
+</li>
+<li>Compares the two reports and writes a diff report with a summary and TU
+deltas</li>
+<li>If a size increase threshold is exceeded and there is no override then fail
+the build</li>
+</ol>
+<h2 id="what-to-do-if-the-check-fails">What to do if the check fails?</h2>
+<ol>
+<li><a href="#inspect-the-report">Inspect the report</a></li>
+<li>Iterate on a fix<ol>
+<li>Run <a href="#run-a-local-compile_size-check">locally</a> to collect a baseline (or
+skip this to iterate remotely)</li>
+<li>If applicable, remove transitive includes by using <a href="#forward-declarations">forward declarations</a></li>
+<li>If stuck, ask for <a href="#get-help">help</a><ol>
+<li>If still stuck, <a href="#skip-the-check">override</a> the builder</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>Confirm results reproduce <a href="#run-remotely">remotely</a></li>
+</ol>
+<h3 id="inspect-the-report">Inspect the report</h3>
+<ol>
+<li>On the <code>compile-size</code> builder&#39;s overview or infra page look for the summary
+and the link to the <code>compile_size_deltas.txt</code> report.
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/binary_size/compile_size_steps.png" alt="alt text" title="Screenshot of the builder overview page
+with boxes highlighting the link to the diff report under &#39;Write size results&#39; &gt;
+&#39;compile_size_deltas.txt&#39; file and the total delta summary under
+&#39;Trybot Results&#39;."></li>
+<li>The report shows translation units with the largest increases. These can
+  give clues about the source of the increase. For example, when many TUs
+  show a similar increase in size, it could mean that a header was added to
+  be transitively included in all of those TUs.
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/binary_size/compile_size_diff_report.png" alt="alt text" title="Screenshot of the compile size diff
+report showing the same summary from the first screenshot on the top with the
+list of translation units with the largest deltas below it."></li>
+</ol>
+<h3 id="run-a-local-compile-size-check">Run a local compile-size check</h3>
+<p>If you want to check TU sizes locally to iterate faster, do the following:</p>
+<pre data-language="bash"># Set up a new build directory with the builder's GN args
+tools/mb/mb gen -m tryserver.chromium.linux -b compile-size out/compile_size
+
+# Build the `chrome` target
+autoninja -C out/compile_size chrome
+
+# Collect the size info
+siso query commands -C out/compile_size chrome &gt; /tmp/commands.txt
+siso query deps -C out/compile_size &gt; /tmp/deps.txt
+tools/clang/scripts/compiler_inputs_size.py out/compile_size \
+  /tmp/commands.txt /tmp/deps.txt &gt; /tmp/report.txt</pre>
+<p>The report will contain lines with compile sizes in bytes per TU, like</p>
+<pre>apps/app_lifetime_monitor.cc 9,034,754
+apps/app_lifetime_monitor_factory.cc 5,863,660
+apps/app_restore_service.cc 9,198,130</pre>
+<p>As you make changes, you can re-build, collect size info, and generate reports
+to see how the per-TU numbers change. Two reports can be diffed with
+<a href="https://chromium.googlesource.com/chromium/src/+/main/tools/clang/scripts/compiler_inputs_size_diff.py">compiler_inputs_size_diff.py</a>.</p>
+<pre>tools/clang/scripts/compiler_inputs_size_diff.py /tmp/report-old.txt \
+  /tmp/report-new.txt &gt; /tmp/diff-report.txt</pre>
+<h3 id="run-remotely">Run remotely</h3>
+<p>Once done iterating on a fix locally (or if you skipped local iterations), you
+can upload a new patchset or CL and trigger the <code>compile-size</code> builder to get
+a new result and report.</p>
+<h3 id="how-to-reduce-your-compiler-input-size">How to reduce your compiler input size</h3>
+<h4 id="forward-declarations">Forward Declarations</h4>
+<p>A common source of compiler input size growth is adding a header to another
+widely included header. This can result in the added header getting compiled
+an additional thousands or tens of thousands of times.</p>
+<p>Chromium style prefers <a href="https://chromium.googlesource.com/chromium/src/+/main/styleguide/c++/c++.md#forward-declarations-vs_includes">forward declarations</a> over includes when a
+full definition isn&#39;t required. For advice on when to use forward declarations
+and how to minimize code in headers see <a href="https://chromium.googlesource.com/chromium/src/+/main/styleguide/c++/c++-dos-and-donts.md#minimize-code-in-headers">these tips</a>.</p>
+<p>Example CLs replacing header inclusion with forward declarations resulting in
+large compiler input size decreases:</p>
+<ul>
+<li><a href="https://crrev.com/c/5213226">crrev.com/c/5213226</a></li>
+<li><a href="https://crrev.com/c/6170321">crrev.com/c/6170321</a></li>
+<li><a href="https://crrev.com/c/6073644">crrev.com/c/6073644</a></li>
+</ul>
+<h3 id="get-help">Get help</h3>
+<p>For help, post to <a href="mailto:build@chromium.org">build@chromium.org</a>. They&#39;re expert build system developers.
+You may also ask <a href="https://chromium.slack.com/archives/CGF4Y2J4W">#cxx</a> or
+<a href="https://chromium.slack.com/archives/CGGPN5GDT">#halp</a> on Chromium slack.</p>
+<h3 id="skip-the-check">Skip the check</h3>
+<p>Not all checks are perfect and sometimes you want to bypass the builder (for
+example, if you did your best and are unable to reduce compiler input size any
+further).</p>
+<p>Adding a <code>Compile-Size: $ANY_TEXT_HERE</code> footer to your CL description (above or
+below <code>Bug: </code>)  will bypass the builder assertions.</p>
+<p>Examples:</p>
+<ul>
+<li><code>Compile-Size: Size increase is unavoidable.</code></li>
+<li><code>Compile-Size: Increase is temporary.</code></li>
+<li><code>Compile-Size: See commit description.</code> &lt;-- use this if longer
+than one line.</li>
+</ul>
+<p>***note
+<strong>Note:</strong> Make sure there are no blank lines between <code>Compile-Size:</code> and
+other footers.</p>
+<hr>
+<h2 id="builder-implementation">Builder Implementation</h2>
+<p>The analysis is done with the following scripts:</p>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/tools/clang/scripts/compiler_inputs_size.py">compiler_inputs_size.py</a>: Computes growth between builds,
+ breaking them down by TU.</li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/tools/clang/scripts/compiler_inputs_size_diff.py">compiler_inputs_size_diff.py</a>: Computes deltas from output of the
+compiler_inputs_size.py script.</li>
+</ul>
+<p>The GN args are in the builder&#39;s <a href="https://chromium.googlesource.com/chromium/src/+/main/infra/config/generated/builders/try/compile-size/gn-args.json">gn-args.json</a> file.</p>
+<h2 id="references">References</h2>
+<ul>
+<li><a href="https://docs.google.com/document/d/1mb4XadoSqaqNZivcKpvMVfXZVXR41uP0wPC79GtDYr8/edit">Design Doc</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/tools/build/+/main:recipes/recipes/compile_size_trybot.py">Builder recipe</a></li>
+<li><a href="https://source.chromium.org/chromium/chromium/tools/build/+/main:recipes/recipe_modules/binary_size/api.py">recipe module</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/compile_size_builder.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/binary_size/compile_size_builder.md</a>
+  </p>
+</div>

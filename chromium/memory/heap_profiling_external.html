@@ -1,0 +1,87 @@
+<h1>Heap Profiling with External Tools (on Linux)</h1>
+<p>For finding memory leaks or generally analyzing native heap usage of Chrome,
+external off-the-shelf tools such as <a href="https://github.com/KDE/heaptrack">heaptrack</a> can sometimes be useful to
+complement the built-in
+<a href="../memory-infra/heap_profiler">MemoryInfra heap profiler</a>.
+E.g., heaptrack has a convenient view for finding temporary allocations, and
+produces a nice flamegraph of the call stacks of all allocation sites.
+Alternatively, the <code>tcmalloc</code> allocator as part of <a href="https://github.com/gperftools/gperftools">gperftools</a> can produce heap
+dumps at arbitrary points in time, which can be visualized and zoomed in,
+filtered, etc. with <a href="https://github.com/google/pprof">pprof</a>.</p>
+<p>This requires hooking into or replacing the allocator used by Chrome (typically
+PartitionAlloc). In this guide, we describe how to do this on Linux. (It might
+work similarly on other systems, feel free to extend this document with
+instructions for macOS and Windows.)</p>
+<p>Note that not all memory usage comes from the allocator or the hooking into it
+may be incomplete, so this may underreport allocations as described in <a href="tools#heap-dumps">the
+blindspots here</a>.</p>
+<h2 id="using-heaptrack"><a name="heaptrack"></a> Using heaptrack</h2>
+<ol>
+<li>Build or install <a href="https://github.com/KDE/heaptrack">heaptrack</a> and its GUI.</li>
+<li><a href="../get_the_code">Build Chrome</a> with the following added to your
+<code>args.gn</code>:</li>
+</ol>
+<pre>forward_through_malloc = true   # so that all C++ allocations go to malloc
+symbol_level = 2                # for stacktraces
+is_component_build = true       # so that the allocation functions are dl-exported
+                                # and can be intercepted</pre>
+<p>Since <a href="https://docs.google.com/document/d/1R1H9z5IVUAnXJgDjnts3nTJVcRbufWWT9ByXLgecSUM/preview">PartitionAlloc Everywhere</a>,
+you should additionally disable PartitionAlloc and use the system allocator
+instead so that more allocations are captured in heaptrack. (Note that
+PartitionAlloc is still used in Blink, just not for <code>malloc</code> in other places
+anymore.) Add these build flags additionally:</p>
+<pre>use_partition_alloc_as_malloc = false
+enable_backup_ref_ptr_support = false</pre>
+<ol start="3">
+<li>Run Chrome with <code>chrome --no-sandbox --renderer-cmd-prefix=&#39;heaptrack --record-only&#39; &lt;other args...&gt;</code>. The sandbox needs to be disabled such that the
+heap dump can be written to disk. The other argument is for attaching heaptrack
+to each new renderer process (which also disables the
+<a href="../linux/zygote">Zygote</a>). This will write (several) heapdump file(s) such
+as <code>heaptrack.chrome.$pid.zst</code>. (Check the Chrome task manager for which tab
+corresponds to which process ID.)</li>
+<li>Analyze the heap dump with <code>heaptrack --analyze heaptrack.chrome.$pid.zst</code>.</li>
+</ol>
+<h2 id="using-tcmalloc--pprof"><a name="tcmalloc"></a> Using tcmalloc + pprof</h2>
+<p>Motivation: An alternative to heaptrack is to use the <a href="https://gperftools.github.io/gperftools/heapprofile.html">heap
+profiler</a> which is
+part of the tcmalloc allocator. This has the advantage of allowing to take
+heapdumps at different triggers (e.g., every N seconds, every N new bytes
+allocated, if in-use memory increases by N bytes, or manually triggered via a
+signal) and that its dumps can be visualized and analyzed with <a href="https://github.com/google/pprof">pprof</a>.</p>
+<ol>
+<li>Build or install <a href="https://github.com/gperftools/gperftools">gperftools</a>. As of 2024-03 the TL;DR of building yourself
+is:</li>
+</ol>
+<pre data-language="bash">git clone https://github.com/gperftools/gperftools
+cd gperftools
+./autogen.sh
+./configure
+make</pre>
+<ol start="2">
+<li>Build Chrome as <a href="#heaptrack">described above</a>.</li>
+<li>Save the following <code>heapdump-renderer.sh</code> script and <code>chmod +x</code> it. It
+<code>LD_PRELOAD</code>s the tcmalloc allocator into every spawned renderer processes in
+Chrome:</li>
+</ol>
+<pre data-language="bash">#!/bin/sh
+echo &quot;Renderer $$ starting...&quot;
+LD_PRELOAD=path/to/gperftools/.libs/libtcmalloc_and_profiler.so MALLOCSTATS=1 HEAPPROFILE=tcmalloc.renderer$$ HEAPPROFILESIGNAL=12 exec $*</pre>
+<ol start="4">
+<li>You can also trigger heapdumps with, e.g.,
+<code>HEAP_PROFILE_ALLOCATION_INTERVAL=...</code> instead of <code>HEAPPROFILESIGNAL</code>, see
+the <a href="https://gperftools.github.io/gperftools/heapprofile.html">gperftools
+documentation</a>.</li>
+<li>Run Chrome with <code>chrome --no-sandbox --renderer-cmd-prefix=./heapdump-renderer.sh &lt;other args...&gt;</code>.</li>
+<li>Instruct the renderer process of your liking to take a heapdump with <code>kill -n 12 $pid</code>. (Find the process ID in the Chrome task manager or check the
+console output.) This produces a <code>tcmalloc.renderer$pid.heap</code> file.</li>
+<li>Analyze the heapdump with <code>pprof -flame tcmalloc.renderer$pid.heap</code>
+(Googlers-only) or <code>pprof -http tcmalloc.renderer$pid.heap</code>. Note that you
+can switch the <code>metric</code>/<code>Sample</code> between <code>alloc_objects</code>, <code>alloc_space</code>,
+<code>inuse_objects</code>, and <code>inuse_space</code>.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/heap_profiling_external.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory/heap_profiling_external.md</a>
+  </p>
+</div>

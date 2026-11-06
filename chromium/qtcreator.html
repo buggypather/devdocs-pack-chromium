@@ -1,0 +1,127 @@
+<h1>Use Qt Creator as an IDE or debugger UI</h1>
+<p><a href="https://www.qt.io/ide/">Qt Creator</a>
+(<a href="https://en.wikipedia.org/wiki/Qt_Creator">Wiki</a>) is a cross-platform C++ IDE.</p>
+<p>You can use Qt Creator as a daily IDE on Linux or Mac, or just as a GDB/LLDB
+frontend (which does not require project configuration).</p>
+<h2 id="ide">IDE</h2>
+<h3 id="workflow-features">Workflow features</h3>
+<ul>
+<li>Built-in code completion.</li>
+<li>Navigate to classes, files, or symbols with <code>ctrl+k</code> or <code>cmd+k</code> (macOS).</li>
+<li>Switch between declaration and definition with <code>F2</code>.</li>
+<li>Build with <code>ctrl+shift+b</code> or <code>shift+cmd+b</code> (macOS).</li>
+<li>Build and run with <code>ctrl+r</code> or <code>cmd+r</code> (macOS), or debug with <code>F5</code>.</li>
+<li>Switch between the header file and cpp file with <code>F4</code>.</li>
+</ul>
+<h3 id="setup">Setup</h3>
+<ol>
+<li>Install the latest Qt Creator.</li>
+<li>Under chromium/src <code>gn gen out/Default --ide=qtcreator</code>.</li>
+<li>Start it with <code>qtcreator out/Default/qtcreator_project/all.creator</code>.</li>
+<li>Help - Plugins - check ClangCodeModel to enable std completion.</li>
+</ol>
+<p>It takes 3 minutes to parse all of chromium&#39;s C++ files on my workstation!!! And
+it does not block while parsing.</p>
+<h4 id="code-style">Code Style</h4>
+<ol>
+<li>Help - About Plugins (or app menu on macOS), enable Beautifier.</li>
+<li>Tools - Options (Preferences on macOS) - Beautifier
+Make sure to tick - Enable auto format on file save&quot;
+Select ClangFormat as the tool
+Go to Clang Format tab
+Change the Clang format command to: <code>$chromium_checkout_dir/src/buildtools/$os/clang-format</code>, and
+set <code>Use predefined style: file</code>. You can also set a keyboard shortcut
+for it.</li>
+<li>Tools - Options - C++ - Code Style, import this xml file.</li>
+</ol>
+<pre>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE QtCreatorCodeStyle&gt;
+&lt;!-- Written by QtCreator 4.2.1, 2017-02-08T19:07:34. --&gt;
+&lt;qtcreator&gt;
+ &lt;data&gt;
+  &lt;variable&gt;CodeStyleData&lt;/variable&gt;
+  &lt;valuemap type=&quot;QVariantMap&quot;&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;AlignAssignments&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;AutoSpacesForTabs&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;BindStarToIdentifier&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;BindStarToLeftSpecifier&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;BindStarToRightSpecifier&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;BindStarToTypeName&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;bool&quot;
+     key=&quot;ExtraPaddingForConditionsIfConfusingAlign&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentAccessSpecifiers&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentBlockBody&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentBlockBraces&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentBlocksRelativeToSwitchLabels&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentClassBraces&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentControlFlowRelativeToSwitchLabels&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;bool&quot;
+     key=&quot;IndentDeclarationsRelativeToAccessSpecifiers&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentEnumBraces&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentFunctionBody&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentFunctionBraces&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentNamespaceBody&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentNamespaceBraces&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;int&quot; key=&quot;IndentSize&quot;&gt;2&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentStatementsRelativeToSwitchLabels&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;IndentSwitchLabels&quot;&gt;false&lt;/value&gt;
+   &lt;value type=&quot;int&quot; key=&quot;PaddingMode&quot;&gt;2&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;ShortGetterName&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;bool&quot; key=&quot;SpacesForTabs&quot;&gt;true&lt;/value&gt;
+   &lt;value type=&quot;int&quot; key=&quot;TabSize&quot;&gt;2&lt;/value&gt;
+  &lt;/valuemap&gt;
+ &lt;/data&gt;
+ &lt;data&gt;
+  &lt;variable&gt;DisplayName&lt;/variable&gt;
+  &lt;value type=&quot;QString&quot;&gt;chrome&lt;/value&gt;
+ &lt;/data&gt;
+&lt;/qtcreator&gt;</pre>
+<h4 id="build--run">Build &amp; Run</h4>
+<ol>
+<li>(Optional) Enable the issues pane for easy navigation to the location of
+compiler errors. qtcreator expects to find compiler errors on stderr, but
+ninja forwards all subcommand output to stdout. So use the following wrapper
+script to forward it to stderr instead.</li>
+</ol>
+<pre>#!/bin/sh
+/path/to/depot_tools/ninja &quot;$@&quot; &gt;&amp;2</pre>
+<ol start="2">
+<li>In the left panel - Projects, set up the ninja command in the build and
+clean steps, and add the path to chrome in the run configuration.</li>
+</ol>
+<h2 id="debugger">Debugger</h2>
+<p><strong>You can skip the project settings and use QtCreator as a single file
+standalone GDB or LLDB (macOS) frontend.</strong></p>
+<p>For macOS :</p>
+<ol>
+<li>Open the file you want to debug.</li>
+<li>Debug - Start Debugging - Attach to running Application, you may need to
+open chromium&#39;s task manager to find the process id.</li>
+</ol>
+<p>For Linux :</p>
+<ol>
+<li>Tools - Options - Build &amp; Run - Debuggers, make sure GDB is set.</li>
+<li>Tools - Options - Kits, change the Desktop kit to GDB (LLDB doesn&#39;t work on
+Linux).</li>
+<li>Open the file you want to debug.</li>
+<li>Debug - Start Debugging - Attach to running Application, you may need to
+open chromium&#39;s task manager to find the process id.</li>
+</ol>
+<h3 id="tips-tricks-and-troubleshooting">Tips, tricks, and troubleshooting</h3>
+<h4 id="linux-the-debugger-exits-immediately">[Linux] The debugger exits immediately</h4>
+<p>Ensure yama allows you to attach to another process:</p>
+<pre>$ echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope</pre>
+<h4 id="linux-the-debugger-does-not-stop-on-breakpoints">[Linux] The debugger does not stop on breakpoints</h4>
+<p>Ensure you are using GDB on Linux, not LLDB.</p>
+<h4 id="more">More</h4>
+<p>Linux :
+See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/debugging.md">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/debugging.md</a></p>
+<p>macOS :
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac/debugging.md">https://chromium.googlesource.com/chromium/src/+/main/docs/mac/debugging.md</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/qtcreator.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/qtcreator.md</a>
+  </p>
+</div>

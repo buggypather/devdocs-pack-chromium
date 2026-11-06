@@ -1,0 +1,95 @@
+<h1>Initialization of Blink runtime features in content layer</h1>
+<p>This document outlines how to initialize your Blink runtime features in the
+Chromium content layer, more specifically in
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/content/child/runtime_features.cc">content/child/runtime_features.cc</a>. To learn more on how to
+set up features in blink, see
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/renderer/platform/RuntimeEnabledFeatures.md">Runtime Enabled Features</a>.</p>
+<h2 id="step-1-do-you-need-a-custom-blink-feature-enabler-function">Step 1: Do you need a custom Blink feature enabler function?</h2>
+<p>If you simply need to enable/disable the Blink feature you can simply use
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/public/platform/web_runtime_features.h#56">WebRuntimeFeatures::EnableFeatureFromString()</a>.</p>
+<p>However, if there are side effects (e.g. you need to disable other features if
+this feature is also disabled), you should declare a custom enabler function in</p>
+<ul>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/public/platform/web_runtime_features.h">third_party/blink/public/platform/web_runtime_features.h</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/HEAD/third_party/blink/renderer/platform/exported/web_runtime_features.cc">third_party/blink/renderer/platform/exported/web_runtime_features.cc</a></li>
+</ul>
+<h2 id="step-2-determine-how-your-feature-is-initialized">Step 2: Determine how your feature is initialized.</h2>
+<h3 id="1-depends-on-os-specific-macros">1) Depends on OS-specific Macros:</h3>
+<p>Add your code for controlling the Blink feature in
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/content/child/runtime_features.cc#46">SetRuntimeFeatureDefaultsForPlatform()</a>
+using the appropriate OS macros.</p>
+<h3 id="2-depends-on-the-status-of-a-basefeature">2) Depends on the status of a base::Feature:</h3>
+<p>Add your code to the function
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/content/child/runtime_features.cc#160">SetRuntimeFeaturesFromChromiumFeatures()</a>.</p>
+<p>If your Blink feature has a custom enabler function, add a new entry to
+<code>blinkFeatureToBaseFeatureMapping</code>. For example, a new entry like this:</p>
+<pre>{wf::EnableNewFeatureX, features::kNewFeatureX, kDefault},</pre>
+<p>will call <code>wf::EnableNewFeatureX</code> to enable it only if <code>features::kNewFeatureX</code>
+is enabled, or to set it to the same status as <code>features::kNewFeatureX</code> if its
+default status is overridden by any field trial or command line switch.</p>
+<p>If your Blink feature does not have a custom enabler function, you need to add
+the entry to <code>runtimeFeatureNameToChromiumFeatureMapping</code>. For example, a new
+entry like this:</p>
+<pre>{&quot;NewFeatureY&quot;, features::kNewFeatureY, kDefault},</pre>
+<p>will call <code>wf::EnableFeatureFromString</code> with your feature name instead of
+<code>wf::EnableNewFeatureX</code> in the same cases as above.</p>
+<p>The following table summarizes the relationship between the default status of
+the Chromium feature and the status of the blink feature, when <code>kDefault</code> is
+specified, if <strong>not overridden</strong> by field trial or command line switches
+(horizontal headers: blink feature status; vertical headers: chromium feature
+default status):</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>No status</th>
+<th><code>status:&quot;test&quot;</code></th>
+<th><code>status:&quot;experimental&quot;</code></th>
+<th><code>status:&quot;stable&quot;</code></th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>FEATURE_DISABLED_BY_DEFAULT</code></td>
+<td>Disabled everywhere</td>
+<td>Blink feature is enabled for tests, or everywhere with <code>--enable-blink-test-features</code> [1]</td>
+<td>Blink feature is enabled for tests, or everywhere with <code>--enable-experimental-web-platform-features</code> [1]</td>
+<td>Blink feature is enabled everywhere [2]</td>
+</tr>
+<tr>
+<td><code>FEATURE_ENABLED_BY_DEFAULT</code></td>
+<td>Enabled everywhere</td>
+<td>Enabled everywhere</td>
+<td>Enabled everywhere</td>
+<td>Enabled everywhere</td>
+</tr>
+</tbody></table>
+<p>[1]: <code>base::FeatureList::IsEnabled(features::kNewFeatureX)</code> is still
+false. These combinations are suitable for features there are fully implemented
+at blink side. Otherwise normally the blink feature should not have a status so
+that the Chromium feature can fully control the feature.</p>
+<p>[2]: This combination is counter-intuitive and should be avoided.</p>
+<p>Field trial and command line switches can always override the Chromium feature
+status and the blink feature status.</p>
+<p>Besides <code>kDefault</code>, there are also other options for the relationship
+between the Chromium feature and the blink feature. These other options should
+only be used in rare cases when the default relationship doesn&#39;t work.</p>
+<p>For more detailed explanation on the options you have, read the comment in enum
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/content/child/runtime_features.cc#135">RuntimeFeatureEnableOptions</a>.</p>
+<h3 id="3-set-by-a-command-line-switch-to-enable-or-disable">3) Set by a command line switch to enable or disable:</h3>
+<p>Add your code to the function
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/content/child/runtime_features.cc#390">SetRuntimeFeaturesFromCommandLine()</a>.</p>
+<p>If your Blink feature has a custom enabler function, add a new entry to
+<code>switchToFeatureMapping</code>. For example, a new entry like this:</p>
+<pre>{wrf::EnableNewFeatureX, switches::kNewFeatureX, false},</pre>
+<p>will call <code>wf::EnableNewFeatureX</code> to disable it only if that
+<code>switches::kNewFeatureX</code> exists on the command line.</p>
+<h3 id="4-combination-of-the-previous-options-or-not-covered">4) Combination of the previous options or not covered:</h3>
+<p>For example, you Blink feature could be controlled by both a base::Feature and a
+command line switch. In this case, your custom logic should live here in
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/content/child/runtime_features.cc#487"><code>SetCustomizedRuntimeFeaturesFromCombinedArgs()</code></a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/initialize_blink_features.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/initialize_blink_features.md</a>
+  </p>
+</div>

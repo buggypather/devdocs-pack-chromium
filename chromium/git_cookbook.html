@@ -1,0 +1,139 @@
+<h1>Git Cookbook</h1>
+<p>A collection of git recipes to do common git tasks.</p>
+<p>See also <a href="git_tips">Git Tips</a>.</p>
+<h2 id="introduction">Introduction</h2>
+<p>This is designed to be a cookbook for common command sequences/tasks relating to
+git, git-cl, and how they work with Chromium development. It might be a little
+light on explanations.</p>
+<p>If you are new to git, or do not have much experience with a distributed version
+control system, you should also check out
+<a href="http://book.git-scm.com/">The Git Community Book</a> for an overview of basic git
+concepts and general git usage. Knowing what git means by branches, commits,
+reverts, and resets (as opposed to what SVN means by them) will help make the
+following much more understandable.</p>
+<h2 id="chromium-specific-git-extensions">Chromium-specific Git Extensions</h2>
+<p>Chromium ships a large number of git extensions in depot_tools. Some (like
+<code>git cl</code>) are required for the Chromium development workflow, while others
+(like <code>git map-branches</code>) are simple utilities to make your life easier.
+Please take a look at the full
+<a href="https://commondatastorage.googleapis.com/chrome-infra-docs/flat/depot_tools/docs/html/depot_tools_tutorial.html">depot_tools tutorial</a>,
+and at the extensive
+<a href="https://commondatastorage.googleapis.com/chrome-infra-docs/flat/depot_tools/docs/html/depot_tools.html">man pages</a>
+for all the extensions.</p>
+<h2 id="excluding-files-from-git-cl-while-preserving-them-for-later-use">Excluding file(s) from git-cl, while preserving them for later use</h2>
+<p>Since git-cl assumes that the diff between your current branch and its tracking
+branch is what should be used for the CL, the goal is to remove the unwanted
+files from the current branch, and preserve them in another branch.</p>
+<h3 id="method-1-reset-your-current-branch-and-selectively-commit-files">Method #1: Reset your current branch, and selectively commit files</h3>
+<ol>
+<li><code>git log</code>  See the list of your commits. Find the hash of the last commit
+ before your changes.</li>
+<li><code>git reset --soft abcdef</code> where abcdef is the hash found in the step above.</li>
+<li><code>git commit &lt;files_for_this_cl&gt; -m &quot;files to upload&quot;</code> commit the files you
+ want included in the CL here.</li>
+<li><code>git new-branch new_branch_name</code> Create a new branch for the
+files that you want to exclude.</li>
+<li><code>git commit -a -m &quot;preserved files&quot;</code> Commit the rest of the files.</li>
+</ol>
+<h3 id="method-2-create-a-new-branch-reset-then-commit-files-to-preserve">Method #2: Create a new branch, reset, then commit files to preserve</h3>
+<p>This method creates a new branch from your current one to preserve your changes.
+The commits on the new branch are undone, and then only the files you want to
+preserve are recommitted.</p>
+<ol>
+<li><code>git checkout -b new_branch_name</code> This preserves your old files.</li>
+<li><code>git log</code> See the list of your commits. Find the hash of the last commit
+before your changes.</li>
+<li><code>git reset --soft abcdef</code> Where abcdef is the hash found in the step above.</li>
+<li><code>git commit &lt;files_to_preserve&gt; -m &quot;preserved files&quot;</code> Commit the found files
+into the <code>new_branch_name</code>.</li>
+</ol>
+<p>Then revert your files however you&#39;d like in your old branch. The files listed
+in step 4 will be saved in <code>new_branch_name</code></p>
+<h3 id="method-3-cherry-pick-changes-into-review-branches">Method #3: Cherry-pick changes into review branches</h3>
+<p>If you are systematic in creating separate local commits for independent
+changes, you can make a number of different changes in the same client and then
+cherry-pick each one into a separate review branch.</p>
+<ol>
+<li>Make and commit a set of independent changes.</li>
+<li><code>git log</code>  # see the hashes for each of your commits.</li>
+<li>repeat checkout, cherry-pick, upload steps for each change 1..n<ol>
+<li><code>git new-branch review-changeN</code> Create a new review branch
+tracking origin</li>
+<li><code>git cherry-pick &lt;hash of change N&gt;</code></li>
+<li><code>git cl upload</code></li>
+</ol>
+</li>
+</ol>
+<p>If a change needs updating due to review comments, you can go back to your main
+working branch, update the commit, and re-cherry-pick it into the review branch.</p>
+<ol>
+<li><code>git checkout &lt;working branch&gt;</code></li>
+<li>Make changes.</li>
+<li>If the commit you want to update is the most recent one:<ol>
+<li><code>git commit --amend &lt;files&gt;</code></li>
+</ol>
+</li>
+<li>If not:<ol>
+<li><code>git commit &lt;files&gt;</code></li>
+<li><code>git rebase -i origin</code>  # use interactive rebase to squash the new
+commit into the old one.</li>
+</ol>
+</li>
+<li><code>git log</code>  # observe new hash for the change</li>
+<li><code>git checkout review-changeN</code></li>
+<li><code>git reset --hard</code>  # remove the previous version of the change</li>
+<li><code>git cherry-pick &lt;new hash of change N&gt;</code></li>
+<li><code>git cl upload</code></li>
+</ol>
+<h2 id="sharing-code-between-multiple-machines">Sharing code between multiple machines</h2>
+<p>Assume Windows computer named vista, and a Linux one named penguin.
+Prerequisite: both machines have git clones of the main git tree.</p>
+<pre data-language="shell">vista$ git remote add linux ssh://penguin/path/to/git/repo
+vista$ git fetch linux
+vista$ git branch -a   # should show &quot;linux/branchname&quot;
+vista$ git checkout -b foobar linux/foobar
+vista$ hack hack hack; git commit -a
+vista$ git push linux  # push branch back to linux
+penguin$ git reset --hard  # update with new stuff in branch</pre>
+<p>Note that, by default, <code>gclient sync</code> will update all remotes. If your other
+machine (i.e., <code>penguin</code> in the above example) is not always available,
+<code>gclient sync</code> will timeout and fail trying to reach it. To fix this, you may
+exclude your machine from being fetched by default:</p>
+<pre>vista$ git config --bool remote.linux.skipDefaultUpdate true</pre>
+<h2 id="reverting-commits">Reverting commits</h2>
+<p>The command <code>git revert X</code> patches in the inverse of a particular commit.
+Using this command is one way of making a revert:</p>
+<pre data-language="shell">git checkout origin   # start with trunk
+git revert abcdef
+git cl upload</pre>
+<h2 id="retrieving-or-diffing-against-an-old-file-revision">Retrieving, or diffing against an old file revision</h2>
+<p>Git works in terms of commits, not files. Thus, working with the history of a
+single file requires modified version of the show and diff commands.</p>
+<pre data-language="shell"># Find the commit you want in the file's commit log.
+git log path/to/file
+# This prints out the file contents at commit 123abc.
+git show 123abc:path/to/file
+# Diff the current version against path/to/file against the version at
+# path/to/file
+git diff 123abc -- path/to/file</pre>
+<p>When invoking <code>git show</code> or <code>git diff</code>, the <code>path/to/file</code> is <strong>not relative the
+the current directory</strong>. It must be the full path from the directory where the
+.git directory lives. This is different from invoking <code>git log</code> which
+understands relative paths.</p>
+<h2 id="reusing-a-git-mirror">Reusing a Git mirror</h2>
+<p>If you have a nearby copy of a Git repo, you can quickly bootstrap your copy
+from that one then adjust it to point it at the real upstream one.</p>
+<ol>
+<li>Clone a nearby copy of the code you want: <code>git clone coworker-machine:/path/to/repo</code></li>
+<li>Change the URL your copy fetches from to point at the real git repo:
+<code>git remote set-url origin https://chromium.googlesource.com/chromium/src.git</code></li>
+<li>Update your copy: <code>git fetch</code></li>
+<li>Delete any extra branches that you picked up in the initial clone:
+<code>git prune origin</code></li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/git_cookbook.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/git_cookbook.md</a>
+  </p>
+</div>

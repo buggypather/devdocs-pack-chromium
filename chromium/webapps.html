@@ -1,0 +1,95 @@
+<h1>Web Apps in Chromium</h1>
+<p>Web apps are websites with app-like qualities or capabilities. Chromium supports
+&quot;installing&quot; a web app (or any website), which enables OS-level integration such
+as windowing, file handlers, protocol handlers, shortcut menus, badging, and
+background synchronization.</p>
+<p>See <a href="webapps/concepts">Web Apps Concepts</a> for core definitions (Manifest,
+Installability, Promotability, Scope, Display Modes, Identifiers).</p>
+<h2 id="user-entry-points">User Entry Points</h2>
+<ul>
+<li><strong>Desktop</strong>: If a site provides a valid web app manifest (name, icon,
+<code>start_url</code>, and non-browser <code>display</code> mode), an install icon appears in the
+omnibox. Users can also install any site via
+<code>Chrome Menu &gt; Cast, Save, and Share &gt; Install page as app...</code>. Installed apps
+are managed on <code>chrome://apps</code>.</li>
+<li><strong>Android</strong>: Installation is triggered via ambient badges, bottom sheets, or
+<code>3-dot menu &gt; Add to Home screen</code> / <code>Install app</code>, installing either a WebAPK
+or adding a homescreen shortcut.</li>
+</ul>
+<h2 id="developer-interface">Developer Interface</h2>
+<p>Sites customize OS integration using the W3C
+<a href="https://www.w3.org/TR/appmanifest/">Web Application Manifest</a> specification.
+See web.dev guides:</p>
+<ul>
+<li><a href="https://web.dev/progressive-web-apps/">Progressive Web Apps Overview</a></li>
+<li><a href="https://web.dev/codelab-make-installable/">Make PWAs Installable</a></li>
+</ul>
+<h2 id="subsystem-architecture--where-code-lives">Subsystem Architecture &amp; Where Code Lives</h2>
+<p>Because Web Apps span Blink, Content, Shared Components, and platform-specific
+embedder layers, the code is structured into several core directories:</p>
+<pre>[Blink Manifest Parser]      third_party/blink/renderer/modules/manifest/
+           │ (Mojo IPC)
+           ▼
+[Content Manifest Host]      content/browser/manifest/
+           │
+           ▼
+[Shared Components]          components/webapps/ (Shared logic)
+           │
+     ┌─────┴───────────────────────────┐
+     ▼                                 ▼
+[Desktop PWA Engine]                   [Android WebAPKs &amp; TWAs]
+chrome/browser/web_applications/       chrome/android/webapk/
+chrome/browser/ui/web_applications/    chrome/android/java/.../webapps/
+chrome/browser/ui/views/web_apps/      chrome/browser/android/webapk/</pre>
+<h3 id="1-cross-platform-shared-components">1. Cross-Platform Shared Components</h3>
+<ul>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/components/webapps/README.md">Shared Web Apps Component</a></strong>
+(<code>components/webapps</code>): Common logic for installability verification
+(<a href="https://chromium.googlesource.com/chromium/src/+/main/components/webapps/browser/installable/installable_manager.h"><code>InstallableManager</code></a>),
+promotion banners
+(<a href="https://chromium.googlesource.com/chromium/src/+/main/components/webapps/browser/banners/app_banner_manager.h"><code>AppBannerManager</code></a>),
+and identifiers (<a href="https://chromium.googlesource.com/chromium/src/+/main/components/webapps/docs/identifiers.md"><code>identifiers.md</code></a>).</li>
+</ul>
+<h3 id="2-desktop-pwa-subsystem-windows-mac-linux-chromeos">2. Desktop PWA Subsystem (Windows, Mac, Linux, ChromeOS)</h3>
+<ul>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/web_applications/README.md">Core Desktop Engine</a></strong>
+(<code>chrome/browser/web_applications</code>): Profile-keyed <code>WebAppProvider</code> system,
+commands, fine-grained locks, LevelDB storage, sync integration, and OS
+integration.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/ui/web_applications/README.md">Desktop UI Controllers</a></strong>
+(<code>chrome/browser/ui/web_applications</code>): Browser window controllers
+(<code>WebAppBrowserController</code>), omnibox actions, navigation capturing, and Mac
+App Shims.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/ui/views/web_apps/README.md">Desktop Views UI</a></strong>
+(<code>chrome/browser/ui/views/web_apps</code>): Views dialogs (install bubbles,
+permission prompts, update reviews) and integration testing driver.</li>
+</ul>
+<h3 id="3-android-web-apps-webapks--twas">3. Android Web Apps (WebAPKs &amp; TWAs)</h3>
+<ul>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/components/webapps/docs/android_architecture.md">Android Web Apps Architecture</a></strong>:
+WebAPKs, Trusted Web Activities (TWAs), auto-minted TWAs, and Android
+lifecycle management.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/android/webapk/README.md">WebAPK Shell &amp; Runtime</a></strong>
+(<code>chrome/android/webapk</code>): Minted Android APK wrapper, client libraries, and
+local test setup.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/components/webapps/docs/android_registration_and_permissions.md">Android Registration &amp; Permissions</a></strong>:
+OS package registration, notification/location permission delegation, and
+uninstallation tracking.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/components/webapps/docs/android_testing_guide.md">Android Testing Guide</a></strong>:
+Robolectric JUnit and on-device instrumentation testing.</li>
+</ul>
+<h3 id="4-manifest-parsing--extraction">4. Manifest Parsing &amp; Extraction</h3>
+<ul>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/manifest/README.md">Blink Manifest Parser</a></strong>
+(<code>third_party/blink/renderer/modules/manifest</code>): W3C manifest parsing in the
+untrusted renderer process converting JSON into <code>blink.mojom.Manifest</code>.</li>
+<li><strong><a href="https://chromium.googlesource.com/chromium/src/+/main/content/browser/manifest/README.md">Content Manifest Coordinator</a></strong>
+(<code>content/browser/manifest</code>): Browser-side manifest fetching and icon
+downloading coordination.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webapps/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/webapps/README.md</a>
+  </p>
+</div>

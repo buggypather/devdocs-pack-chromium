@@ -1,0 +1,130 @@
+<h1>Memory</h1>
+<p>Landing page for all things memory-related in Chromium.</p>
+<h2 id="how-is-chromes-memory-usage-doing-in-the-world">How is chrome&#39;s memory usage doing in the world?</h2>
+<p>Look at the UMAs <strong>Memory.{Total,Renderer,Browser,Gpu,Extension}.PrivateMemoryFootprint</strong>.</p>
+<h2 id="how-do-developers-communicate">How do developers communicate?</h2>
+<p>Note, these channels are for developer coordination and NOT user support. If
+you are a Chromium user experiencing a memory related problem, file a bug
+instead.</p>
+<table>
+<thead>
+<tr>
+<th>name</th>
+<th>description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="">memory-dev@chromium.org</a></td>
+<td>Discussion group for all things memory related. Post docs, discuss bugs, etc., here.</td>
+</tr>
+<tr>
+<td><a href="mailto:chrome-memory@google.com">chrome-memory@google.com</a></td>
+<td>Google internal version of the above. Use sparingly.</td>
+</tr>
+<tr>
+<td><a href="https://chromium.slack.com/messages/memory/">https://chromium.slack.com/messages/memory/</a></td>
+<td>Slack channel for real-time discussion with memory devs. Lots of C++ sadness too.</td>
+</tr>
+<tr>
+<td>crbug <a href="https://bugs.chromium.org/p/chromium/issues/list?can=2&amp;q=Performance%3DMemory">Performance=Memory</a> label</td>
+<td>Bucket with auto-filed and user-filed bugs.</td>
+</tr>
+<tr>
+<td>crbug <a href="https://bugs.chromium.org/p/chromium/issues/list?can=2&amp;q=Stability%3DMemory">Stability=Memory</a> label</td>
+<td>Tracks mostly OOM crashes.</td>
+</tr>
+</tbody></table>
+<h2 id="i-have-memory-problem-what-do-i-do">I have memory problem, what do I do?</h2>
+<p>Follow <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/filing_memory_bugs.md">these instructions</a> to file a high
+quality bug.</p>
+<h2 id="im-a-developer-trying-to-investigate-a-memory-issues-what-do-i-do">I&#39;m a developer trying to investigate a memory issues, what do I do?</h2>
+<p>See <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/debugging_memory_issues.md">this page</a> for further instructions.</p>
+<h2 id="im-a-developer-looking-for-more-information-how-do-i-get-started">I&#39;m a developer looking for more information. How do I get started?</h2>
+<p>Great! First, sign up for the mailing lists above and check out the slack channel.</p>
+<p>Second, familiarize yourself with the following:</p>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/key_concepts.md">Key Concepts in Chrome Memory</a></td>
+<td>Primer for memory terminology in Chrome.</td>
+</tr>
+<tr>
+<td><a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory-infra/README.md">memory-infra</a></td>
+<td>The primary tool used for inspecting allocations.</td>
+</tr>
+</tbody></table>
+<h2 id="what-are-people-actively-working-on">What are people actively working on?</h2>
+<p>There are roughly three types of memory work within Chrome:</p>
+<ul>
+<li>Team based, targeted improvements. Examples include:<ul>
+<li>memory reductions for specific components [e.g. for v8]</li>
+<li>allocator improvements [e.g. PartitionAlloc]</li>
+<li>memory purging at appropriate times [e.g. on tab background]</li>
+<li>better memory pressure signals</li>
+</ul>
+</li>
+<li>Memlog: Heap profiling in the wild for regression detection + root cause
+analysis.</li>
+<li>Lab tests: Perf waterfall for micro-regressions, ASAN/MSAN/LSAN, blink leak
+detector.</li>
+</ul>
+<h2 id="key-knowledge-areas-and-contacts">Key knowledge areas and contacts</h2>
+<table>
+<thead>
+<tr>
+<th>Knowledge Area</th>
+<th>Contact points</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Chrome on Android</td>
+<td>lizeb, pasko, ssid</td>
+</tr>
+<tr>
+<td>Browser Process</td>
+<td>ssid, erikchen, etienneb</td>
+</tr>
+<tr>
+<td>GPU/cc</td>
+<td>ericrk</td>
+</tr>
+<tr>
+<td>Memory metrics</td>
+<td>ssid, erikchen, primano, ajwong, wez</td>
+</tr>
+<tr>
+<td>Heap Profiling</td>
+<td>alph, erikchen, ssid, etienneb</td>
+</tr>
+<tr>
+<td>Net Stack</td>
+<td>mmenke, rsleevi, xunjieli</td>
+</tr>
+<tr>
+<td>Renderer Process</td>
+<td>haraken, tasak, hajimehoshi, keishi, hiroshige</td>
+</tr>
+<tr>
+<td>V8</td>
+<td>hpayer, ulan, verwaest, mlippautz</td>
+</tr>
+</tbody></table>
+<h2 id="other-docs">Other docs</h2>
+<ul>
+<li><a href="https://docs.google.com/document/d/1jhERqimO-LtuplzQzbBv1vK7SVOh63AMf2irJI2LOqU/edit">Why we work on memory</a></li>
+<li><a href="https://docs.google.com/document/d/1tCTw9lnjs85t8GFiiyae2hbu6lrz8kysFCgMCKUvcXo/edit">TOK/LON memory-dev@ meeting notes</a></li>
+<li><a href="https://docs.google.com/document/d/1FBIqBGIa0DSaFsh-QjmVvoC82pGuOgiQDIhc8-vzXbQ/edit">Memory convergence 3 (in Mountain View, 2017 May)</a></li>
+<li><a href="https://docs.google.com/document/d/17Kef7UxjR6VW_ehVbsc-DI0IU7TQk-2C56JSbzbPuhA/edit">TRIM convergence 2 (in Mountain View, 2016 Nov)</a></li>
+<li><a href="https://docs.google.com/document/d/1PGcM6iVBp0OYh3m8xGQhOgkQK0obQy8YWwoefP9NZCA/edit#">TRIM convergence 1 (in Munich, 2016 Apr)</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/memory/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/memory/README.md</a>
+  </p>
+</div>

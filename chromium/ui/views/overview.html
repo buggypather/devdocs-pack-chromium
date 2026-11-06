@@ -1,0 +1,126 @@
+<h1>Views Overview</h1>
+<p>This document is an overview of Views concepts, terminology, and architecture.
+The target audience is engineers using or working on Views.</p>
+<h2 id="general-things">General Things</h2>
+<p>Points in this document are written as <code>(x,y)</code>, and rectangles are written as
+<code>[(x,y) wxh]</code>. For example, the rectangle <code>[(100,100) 50x20]</code> contains the point
+<code>(130,110)</code>.</p>
+<p>Views uses a coordinate system with <code>(0,0)</code> at the top-left, with increasing
+x-coordinates moving rightwards and increasing y-coordinates moving downwards.
+This is the same as the Windows and GTK coordinate systems, but <em>different from</em>
+the Cocoa coordinate system, which has <code>(0,0)</code> at the bottom-left. Coordinates
+in this document use the Views coordinate system.</p>
+<p>Views generally <em>take ownership</em> of objects passed to them even via raw
+pointers, although there are some exceptions, such as delegates.</p>
+<h2 id="views">Views</h2>
+<p>A <strong>View</strong> is a UI element, similar to an HTML DOM element. Each View occupies a
+rectangle, called its <strong>bounds</strong>, which is expressed in the coordinate system of
+its parent View. Views may have child Views, which are laid out according to the
+View&#39;s <strong>layout manager</strong>, although individual Views may also override
+<code>View::Layout</code> to implement their own layout logic. Each View may also have a
+<strong>border</strong> and/or a <strong>background</strong>.</p>
+<p>Each View can calculate different sizes, which are used by the View&#39;s parent
+View to decide how to position and size it. Views may have any or all of a
+preferred size, a minimum size, and a maximum size. These may instead be
+calculated by the View&#39;s LayoutManager, and may be used by the parent View&#39;s
+LayoutManager.</p>
+<p>It is generally not a good idea to explicitly change the bounds of a View.
+Typically, bounds are computed by the parent View&#39;s Layout method or the parent
+View&#39;s LayoutManager. It is better to build a LayoutManager that does what you
+want than to hand-layout Views by changing their bounds.</p>
+<p>For more details about Views, see <a href="https://cs.chromium.org/chromium/src/ui/views/view.h">view.h</a>.</p>
+<h3 id="border">Border</h3>
+<p>The <strong>border</strong> is conventionally drawn around the edges of the View&#39;s bounding
+rectangle, and also defines the View&#39;s <strong>content bounds</strong>, which are the area
+inside which the View&#39;s content is drawn. For example, a View that is at
+<code>[(0,0) 100x100]</code> which has a solid border of thickness 2 will have content
+bounds of <code>[(2,2) 96x96]</code>.</p>
+<p>For more details, see <a href="https://cs.chromium.org/chromium/src/ui/views/border.h">border.h</a>.</p>
+<h3 id="background">Background</h3>
+<p>The <strong>background</strong> is drawn below any other part of the View, including the
+border. Any View can have a background, but most Views do not. A background is
+usually responsible for filling the View&#39;s entire bounds. Backgrounds are
+usually a color, but can be a gradient or something else entirely.</p>
+<p>For more details, see <a href="https://cs.chromium.org/chromium/src/ui/views/background.h">background.h</a>.</p>
+<h3 id="content">Content</h3>
+<p>The <strong>content</strong> is the area inside the content bounds of the View. A View&#39;s
+child Views, if it has any, are also positioned and drawn inside the content
+bounds of a View. There is no class representing the content area of a View; it
+only exists as the space enclosed by the View&#39;s border, and its shape is defined
+by the border&#39;s insets.</p>
+<h3 id="layout--layout-managers">Layout &amp; Layout Managers</h3>
+<p>A View&#39;s <strong>layout manager</strong> defines how the View&#39;s child views should be laid
+out within the View&#39;s content bounds. There are a few layout managers supplied
+with Views. The simplest is <a href="https://cs.chromium.org/chromium/src/ui/views/layout/fill_layout.h">FillLayout</a>, which lays out all a View&#39;s children
+occupying the View&#39;s entire content bounds. <a href="https://cs.chromium.org/chromium/src/ui/views/layout/flex_layout.h">FlexLayout</a> provides a CSS-like
+layout for horizontal and vertical arrangements of views.</p>
+<p>Other commonly-used layouts managers are <a href="https://cs.chromium.org/chromium/src/ui/views/layout/box_layout.h">BoxLayout</a>, a predecessor of
+FlexLayout, and <a href="https://cs.chromium.org/chromium/src/ui/views/layout/table_layout.h">TableLayout</a>, which provides a flexible row-and-column
+system.</p>
+<h3 id="painting">Painting</h3>
+<p>Views are painted by pre-order traversal of the View tree - i.e., a parent View
+is painted before its child Views are. Each View paints all its children in
+z-order, as determined by <code>View::GetChildrenInZOrder()</code>, so the last child in
+z-order is painted last and therefore over the previous children. The default
+z-order is the order in which children were added to the parent View.</p>
+<p>Different View subclasses implement their own painting logic inside
+<code>View::OnPaint</code>, which by default simply calls <code>View::OnPaintBackground</code> and
+<code>View::OnPaintBorder</code>. Generally, subclass implementations of <code>View::OnPaint</code>
+begin by calling the superclass <code>View::OnPaint</code>.</p>
+<p>If you need a special background or border for a View subclass, it is better to
+create a subclass of <code>Background</code> or <code>Border</code> and install that, rather than
+overriding <code>::OnPaintBackground</code> or <code>::OnPaintBorder</code>. Doing this helps preserve
+the separation of Views into the three parts described above and makes painting
+code easier to understand.</p>
+<h3 id="debugging">Debugging</h3>
+<p>See <a href="../ui_devtools">page</a> for details.</p>
+<h2 id="widgets">Widgets</h2>
+<p>Views need an underlying canvas to paint onto. This has to be supplied by the
+operating system, usually by creating a native drawing surface of some kind.
+Views calls these <strong>widgets</strong>. A Widget is the bridge between a tree of Views
+and a native window of some sort, which Views calls a <strong>native widget</strong>. Each
+Widget has a <strong>root view</strong>, which is a special subclass of View that helps with
+this bridging; the root view in turn has a single child view, called the
+Widget&#39;s <strong>contents view</strong>, which fills the entire root view. All other Views
+inside a given Widget are children of that Widget&#39;s contents view.</p>
+<p>Widgets have many responsibilities, including but not limited to:</p>
+<ol>
+<li>Keyboard focus management, via <a href="https://cs.chromium.org/chromium/src/ui/views/focus/focus_manager.h">FocusManager</a></li>
+<li>Window resizing/minimization/maximization</li>
+<li>Window shaping, for non-rectangular windows</li>
+<li>Input event routing</li>
+</ol>
+<p>For more details, see <a href="https://cs.chromium.org/chromium/src/ui/views/widget/widget.h">widget.h</a>.</p>
+<h3 id="client-and-non-client-views">Client and Non-Client Views</h3>
+<p>The contents view of most Widgets is a <strong>Non-Client View</strong>, which is either a
+<a href="https://cs.chromium.org/chromium/src/ui/views/window/non_client_view.h">NonClientView</a> or one of its descendants. The Non-Client View has two children,
+which are the <strong>Non-Client Frame View</strong> (a <a href="https://cs.chromium.org/chromium/src/ui/views/window/non_client_view.h">NonClientFrameView</a>) and the
+<strong>Client View</strong> (a <a href="https://cs.chromium.org/chromium/src/ui/views/window/client_view.h">ClientView</a>). The non-client frame view is responsible for
+painting window decorations, the Widget&#39;s border, the shadow, and so on; the
+client view is responsible for painting the Widget&#39;s contents. The area the
+client view occupies is sometimes referred to as the Widget&#39;s &quot;client area&quot;. The
+non-client frame view may be swapped out as the system theme changes without
+affecting the client view.</p>
+<p>The overall structure of a Widget and its helper Views looks like this:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/views/images/views.png" alt="views"></p>
+<h2 id="dialogs">Dialogs</h2>
+<p>A commonly-used type of client view is a <strong>dialog client view</strong>, which has a
+<strong>contents view</strong>, optional buttons on the lower-right, and an optional extra
+view on the lower-left. Dialogs are usually created by subclassing
+<a href="https://cs.chromium.org/chromium/src/ui/views/window/dialog_delegate.h">DialogDelegate</a> or <a href="https://cs.chromium.org/chromium/src/ui/views/window/dialog_delegate.h">DialogDelegateView</a> and then calling
+<code>DialogDelegate::CreateDialogWidget</code>. The dialog&#39;s contents view fills the
+entire top part of the widget&#39;s client view, and the bottom part is taken over
+by the dialog&#39;s buttons and extra view.</p>
+<h2 id="bubbles">Bubbles</h2>
+<p>A common type of dialog is a <strong>bubble</strong>, which is a dialog that is anchored to a
+parent View and moves as the parent View moves. Bubbles are usually created by
+subclassing <a href="https://cs.chromium.org/chromium/src/ui/views/bubble/bubble_dialog_delegate_view.h">BubbleDialogDelegateView</a> and then calling
+<code>BubbleDialogDelegateView::CreateBubble</code>. Bubbles can have a title, which is
+drawn alongside the window controls as part of the Bubble&#39;s Widget&#39;s
+NonClientFrameView.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/views/overview.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/views/overview.md</a>
+  </p>
+</div>

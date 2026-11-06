@@ -1,0 +1,200 @@
+<h1>Threading and Tasks in Chrome - FAQ</h1>
+<p>Note: Make sure to read the main <a href="threading_and_tasks">Threading and Tasks</a>
+docs first.</p>
+<h2 id="general">General</h2>
+<h3 id="on-which-thread-will-a-task-run">On which thread will a task run?</h3>
+<p>A task is posted through the <code>base/task/thread_pool.h</code> API with <code>TaskTraits</code>.</p>
+<ul>
+<li><p>If <code>TaskTraits</code> contain <code>BrowserThread::UI</code>:</p>
+<ul>
+<li>The task runs on the main thread.</li>
+</ul>
+</li>
+<li><p>If <code>TaskTraits</code> contain <code>BrowserThread::IO</code>:</p>
+<ul>
+<li>The task runs on the IO thread.</li>
+</ul>
+</li>
+<li><p>If <code>TaskTraits</code> don&#39;t contain <code>BrowserThread::UI/IO</code>:</p>
+<ul>
+<li><p>If the task is posted through a <code>SingleThreadTaskRunner</code> obtained from
+<code>CreateSingleThreadTaskRunner(..., mode)</code>:</p>
+<ul>
+<li><p>Where <code>mode</code> is <code>SingleThreadTaskRunnerThreadMode::DEDICATED</code>:</p>
+<ul>
+<li>The task runs on a thread that only runs tasks from that
+SingleThreadTaskRunner. This is not the main thread nor the IO
+thread.</li>
+</ul>
+</li>
+<li><p>Where <code>mode</code> is <code>SingleThreadTaskRunnerThreadMode::SHARED</code>:</p>
+<ul>
+<li>The task runs on a thread that runs tasks from one or many
+unrelated SingleThreadTaskRunners. This is not the main thread nor
+the IO thread.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>Otherwise:</p>
+<ul>
+<li>The task runs in a thread pool.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>As explained in <a href="threading_and_tasks#Prefer-Sequences-to-Threads">Prefer Sequences to Threads</a>,
+tasks should generally run on a sequence in a thread pool rather than on a
+dedicated thread.</p>
+<h3 id="does-release-of-a-taskrunner-block-on-posted-tasks">Does release of a TaskRunner block on posted tasks?</h3>
+<p>Releasing a TaskRunner reference does not wait for tasks previously posted to
+the TaskRunner to complete their execution. Tasks can run normally after the
+last client reference to the TaskRunner to which they were posted has been
+released and it can even be kept alive indefinitely through
+<code>SequencedTaskRunner::GetCurrentDefault()</code> or
+<code>SingleThreadTaskRunner::GetCurrentDefault()</code>.</p>
+<p>If you want some state to be deleted only after all tasks currently posted to a
+SequencedTaskRunner have run, store that state in a helper object and schedule
+deletion of that helper object on the SequencedTaskRunner using
+<code>base::OnTaskRunnerDeleter</code> after posting the last task. See
+<a href="https://crrev.com/c/1416271/15/chrome/browser/performance_monitor/system_monitor.h">example CL</a>.
+But be aware that any task posting back to its &quot;current&quot; sequence can enqueue
+itself after that &quot;last&quot; task.</p>
+<h2 id="making-blocking-calls-which-do-not-use-the-cpu">Making blocking calls (which do not use the CPU)</h2>
+<h3 id="how-to-make-a-blocking-call-without-preventing-other-tasks-from-being-scheduled">How to make a blocking call without preventing other tasks from being scheduled?</h3>
+<p>The steps depend on where the task runs (see <a href="#On-what-thread-will-a-task-run_">Where will a task run?</a>).</p>
+<p>If the task runs in a thread pool:</p>
+<ul>
+<li>Annotate the scope that may block with
+<code>ScopedBlockingCall(BlockingType::MAY_BLOCK/WILL_BLOCK)</code>. A few milliseconds
+after the annotated scope is entered, the capacity of the thread pool is
+incremented. This ensures that your task doesn&#39;t reduce the number of tasks
+that can run concurrently on the CPU. If the scope exits, the thread pool
+capacity goes back to normal.</li>
+</ul>
+<p>If the task runs on the main thread, the IO thread or a <code>SHARED SingleThreadTaskRunner</code>:</p>
+<ul>
+<li>Blocking on one of these threads will cause breakages. Move your task to a
+thread pool (or to a <code>DEDICATED SingleThreadTaskRunner</code> if necessary - see
+<a href="threading_and_tasks#Prefer-Sequences-to-Threads">Prefer Sequences to Threads</a>).</li>
+</ul>
+<p>If the task runs on a <code>DEDICATED SingleThreadTaskRunner</code>:</p>
+<ul>
+<li>Annotate the scope that may block with
+<code>ScopedBlockingCall(BlockingType::MAY_BLOCK/WILL_BLOCK)</code>. The annotation is a
+no-op that documents the blocking behavior (and makes it pass assertions).
+Tasks posted to the same <code>DEDICATED SingleThreadTaskRunner</code> won&#39;t run until
+your blocking task returns (they will never run if the blocking task never
+returns).</li>
+</ul>
+<p><a href="https://cs.chromium.org/chromium/src/base/threading/scoped_blocking_call.h">base/threading/scoped_blocking_call.h</a>
+explains the difference between <code>MAY_BLOCK</code> and <code>WILL_BLOCK</code> and gives
+examples of blocking operations.</p>
+<h3 id="how-to-make-a-blocking-call-that-may-never-return-without-preventing-other-tasks-from-being-scheduled">How to make a blocking call that may never return without preventing other tasks from being scheduled?</h3>
+<p>If you can&#39;t avoid making a call to a third-party library that may block off-
+CPU, follow recommendations in <a href="#How-to-make-a-blocking-call-without-affecting-other-tasks_">How to make a blocking call without affecting
+other tasks?</a>.
+This ensures that a current task doesn&#39;t prevent other tasks from running even
+if it never returns.</p>
+<p>Since tasks posted to the same sequence can&#39;t run concurrently, it is advisable
+to run tasks that may block indefinitely in
+<a href="threading_and_tasks#posting-a-parallel-task">parallel</a> rather than in
+<a href="threading_and_tasks#posting-a-sequenced-task">sequence</a> (unless posting many
+such tasks at which point sequencing can be a useful tool to prevent flooding).</p>
+<h3 id="do-calls-to-blocking-base-apis-need-to-be-annotated-with-scopedblockingcall">Do calls to blocking //base APIs need to be annotated with ScopedBlockingCall?</h3>
+<p>No. All blocking //base APIs (e.g. <code>base::ReadFileToString</code>, <code>base::File::Read</code>,
+<code>base::SysInfo::AmountOfFreeDiskSpace</code>, <code>base::WaitableEvent::Wait</code>, etc.) have
+their own internal annotations. See
+<a href="https://cs.chromium.org/chromium/src/base/threading/scoped_blocking_call.h">base/threading/scoped_blocking_call.h</a>.</p>
+<h3 id="can-multiple-scopedblockingcall-be-nested-for-the-purpose-of-documentation">Can multiple ScopedBlockingCall be nested for the purpose of documentation?</h3>
+<p>Nested <code>ScopedBlockingCall</code> are supported. Most of the time, the inner
+ScopedBlockingCalls will no-op (the exception is <code>WILL_BLOCK</code> nested in <code>MAY_BLOCK</code>).
+As such, it is permitted to add a ScopedBlockingCall in the scope where a function
+that is already annotated is called for documentation purposes.:</p>
+<pre data-language="cpp">Data GetDataFromNetwork() {
+  ScopedBlockingCall scoped_blocking_call(BlockingType::MAY_BLOCK);
+  // Fetch data from network.
+  ...
+  return data;
+}
+
+void ProcessDataFromNetwork() {
+  Data data;
+  {
+    // Document the blocking behavior with a ScopedBlockingCall.
+    // Permitted, but not required since GetDataFromNetwork() is itself annotated.
+    ScopedBlockingCall scoped_blocking_call(BlockingType::MAY_BLOCK);
+    data = GetDataFromNetwork();
+  }
+  CPUIntensiveProcessing(data);
+}</pre>
+<p> However, CPU usage should always be minimal within the scope of
+<code>ScopedBlockingCall</code>. See
+<a href="https://cs.chromium.org/chromium/src/base/threading/scoped_blocking_call.h">base/threading/scoped_blocking_call.h</a>.</p>
+<h2 id="sequences">Sequences</h2>
+<h3 id="how-to-migrate-from-singlethreadtaskrunner-to-sequencedtaskrunner">How to migrate from SingleThreadTaskRunner to SequencedTaskRunner?</h3>
+<p>The following mappings can be useful when migrating code from a
+<code>SingleThreadTaskRunner</code> to a <code>SequencedTaskRunner</code>:</p>
+<ul>
+<li>base::SingleThreadTaskRunner -&gt; base::SequencedTaskRunner<ul>
+<li>SingleThreadTaskRunner::BelongsToCurrentThread() -&gt; SequencedTaskRunner::RunsTasksInCurrentSequence()</li>
+</ul>
+</li>
+<li>base::SingleThreadTaskRunner::CurrentDefaultHandle -&gt;
+base::SequencedTaskRunnerHandle::CurrentDefaultHandle</li>
+<li>THREAD_CHECKER -&gt; SEQUENCE_CHECKER</li>
+<li>base::ThreadLocalStorage::Slot -&gt; base::SequenceLocalStorageSlot</li>
+<li>BrowserThread::DeleteOnThread -&gt; base::OnTaskRunnerDeleter / base::RefCountedDeleteOnSequence</li>
+<li>BrowserMessageFilter::OverrideThreadForMessage() -&gt; BrowserMessageFilter::OverrideTaskRunnerForMessage()</li>
+<li>CreateSingleThreadTaskRunner() -&gt; CreateSequencedTaskRunner()<ul>
+<li>Every CreateSingleThreadTaskRunner() usage, outside of
+BrowserThread::UI/IO, should be accompanied with a comment and ideally a
+bug to make it sequence when the sequence-unfriendly dependency is
+addressed.</li>
+</ul>
+</li>
+</ul>
+<h3 id="how-to-ensure-mutual-exclusion-between-tasks-posted-by-a-component">How to ensure mutual exclusion between tasks posted by a component?</h3>
+<p>Create a <code>SequencedTaskRunner</code> using <code>CreateSequencedTaskRunner()</code> and
+store it on an object that can be accessed from all the PostTask() call sites
+that require mutual exclusion. If there isn&#39;t a shared object that can own a
+common <code>SequencedTaskRunner</code>, use
+<code>Lazy(Sequenced|SingleThread|COMSTA)TaskRunner</code> in an anonymous namespace.</p>
+<h2 id="tests">Tests</h2>
+<h3 id="how-to-test-code-that-posts-tasks">How to test code that posts tasks?</h3>
+<p>If the test uses <code>BrowserThread::UI/IO</code>, instantiate a
+<code>content::BrowserTaskEnvironment</code> for the scope of the test. Call
+<code>BrowserTaskEnvironment::RunUntilIdle()</code> to wait until all tasks have run.</p>
+<p>If the test doesn&#39;t use <code>BrowserThread::UI/IO</code>, instantiate a
+<code>base::test::TaskEnvironment</code> for the scope of the test. Call
+<code>base::test::TaskEnvironment::RunUntilIdle()</code> to wait until all tasks have
+run.</p>
+<p>In both cases, you can run tasks until a condition is met. A test that waits for
+a condition to be met is easier to understand and debug than a test that waits
+for all tasks to run.</p>
+<pre data-language="cpp">int g_condition = false;
+
+base::RunLoop run_loop;
+base::ThreadPool::PostTask(FROM_HERE, {}, base::BindOnce(
+    [] (base::OnceClosure quit_closure) {
+        g_condition = true;
+        std::move(quit_closure).Run();
+    }, run_loop.QuitClosure()));
+
+// Runs tasks until the quit closure is invoked.
+run_loop.Run();
+
+EXPECT_TRUE(g_condition);</pre>
+<h2 id="your-question-hasnt-been-answered">Your question hasn&#39;t been answered?</h2>
+<ol>
+<li>Check the main <a href="threading_and_tasks">Threading and Tasks</a> docs.</li>
+<li>Ping
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/scheduler-dev">scheduler-dev@chromium.org</a>.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/threading_and_tasks_faq.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/threading_and_tasks_faq.md</a>
+  </p>
+</div>

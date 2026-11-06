@@ -1,0 +1,29 @@
+<h1>Crosier: ChromeOS Integration/E2E-test Revamp</h1>
+<h2 id="overview">Overview</h2>
+<p>Crosier is a project for running GTest-based integration tests on a ChromeOS
+hardware Device Under Test (DUT) or in a ChromeOS Virtual Machine (VM). The idea
+is similar to interactive_ui_tests. A runner uses GTest to launch a full browser
+on DUT/VM, and the test body runs in the same process as the browser process.
+Utility APIs will be provided so the test body can access Chrome classes and
+objects like normal browser tests. The test can also access ChromeOS system
+services/daemons via utilities (D-Bus wrappers, shell commands, etc.).</p>
+<h2 id="guidelines-for-using-crosier">Guidelines for using Crosier</h2>
+<p>Getting a DUT for local development is not easy for most developers and cros VM
+setup is harder than using the linux-chromeos &quot;emulator&quot; environment. We should
+limit the usage of Crosier and avoid DUT testing when possible.
+Running ChromeOS integration tests on DUT is only recommended for tests
+exercising hardware components (e.g. graphics tests) or testing communication
+with OS daemons (e.g. Bluetooth daemon).</p>
+<p>The preferred order when adding a new test:</p>
+<ul>
+<li>unit_tests, ash_unittests, browser_tests in linux-chromeos environment</li>
+<li>unit_tests, chromeos_integration_tests on a ChromeOS VM</li>
+<li>unit_tests, chromeos_integration_tests on a ChromeOS device (DUT)</li>
+</ul>
+<p>Contacts: <a href="mailto:crosier-team@google.com">crosier-team@google.com</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/chromeos_integration/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/chromeos_integration/README.md</a>
+  </p>
+</div>

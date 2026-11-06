@@ -1,0 +1,110 @@
+<h1>Modifying Session History Serialization</h1>
+<p><em>Note: Please expand these steps as needed. See also
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/renderer_host/navigation_entry_impl.h;drc=23e90a11b9094fe2682083445f14abbaea9bef48;l=524">NavigationEntryImpl</a>
+comments for how to save and restore values outside of PageState, which is less
+common.</em></p>
+<h2 id="overview">Overview</h2>
+<p>The following (non-exhaustive) steps are required to add new values to the
+PageState data serialization process, which is used for saving and restoring
+values in session restore across different versions of Chromium, as well as tab
+restore and tab duplication within a running instance of Chromium.</p>
+<p>Note that changing the serialization format is <strong>high risk</strong> and should be
+approached carefully.  Mistakes or missed steps can cause backwards
+compatibility problems, because the effects can continue to live on disk between
+different versions of Chromium. For this reason, it is important to make these
+changes carefully, minimizing the risk of reverts (<em>e.g.</em>, not as part of much
+larger CLs) or other back-and-forth between formats (<em>e.g.</em>, not as part of an
+A/B experiment).</p>
+<p>Please ask the CL reviewer to also consult this checklist to ensure no steps
+have been missed.</p>
+<h2 id="pagestate-modification-checklist">PageState Modification Checklist</h2>
+<ul>
+<li>Update NavigationEntryImpl&#39;s
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/renderer_host/navigation_entry_impl.cc;drc=23e90a11b9094fe2682083445f14abbaea9bef48;l=59"><code>RecursivelyGenerateFrameEntries</code></a>
+and
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/renderer_host/navigation_entry_impl.cc;drc=23e90a11b9094fe2682083445f14abbaea9bef48;l=132"><code>RecursivelyGenerateFrameState</code></a>
+in <code>content/browser/renderer_host/navigation_entry_impl.cc</code> to save and
+restore the new value from appropriate locations in Chromium.</li>
+<li>Update any member declaration comments for the new value in
+  <code>content/browser/renderer_host/frame_navigation_entry.h</code>, indicating if the
+  new value is persisted if necessary (<em>e.g.</em>
+  <a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/renderer_host/frame_navigation_entry.h;drc=23e90a11b9094fe2682083445f14abbaea9bef48;l=286">here</a>).</li>
+<li>Update <code>third_party/blink/public/mojom/page_state/page_state.mojom</code>,
+following the current instructions and warnings in the comments. These
+include (but are not limited to):<ul>
+<li>Search for <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/mojom/page_state/page_state.mojom;drc=047c7dc4ee1ce908d7fea38ca063fa2f80f92c77;l=43"><code>Next   MinVersion</code></a>
+  in the comments and increment it.</li>
+<li>Add the new value under the appropriate section, remembering to
+increment the <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/mojom/page_state/page_state.mojom;drc=047c7dc4ee1ce908d7fea38ca063fa2f80f92c77;l=108"><code>Next Ordinal</code></a>
+value for that section. Include <code>[MinVersion=&lt;N&gt;]</code> in front of the
+mojom declaration for the newly added value. <em>E.g.</em> if adding a value to
+<code>ExplodedFrameState</code>, update the <code>Next Ordinal</code> value for the <code>struct FrameState</code> section.</li>
+</ul>
+</li>
+<li>Add the new element to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/common/page_state/page_state_serialization.h;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=36"><code>ExplodedFrameState</code></a>
+in
+<code>third_party/blink/public/common/page_state/page_state_serialization.h</code>.</li>
+<li>Update the value of
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/common/page_state/page_state_serialization.cc;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=203"><code>kCurrentVersion</code></a>
+in <code>third_party/blink/common/page_state/page_state_serialization.cc</code>, and
+modify the comment above to explain what’s new in this version.</li>
+<li>Update the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/common/page_state/page_state_serialization.cc;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=601"><code>WriteFrameState</code></a>
+and
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/common/page_state/page_state_serialization.cc;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=804"><code>ReadFrameState</code></a>
+functions in <code>third_party/blink/common/page_state/page_state_serialization.cc</code>
+to save and restore the new value in the persistence format.</li>
+<li>Update
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/common/page_state/page_state_serialization.cc;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=953"><code>ExplodedFrameState::assign()</code></a>
+to copy the new element so that its copy constructor and assignment operator
+works as expected.</li>
+<li>Update the <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/common/page_state/page_state_serialization_unittest.cc;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=86"><code>ExplodedFrameState</code>-specialization of
+<code>ExpectEquality()</code></a>
+in <code>third_party/blink/common/page_state/page_state_serialization_unittest.cc</code>.</li>
+<li>Update
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/common/page_state/page_state_serialization_unittest.cc;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=169"><code>PopulateFrameStateForBackwardsCompatTest</code></a>,
+for cases where the <code>version</code> value equals/exceeds the new <code>kCurrentVersion</code>
+set earlier.</li>
+<li>Update
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/common/page_state/page_state_serialization_unittest.cc;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=124"><code>PopulateFrameState</code></a>
+to include the newly-added value.</li>
+<li>Add a <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/common/page_state/page_state_serialization_unittest.cc;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=635">backwards compatibility test</a>,
+<code>TEST_F(PageStateSerializationTest, BackwardsCompat_v&lt;NN&gt;)</code>, where <code>&lt;NN&gt;</code>
+is replaced by the new kCurrentVersion value.</li>
+<li>Add a new baseline data file
+<code>third_party/blink/common/page_state/test_data/serialized_v&lt;NN&gt;.dat</code>, using
+the following steps:<ul>
+<li>In
+<code>third_party/blink/common/page_state/page_state_serialization_unittest.cc</code>,
+find the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/common/page_state/page_state_serialization_unittest.cc;drc=f98aa0661150d5b2d2ed40562fb398e049172549;l=518"><code>#if 0</code></a>
+directive before <code>TEST_F(PageStateSerializationTest, DumpExpectedPageStateForBackwardsCompat)</code>, and temporarily change it to
+<code>#if 1</code>.</li>
+<li>Compile <code>blink_common_unittests</code> then run with
+ <code>--gtest_filter=PageStateSerializationTest.DumpExpectedPageStateForBackwardsCompat</code></li>
+<li>This will create a file <code>expected.dat</code> in the temp directory (<em>e.g.</em>
+<code>/tmp</code> on Linux). Copy this file to
+<code>third_party/blink/common/page_state/test_data/serialized_v&lt;NN&gt;.dat</code>
+and run <code>git add</code>.</li>
+<li>Remember to undo the <code>#if 1</code> change made to
+<code>page_state_serialization_unittest.cc</code> above once the new baseline data
+has been created.</li>
+</ul>
+</li>
+</ul>
+<h2 id="example-cls-modifying-the-format">Example CLs modifying the format:</h2>
+<ul>
+<li><a href="https://chromium-review.googlesource.com/c/chromium/src/+/1679162">https://chromium-review.googlesource.com/c/chromium/src/+/1679162</a></li>
+<li><a href="https://chromium-review.googlesource.com/c/chromium/src/+/4092432">https://chromium-review.googlesource.com/c/chromium/src/+/4092432</a></li>
+</ul>
+<h2 id="example-bugs-from-missing-steps">Example bugs from missing steps:</h2>
+<ul>
+<li><a href="https://crbug.com/1405812">1405812</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/modifying_session_history_serialization.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/modifying_session_history_serialization.md</a>
+  </p>
+</div>

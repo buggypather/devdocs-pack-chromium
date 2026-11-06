@@ -1,0 +1,134 @@
+<h1>Android IPC Security Considerations</h1>
+<p>Generally Chrome communicates between its processes using the
+<a href="https://github.com/chromium/chromium/blob/HEAD/mojo/README.md">Mojo</a> <a href="mojo">inter-process communication (IPC)
+mechanism</a>. For most features, this is the preferred IPC mechanism to
+use. However, as an Android application, there are certain interactions with
+other applications and the Android OS that necessitate using different IPC
+mechanisms to communicate. This document covers security concerns related to
+those Android-specific IPC mechanisms.</p>
+<p>The Chrome browser process is typically the only process type that will interact
+with these different IPC mechanisms.</p>
+<h2 id="intents">Intents</h2>
+<p><a href="https://developer.android.com/guide/components/intents-filters">Intents</a> are
+the most common type of inter-process communication mechanism on Android. They
+are most commonly used to start Activities and they internally carry data
+associated with that Activity (e.g. using the <code>ACTION_SEND</code> Intent to share a
+piece of content and including either text or image data in the Intent body).</p>
+<h3 id="inbound-intents">Inbound Intents</h3>
+<p>Because any application can dispatch Intents with Chrome as the receiver, when
+receiving an inbound Intent, you should never fully trust the data contained
+within. Data sent from other applications could be malicious or malformed, and
+so you must validate or sanitze the data before passing it to other trusted
+components of the browser process. Intents are handled in Java though, so
+following the <a href="rule-of-2">Rule of 2</a> is generally easy. (Though take note
+that certain Android classes are just Java wrappers around native code, which
+would not be considered safe by that rule.)</p>
+<p>Inbound Intents may also pose deserialization issues via the data stored in an
+Intent&#39;s extras. These issues may result in non-exploitable crashes (e.g.
+<a href="https://crbug.com/1232099">https://crbug.com/1232099</a>), but it is also possible to have deserialization
+vulnerabilities with security implications. Always use the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:base/android/java/src/org/chromium/base/IntentUtils.java;l=58;drc=7f1297bacd32fe668d4c99cb8963b56aed363acc"><code>IntentUtils.safe*Extra()</code></a>
+family of methods to access Intent extra fields from inbound Intents.</p>
+<p>It is <strong>fundamentally impossible</strong> to determine the sender of an Intent, unless
+the Activity was started with
+<a href="https://developer.android.com/reference/android/app/Activity#startActivityForResult(android.content.Intent,%20int)"><code>startActivityForResult</code></a>.
+For Intents that are started via <code>startActivityForResult</code>, you can use
+<a href="https://developer.android.com/reference/android/app/Activity#getCallingActivity()"><code>getCallingActivity</code></a>
+or
+<a href="https://developer.android.com/reference/android/app/Activity#getCallingPackage()"><code>getCallingPackage</code></a>
+to retrieve the identity of the component that called
+<a href="https://developer.android.com/reference/android/app/Activity#setResult(int)"><code>setResult</code></a>
+on the started Activity. For all other cases, the security model of your feature
+cannot depend on authenticating the sender of an Intent. Do not trust
+<code>Intent.EXTRA_REFERRER</code>. See also the discussion below about <a href="#capability-tokens">capability
+tokens</a>.</p>
+<p>One way to authorize Intents is to use the system&#39;s
+<a href="https://developer.android.com/guide/topics/permissions/overview#permission_enforcement"><code>android:permission</code></a>
+attribute on a component&#39;s (e.g. Activity, Service, etc.) manifest declaration.
+You can <a href="https://developer.android.com/guide/topics/permissions/defining">define a custom permission</a> and
+set the <code>android:protectionLevel</code> of the permission to <code>&quot;signature&quot;</code> or
+<code>&quot;signatureOrSystem&quot;</code> to restrict access to just components signed by the same
+certificate (or trusted system components).</p>
+<h2 id="outbound-intents">Outbound Intents</h2>
+<p>There are <a href="https://developer.android.com/guide/components/intents-filters?hl=en#Types">two types of Intents</a>:
+implicit and explicit. With implicit Intents, the receiving application is not
+specified by the sender and the system uses a resolution process to find the
+most suitable component to handle it. An implicit Intent can sometimes result in
+a chooser being shown to the user when multiple applications could handle it.
+Explicit Intents specify either the package name or a fully qualified
+<code>ComponentName</code>, so the recipient is known at the time it is dispatched.
+Implicit Intents can result in an unexpected (and maybe malicious) application
+receiving user data. If it is possible to know the target application when
+sending an Intent, always prefer using an explicit Intent.</p>
+<h2 id="pendingintents">PendingIntents</h2>
+<p>A <a href="https://developer.android.com/reference/android/app/PendingIntent">PendingIntent</a>
+is created by one application and vended to another. The object allows the
+receiving application to start the component (i.e. Activity, Service, Broadcast)
+<em>as if the creating application started it</em>. Similar to a <a href="https://en.wikipedia.org/wiki/Setuid">setuid binary</a>,
+you must use this with care, as it can even be used to start non-exported
+components of the creating application.</p>
+<p>It is possible to retrieve information about the creator package of the
+PendingIntent using the <a href="https://developer.android.com/reference/android/app/PendingIntent.html#getCreatorPackage()"><code>getCreatorPackage()</code></a>
+method. This is the identity under which the Intent, which the PendingIntent
+represents, will be started. Note that you cannot retrieve specific information
+about the Intent (e.g. its target and extras). And as discussed above with
+Intents, it is not possible to determine the application that called
+<code>PendingIntent.send()</code>.</p>
+<h2 id="binder">Binder</h2>
+<p><a href="https://developer.android.com/reference/android/os/Binder">Binder</a> is the low
+level IPC mechanism on Android, and it is what Intents and other Framework-level
+primitives are built upon.</p>
+<h3 id="bound-services">Bound Services</h3>
+<p>To communicate between components using Binder, you declare a <code>&lt;service&gt;</code> in
+your manifest and connect to it using <a href="https://developer.android.com/reference/android/content/Context.html#bindService(android.content.Intent,%2520android.content.ServiceConnection,%2520int)"><code>Context.bindService()</code></a>.
+This is referred to a as a <a href="https://developer.android.com/guide/components/bound-services">bound service</a>.</p>
+<p>One of the powerful properties of a bound service is that you can determine the
+identity of your communicating peer. This can only be done during a Binder
+transaction (e.g. in an <a href="https://developer.android.com/guide/components/aidl">AIDL</a>
+method implementation or a <a href="https://developer.android.com/reference/android/os/Handler.Callback.html"><code>Handler.Callback</code></a>)
+that is <strong>not</strong> marked <a href="https://developer.android.com/reference/android/os/IBinder"><code>FLAG_ONEWAY</code></a>.
+During the transaction use <a href="https://developer.android.com/reference/android/os/Binder.html#getCallingUid()"><code>Binder.getCallingUid()</code></a>
+to retrieve the package&#39;s UID.</p>
+<p>In Android, every installed application is given a unique user ID (UID). This
+can be used as a key to query the <a href="https://developer.android.com/reference/android/content/pm/PackageManager">PackageManager</a>,
+to retrieve the <a href="https://developer.android.com/reference/android/content/pm/PackageInfo">PackageInfo</a>
+for the application. With the PackageInfo, information about the applications
+code signing certificates can be retrieved and cryptographically authenticated.
+This is a strong authentication check and it is the <strong>only</strong> reliable mechanism
+by which you can authenticate your peer.</p>
+<p>In Chrome, the helper functions
+<a href="https://cs.chromium.org/chromium/src/chrome/android/java/src/org/chromium/chrome/browser/externalauth/ExternalAuthUtils.java?l=157&amp;rcl=fa790f69ce80bf2e192d710ea08b8343cad93fbb"><code>ExternalAuthUtils.isCallerValid()</code></a>
+and <code>isCallerValidForPackage()</code> can perform these checks for you.</p>
+<h2 id="capability-tokens">Capability Tokens</h2>
+<p>We define a <strong>capability token</strong> to be an unforgeable object that the holder may
+present to another application as authentication to access a specific
+capability. Binder objects are backed by the kernel (i.e. are unforgeable), are
+transferable, and are comparable using <code>isEqual()</code>, so Binders can be used as
+capability tokens.</p>
+<p>One security factor to bear in mind is that because capability tokens are
+transferable, they do not strongly authenticate a caller&#39;s identity. One
+application may deliberately or accidentally transfer a capability token to
+another application, or a token could be exfiltrated via an application logic
+vulnerability. Therefore, only use capability tokens for access control, not
+identity authentication.</p>
+<p>While noting the above factor, capability tokens can be useful for
+authenticating Intents. If two applications have established a Binder
+connection, they can use the channel to exchange a capability token. One
+application constructs a generic Binder (using the
+<a href="https://developer.android.com/reference/android/os/Binder.html#Binder(java.lang.String)"><code>Binder(String)</code></a>
+constructor) and sends the object over that <code>ServiceConnection</code> to the other
+application, while retaining a reference to it.</p>
+<p>The generic Binder object can then be transmitted as an Intent extra when
+sending Intents between the two applications. By comparing the object with
+<code>Binder.isEqual()</code>, you can validate the capability token. Be sure to use an
+<a href="#outbound-intents">explicit Intent</a> when sending such an Intent.</p>
+<p>This same approach can also be done with using a PendingIntent to a non-exported
+component as a capability token. Internally PendingIntents use a Binder token
+approach, so the only significant difference is the additional capability
+conferred by the PendingIntent to start a component.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/android-ipc.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/android-ipc.md</a>
+  </p>
+</div>

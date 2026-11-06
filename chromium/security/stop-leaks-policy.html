@@ -1,0 +1,80 @@
+<h1>Stop leaks policy</h1>
+<h2 id="what-leaks">What leaks?</h2>
+<p>XS-Leaks (<a href="https://xsleaks.dev/">cross-site leaks</a>) are a type of attack where an attacker web page is able to bypass the same-origin policy and gain access to data in sensitive web applications to which the user is logged in. XS-Leaks do not require the attacker to gain code execution in the browser, and can be achieved entirely through the use of legitimate web APIs.</p>
+<p>Any new XS-Leak we might introduce to the web platform has the potential to regress the security of all existing web applications by creating a novel way to leak data. For web applications that try to protect themselves against known XS-Leaks, any new way of leaking data means that they must secure themselves against the leak, incurring extra cost to develop and deploy web-level mitigations. In some cases, websites might not even be aware of—or able to—deploy a mitigation by themselves, and will be dependent on protections built into the web platform to ensure they don&#39;t leak data to other websites.</p>
+<p>This core issue is compounded by the fact that even minor leaks in the web platform can often be abused to reveal sensitive data about actual applications. For example, inferring whether a given resource had been in the HTTP cache sounds fairly benign. But in practice this can allow XS-Search and reveal sensitive data when exploited against users of e.g. a  <a href="https://www.blackhat.com/docs/us-16/materials/us-16-Gelernter-Timing-Attacks-Have-Never-Been-So-Practical-Advanced-Cross-Site-Search-Attacks.pdf">webmail application</a> or a <a href="https://www.comp.nus.edu.sg/~prateeks/papers/Geo-inference.pdf">map application</a>.</p>
+<p><strong>It is our goal to move the Web Platform towards a future with stronger cross-site boundaries that protect applications from exposing data about logged in users to other websites, which is critical for long term trust in the security of the platform.</strong></p>
+<h2 id="stop-leaks-policies">Stop leaks policies</h2>
+<h3 id="web-api-design">Web API design</h3>
+<p>When designing a new Web API, pay attention to the following:</p>
+<h4 id="memory-information">Memory information</h4>
+<p><strong>APIs providing information about memory usage should be gated behind crossOriginIsolation.</strong></p>
+<blockquote>
+<p>Reasoning: APIs that provide information about memory usage can be used to leak information about the size of cross-origin resources, bypassing the same-origin policy. <a href="https://developer.mozilla.org/en-US/docs/Web/API/crossOriginIsolated">CrossOriginIsolation</a> is designed to deal with this threat model.</p>
+</blockquote>
+<blockquote>
+<p>Example: <a href="https://developer.mozilla.org/en-US/docs/Web/API/Performance/measureUserAgentSpecificMemory">performance.measureUserAgentSpecificMemory()</a> is gated behind <a href="https://developer.mozilla.org/en-US/docs/Web/API/crossOriginIsolated">CrossOriginIsolation</a>.</p>
+</blockquote>
+<h4 id="timers">Timers</h4>
+<p><strong>Precise timers should be gated behind <a href="https://developer.mozilla.org/en-US/docs/Web/API/crossOriginIsolated">CrossOriginIsolation</a>.</strong></p>
+<blockquote>
+<p>Reasoning: Precise timers can be used to mount efficient Spectre attacks, allowing to read cross-origin resources, bypassing the same-origin policy. <a href="https://developer.mozilla.org/en-US/docs/Web/API/crossOriginIsolated">CrossOriginIsolation</a> is designed to deal with this threat model.</p>
+</blockquote>
+<blockquote>
+<p>Example: SharedArrayBuffers can be used to build precise timers, and thus are gated behind CrossOriginIsolation.</p>
+</blockquote>
+<h4 id="cpu-information">CPU information</h4>
+<p><strong>Do not expose CPU global utilization beyond the <a href="https://www.w3.org/TR/compute-pressure/">Compute Pressure API pressure states</a>, and do not expose thread specific or document specific CPU utilization information.</strong></p>
+<blockquote>
+<p>Reasoning: APIs that expose CPU global utilization can be used to leak activity of cross-origin documents, including pages in other processes. This bypasses the same-origin policy and Site Isolation.</p>
+</blockquote>
+<blockquote>
+<p>Example: the <a href="https://www.w3.org/TR/compute-pressure/">Compute Pressure API</a> offers a reasonable tradeoff between usability and security. An API with more buckets of CPU utilization would risk leaking too much information.</p>
+</blockquote>
+<h4 id="global-state">Global state</h4>
+<p><strong>Any state maintained by the API must be partitioned according to the Network or Storage key.</strong></p>
+<blockquote>
+<p>Reasoning: APIs that depend on a global state (like unpartitioned history) can be used to leak the interactions of cross-origin resources with that global state, bypassing the same-origin policy.</p>
+</blockquote>
+<blockquote>
+<p>Example: the <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/:visited">CSS :visited property</a> applied whenever a user had visited any link, allowing to leak the user’s complete browsing history. Instead, it should be partitioned so that it only applies to links a user clicked on from a particular network partition.</p>
+</blockquote>
+<h3 id="web-platform-implementation">Web platform implementation</h3>
+<p>When implementing a new web-observable behavior, pay attention to the following:</p>
+<h4 id="cpu-information-1">CPU information</h4>
+<p><strong>Use only coarse-grained, web exposed CPU utilization data (i.e. <a href="https://www.w3.org/TR/compute-pressure/">Compute Pressure API pressure states</a>) to make implementation decisions.</strong></p>
+<blockquote>
+<p>Reasoning: web-observable implementation choices can be leveraged by an attacker in the same manner as APIs exposing CPU utilization directly. An attacker can use this to learn information about the activity of cross-origin documents, including in other processes.</p>
+</blockquote>
+<blockquote>
+<p>Example: freezing background pages due to CPU pressure can be detected by an attacker. If the freezing thresholds are different from the web-exposed Compute Pressure API, this gives an attacker additional info about CPU utilization.</p>
+</blockquote>
+<h4 id="global-state-1">Global state</h4>
+<p><strong>Do not rely on any global state that is not partitioned according to the Network or Storage key. In particular, avoid designing any limits scoped to the tab or top-level window; instead, rely on document-level limits.</strong></p>
+<blockquote>
+<p>Reasoning: limits that are global can be exploited by an attacker to learn how other cross-origin resources are interacting with this limit.</p>
+</blockquote>
+<blockquote>
+<p>Example: having a <a href="https://xsleaks.dev/docs/attacks/timing-attacks/connection-pool/">global limit for the number of sockets</a> allows an attacker to exhaust the socket pool. The attacker can then open a new page and progressively release sockets, then attempt to claim them back, gaining information about the number of network connections opened by the other page.</p>
+</blockquote>
+<h4 id="personalization">Personalization</h4>
+<p><strong>Do not use the presence or absence of cookies or history data to make implementation decisions beyond what is specified in the web platform.</strong></p>
+<blockquote>
+<p>Reasoning: using personalized data to make implementation choices can allow an attacker to gain access to this data.</p>
+</blockquote>
+<blockquote>
+<p>Example: triggering a preload of a page based on whether a user has cookies for the page’s site allows an attacker to learn whether a user had cookies for another site or not.</p>
+</blockquote>
+<h2 id="faq">FAQ</h2>
+<p><strong>Can’t I just add some noise to mitigate the issue?</strong>
+Unfortunately, research has shown that it’s possible to bypass noise added to a side-channel to get to the underlying data. So adding noise is not a sound security mitigation.</p>
+<p><strong>Is this everything I need to worry about when it comes to XS-Leaks?</strong>
+No, there are a number of less common pitfalls that might introduce the risk of cross-site leaks, which we might point out during security reviews of your feature. This is one of the reasons why most features should go through security review.</p>
+<p><strong>Do you have guidance on other web-related security risks beyond XS-Leaks?</strong>
+Yes, we have more general <a href="https://chromium.googlesource.com/chromium/src/+/master/docs/security/web-platform-security-guidelines.md">web platform guidelines</a>, and also a <a href="https://chromium.googlesource.com/chromium/src/+/master/docs/security/web-platform-security-questionnaire.md">questionnaire</a> to help you understand whether your web API might have security impacts.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/stop-leaks-policy.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/stop-leaks-policy.md</a>
+  </p>
+</div>

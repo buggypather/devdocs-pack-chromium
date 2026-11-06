@@ -1,0 +1,49 @@
+<h1>The Friend-the-tests Pattern</h1>
+<p>The Friend-the-tests pattern involves friending test fixture classes from the
+class under test. Chromium has a macro named <code>FRIEND_TEST_ALL_PREFIXES</code> that
+makes this convenient to do.</p>
+<p><strong>Note</strong>: Friending test classes is usually not the best way to provide testing
+access to a class. It makes it far too easy to unintentionally depend on the
+class&#39;s implementation rather than its interface. It is better to use a proper
+testing interface than to friend test classes. That testing interface might be
+the <a href="testapi">TestApi</a> pattern, or might be a simple subclass of the class under test
+which exposes normally-protected functionality publicly.</p>
+<h2 id="use-this-pattern-when">Use this pattern when:</h2>
+<p>A test needs simple access to the internals of a class, such as access to
+individual fields or methods.</p>
+<h2 id="dont-use-this-pattern-when">Don&#39;t use this pattern when:</h2>
+<ul>
+<li>Many different test classes need access to a class&#39;s internals: you will have
+to friend too many things and the class under test will end up coupled with
+too many unit tests.</li>
+<li>You&#39;re doing it to test private methods: in general, you should not separately
+test private methods; the correctness of the private methods should be
+observable from the correctness of the public methods, and if a piece of
+private behavior has no effect on the public behavior of a class, it might
+actually be unnecessary.</li>
+</ul>
+<h2 id="alternatives--see-also">Alternatives / See also:</h2>
+<ul>
+<li><a href="testapi">TestApi</a></li>
+<li><a href="fortesting-methods">ForTesting methods</a></li>
+<li><a href="https://abseil.io/tips/135">&quot;Test the contract, not the implementation&quot;</a></li>
+<li><a href="https://groups.google.com/a/chromium.org/d/msg/cxx/AOsKCPCBYhk/RDVLSMRGCgAJ">Discussion thread on cxx@</a></li>
+</ul>
+<h2 id="how-to-use-this-pattern">How to use this pattern:</h2>
+<pre data-language="cpp">class Foo {
+ public:
+  // ... public API ...
+
+ private:
+  FRIEND_TEST_ALL_PREFIXES(FooTest, TestSomeProperty);
+  FRIEND_TEST_ALL_PREFIXES(FooTest, TestABehavior);
+
+  // or if every test in the suite needs private access:
+  friend class FooTest;
+};</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/friend-the-tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/friend-the-tests.md</a>
+  </p>
+</div>

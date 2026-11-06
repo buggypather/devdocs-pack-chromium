@@ -1,0 +1,140 @@
+<h1>Profile-Guided Optimization (PGO)</h1>
+<h2 id="generating-pgo-profiles-via-bots">Generating PGO Profiles via Bots</h2>
+<p>See
+<a href="#Generating-Profiles-on-Trybots-and-Using-in-Pinpoint">Generating Profiles on Trybots and Using in Pinpoint</a>.</p>
+<p>See also <a href="https://goto.google.com/chrome-pgo-internal">go/chrome-pgo-internal</a>(Googlers only and somewhat outdated).</p>
+<h2 id="generating-pgo-profiles-manually">Generating PGO Profiles Manually</h2>
+<p>Normally devs don&#39;t need to worry about this and can use the default profile for
+official builds. The default profile can be fetched by adding
+<code>&quot;checkout_pgo_profiles&quot;: True</code> to <code>custom_vars</code> in the gclient config and
+running <code>gclient runhooks</code>.</p>
+<p>To produce an executable built with a custom PGO profile:</p>
+<ul>
+<li><p>Produce the instrumented executable using the following gn args:</p>
+<pre>chrome_pgo_phase = 1
+enable_resource_allowlist_generation = false
+is_official_build = true
+symbol_level = 0
+use_remoteexec = true</pre>
+<p>For android you need these in addition:</p>
+<pre>target_os = &quot;android&quot;
+target_cpu = &quot;arm64&quot;</pre>
+</li>
+<li><p>Run representative benchmarks to produce profiles</p>
+<p><code>python3 tools/pgo/generate_profile.py -C out/builddir</code></p>
+<p>If collecting profiles on an android device, add a browser name like one of
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/catapult/telemetry/telemetry/internal/backends/android_browser_backend_settings.py;l=400;drc=bf85e76dc3467385a623e9bf11ab950cf2889ca5">these</a>:</p>
+<pre>python3 tools/pgo/generate_profile.py -C out/builddir \
+    --target-arch arm64 \
+    --android-browser android-chrome-bundle</pre>
+<p>You can find available browsers using:</p>
+<pre>tools/perf/run_benchmark run --browser=list</pre>
+<p>By default, some benchmark replay archives require special access permissions.
+For more details and to request access, please refer to
+<a href="https://www.chromium.org/developers/telemetry/upload_to_cloud_storage/#request-access-for-google-partners">Telemetry documentation</a>. You can also choose to run
+<code>generate_profile.py</code> without these benchmarks, using the
+<code>--run-public-benchmarks-only</code> flag. However, note that doing so may produce a
+profile that isn&#39;t fully representative.</p>
+<pre>python3 tools/pgo/generate_profile.py -C out/builddir \
+   --target-arch arm64 \
+   --android-browser android-chrome-bundle \
+   --run-public-benchmarks-only</pre>
+<p>If <code>generate_profile.py</code> fails with
+<code>ServiceException: 401 Anonymous caller does not have storage.objects.get access to the Google Cloud Storage object.</code>,
+then run <code>download_from_google_storage --config</code> (with your @google address;
+enter 0 as project-id).</p>
+<p>This will produce <code>out/builddir/profile.profdata</code></p>
+</li>
+<li><p>Produce the final PGO&#39;d executable with the following gn args (and additional
+android args, if any):</p>
+<pre>enable_resource_allowlist_generation = false
+is_official_build = true
+symbol_level = 0
+use_remoteexec = true
+pgo_data_path = &quot;//out/builddir/profile.profdata&quot;</pre>
+</li>
+</ul>
+<h2 id="using-custom-pgo-profiles">Using Custom PGO Profiles</h2>
+<p>To use a custom PGO profile, you need to specify the GCS bucket, path, and
+filename of the profile. This can be done by setting the following GN args:</p>
+<pre>pgo_gs_bucket = &quot;chrome-pgo-trybot-profiles&quot;
+pgo_gs_bucket_path = &quot;pgo_profiles&quot;
+pgo_override_filename = &quot;&lt;full-filename-of-your-profile&gt;.profdata&quot;</pre>
+<h2 id="how-it-works">How It Works</h2>
+<p><code>chrome_pgo_phase</code> is defined in <a href="https://source.chromium.org/chromium/chromium/src/+/main:build/config/compiler/pgo/pgo.gni"><code>build/config/compiler/pgo/pgo.gni</code></a>.
+This GN variable can be one of 0, 1, or 2, meaning &quot;don&#39;t use profile&quot;,
+&quot;generating profile&quot;, and &quot;use profile&quot; respectively. See <a href="https://source.chromium.org/chromium/chromium/src/+/main:build/config/compiler/pgo/pgo.gni">pgo.gni</a> for
+details on platform-specific GN variables that determine which phase is used in
+each build.</p>
+<p>Which file under <code>//chrome/build/pgo_profiles/</code> gets used? It depends on both
+the platform and <a href="https://source.chromium.org/chromium/chromium/src/+/main:build/config/compiler/pgo/BUILD.gn;l=88;drc=3d2e089ad74a30754376571531e00615de96061e"><code>_pgo_target</code></a>. For example, for 64-bit android,
+the file <code>//chrome/build/android-arm64.pgo.txt</code> contains the name of the
+<code>*.profdata</code> file that is used as the PGO profile by default if no other profile
+is specified via the GN arg <code>pgo_data_path</code>.</p>
+<h3 id="interaction-with-orderfile-generation">Interaction with Orderfile Generation</h3>
+<p>On Android, the PGO profile generation process is tightly coupled with
+<a href="orderfile">orderfile generation</a>. The CI builders that generate PGO
+profiles are configured to trigger the corresponding orderfile generation
+builders upon successful completion.</p>
+<p>This triggering mechanism is defined in the CI configuration files:</p>
+<ul>
+<li>The PGO builder configurations (in
+<code>//internal/infra/config/subprojects/chrome/ci/chrome.pgo.star</code>) specify which
+orderfile builders to trigger via the <code>builders_to_trigger</code> parameter.</li>
+<li>The custom recipe at
+<a href="https://source.corp.google.com/h/chromium/infra/infra_superproject/+/main:build_internal/recipes/recipes/clank/pgo.py"><code>build_internal/recipes/recipes/clank/pgo.py</code></a>
+reads this parameter and triggers the specified downstream builds.</li>
+<li>The orderfile builders are configured with a <code>triggered_by</code> parameter, which
+allows them to be triggered by the listed PGO builder.</li>
+</ul>
+<p>This ensures that the orderfile, which helps optimize the binary layout, is
+always built using the freshest profile data at the same Chromium commit that
+the PGO profile is generated from. The <code>clank/pgo.py</code> recipe also passes the
+Cloud Storage location of the newly generated PGO profile to the orderfile
+builder as it would not have been rolled into trunk by Skia autorollers at this
+point.</p>
+<h2 id="generating-profiles-on-trybots-and-using-in-pinpoint">Generating Profiles on Trybots and Using in Pinpoint</h2>
+<p><strong>Step 1</strong>: pick an <code>android-arm64-pgo</code> build to benchmark against. In this
+example I picked the latest:
+<a href="https://ci.chromium.org/ui/p/chrome/builders/ci/android-arm64-pgo/12831/overview">https://ci.chromium.org/ui/p/chrome/builders/ci/android-arm64-pgo/12831/overview</a></p>
+<p><strong>Step 2</strong>: grab its chromium commit hash, your local CL should be rebased on
+it:
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/pgo/images/find_commit_hash.png" alt="Chromium CI build details showing the commit hash"></p>
+<p>In this case it is <code>a26eb2940c446b477ffa908081083aefad361ead</code></p>
+<p><strong>Step 3</strong>: upload your change to gerrit and trigger the <code>android-arm64-pgo</code>
+trybot:
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/pgo/images/add_pgo_trybot.png" alt="Gerrit UI for adding the android-arm64-pgo trybot"></p>
+<p>See <a href="https://crrev.com/c/6979965?tab=checks">https://crrev.com/c/6979965?tab=checks</a></p>
+<p><strong>Step 4</strong>: find a successful run of <code>android-arm64-pgo</code> (you may need to do
+this several times), and copy the gsutil artifact name:
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/pgo/images/find_artifact_name.png" alt="Chromium CI build steps showing the gsutil artifact name"></p>
+<p>For this one I got:
+<code>chrome-android64-main-1759253260-88cce76848485c7544e4c3c3318a2d5ca1e4c3ec-2d4ffc91620fc1cae131415e81c8fed36dfabfaa.profdata</code>
+(note that the second hash is not <code>a26eb2940c446b477ffa908081083aefad361ead</code>
+because I had a single modification CL on top of it).</p>
+<p><strong>Step 5</strong>: create two new CLs that sets this and the one generated by the
+original android-arm64-pgo CI bot in the default gn args file (<strong>IMPORTANT</strong>:
+these <strong>both</strong> need to be based on the same original base commit that generated
+them, in this case, both based on top of
+<code>a26eb2940c446b477ffa908081083aefad361ead</code>).</p>
+<p>In this case, the one generated by CI was
+<code>chrome-android64-main-1758734180-32cedafa6ae7a837a72fd6da923a5463d45bbc9a-a26eb2940c446b477ffa908081083aefad361ead.profdata</code></p>
+<p>Trybot CL: <a href="https://crrev.com/c/7001460">https://crrev.com/c/7001460</a></p>
+<p>CI CL: <a href="https://crrev.com/c/6998908">https://crrev.com/c/6998908</a> (note the different bucket for CI generated
+profiles <code>chromium-optimization-profiles</code>)</p>
+<p><strong>Step 6</strong>: Create a pinpoint job comparing the two above CLs:
+<a href="https://pinpoint-dot-chromeperf.appspot.com/">https://pinpoint-dot-chromeperf.appspot.com/</a> Example:
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/pgo/images/example_pinpoint_settings.png" alt="Example Pinpoint job settings for a PGO experiment"></p>
+<p>This used <code>android-pixel6-perf-pgo</code> and 150 attempts to make results less noisy.</p>
+<p>This is the actual pinpoint run that worked (some tweaks were needed):
+<a href="https://pinpoint-dot-chromeperf.appspot.com/job/118daa5a510000">https://pinpoint-dot-chromeperf.appspot.com/job/118daa5a510000</a></p>
+<p><strong>Step 7</strong>: Analyze the pinpoint run as you would normally.</p>
+<h2 id="background-reading">Background Reading</h2>
+<p><a href="https://clang.llvm.org/docs/UsersManual.html#profile-guided-optimization">https://clang.llvm.org/docs/UsersManual.html#profile-guided-optimization</a></p>
+<p><a href="https://source.android.com/docs/core/perf/pgo">https://source.android.com/docs/core/perf/pgo</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/pgo.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/pgo.md</a>
+  </p>
+</div>

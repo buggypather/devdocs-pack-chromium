@@ -1,0 +1,594 @@
+<h1>Chromium Updater Developer's Manual</h1>
+<p>This manual provides information on how to develop the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/updater/">Chromium Updater</a>,
+including tips and tricks.</p>
+<h2 id="code-organization">Code Organization</h2>
+<h2 id="bots--lab">Bots &amp; Lab</h2>
+<blockquote>
+<p><strong><em>NOTE:</em></strong> Knowledge in this section may become out-of-date as LUCI evolves
+quickly.</p>
+</blockquote>
+<h3 id="builders--testers">Builders / Testers</h3>
+<p>There are two sets of configuration files for our builders/testers. One is
+for chromium-branded and locates in <code>src</code>. The other one is for chrome-branded
+and locates in <code>src-internal</code>.</p>
+<h4 id="chromium-branded-src">Chromium-branded (<code>src</code>)</h4>
+<ul>
+<li>Console: <a href="https://ci.chromium.org/p/chromium/g/chromium.updater/console">https://ci.chromium.org/p/chromium/g/chromium.updater/console</a></li>
+<li><code>tools/mb/mb_config.pyl</code>: specifies GN args.</li>
+<li><code>testing/buildbot/gn_isolate_map.pyl</code>: maps a GN label to GN targets, and
+provides test arguments, for example test timeout values.</li>
+<li><code>testing/buildbot/test_suites.pyl</code>: maps test suite name to GN label, and
+provides optional swarming dimensions.</li>
+<li><code>testing/buildbot/waterfalls.pyl</code>: maps tester to test suites names, and
+specifies OS, architecture etc.</li>
+<li><code>infra/config/subprojects/chromium/ci/chromium.updater.star</code>: defines our
+testers and builders and how they appear on the console.</li>
+</ul>
+<p>Command to update json files after configure update:</p>
+<ul>
+<li><code>tools\mb\mb train</code> (if <code>mb_config.pyl</code> is changed).</li>
+<li><code>lucicfg generate .\infra\config\main.star</code> (if <code>chromium.updater.star</code>
+is changed).</li>
+<li><code>vpython3 .\testing\buildbot\generate_buildbot_json.py</code></li>
+</ul>
+<p>Reference CLs:</p>
+<ul>
+<li>Add a tester: <a href="https://crrev.com/c/4068601">https://crrev.com/c/4068601</a></li>
+<li>Update GN args: <a href="https://crrev.com/c/3656357">https://crrev.com/c/3656357</a></li>
+</ul>
+<h4 id="chrome-branded-src-internal">Chrome-branded (<code>src-internal</code>)</h4>
+<ul>
+<li>Console: <a href="https://ci.chromium.org/p/chrome/g/chrome.updater/console">https://ci.chromium.org/p/chrome/g/chrome.updater/console</a></li>
+<li><code>tools/mb/mb_config.pyl</code>: specifies GN args.</li>
+<li><code>testing/buildbot/gn_isolate_map.pyl</code>: maps a GN label to GN targets, and
+provides test arguments, for example test timeout values.</li>
+<li><code>testing/buildbot/test_suites.pyl</code>: maps test suite name to GN label, and
+provides optional swarming dimensions.</li>
+<li><code>testing/buildbot/waterfalls.pyl</code>: maps tester to test suites names, and
+specifies OS, architecture etc.</li>
+<li><code>infra/config/subprojects/chrome/ci/chrome.updater.star</code>: defines our
+testers and builders and how they appear on the console.</li>
+</ul>
+<p>Command to update json files after configure update:</p>
+<ul>
+<li><code>..\src\tools\mb\mb train -f tools\mb\mb_config.pyl</code> (if <code>mb_config.pyl</code>
+is changed).</li>
+<li><code>lucicfg generate .\infra\config\main.star</code> (if <code>chrome.updater.star</code>
+is changed).</li>
+<li><code>vpython3 .\testing\buildbot\generate_testing_json.py</code></li>
+</ul>
+<p>Please note changes in <code>src-internal</code> needs to roll into chromium/src to take
+effect. This could take hours until a CL authored by
+<code>chromium-internal-autoroll@</code> lands. During transition, the configure files
+could be in inconsistent state and leads to infra error.</p>
+<h3 id="run-tests-on-swarming">Run tests on swarming</h3>
+<p><code>mb</code> tool can upload your private build target (and all the dependencies,
+ based on build rule) to swarming server and run the target on bots. The
+ upload may take quite some time if the target changed a lot since the last
+ upload and/or your network is slow.</p>
+<ul>
+<li><p>Simple scenario:</p>
+<pre>.\tools\mb\mb.bat run -v --swarmed .\out\Default updater_tests -- --gtest_filter=*Integration*</pre>
+</li>
+<li><p>Sometimes the mb tool may fail to match the testing OS (when doing
+ cross-compile) or you may want to run the task on certain kind of bots.
+This can be done by specifying bots dimension with switch <code>-d</code>. Remember
+<code>--no-default-dimensions</code> is necessary to avoid dimension value conflict.
+Example:</p>
+<pre>.\tools\mb\mb.bat run --swarmed --no-default-dimensions -d pool chromium.win.uac -d os Windows-10 .\out\Default updater_tests_system -- --gtest_filter=*Install*</pre>
+</li>
+<li><p><code>mb</code> can schedule tests in the pools managed by different swarming servers.
+The default server is
+<a href="https://chromium-swarm.appspot.com/botlist?k=pool">chromium-swarm.appspot.com</a>.
+To schedule tests to pools managed by
+<a href="https://chrome-swarming.appspot.com/botlist?k=pool">chrome-swarming.appspot.com</a>,
+for example <code>chrome.tests</code>, add <code>--internal</code> flag in the command line:</p>
+<pre>  tools/mb/mb run -v --swarmed --internal --no-default-dimensions -d pool chrome.tests -d os Windows-10 out/WinDefault updater_tests</pre>
+</li>
+<li><p>If <code>mb</code> command failed with error <code>isolate: original error: interactive login is required</code>, you need to login:</p>
+<pre> tools/luci-go/isolate login</pre>
+</li>
+<li><p>If your test introduces dependency on a new app on macOS, you need to let
+ <code>mb</code> tool know so it can correctly figure out the dependency. Example:
+<a href="https://crrev.com/c/3470143">https://crrev.com/c/3470143</a>.</p>
+</li>
+<li><p>To run tests on <code>Arm64</code>, the mb tool needs to be invoked as follows:</p>
+<pre>.\tools\mb\mb run -v --swarmed --no-default-dimensions --internal -d pool chrome.tests.arm64 out\Default updater_tests_system -- --gtest_filter=LegacyAppCommandWebImplTest.FailedToLaunchStatus</pre>
+</li>
+<li><p>When system tests crash, the stack is missing from the swarming log. This can be avoided if you suppress the test bot mode:</p>
+<pre>.\tools\mb\mb run -v --swarmed  --no-bot-mode out\Default updater_tests_system</pre>
+</li>
+</ul>
+<h3 id="accessing-bots">Accessing Bots</h3>
+<p> TODO(crbug.com/40841197): Document how to remote into bots for debugging.</p>
+<h3 id="updating-the-checked-in-version-of-the-updater">Updating the Checked-In Version of the Updater</h3>
+<p>An older version of the updater is checked in under <code>//third_party/updater/*/cipd</code>.
+This version of the updater is used in some integration tests. The updater is
+pulled from
+<a href="https://chrome-infra-packages.appspot.com/p/chromium/third_party/updater">CIPD</a>
+based on the versions specified in <code>//DEPS</code>. A system called <code>3pp</code> periodically
+updates the packages in CIPD, based on a combination of the Chromium build
+output and what is actually released through Omaha servers. The configuration
+for 3pp can be found in <code>//third_party/updater/*/3pp</code>.</p>
+<p>To update these copies of the updaters:</p>
+<ol>
+<li>Land whatever CLs need to be committed on trunk.</li>
+<li>Wait for builds to be available in CIPD that have the needed changes.<ul>
+<li>Instead of waiting, you can instead modify the <code>fetch.py</code> scripts for
+3pp. For Chrome builds, make sure the build has been released in Omaha
+then update the fetch script with the desired version number. For
+Chromium, make sure the build exists in GCS (the
+chromium-browser-snapshots bucket), then update the min version in the
+script. The min version usually is different per-platform, since
+Chromium does not archive a version at every CL. After making these
+changes, 3pp will import the new versions within a few hours.</li>
+<li>As an example, let us suppose that
+<a href="https://crrev.com/1371769">revision 1371769</a>
+is the change that needs to be picked up for the checked-in version.<ul>
+<li>Look up the chrome version by checking
+<a href="https://chromiumdash.appspot.com/">chromiumdash</a>.</li>
+<li>It shows that version <code>132.0.6791.0</code> is the version <code>1371769</code> was
+released with.</li>
+<li>Make sure the <code>updater</code> is shipping at a <code>version</code> higher than
+<code>132.0.6791.0</code>
+<a href="https://versionhistory.googleapis.com/v1/chromium_updater/platforms/win/channels/canary/versions/all/releases?filter=endtime=none">here</a>
+.</li>
+<li>Look up the chromium versions under
+<a href="https://commondatastorage.googleapis.com/chromium-browser-snapshots/index.html">commondatastorage</a>
+, in the folders corresponding to <code>get_platform()</code> for each
+<code>fetch.py</code>, for instance, the <code>Win</code>, <code>Win_x64</code>, and <code>Win_Arm64</code>
+folders for the Windows <code>fetch.py</code> files, and look up a build with a
+revision greater than <code>1371781</code>, corresponding to <code>r1371769</code>, and make
+sure that the <code>updater.zip</code> file is present in those folders.</li>
+<li>Make changes to the <code>fetch.py</code> files based on the lookups, and send it
+out for review.</li>
+<li>After the change lands, give it a few hours for the fetch to complete.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Update //DEPS to point to the new versions.</li>
+</ol>
+<h2 id="developing">Developing</h2>
+<h3 id="cross-platform-code">Cross-platform Code</h3>
+<p>Where possible, cross-platform code is preferred to other alternatives. This
+means that the source code of the updater is organized in sub-directories,
+first by functionality (or feature), and second by platform name. For example,
+the source code contains <code>updater\net</code> instead of <code>updater\mac\net</code>.</p>
+<h3 id="strings-and-file-paths">Strings and file paths</h3>
+<p>Strings in <code>Posix</code> are 8-bit encoded characters, usually (but not always) using
+<code>UTF8</code> encoding.</p>
+<p>Strings in <code>Windows</code> can be 8-bit or 16-bit characters, usually <code>UTF8</code> or
+<code>UTF16</code> respectively. The <code>updater</code> project uses 16-bit strings for most
+Windows-specific literals, since that is the Chromium coding style for Windows,
+and there are some Windows APIs that only have the <code>W</code> variant that require
+16-bit strings.</p>
+<p>The <code>updater</code> project uses 8-bit literals and 8-bit characters for
+cross-platform code, and uses conversion functions such as <code>base::UTF8ToWide</code>
+and <code>base::WideToUTF8</code> to convert to and from 8-bit strings for Windows-specific
+code paths that are called from the cross-platform code.</p>
+<p>Using the <code>ASCII</code> functions is not allowed in the <code>updater</code> codebase, unless
+there is no alternative native or <code>UTF8</code> function.</p>
+<h4 id="appending-strings-to-a-file-path">Appending strings to a file path</h4>
+<p>When appending strings to a <code>FilePath</code>, there are several functions available,
+such as:</p>
+<ul>
+<li><code>Append</code>: appends a string using the native format</li>
+<li><code>AppendUTF8</code>: appends a UTF8-encoded string</li>
+<li><code>AppendASCII</code>: appends an ASCII-encoded string. ASCII is a subset of UTF8.
+This function is not used in the <code>updater</code> project.</li>
+</ul>
+<p>These are the rules to follow when appending strings to a <code>FilePath</code>:</p>
+<ol>
+<li>Use <code>base::FilePath::Append</code> for platform-specific code<ul>
+<li>Since <code>Append</code> does not do any conversions, it is the safest function to
+use for platform-specific code, since the characters can retain their
+native format without undergoing any conversions.</li>
+</ul>
+</li>
+<li>Use <code>base::FilePath::Append</code> for cross-platform code where
+<code>FILE_PATH_LITERAL</code> can be used to wrap the literals<ul>
+<li>Since <code>Append</code> does not do any conversions, it is the most efficient
+function to use in this case.</li>
+</ul>
+</li>
+<li>Use <code>base::FilePath::AppendUTF8</code> for all other cross-platform code<ul>
+<li>cross-platform code is expected to use UTF8 literals or UTF8 strings
+only.</li>
+</ul>
+</li>
+</ol>
+<h4 id="creating-a-file-path-from-a-string">Creating a file path from a string</h4>
+<p>These are the rules to follow when constructing a <code>FilePath</code> from a string:</p>
+<ol>
+<li>Use the <code>base::FilePath</code> constructor for platform-specific code<ul>
+<li>Since the <code>base::FilePath</code> constructor does not do any conversions, it
+is the safest function to use for platform-specific code, since the
+characters can retain their native format without undergoing any
+conversions.</li>
+</ul>
+</li>
+<li>Use the <code>base::FilePath</code> constructor for cross-platform code where
+<code>FILE_PATH_LITERAL</code> can be used to wrap the literals<ul>
+<li>Since the <code>base::FilePath</code> constructor does not do any conversions, it
+is the most efficient function to use in this case.</li>
+</ul>
+</li>
+<li>Use <code>base::FilePath::FromUTF8Unsafe</code> for all other cross-platform code<ul>
+<li>cross-platform code is expected to use UTF8 literals or UTF8 strings
+only.</li>
+</ul>
+</li>
+</ol>
+<h4 id="converting-a-file-path-to-a-string">Converting a file path to a string</h4>
+<p>These are the rules to follow when converting a <code>FilePath</code> to a string:</p>
+<ol>
+<li>Use <code>base::FilePath::value()</code> for platform-specific code<ul>
+<li>Since <code>value()</code> does not do any conversions, it is the safest function
+to use for platform-specific code, since the characters can retain their
+native format without undergoing any conversions.</li>
+</ul>
+</li>
+<li>Use <code>base::FilePath::AsUTF8Unsafe</code> for cross-platform code<ul>
+<li><code>AsUTF8Unsafe</code> is safe to use for both <code>Posix</code> (where it returns the
+underlying string unmodified) and <code>Windows</code> (where the underlying wide
+string is converted using <code>base::WideToUTF8</code>).</li>
+</ul>
+</li>
+</ol>
+<h3 id="mind-the-dependencies">Mind the dependencies</h3>
+<p>To enforce layering, there are enforced rules about what can be included in
+certain modules. The rules checked by <code>GN</code> and the build breaks on bots if the
+dependencies constraints are not satisfied.</p>
+<p>Use the following command to check the target dependencies:
+<code>gn check out\Default chrome/updater:* --check-generated --check-system</code></p>
+<h2 id="building">Building</h2>
+<h3 id="configuring-the-build">Configuring the build</h3>
+<p>After creating your build configuration directory via
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/build_instructions.md#Setting-up-the-build"><code>gn gen</code></a>
+(this step is equivalent across all platforms), you will need to use
+<a href="https://www.chromium.org/developers/gn-build-configuration/"><code>gn args</code></a> to
+configure the build appropriately.</p>
+<h4 id="flags-required-for-building-successfully">Flags required for building successfully</h4>
+<p>As of 2023-05-24, the updater cannot be built in component mode. It is also not
+specifically designed to be built without the updater being enabled. You must
+specify these options to <code>gn</code> via <code>gn args</code>:</p>
+<pre>is_component_build=false
+enable_updater=true</pre>
+<p>Depending on other configuration options, the default <code>symbol_level</code>, 2, might
+produce object files too large for the linker to handle (in debug builds).
+Partial symbols, via <code>symbol_level=1</code>, fix this. Omitting almost all symbols
+via <code>symbol_level=0</code> reuslts in a smaller and faster build but makes debugging
+nearly impossible (call stacks will not be symbolicated).</p>
+<h4 id="faster-builds">Faster builds</h4>
+<p>Remote execution (via Siso and RBE) allows you to compile Chromium fast. After
+you&#39;ve set up remote execution, specify it in <code>gn args</code> with
+<code>use_remoteexec=true</code>.</p>
+<p>To get started with remote execution, and for more information on how to use it,
+see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac_build_instructions.md">macOS build instructions</a>,
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/windows_build_instructions.md">Windows build instructions</a>,
+or <a href="https://github.com/chromium/chromium/blob/HEAD/docs/updater/go/building-chrome">Google-internal documentation</a>, if you are a Google
+employee.</p>
+<h4 id="more-release-like-builds">More release-like builds</h4>
+<p>Chromium projects build in debug mode by default. Release builds (also called
+&quot;opt&quot;, or &quot;optimized&quot;, builds) are faster to link and run more efficiently;
+they are, of course, much harder to debug. For a release build, add the
+following to the build configuration&#39;s <code>gn args</code>:</p>
+<pre>is_debug=false</pre>
+<p>With a Google <code>src-internal</code> checkout, you can create a Chrome-branded build:</p>
+<pre>is_chrome_branded=true
+include_branded_entitlements=false</pre>
+<p>Updater branding affects the path the updater installs itself to, among other
+things. Differently-branded copies of Chromium Updater are intended to coexist
+on a machine, operating independently from each other.</p>
+<h3 id="build-output">Build output</h3>
+<p>The build generates the following main files:</p>
+<ul>
+<li><code>updater.exe</code> (Windows) / <code>ChromiumUpdater.app</code> (macOS): The actual updater
+application.</li>
+<li><code>UpdaterSetup.exe</code> (Windows): The self-extracting &quot;metainstaller&quot;, suitable
+for tagging, signing, and further distribution.</li>
+<li><code>UpdaterSigning</code>: A collection of scripts and tools used to sign the
+updater.</li>
+<li><code>qualification_app</code> (.exe on Windows): A simple app run by each version of
+the updater prior to taking over as the active updater. Updaters will
+download and run whatever version is actually released (not what you&#39;ve
+built), and the qualification app can be version skewed with the updater.</li>
+<li><code>ChromiumUpdaterUtil</code> (macOS): A utility program for debugging the updater.</li>
+<li><code>chrome/updater/.install</code> (macOS): A Keystone-compatible install script that
+drives the updater&#39;s installation during update.</li>
+<li><code>updater.zip</code>: A zip file containing all of the above, for uploading to the
+archive / signing infrastructure.</li>
+</ul>
+<h3 id="cleaning-the-build-output">Cleaning the build output</h3>
+<p>Running <code>ninja</code> with <code>t clean</code> cleans the build out directory. For example:</p>
+<pre>ninja -C out\Default chrome/updater:all -t clean</pre>
+<h3 id="how-to-generate-the-cross-compilation-idl-com-headers-and-tlb-files">How to generate the cross-compilation IDL COM headers and TLB files</h3>
+<p>6 different build flavors need to be built in sequence. If you see errors
+similar to the following:</p>
+<pre>midl.exe output different from files in gen/chrome/updater/app/server/win, see C:\src\temp\tmppbfwi0ds
+To rebaseline:
+  copy /y C:\src\temp\tmppbfwi0ds\* c:\src\chromium\src\third_party\win_build_output\midl\chrome\updater\app\server\win\x64
+ninja: build stopped: subcommand failed.</pre>
+<p>You can then run the following command to update IDL COM files for all flavors:</p>
+<pre>python3 tools/win/update_idl.py</pre>
+<h3 id="build-artifacts">Build artifacts</h3>
+<p>Build outputs will land in the directory created by <code>gn gen</code> that you have been
+providing to assorted <code>gn</code>, <code>ninja</code>, and <code>autoninja</code> commands. <code>updater.zip</code>
+contains copies of the &quot;final&quot; outputs created by the build. <code>UpdaterSetup</code> is
+probably what you want for installing the updater you have built.</p>
+<h2 id="signing">Signing</h2>
+<p>GoogleUpdater signing doesn&#39;t take place on Chromium infra, but rather on
+proprietary Google infrastructure (go/o4signing). The build system packages all
+necessary ingredients for signing in updater.zip, which is uploaded by Chrome
+archive builders to the unsigned builds bucket in GCS. The zip contains both
+the artifacts to be signed and scripts to sign them. Signing infrastructure is
+triggered after each upload, ingests the files, injects the key material, signs,
+and then uploads the results to the signed builds bucket. More detail is
+available for Googlers at go/o4signing.</p>
+<p>On Windows, it&#39;s important to sign updater.exe, and then package that into
+UpdaterSetup.exe, and sign UpdaterSetup.exe. The signing scripts take an
+unsigned UpdaterSetup.exe, extract updater.exe, sign, reconstruct, and then
+sign the new UpdaterSetup.exe.</p>
+<p>On macOS, the GoogleUpdater.app bundle is signed directly, and then notarized
+(sent to Apple for countersigning). Notarization is &quot;stapled&quot; into the app
+bundle, and then the entire thing is packaged into a DMG, which in turn is
+signed, notarized, and stapled.</p>
+<h2 id="code-coverage">Code Coverage</h2>
+<p>Gerrit now down-votes the changes that do not have enough coverage. And it&#39;s
+nice to have good coverage regardless. To improve code-coverage, we need to
+know what are already covered and what are not.</p>
+<h4 id="coverage-on-gerrit">Coverage on Gerrit</h4>
+<p>It&#39;s automatically generated. But the coverage shown is the combined result
+from all OS platforms.</p>
+<h4 id="coverage-dashboard">Coverage Dashboard</h4>
+<p>The <a href="https://analysis.chromium.org/coverage/p/chromium/dir?host=chromium.googlesource.com&amp;project=chromium/src&amp;ref=refs/heads/main&amp;path=//chrome/updater/&amp;platform=mac">updater code coverage dashboard</a>
+supports breakdown by OS platform or test type. But it is only for the code in
+trunk.</p>
+<h4 id="run-coverage-locally">Run Coverage Locally</h4>
+<p>We can quickly get OS-specific coverage result with the local changes:</p>
+<ul>
+<li>macOS/Linux</li>
+</ul>
+<pre>gn gen out/coverage --args=&quot;use_clang_coverage=true is_component_build=false is_chrome_branded=true is_debug=true use_debug_fission=true use_remoteexec=true symbol_level=2&quot;
+
+vpython3 tools/code_coverage/coverage.py  updater_tests -b out/coverage -o out/report -c 'out/coverage/updater_tests' -f chrome/updater</pre>
+<ul>
+<li>Windows</li>
+</ul>
+<pre>gn gen out\coverage --args=&quot;use_clang_coverage=true is_component_build=false is_chrome_branded=true is_debug=true use_debug_fission=true use_remoteexec=true symbol_level=2&quot;
+
+vpython3 tools\code_coverage\coverage.py updater_tests -b out\coverage -o out\report -c out\coverage\updater_tests.exe  -f chrome/updater</pre>
+<p>The last command outputs an HTML file and you can open it in browser to see the
+coverages.</p>
+<h2 id="unit-tests-and-integration-tests">Unit tests and integration tests</h2>
+<h3 id="running-tests-locally">Running tests locally</h3>
+<p>The updater tests are available as <code>updater_tests</code> build target in the <code>out</code>
+directory of the build.</p>
+<p>In general, running branded unit tests locally is likely to break the updater
+for the browser. To avoid this outcome when unsuspecting developers build and
+run the branded updater tests, the test don&#39;t run locally unless the
+developer sets an environment variable <code>ISOLATED_OUTDIR</code>. This is an
+environment variable which is present on all bots (see the updater logs
+section below). The presence of <code>ISOLATED_OUTDIR</code> does not preserve the
+updater though. It only prevents the tests from being run.</p>
+<h2 id="debugging">Debugging</h2>
+<h3 id="debug-into-windows-update-service">Debug into Windows update service</h3>
+<ul>
+<li>Install updater: <code>UpdaterSetup.exe --install [--system]</code></li>
+</ul>
+<blockquote>
+<p><strong><em>TIP:</em></strong>  Debugger may have trouble to find the symbols at the service
+ side even if you add your build output directory to the symbol paths. To
+workaournd the issue, you can copy <code>updater.exe*</code> to the versioned
+installation directory.</p>
+</blockquote>
+<ul>
+<li>Set a breakpoint at the client side after service instantiation but before
+calling into the service API. Most likely this will be somewhere in file
+<code>update_service_proxy.*</code>.</li>
+<li>Start the client, wait for it to hit the break point. At this time, the
+service process should have started.</li>
+<li>Find the server process, which contains the command line switch <code>--server</code>
+(user-level server) or <code>--system --windows-service</code> (system-level server).
+Start another debugger and attach the server process. Then set a server-side
+breakpoint at the place you want to debug.</li>
+<li>Continue the client process.</li>
+</ul>
+<h3 id="logging">Logging</h3>
+<p>Both the updater and the unit tests can create program logs.</p>
+<h4 id="updater-logs">Updater logs</h4>
+<p>The updater itself logs in the product directory.</p>
+<h4 id="unit-test-logs">Unit test logs</h4>
+<p>The unit tests log into a directory defined by the environment variable
+<code>${ISOLATED_OUTDIR}</code>. When run by Swarming, the updater logs are copied
+into <code>${ISOLATED_OUTDIR}</code> too, so that after the swarming task has completed,
+both types of logs are available as CAS outputs. The logs for
+<code>updater_tests_system</code> and <code>integration_test_helper</code> are merged into
+<code>updater_tests_system.log</code>.</p>
+<p>Non-bot systems can set up this environment variable to collect logs for
+debugging when the tests are run locally.</p>
+<h2 id="testing-src-changes-with-trybots">Testing src changes with trybots</h2>
+<p>In some cases, you will want to test the changes you make within
+<a href="https://chromium.googlesource.com/chromium/src.git">chromium/src</a> on
+specific builders/testers before landing these changes. It is possible
+to do this with the use of the trybots available on the
+<a href="https://ci.chromium.org/ui/p/chromium/g/tryserver.chromium.updater/builders">tryserver.chromium.updater</a>
+ waterfall. The steps are as follows:</p>
+<ol>
+<li>Find a trybot to run your tests with. All of the trybots on the
+tryserver.chromium.updater waterfall have a corresponding builder and
+tester, so find one that runs a workflow to test your changes.</li>
+<li>Apply your configuration changes to chromium/src and upload a CL
+using the typical workflow: <code>git cl upload</code></li>
+<li>Run <code>git cl try -B luci.chromium.try -b {TRYBOT_NAME}</code> with the
+name of the trybot you found.</li>
+<li>Monitor and debug any failures as you normally would for any
+builder or tester.</li>
+</ol>
+<h3 id="ui-strings--localization">UI Strings &amp; Localization</h3>
+<p>The strings for the metainstaller live in the //chrome/app/chromium_strings.grd
+and //chrome/app/google_chrome_strings.grd files. This allows the updater
+strings to utilize the Chromium repo&#39;s translation process instead of generating
+its own. Having it in existing grd files also eliminates the need to onboard
+updater specific grd files.</p>
+<p>During the build process, the updater strings are embedded directly into the
+metainstaller binary via <code>generate_embedded_i18n</code>. <code>generate_embedded_i18n</code> also
+allows an <code>extractor_datafile</code>, which can define specific strings to pick out
+from the originating grd file. This way, the metainstaller only has the strings
+specific to the updater and not any of the other strings within the grd file.
+When the <code>generate_embedded_i18n</code> is complete, it generates an
+<code>updater_installer_strings.h</code> header, which contains macro definitions of the
+message ids and the offsets. The strings are mapped with their var name appended
+with <code>_BASE</code>. Then the  <code>_BASE</code> appended macros are defined to be the first
+localization id in the list, in which case it is <code>_AF</code>.</p>
+<p>An example from the <code>updater_installer_strings.h</code></p>
+<pre>#define IDS_BUNDLE_INSTALLED_SUCCESSFULLY_AF 1600
+#define IDS_BUNDLE_INSTALLED_SUCCESSFULLY_AM 1601
+
+...
+
+#define IDS_BUNDLE_INSTALLED_SUCCESSFULLY_BASE IDS_BUNDLE_INSTALLED_SUCCESSFULLY_AF
+
+...
+
+#define DO_STRING_MAPPING \
+  HANDLE_STRING(IDS_BUNDLE_INSTALLED_SUCCESSFULLY_BASE, IDS_BUNDLE_INSTALLED_SUCCESSFULLY) \</pre>
+<p>Within the metainstaller, an l10_util.h/cc has three functions to get localized
+strings.</p>
+<pre>GetLocalizedString(int base_message_id)
+GetLocalizedStringF(int base_message_id, const std::wstring&amp; replacement)
+GetLocalizedStringF(int base_message_id, std::vector&lt;std::wstring&gt; replacements)</pre>
+<p>One function for getting the literal string and two functions to get formatted
+strings. <code>GetLocalizedString()</code> uses the base id plus the offset based on the
+language to look through the binary&#39;s string table to get the correct, localized
+string. The formatted strings utilize GetLocalizedString() to get the string and
+then uses <code>base::ReplaceStringPlaceholders()</code> to remove the <code>$i</code> placeholders
+within the string. With regards to picking the correct language to utilize for
+the localized string, <code>base::win::i18n::GetUserPreferredUILanguageList()</code> is
+used to get the preferred UI languages from MUI. If there are multiple languages
+in the list, the first language in the list is picked.</p>
+<h4 id="steps-to-add-a-new-ui-string-to-the-updater">Steps to add a new UI String to the updater</h4>
+<ul>
+<li>Add the string to chrome/app/chromium_strings.grd and
+chrome/app/google_chrome_strings.grd. For example:</li>
+</ul>
+<pre>  &lt;message name=&quot;IDS_NO_NETWORK_PRESENT_ERROR&quot;
+           desc=&quot;Error message displayed in the main dialog when the Updater is unable to connect to the network.&quot;&gt;
+    Unable to connect to the Internet. If you use a firewall, please allowlist &lt;ph name=&quot;PRODUCT_EXE_NAME&quot;&gt;$1&lt;ex&gt;ChromiumUpdater.exe&lt;/ex&gt;&lt;/ph&gt;.
+  &lt;/message&gt;</pre>
+<ul>
+<li>Add the identifier for the string, for example <code>IDS_NO_NETWORK_PRESENT_ERROR</code>,
+in chrome/updater/win/ui/resources/create_metainstaller_string_rc.py.</li>
+<li>Use the string identifier in the code. For example:</li>
+</ul>
+<pre>  GetLocalizedStringF(IDS_NO_NETWORK_PRESENT_ERROR_BASE, L&quot;updater.exe&quot;);</pre>
+<ul>
+<li>Add tests for the new string in the UI if applicable.</li>
+<li>Capture a screenshot of the UI with the new string.</li>
+<li>Save the screenshot as chrome\app\chromium_strings_grd\IDS_NO_NETWORK_PRESENT_ERROR.png
+and chrome\app\google_chrome_strings_grd\IDS_NO_NETWORK_PRESENT_ERROR.png.</li>
+<li>Run <code>python3 tools/translation/upload_screenshots.py</code></li>
+<li>This will generate chrome\app\chromium_strings_grd\IDS_NO_NETWORK_PRESENT_ERROR.png.sha1
+and chrome\app\google_chrome_strings_grd\IDS_NO_NETWORK_PRESENT_ERROR.png.sha1.</li>
+<li>Add these <code>.sha1</code> files to your CL. Do not add the actual <code>.png</code> images to
+your CL.</li>
+<li>Once the images are successfully uploaded via <code>upload_screenshots.py</code>, delete
+them from your local enlistment.</li>
+</ul>
+<p>However, if <code>upload_screenshots.py</code> encounters the following error, then the
+screenshots have to be manually uploaded to
+<a href="https://storage.cloud.google.com/chromium-translation-screenshots/">https://storage.cloud.google.com/chromium-translation-screenshots/</a>.</p>
+<pre>ServiceException: 401 Anonymous caller does not have storage.objects.list
+access to the Google Cloud Storage bucket. Permission 'storage.objects.list'
+denied on resource (or it may not exist).</pre>
+<p>To manually upload each screenshot:</p>
+<ul>
+<li>Get the <code>sha1</code> generated from the tool. So for example, for
+chrome/app/chromium_strings_grd/IDS_UNKNOWN_APPLICATION.png, the <code>sha1</code> is
+<code>085c88707d854787e0c1310d93b519e93d906592</code>.</li>
+<li>Rename the <code>.png</code> file to the <code>sha1</code> hash name. So for example, rename
+<code>chrome/app/chromium_strings_grd/IDS_UNKNOWN_APPLICATION.png</code> to
+<code>chrome/app/chromium_strings_grd/085c88707d854787e0c1310d93b519e93d906592</code>.</li>
+<li>upload
+<code>chrome/app/chromium_strings_grd/085c88707d854787e0c1310d93b519e93d906592</code> to
+<a href="https://storage.cloud.google.com/chromium-translation-screenshots/">https://storage.cloud.google.com/chromium-translation-screenshots/</a>.</li>
+<li>Edit the <code>content-type</code> from <code>application/octet-stream</code> to <code>image/png</code>.</li>
+</ul>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="build-errors">Build errors</h3>
+<ul>
+<li><strong>Maybe it&#39;s not you.</strong> If you pulled from <code>origin/main</code> since your last
+successful build, or have never successfully built on your current branch,
+and the build errors you&#39;re seeing aren&#39;t obviously related to any changes
+you&#39;ve made,
+<a href="https://chromium-status.appspot.com/status_viewer">check the tree status</a>.
+Did you pull down a broken version? If so, and the revert is in, pull again
+and see if it works better. Or skip checking the tree status and just try
+this as your first debugging step for build breaks after a pull.</li>
+<li><strong>Dependencies are a fast-moving target.</strong> Remember to run <code>gclient sync -D</code>
+after every pull from <code>origin/main</code> <em>and</em> every branch change. If you aren&#39;t
+sure whether you ran it, just run it, it&#39;s fast if you don&#39;t need it.</li>
+<li><strong>Symbols too big?</strong> If your build is failing during linking, check your
+<code>gn args</code> to verify that <code>symbol_level=1</code> (or <code>0</code>) is present. If it&#39;s not,
+you&#39;re running into a known issue where the default symbol level, <code>2</code>,
+outputs symbols too large for the linker to comprehend.</li>
+</ul>
+<h3 id="interpreting-numeric-exit-codes-and-error-codes">Interpreting numeric exit codes and error codes</h3>
+<ul>
+<li>Chrome installer exit codes: early in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/installer/util/util_constants.h">chrome/installer/util/util_constants.h</a></li>
+<li>Updater installer and update service errors: as of 2025-08-15, they start at
+line 327 of
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/updater/constants.h">chrome/updater/constants.h</a></li>
+<li>Update client errors:
+<a href="https://chromium.googlesource.com/chromium/src/+/main/components/update_client/update_client_errors.h">components/update_client/update_client_errors.h</a></li>
+<li>Response codes reported from the network fetcher are standard HTTP
+response codes.</li>
+<li>Update service state and result codes in general:
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/updater/mojom/updater_service.mojom">chrome/updater/mojom/updater_service.mojom</a>
+which are intended to stay in sync with the equivalent enumerations in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/updater/update_service.h">chrome/updater/update_service.h</a></li>
+<li>Chromium Mini-Installer exit codes:
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/installer/mini_installer/exit_code.h">chrome/installer/mini_installer/exit_code.h</a></li>
+<li>LZMA unpacker error codes:
+<a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/installer/util/lzma_util.h">chrome/installer/util/lzma_util.h</a></li>
+</ul>
+<h2 id="how-to-manually-test-the-windows-recovery-component-end-to-end">How to manually test the Windows recovery component end-to-end</h2>
+<ul>
+<li>Modify <code>generate_policy_source.py</code> as per <a href="https://crrev.com/c/7817997">https://crrev.com/c/7817997</a> to
+ignore <code>supported_on</code> constraints, allowing all policies to be supported
+regardless of the version specified in <code>chrome/VERSION</code>. This enables
+building a <code>mini_installer</code> with a customized lower version (like 141)
+without running into compilation errors caused by missing generated policy
+keys.</li>
+<li>Change the <code>MAJOR</code> version in <code>chrome/VERSION</code> to a lower version, say <code>141</code>.</li>
+</ul>
+<p>To test the recovery component end-to-end:</p>
+<ol>
+<li>Build the <code>mini_installer</code> with <code>is_chrome_branded=true</code>.</li>
+<li>Run <code>mini_installer.exe --system-level</code> on a clean test machine or Windows
+Sandbox. Wait a while for Chrome to be installed.</li>
+<li>Open Chrome and navigate to <code>chrome://components</code>.</li>
+<li>Find <code>Chrome Improved Recovery</code> and click <code>Check for update</code>.</li>
+<li>Verify that <code>ChromeRecovery.exe</code> runs as expected by checking the log at
+<code>C:\Program Files (x86)\Google\GoogleUpdater\updater.log</code>.</li>
+</ol>
+<p>Step <code>2</code> above installs Chrome Stable. To test other flavors, do the following
+instead:</p>
+<ul>
+<li><strong>Beta</strong>:<pre data-language="cmd">mini_installer.exe --system-level --chrome-beta</pre>
+</li>
+<li><strong>Dev</strong>:<pre data-language="cmd">mini_installer.exe --system-level --chrome-dev</pre>
+</li>
+<li><strong>Canary (Side-by-Side)</strong>:<pre data-language="cmd">mini_installer.exe --system-level --chrome-sxs</pre>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/updater/dev_manual.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/updater/dev_manual.md</a>
+  </p>
+</div>

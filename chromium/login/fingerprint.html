@@ -1,0 +1,33 @@
+<h1>Fingerprint Enrollment</h1>
+<p>Fingerprint scanners are an easy way for users to authenticate to their devices.
+As per current policy, up to 3 fingerprints can be enrolled per user per device.
+On devices that have fingerprint sensors, users can enroll their fingerprints:</p>
+<ol>
+<li>during the user login OOBE in the Fingerprint Enrollment screen</li>
+<li>in lock screen settings page (chrome://settings/lockScreen).</li>
+</ol>
+<p>The OOBE Fingerprint Enrollment screen is shown in the middle of OOBE flow and
+can be skipped. It prompts the user to enroll a fingerprint up to 3 times and
+shows progress during enrollment.</p>
+<p>The lock screen settings page is hidden behind a password prompt that creates
+an authentication token. This auth token is needed to successfully enroll
+fingerprints. Enrollment can only be started if the user has less than 3
+fingerprints enrolled.</p>
+<p>While fingerprint setup depends on biod system dbus service, Chromium implements
+a fake dbus client (<code>FakeBiodClient</code>) that fakes interactions with the biod
+dbus service. Tests can use <code>FakeBiodClient</code> to create an enrollment session and
+simulate fingerprint enrollment scan progress.</p>
+<p>Fingerprint unlock policy is dependent on device policy and hardware specs.
+Fingerprint can be manually enabled for testing using ash::quick_unlock::TestApi
+to force enable fingerprint features.</p>
+<p>Fingerprint unlock is not considered strong authentication. This means that,
+under certain policies, fingerprint cannot be the only method of authentication
+used over an extended period of time. After a designated amount of time, the
+user&#39;s is notified that a password must be used to login which will mark strong
+auth and re-enable fingerprint unlock.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/login/fingerprint.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/login/fingerprint.md</a>
+  </p>
+</div>

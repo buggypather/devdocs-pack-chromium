@@ -1,0 +1,118 @@
+<h1>About Mac Hotkeys and Virtual Keycodes</h1>
+<p>This doc is useful if you need to:</p>
+<ul>
+<li>Examine the definition of hotkeys or add new ones</li>
+<li>Determine why a certain hotkey press on a given keyboard layout maps to a particular command</li>
+<li>Generally understand the flow from hotkey press to execution<br>
+<br></li>
+</ul>
+<h2 id="hotkey-definitions">Hotkey Definitions</h2>
+<p>Many Mac apps define hotkeys in nib files. We configure them in code.
+<br></p>
+<h3 id="menu-hotkeys"><strong>Menu Hotkeys</strong></h3>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/cocoa/accelerators_cocoa.mm?q=acceleratorscocoa">AcceleratorsCocoa</a> sets up the mapping of Chrome commands to hotkeys</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/cocoa/main_menu_builder.mm?q=file:main_menu_builder%20AcceleratorsCocoa%5C:%5C:GetInstance&amp;ss=chromium%2Fchromium%2Fsrc">MainMenuBuilder</a> consults AcceleratorsCocoa as it assigns hotkeys to menu items</li>
+</ul>
+<h3 id="hidden-hotkeys"><strong>Hidden Hotkeys</strong></h3>
+<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/global_keyboard_shortcuts_mac.mm?q=%5C:%5C%20GetMenuItemsNotPresentInMainMenu%5C(%5C)%20&amp;ss=chromium%2Fchromium%2Fsrc">global_keyboard_shortcuts_mac.mm</a> sets up hotkeys that aren&#39;t associated with any menu item, such as ⌘1 which selects the current browser window&#39;s first tab</li>
+</ul>
+<h3 id="system-hotkeys"><strong>System Hotkeys</strong></h3>
+<ul>
+<li>System Hotkeys (AKA Apple Symbolic Hotkeys) are things like &quot;Mission Control&quot; (^↑) which appear in the Shortcuts sheet in the Desktop and Dock pane in System Settings</li>
+<li>The <a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/cocoa/system_hotkey_helper_mac.h?q=file:system_hotkey_helper_mac.h%20GetSystemHotkeyMap&amp;ss=chromium%2Fchromium%2Fsrc">SystemHotkeyMap</a> maintains a table of the user&#39;s system-reserved hotkeys</li>
+<li>We call SystemHotkeyMap::IsHotkeyReserved() to quickly check if an incoming hotkey is a system hotkey (and ignore it if so)</li>
+<li>See <a href="https://web.archive.org/web/20141112224103/http://hintsforums.macworld.com/showthread.php?t=114785">Documenting com.apple.symbolichotkeys.plist</a> for more information on the different system hotkeys and how they&#39;re stored<br><br></li>
+</ul>
+<h2 id="hotkey-execution">Hotkey Execution</h2>
+<p>Hotkeys populate Chrome&#39;s menus but we don&#39;t use the normal AppKit machinery to trigger their commands. Websites can override most hotkeys, which means we want to sometimes defer first to the renderer before falling back on a command in the menus.
+<br>
+<br></p>
+<p><a href="https://source.chromium.org/search?q=file:chrome_command_dispatcher_delegate.mm%20%5E.*prePerformKeyEquivalent%5C:.*"><code>- [ChromeCommandDispatcherDelegate prePerformKeyEquivalent:window:]</code></a></p>
+<ul>
+<li>Starts hotkey processing</li>
+<li>Executes commands for hotkeys that can&#39;t be overridden such as File-&gt;New and Chrome-&gt;Quit as well as hotkeys registered by extensions</li>
+<li>Passes unconsumed hotkeys to the RenderWidgetHostViewCocoa<br>
+<br></li>
+</ul>
+<p><a href="https://source.chromium.org/search?q=file:render_widget_host_view_cocoa.mm%20%5E.*performKeyEquivalent%5C:.*%5C%7B"><code>- [RenderWidgetHostViewCocoa performKeyEquivalent:]</code></a></p>
+<ul>
+<li>Receives hotkeys for processing in RenderWidgetHostViewCocoa</li>
+<li>Returns <code>NO</code> for any system-reserved hotkeys per the SystemHotkeyMap</li>
+<li>Sends the rest to <code>-keyEvent:wasKeyEquivalent:</code><br>
+<br></li>
+</ul>
+<p><a href="https://source.chromium.org/search?q=file:render_widget_host_view_cocoa.mm%20%5E.*keyEvent%5C:.*%5CwasKeyEquivalent%5C:.*%7B"><code>- [RenderWidgetHostViewCocoa keyEvent:wasKeyEquivalent:]</code></a></p>
+<ul>
+<li>Forwards incoming hotkeys to the renderer via <code>_hostHelper-&gt;ForwardKeyboardEventWithCommands()</code>, which gives the website a chance to consume them</li>
+<li>Tells Cocoa the hotkey was consumed even though it doesn&#39;t know for sure (renderer hotkey processing is asynchronous)<br>
+<br></li>
+</ul>
+<p><a href="https://source.chromium.org/search?q=file:command_dispatcher.mm%20%5E.*redispatchKeyEvent%5C:.*%5C%7B"><code>- [CommandDispatcher redispatchKeyEvent:]</code></a></p>
+<ul>
+<li>Receives hotkeys that weren&#39;t consumed by the renderer</li>
+<li>Redispatches hotkeys to the ChromeCommandDispatcherDelegate for final processing<br>
+<br></li>
+</ul>
+<p><a href="https://source.chromium.org/search?q=file:chrome_command_dispatcher_delegate.mm%20%5E%5B%5E%5C%2F%5D*postPerformKeyEquivalent%5C:.*"><code>- [ChromeCommandDispatcherDelegate postPerformKeyEquivalent:window:isRedispatch:]</code></a></p>
+<ul>
+<li>Calls <code>CommandForKeyEvent()</code> to locate the NSMenuItem with the corresponding hotkey and executes its command<br>
+<br></li>
+</ul>
+<p><a href="https://source.chromium.org/search?q=file:global_keyboard_shortcuts_mac.mm%20%5ECommandForKeyEventResult%5C%20CommandForKeyEvent%5C(.*%5C)%5Cs*%5C%7B"><code>CommandForKeyEvent()</code></a></p>
+<ul>
+<li>Calls <code>cr_firesForKeyEquivalentEvent:</code> on each menu item until it finds one with the same hotkey</li>
+<li>For hidden hotkeys (i.e. not associated with a menu item), this function calls <code>cr_firesForKeyEquivalentEvent:</code> on a set of invisible NSMenuItems that have been assigned the hidden hotkeys<br>
+<br></li>
+</ul>
+<p><a href="https://source.chromium.org/search?q=file:nsmenuitem_additions.mm%20%5E.*cr_firesForKeyEquivalentEvent%5C:.*%5C%7B"><code>- [NSMenuItem cr_firesForKeyEquivalentEvent:]</code></a></p>
+<ul>
+<li>Returns <code>YES</code> if the menu item&#39;s hotkey matches the event&#39;s</li>
+<li>For non-US keyboard layouts, uses the event&#39;s <code>characters</code>, <code>charactersIgnoringModifiers</code>, and virtual <code>keyCode</code> to decide if they match<ul>
+<li>For example, if the incoming event&#39;s keycode is for a number key (<code>kVK_ANSI_1</code> through <code>kVK_ANSI_0</code>), this method matches the event to the hotkeys that select a window tab (⌘1, etc.), regardless of the actual <code>characters</code> or <code>charactersIgnoringModifiers</code> in the event<br>
+<br></li>
+</ul>
+</li>
+</ul>
+<h2 id="about-virtual-keycodes">About Virtual Keycodes</h2>
+<ul>
+<li>Virtual keycodes identify physical keys on a keyboard, providing a hardware- and language-independent way of specifying keyboard keys<ul>
+<li>For example, <code>kVK_Return</code> is the virtual keycode for the last key in the fourth row from the top in the US keyboard layout</li>
+<li>See <a href="https://web.archive.org/web/20221028180946/https://github.com/phracker/MacOSX-SDKs/blob/master/MacOSX10.6.sdk/System/Library/Frameworks/Carbon.framework/Versions/A/Frameworks/HIToolbox.framework/Versions/A/Headers/Events.h">HIToolbox.framework/Events.h</a> for kVK_* definitions</li>
+<li>See <a href="https://web.archive.org/web/20220925114939/https://eastmanreference.com/complete-list-of-applescript-key-codes">Complete list of AppleScript key codes</a> for a visual mapping of keycodes</li>
+<li>See <a href="https://web.archive.org/web/20221028180852/https://stackoverflow.com/questions/5253972/converting-cgkeycodes-for-international-keyboards">Converting CGKeyCodes for International Keyboards</a> for a discussion of the meaning of virtual keycodes</li>
+</ul>
+</li>
+<li>Keycodes with &quot;ANSI&quot; in the name correspond to key positions on an ANSI-standard US keyboard<ul>
+<li>For example, <code>kVK_ANSI_A</code> is the virtual keycode for the key next to &#39;Caps Lock&#39; in the US keyboard layout</li>
+</ul>
+</li>
+<li>A key&#39;s virtual keycode does not change when a modifier key is pressed but the character it generates might</li>
+<li>Chrome uses Windows VKEY virtual keycodes, which differ from the Mac&#39;s keycodes, throughout its platform-independent code<ul>
+<li>Functions like <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/keyboard_code_conversion_mac.mm?q=KeyboardCode%5C%20KeyboardCodeFromKeyCode%5C%28%20file:keyboard_code_conversion_mac.mm&amp;ss=chromium%2Fchromium%2Fsrc"><code>KeyboardCodeFromKeyCode()</code></a> and <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/events/keycodes/keyboard_code_conversion_mac.mm?q=MacKeyCodeForWindowsKeyCode%5C%28%20file:keyboard_code_conversion_mac.mm&amp;ss=chromium%2Fchromium%2Fsrc"><code>MacKeyCodeForWindowsKeyCode()</code></a> translate between the two worlds</li>
+</ul>
+</li>
+<li>&quot;Located&quot; keyboard codes identify specific keys with the same meaning<ul>
+<li>For example, <code>VKEY_LSHIFT</code> and <code>VKEY_RSHIFT</code> are &#39;located&#39; keyboard codes while <code>VKEY_SHIFT</code> is their non-located representation</li>
+<li>Similar mappings exist for the Option, Control, and numeric keypad keys<br>
+<br></li>
+</ul>
+</li>
+</ul>
+<h2 id="sample-bugs">Sample Bugs</h2>
+<p>When debugging new hotkey / keycode issues, the following fixed bugs may help suggest a place to start.</p>
+<h3 id="for-rtl-tabstrips-switching-tabs-with--and--behaves-opposite-to-expectations-crbugcom672876"><strong>For RTL tabstrips, switching tabs with ⌘[ and ⌘] behaves opposite to expectations</strong> (<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=672876">crbug.com/672876</a>)</h3>
+<p>The default hotkey assignments for ⌘[ and ⌘], which select the &quot;next&quot; and &quot;previous&quot; tabs, respectively, needed to be swapped for RTL users. These hotkey definitions live in <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/cocoa/accelerators_cocoa.mm?q=acceleratorscocoa">AcceleratorsCocoa()</a>, which sets up the mapping of Chrome commands to hotkeys. After checking for RTL, the code exchanged the hotkey assignments.</p>
+<h3 id="chrome-instantly-quits-on-command-q-despite-warn-before-quitting-in-non-us-keyboard-layout-crbugcom142944"><strong>Chrome instantly quits on Command-Q despite &#39;Warn Before Quitting&#39; in non-US keyboard layout</strong> (<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=142944">crbug.com/142944</a>)</h3>
+<p>In many non-US keyboard mappings, <code>[hotkeyEvent charactersIgnoringModifiers]</code> returns a non-ASCII character while <code>[hotkeyEvent characters]</code> returns an ASCII character. In these situations, as a quick hack we use the ASCII character string to determine which hotkey the user is triggering. Some keys in some non-US keyboard mappings, however, return ASCII for both -characters and -charactersIgnoringModifiers. This is the case for the <code>kVK_ANSI_Q</code> key in the Hebrew layout. As a result, pressing ⌘Q in the layout resulted in a ⌘\ hotkey event. No code looks for ⌘, and the original event filtered down to a layer that processed the ⌘Q correctly, but without the &quot;Warn Before Quitting&quot; check.</p>
+<p>The solution was to check for this special &quot;Q&quot; / &quot;&quot; combination in <code>[NSMenuItem(ChromeAdditions) cr_firesForKeyEquivalentEvent:]</code> and interpret the event as ⌘Q.</p>
+<h3 id="some-shortcut-keys-do-not-work-on-dvorak-right-handed-keyboard-crbugcom1358823"><strong>Some Shortcut keys do not work on Dvorak-Right-Handed Keyboard</strong> (<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1358823">crbug.com/1358823</a>)</h3>
+<p>Chrome Mac interprets ⌘<code>kVK_ANSI_1</code> through ⌘<code>kVK_ANSI_0</code> as a tab switch hotkey. However, certain flavors of Dvorak don&#39;t generate numbers from the numbered ANSI keys. For example, <code>kVK_ANSI_8</code> generates a &quot;p&quot;, so ⌘<code>kVK_ANSI_8</code> should be interpreted as ⌘P (Print) but instead switched the browser to the eighth tab.</p>
+<p>The solution was to add an exception for the Dvorak keyboards in <code>[NSMenuItem(ChromeAdditions) cr_firesForKeyEquivalentEvent:]</code>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mac/about_hotkeys_and_keycodes.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mac/about_hotkeys_and_keycodes.md</a>
+  </p>
+</div>

@@ -1,0 +1,54 @@
+<h1>Linux sysroot images</h1>
+<p>The chromium build system for Linux will (by default) use a sysroot image
+rather than building against the libraries installed on the host system.
+This serves several purposes.  Firstly, it ensures that binaries will run on all
+supported linux systems independent of the packages installed on the build
+machine.  Secondly, it makes the build more hermetic, preventing issues that
+arise for variations among developers&#39; systems.</p>
+<p>The sysroot consists of a minimal installation of Debian/stable (or old-stable)
+to ensure maximum compatibility.  Pre-built sysroot images are stored in
+Google Cloud Storage and downloaded during <code>gclient runhooks</code></p>
+<h2 id="installing-the-sysroot-images">Installing the sysroot images</h2>
+<p>Installation of the sysroot is performed by
+<code>build/linux/sysroot_scripts/install-sysroot.py</code>.</p>
+<p>This script can be run manually but is normally run as part of gclient
+hooks. When run from hooks this script in a no-op on non-linux platforms.</p>
+<h2 id="rebuilding-the-sysroot-image">Rebuilding the sysroot image</h2>
+<p>The pre-built sysroot images occasionally needs to be rebuilt.  For example,
+when security updates to Debian are released, or when a new package is needed by
+the chromium build.  If you just want to update the sysroots without adding any
+new packages, skip to <code>Using build_and_upload.py</code>.</p>
+<h3 id="adding-new-packages">Adding new packages</h3>
+<p>To add a new package, edit the <code>sysroot_creator.py</code> script and modify the
+<code>DEBIAN_PACKAGES</code> list.</p>
+<h3 id="rebuilding">Rebuilding</h3>
+<p>To rebuild the images (without any changes) run the following command for
+each desired architecture:</p>
+<pre>$ build/linux/sysroot_scripts/sysroot_creator.py build &lt;arch&gt;</pre>
+<p>This command on its own should be a no-op and produce an image identical to
+the one on Google Cloud Storage.</p>
+<h3 id="uploading-new-images">Uploading new images</h3>
+<p>To upload image to Google Cloud Storage run the following command:</p>
+<pre>$ build/linux/sysroot_scripts/sysroot_creator.py upload &lt;arch&gt;</pre>
+<p>Here you should use the SHA1 of the git revision at which the images were
+created.</p>
+<p>Uploading new images to Google Clound Storage requires write permission on the
+<code>chrome-linux-sysroot</code> bucket.</p>
+<h3 id="rolling-the-sysroot-version-used-by-chromium">Rolling the sysroot version used by chromium</h3>
+<p>Once new images have been uploaded, the <code>sysroots.json</code> file needs to be updated
+to reference the new versions.  This process is manual and involves updating the
+<code>Revision</code> and <code>Sha1Sum</code> values in the file.</p>
+<h3 id="using-build-and-uploadpy">Using <code>build-and-upload.py</code></h3>
+<p>The <code>build_and_upload.py</code> script automates the above four steps.  It is
+recommended to use this just before you&#39;re ready to submit your CL, after you&#39;ve
+already tested one of the updated sysroots on your local configuration.  Build
+or upload failures will not produce detailed output, but will list the script
+and arguments that caused the failure.  To debug this, you must run the failing
+command manually.  This script requires Google Cloud Storage write permission on
+the <code>chrome-linux-sysroot</code> bucket.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/sysroot.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/sysroot.md</a>
+  </p>
+</div>

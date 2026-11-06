@@ -1,0 +1,45 @@
+<h1>D-Bus Mojo Connection Service</h1>
+<h2 id="overview">Overview</h2>
+<p>D-Bus Mojo Connection Service in Chrome is a D-Bus service that helps to
+bootstrap CrOS services&#39; Mojo connection.</p>
+<h2 id="bootstrap-a-new-cros-service">Bootstrap a new CrOS service</h2>
+<p>D-Bus Mojo Connection Service lives in <a href="https://chromium.googlesource.com/chromium/src.git/+/main/chrome/browser/ash/dbus/mojo_connection_service_provider.h">//chrome/browser/ash/dbus/mojo_connection_service_provider.h</a>.</p>
+<p>Follow the example of CrOS Sensors&#39; <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2352298">changelist</a>.</p>
+<h3 id="steps-to-add-a-usage-for-a-cros-process-with-a-new-d-bus-method">Steps to Add a usage for a CrOS process with a new D-Bus method:</h3>
+<ol>
+<li>Add a method name in both CrOS platform and Chrome.
+(Recommend: <code>platform2/system_api</code>)</li>
+<li>Add the busconfig policy in <a href="https://chromium.googlesource.com/chromium/src.git/+/main/chrome/browser/ash/dbus/org.chromium.MojoConnectionService.conf">MojoConnectionService.conf</a>.</li>
+<li>Upon a D-Bus request coming from the CrOS service, pass one endpoint of the
+generated Mojo pipe to the component in Chrome that needs a Mojo channel to
+the CrOS service. Ex: <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2352298/16/chrome/browser/ash/dbus/mojo_connection_service_provider.cc#74">RegisterServer</a> in CrOS Sensors&#39; usage.</li>
+<li>Respond to the D-Bus request with the other endpoint of the generated Mojo
+pipe. (Recommend: use the helper function <a href="https://chromium-review.googlesource.com/c/chromium/src/+/2352298/16/chrome/browser/ash/dbus/mojo_connection_service_provider.h#75">SendResponse</a>)</li>
+</ol>
+<p>The Mojo pipe can also be generated in the CrOS process, and pass the endpoint
+of it as the D-Bus argument to the service provider, instead of allowing Chrome
+to generate the pipe.</p>
+<h3 id="steps-to-add-a-usage-for-a-cros-process-with-an-existing-d-bus-method">Steps to Add a usage for a CrOS process with an existing D-Bus method:</h3>
+<ol>
+<li>Add the busconfig policy in <a href="https://chromium.googlesource.com/chromium/src.git/+/main/chrome/browser/ash/dbus/org.chromium.MojoConnectionService.conf">MojoConnectionService.conf</a>.</li>
+</ol>
+<p>And that’s it. The method name and the logic in the service provider can be
+reused.</p>
+<h2 id="security">Security</h2>
+<p>UID filtering should be used to ensure only the needed processes are calling
+the specific D-Bus methods, as processes/applications calling D-Bus APIs are
+trusted (written and reviewed by Chromium/CrOS teams) and should have a
+well-known UID to be filtered.</p>
+<p>UID filtering: Define access permission for each UID in
+<a href="https://chromium.googlesource.com/chromium/src.git/+/main/chrome/browser/ash/dbus/org.chromium.MojoConnectionService.conf">MojoConnectionService.conf</a>. Only the processes run under the specific UIDs can
+send respective D-Bus requests to the service provider.</p>
+<p>Arguments/tokens in D-Bus methods are still available if needed, which should
+be enough for multi-login situations and handling failures. The arguments can
+also be used to determine if Chromium should accept the request, and which Mojo
+interface should be used to establish the Mojo channel.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/dbus_mojo_connection_service.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/dbus_mojo_connection_service.md</a>
+  </p>
+</div>

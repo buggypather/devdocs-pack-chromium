@@ -1,0 +1,38 @@
+<h1>Hacking on ANGLE in Chromium</h1>
+<p>In DEPS, comment out the part that looks like this.</p>
+<pre>#  &quot;src/third_party/angle&quot;:
+#    Var(&quot;chromium_git&quot;) + &quot;/angle/angle.git@&quot; + Var(&quot;angle_revision&quot;),</pre>
+<p>Delete or rename third_party/angle.</p>
+<p>(Optional) sync and make sure the third_party/angle directory doesn&#39;t come
+back. It shouldn’t because it is no longer referenced from DEPS.</p>
+<pre data-language="shell">gclient sync -r CURRENT_REVISION</pre>
+<p>Clone the ANGLE git repository.</p>
+<pre>&gt; git clone https://chromium.googlesource.com/angle/angle third_party/angle
+&gt; gclient runhooks</pre>
+<p>To check ANGLE builds without building all of Chromium.</p>
+<pre data-language="shell">ninja -C out\Release libEGL.dll</pre>
+<p>Change files then commit locally.</p>
+<p>Upload to Gerrit for review. You will need to have installed the git hook as
+described in the &quot;Getting started with Gerrit for ANGLE&quot; section of the
+ContributingCode doc before committing them locally.</p>
+<pre data-language="shell">git cl upload</pre>
+<p>As with subversion and Rietveld: visit the upload link for the review site,
+check the diff and the commit message then add reviewer(s) and publish.</p>
+<p>Land your changes to the upstream repository from the Gerrit web interface.</p>
+<p>If there are upstream changes, you may need to rebase your patches and reupload
+them.</p>
+<pre data-language="shell">git pull
+git cl upload</pre>
+<h1 id="rolling-angle-into-chrome">Rolling ANGLE into Chrome</h1>
+<p>To roll DEPS, make sure this is not commented out and update the hash associated
+with &quot;angle_revision&quot;. (Your hash will be different than the one below.)</p>
+<pre>  &quot;angle_revision&quot;: &quot;0ee126c670edae8dd1822980047450a9a530c032&quot;,</pre>
+<p>Then sync.</p>
+<pre data-language="shell">gclient sync</pre>
+<p>Your changes should now be in third_party/angle.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/angle_in_chromium.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/angle_in_chromium.md</a>
+  </p>
+</div>

@@ -1,0 +1,27 @@
+<h1>Changes related to FCP and document opacity in Chrome 102</h1>
+<h2 id="opacity-changes-and-fcp">Opacity changes and FCP</h2>
+<p>When investigating an 
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1279548">issue</a>, we
+discovered that while FCP is properly ignored when the document is fully opaque
+(e.g. in cases where an A/B anti-flicker snippet is deployed), it does not
+necessarily fire when the document&#39;s opacity changes, unless there are paint
+involved with that opacity change. One particular case where paints are elided
+is when a <code>will-change: opacity</code> style is applied to the document.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>If your site is using an A/B testing framework that employs
+<a href="https://andydavies.me/blog/2020/11/16/the-case-against-anti-flicker-snippets/">full-document opacity snippets</a>,
+then this issue may have affected your site&#39;s FCP metrics.</p>
+<p>The issue results in an FCP entry that indicated the time of the next
+contentful paint after the opacity change,  which could be significantly after
+the actual FCP. Potentially, there could also be cases where FCP wasn&#39;t
+reported at all.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>This seems to have been a long standing issue, most likely introduced when we
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2316788">started ignoring paints with opacity 0</a>
+in Chrome 86.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2022_04_fcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2022_04_fcp.md</a>
+  </p>
+</div>

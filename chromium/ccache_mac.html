@@ -1,0 +1,31 @@
+<h1>Using CCache on Mac</h1>
+<p><a href="https://ccache.dev/">ccache</a> is a compiler cache. It speeds up
+recompilation of C/C++ code by caching previous compilations and detecting when
+the same compilation is being done again. This often results in a significant
+speedup in common compilations, especially when switching between branches. This
+page is about using ccache on Mac with clang and the Ninja build system.</p>
+<h2 id="installation">Installation</h2>
+<p>To install ccache with <a href="https://brew.sh/">Homebrew</a>, run <code>brew install ccache</code>.
+With <a href="https://macports.org/">MacPorts</a>, run <code>port install ccache</code>. You can also
+download and install yourself, using the
+<a href="https://github.com/ccache/ccache/blob/master/doc/INSTALL.md">instructions in
+the repository</a>.</p>
+<p>Make sure ccache can be found in your <code>$PATH</code>.</p>
+<h2 id="use-with-gn">Use with GN</h2>
+<p>You just need to set the <code>cc_wrapper</code> GN variable. You can do so by running
+<code>gn args out/Default</code> and adding
+<code>cc_wrapper=&quot;env CCACHE_SLOPPINESS=time_macros ccache&quot;</code> to the build arguments.</p>
+<h2 id="build">Build</h2>
+<p>After setting the <code>cc_wrapper</code> GN variable you can just run ninja as normal:</p>
+<pre data-language="shell">ninja -C out/Default chrome</pre>
+<h2 id="optional-steps">Optional Steps</h2>
+<ul>
+<li>Configure ccache to use a different cache size with <code>ccache -M &lt;max size&gt;</code>.
+You can see a list of configuration options by calling <code>ccache</code> alone.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ccache_mac.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ccache_mac.md</a>
+  </p>
+</div>

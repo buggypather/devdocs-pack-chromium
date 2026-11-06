@@ -1,0 +1,36 @@
+<h1>No sourcesassignmentfilter</h1>
+<p>There is a <a href="https://groups.google.com/a/chromium.org/d/topic/chromium-dev/hyLuCU6g2V4/discussion">strong</a> <a href="https://groups.google.com/a/chromium.org/d/topic/gn-dev/oQcYStl_WkI/discussion">consensus</a> that the set_sources_assignment_filter
+feature from GN is a mis-feature and should be removed. This requires that
+Chromium&#39;s BUILD.gn file stop using the feature.</p>
+<p>Since October 2020, the filter is no longer used.</p>
+<p>Chromium build does not set a default sources assignment filter, and all build
+files must manage <code>sources</code> with explicit <code>if</code> statements.</p>
+<h2 id="explicit-assignment">Explicit assignment</h2>
+<p>If you have a target that have platform specific implementation files, you can
+use the following pattern:</p>
+<pre>  source_set(&quot;foo&quot;) {
+    sources = [
+      &quot;foo.h&quot;,
+    ]
+    if (is_mac) {
+      sources += [
+        &quot;foo_mac.mm&quot;,
+      ]
+    }
+    if (is_win) {
+      sources += [
+        &quot;foo_win.cc&quot;,
+      ]
+    }
+    if (is_linux) {
+      sources += [
+        &quot;foo_linux.cc&quot;,
+      ]
+    }
+  }</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/no_sources_assignment_filter.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/no_sources_assignment_filter.md</a>
+  </p>
+</div>

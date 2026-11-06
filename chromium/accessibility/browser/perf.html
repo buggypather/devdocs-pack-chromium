@@ -1,0 +1,51 @@
+<h1>Accessibility Performance Measurements</h1>
+<p>Accessibility support can have a negative impact on performance, so it is
+important to test for regressions and to improve performance over time. This can
+be done with Chromium&#39;s performance testing framework,
+<a href="https://chromium.googlesource.com/catapult/+/HEAD/telemetry/README.md">Telemetry</a>.</p>
+<p>The metrics for accessibility are defined in
+<a href="https://cs.chromium.org/chromium/src/third_party/catapult/tracing/tracing/metrics/accessibility_metric.html">third_party/catapult/tracing/tracing/metrics/accessibility_metric.html</a>.</p>
+<h2 id="stories">Stories</h2>
+<p>A story is a url to load and actions to take on that page.</p>
+<p>Accessibility stories are defined in
+<a href="https://cs.chromium.org/chromium/src/tools/perf/page_sets/system_health/accessibility_stories.py">tools/perf/page_sets/system_health/accessibility_stories.py</a>.
+If a particular web page seems slow, you may add a new story here to track its
+performance.</p>
+<h3 id="running-stories-from-the-command-line">Running stories from the command line</h3>
+<p>To run all accessibility stories locally using the currently installed Canary
+browser:</p>
+<pre data-language="shell">tools/perf/run_benchmark system_health.common_desktop \
+  --story-filter=&quot;accessibility.*&quot; \
+  --browser canary</pre>
+<p>To run the same set of tests on your own compiled version of Chrome:</p>
+<pre data-language="shell">tools/perf/run_benchmark system_health.common_desktop \
+  --story-filter=&quot;accessibility.*&quot; \
+  --browser=exact \
+  --browser-executable=out/Release/chrome</pre>
+<p>For more information, see the
+<a href="https://chromium.googlesource.com/catapult/+/refs/heads/main/telemetry/docs/run_benchmarks_locally.md">Telemetry documentation</a>
+or command-line help for tools/perf/run_benchmark.</p>
+<h3 id="capture-web-page-replay-for-new-or-modified-stories">Capture web page replay for new or modified stories</h3>
+<p>You should capture web page replay information whenever you add or modify a
+story. To do so, see <a href="https://github.com/chromium/chromium/blob/HEAD/tools/perf/recording_benchmarks.md">here</a>.</p>
+<h2 id="blink-perf">Blink Perf</h2>
+<p>Blink perf tests are microbenchmarks that track the performance of a small
+function or operation in isolation. You can find these tests in
+<a href="https://cs.chromium.org/chromium/src/third_party/blink/perf_tests/accessibility/">third_party/blink/perf_tests/accessibility/</a>.</p>
+<p>To run these tests locally on your own compiled Chrome:</p>
+<pre data-language="shell">tools/perf/run_benchmark blink_perf.accessibility \
+  --browser=exact \
+  --browser-executable=out/Release/chrome</pre>
+<h2 id="results">Results</h2>
+<p>The results can be found at
+<a href="https://perf.luci.app/">Chrome Performance Dashboard</a>.</p>
+<h2 id="google-internal-info">Google-internal Info</h2>
+<p>More information on analytics and performance, including some additional
+Google-internal resources, can be found at
+<a href="http://go/chrome-a11y/resources/analytics-performance">go/chrome-a11y/resources/analytics-performance</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/perf.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/perf.md</a>
+  </p>
+</div>

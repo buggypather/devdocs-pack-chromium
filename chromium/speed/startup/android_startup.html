@@ -1,0 +1,64 @@
+<h1>Android Start-up Performance</h1>
+<h2 id="stages-of-start-up">Stages of Start-up</h2>
+<p>Every Android component (activities, broadcast receivers, etc) can be a
+start-up entry point for Chrome. The main start-up scenarios we optimize for
+are:</p>
+<ul>
+<li>Launching from the home screen</li>
+<li>Handling a View intent</li>
+<li>Showing a Chrome Custom Tab</li>
+</ul>
+<p>For a home screen launch, we consider start-up to be complete once the
+Activity is rendered. For the latter two, we care both about:</p>
+<ul>
+<li>The first <a href="https://developer.chrome.com/docs/extensions/reference/webNavigation/#event-onCommitted">Navigation Commit</a> in the app lifetime</li>
+<li>The initial <a href="https://web.dev/fcp/">First Contentful Paint</a></li>
+</ul>
+<h2 id="uma">UMA</h2>
+<p>Here are some UMA metrics that measure start-up (UMA&#39;s UI has descriptions):</p>
+<ul>
+<li><code>Startup.Android.Cold.TimeToFirstVisibleContent4</code></li>
+<li><code>Startup.Android.Cold.TimeToFirstNavigationCommit3.Tabbed</code></li>
+<li><code>Browser.PaintPreview.TabbedPlayer.TimeToFirstBitmap</code></li>
+<li><code>Startup.Android.Cold.TimeToFirstContentfulPaint3.Tabbed</code></li>
+</ul>
+<p>This one can be useful for measuring dex optimization changes:</p>
+<ul>
+<li><code>Startup.LoadTime.ProcessCreateToApplicationStart</code></li>
+</ul>
+<p>For Googlers, there&#39;s more background in <a href="https://docs.google.com/document/d/1ahGc_uIRk76znPGg3KopOteRLmLLo4-sfXdq4Kt4Jwk/edit#heading=h.zgb0nx9k2mr0">this doc</a>.</p>
+<h2 id="chromeperf">ChromePerf</h2>
+<p>Here are some <a href="https://chromeperf.appspot.com/report?sid=06a1fe93dd4da84479b7ee8987ed6a7668c7cef3cdf2ba1d9e3234d31c773cf8">chromeperf metrics</a> that measure start-up in a lab
+environment:</p>
+<ul>
+<li><code>ChromiumPerf/android-pixel4-perf/startup.mobile / messageloop_start_time</code></li>
+<li><code>ChromiumPerf/android-pixel4-perf/startup.mobile / navigation_commit_time</code></li>
+<li><code>ChromiumPerf/android-pixel4-perf/startup.mobile / first_contentful_paint_time</code></li>
+</ul>
+<h2 id="pinpoint">Pinpoint</h2>
+<p>When using <a href="https://pinpoint-dot-chromeperf.appspot.com/">Pinpoint</a> to test start-up changes, make sure to:</p>
+<ul>
+<li>Use bundles rather than APKs.<ul>
+<li><code>--browser=android-chrome-bundle</code></li>
+</ul>
+</li>
+<li>Compile DEX: <code>--compile-apk=speed</code></li>
+</ul>
+<p>Some start-up changes can improve start-up for high-end devices but degrade
+it for low-end ones (or vice versa). It is important to test both.</p>
+<p>For small regressions (e.g. ~1%), it can help to add <code>--pageset-repeat 10</code>
+or <code>--pageset-repeat 20</code> in order to increase the number of samples collected.
+A single repeat produces 8 samples, then Pinpoint normally runs it 10 times
+(total 80). With <code>--pageset-repeat=20</code> the total number of samples is 1600.</p>
+<ul>
+<li>Use <code>android-go-*</code> devices to test low-end.</li>
+<li>Use <code>android-pixel6-*</code> to test high-end. They set
+<code>is_high_end_android=true</code>.</li>
+<li>The full list of bots <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/perf_lab_platforms.md">is here</a>.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/startup/android_startup.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/startup/android_startup.md</a>
+  </p>
+</div>

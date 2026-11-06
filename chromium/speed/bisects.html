@@ -1,0 +1,69 @@
+<h1>Bisecting Performance Regressions</h1>
+<p>The perf tests on chromium&#39;s continuous build are very long-running, so we
+cannot run them on every revision. Further, separate repositories like v8
+and skia sometimes roll multiple performance-sensitive changes into chromium
+at once. For these reasons, we need a tool that can bisect the root cause of
+performance regressions over a CL range, descending into third_party
+repositories as necessary. The name of the service that does this is called
+<a href="https://pinpoint-dot-chromeperf.appspot.com/">Pinpoint</a>.</p>
+<h2 id="starting-a-perf-bisect">Starting a perf bisect</h2>
+<p>Performance bisects are integrated with the
+<a href="https://chromeperf.appspot.com/alerts">Chrome Performance Dashboard</a> and
+<a href="https://bugs.chromium.org/p/chromium/issues/list">monorail</a>. Users kick off
+perf bisects on the perf dashboard and view results in monorail.</p>
+<p>You can kick off perf bisect from performance graphs on the perf dashboard for
+any test that runs on the
+<a href="https://ci.chromium.org/p/chromium/g/chromium.perf/builders">chromium.perf waterfall</a>.</p>
+<h3 id="to-get-to-a-graph-use-one-of-the-following-methods">To get to a graph, use one of the following methods:</h3>
+<ul>
+<li>From a perf sheriff-filed bug, follow the link in #1 that looks like
+<code>https://chromeperf.appspot.com/group_report?bug_id=XXXXXX</code>. Check the
+boxes next to alerts in the table to display graphs.</li>
+<li>From the <a href="https://chromeperf.appspot.com/alerts">alerts page</a>, check the
+box next to an alert and click the <code>Graph</code> button.</li>
+<li>From the <a href="https://chromeperf.appspot.com/report">report page</a>, use the menu
+to navigate to the graph you want.</li>
+</ul>
+<h3 id="to-kick-off-a-bisect-from-the-graph">To kick off a bisect from the graph:</h3>
+<ol>
+<li>Click on a data point in the graph.</li>
+<li>In the tooltip that shows up, click the <code>BISECT</code> button.</li>
+<li>Make sure to enter a Bug ID in the dialog that comes up.</li>
+<li>Click the <code>CREATE</code> button.</li>
+</ol>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/images/bisect_graph.png" alt="Bisecting on a performance graph">
+![The bisect dialog](images/bisect_dialog.png =100)</p>
+<h3 id="what-are-all-the-boxes-in-the-form">What are all the boxes in the form?</h3>
+<ul>
+<li><strong>Bug ID</strong>: The bug number in monorail. It&#39;s very important to fill in
+this field, as this is where bisect results will be posted.</li>
+<li><strong>Start commit</strong>: The chromium commit pos to start bisecting from. This
+is prefilled by the dashboard to the start of the revision range for the
+point you clicked on. You can set it to an earlier commit position to
+bisect a larger range.</li>
+<li><strong>End commit</strong>: The chromium commit pos to bisect to. This is prefilled
+by the dashboard to the end of the revision range for the point you clicked
+on. You can set it to a later commit pos to bisect a larger range.</li>
+<li><strong>Story Filter</strong>: This is a flag specific to
+<a href="https://chromium.googlesource.com/catapult/+/refs/heads/main/telemetry/README.md">telemetry</a>.
+It tells telemetry to only run a specific test case, instead of running all
+the test cases in the suite. This dramatically reduces bisect time for
+large test suites. The dashboard will prefill this box based on the graph
+you clicked on. If you suspect that test cases in the benchmark are not
+independent, you can try bisecting with this box cleared.</li>
+<li><strong>Performance or functional</strong>: use &quot;performance&quot; to bisect on a performance
+metric, or &quot;functional&quot; to bisect on a test failure or flake.</li>
+</ul>
+<h2 id="interpreting-the-results">Interpreting the results</h2>
+<p>The bisect bot will output a comment on the bug when the bisection is complete. See
+<a href="addressing_performance_regressions#Understanding-the-bisect-results">Understanding the Bisect Results</a>
+for details on how to interpret the results.</p>
+<h3 id="traces-and-stdout">Traces and stdout</h3>
+<p>On the Job result page, there is a line chart. Each dot represents a commit. The bisect culprits are represented by flashing dots. Clicking on a dot reveals some colored bars; each box represents one benchmark run. Click on one of the runs to see trace links. Click on the <code>task_id</code> link to see the stdout.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/images/pinpoint-trace-links.png" alt="Trace links"></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/bisects.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/bisects.md</a>
+  </p>
+</div>

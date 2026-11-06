@@ -1,0 +1,236 @@
+<h1>Test Descriptions</h1>
+<p>See <a href="https://sites.google.com/a/chromium.org/dev/developers/testing">Testing and infrastructure</a> for more information.</p>
+<table>
+<thead>
+<tr>
+<th align="left">Type of test</th>
+<th align="left">Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">accessibility_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">angle_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">app_list_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">ash_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">aura_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">base_i18n_perftests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">base_perftests</td>
+<td align="left">Performance tests for base module.</td>
+</tr>
+<tr>
+<td align="left">base_unittests</td>
+<td align="left">Tests the base module.</td>
+</tr>
+<tr>
+<td align="left">blink_heap_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">blink_platform_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">breakpad_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left"><a href="https://sites.google.com/a/chromium.org/dev/developers/testing/browser-tests">browser_tests</a></td>
+<td align="left">Tests the browser UI. Can not inject user input or depend on focus/activation behavior because it can be run in parallel processes and/or with a locked screen, headless etc. For tests sensitive to that, use interactive_ui_tests. For example, when tests need to navigate to chrome://hang (see chrome/browser/ui/webui/ntp/new_tab_ui_uitest.cc)</td>
+</tr>
+<tr>
+<td align="left">chromedriver_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">content_browsertests</td>
+<td align="left">Similar to browser_tests, but with a minimal shell contained entirely within content/. This test, as well as the entire content module, has no dependencies on chrome/.</td>
+</tr>
+<tr>
+<td align="left">content_gl_tests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">content_perftests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">content_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">courgette_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">crypto_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">curvecp_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">device_unittests</td>
+<td align="left">Tests for the device (Bluetooth, HID, USB, etc.) APIs.</td>
+</tr>
+<tr>
+<td align="left">ffmpeg_tests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">ffmpeg_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">gfx_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">gpu_tests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">interactive_ui_tests</td>
+<td align="left">Like browser_tests, but these tests do things like changing window focus, so that the machine running the test can&#39;t be used while the test is running. May include browsertests (derived from InProcessBrowserTest) to run in-process in case when the test is sensitive to focus transitions or injects user input/mouse events.</td>
+</tr>
+<tr>
+<td align="left">ipc_tests</td>
+<td align="left">Tests the IPC subsystem for communication between browser, renderer, and plugin processes.</td>
+</tr>
+<tr>
+<td align="left">jingle_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">media_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">memory_test</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">net_perftests</td>
+<td align="left">Performance tests for the disk cache and cookie storage.</td>
+</tr>
+<tr>
+<td align="left">net_unittests</td>
+<td align="left">Unit tests network stack.</td>
+</tr>
+<tr>
+<td align="left"><a href="https://sites.google.com/a/chromium.org/dev/developers/testing/page-cyclers">page_cycler_tests</a></td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">performance_ui_tests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">plugin_tests</td>
+<td align="left">Tests the plugin subsystem.</td>
+</tr>
+<tr>
+<td align="left">ppapi_unittests</td>
+<td align="left">Tests to verify Chromium recovery after hanging or crashing of renderers.</td>
+</tr>
+<tr>
+<td align="left">printing_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">reliability_tests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">safe_browsing_tests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">sql_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">startup_tests</td>
+<td align="left">Test startup performance of Chromium.</td>
+</tr>
+<tr>
+<td align="left">sync_integration_tests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">sync_unit_tests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">tab_switching_test</td>
+<td align="left">Test tab switching functionality.</td>
+</tr>
+<tr>
+<td align="left">telemetry_unittests</td>
+<td align="left">Tests for the core functionality of the Telemetry performance testing framework. Not performance-sensitive.</td>
+</tr>
+<tr>
+<td align="left">telemetry_perf_unittests</td>
+<td align="left">Smoke tests to catch errors running performance tests before they run on the chromium.perf waterfall. Not performance-sensitive.</td>
+</tr>
+<tr>
+<td align="left">test_shell_tests</td>
+<td align="left">A collection of tests within the Test Shell.</td>
+</tr>
+<tr>
+<td align="left"><a href="https://sites.google.com/a/chromium.org/dev/developers/testing/windows-installer-tests">test_installer</a></td>
+<td align="left">Tests Chrome&#39;s installer for Windows</td>
+</tr>
+<tr>
+<td align="left">ui_base_unittests</td>
+<td align="left">Unit tests for //ui/base.</td>
+</tr>
+<tr>
+<td align="left">unit_tests</td>
+<td align="left">The kitchen sink for unit tests. These tests cover several modules within Chromium.</td>
+</tr>
+<tr>
+<td align="left">url_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">views_unittests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">wav_ola_test</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">webkit_unit_tests</td>
+<td align="left"></td>
+</tr>
+<tr>
+<td align="left">webui tests</td>
+<td align="left">Special type of browser_tests used for <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/webui/webui_explainer.md">WebUI features</a>, see <a href="https://docs.google.com/document/d/1Z18WTNv28z5FW3smNEm_GtsfVD2IL-CmmAikwjw3ryo/edit#">here</a> for more information on known issues with WebUI test infrastructure.</td>
+</tr>
+</tbody></table>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/test_descriptions.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/test_descriptions.md</a>
+  </p>
+</div>

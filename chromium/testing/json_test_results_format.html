@@ -1,0 +1,379 @@
+<h1>The JSON Test Results Format</h1>
+<p>*** note
+Warning: The JSON test result format no longer affects the pass-fail decisions
+made by Chrome&#39;s bots. All results are now fetched from ResultDB. For more
+info, see <a href="resultdb">resultdb.md</a>.</p>
+<hr>
+<p>The JSON Test Results Format is a generic file format we use to record the
+results of each individual test in test run (whether the test is run on a bot,
+or run locally).</p>
+<h2 id="introduction">Introduction</h2>
+<p>We use these files on the bots in order to determine whether a test step had
+any failing tests (using a separate file means that we don&#39;t need to parse the
+output of the test run, and hence the test can be tailored for human readability
+as a result). We also upload the test results to dashboards like the
+<a href="http://test-results.appspot.com">Flakiness Dashboard</a>.</p>
+<p>The test format originated with the Blink web tests, but has since been
+adopted by GTest-based tests and Python unittest-based tests, so we&#39;ve
+standardized on it for anything related to tracking test flakiness.</p>
+<h3 id="example">Example</h3>
+<p>Here&#39;s a very simple example for one Python test:</p>
+<pre>% python mojo/tools/run_mojo_python_tests.py --write-full-results-to results.json mojom_tests.parse.ast_unittest.ASTTest.testNodeBase
+Running Python unit tests under mojo/public/tools/bindings/pylib ...
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+% cat results.json
+{
+  &quot;tests&quot;: {
+    &quot;mojom_tests&quot;: {
+      &quot;parse&quot;: {
+        &quot;ast_unittest&quot;: {
+          &quot;ASTTest&quot;: {
+            &quot;testNodeBase&quot;: {
+              &quot;expected&quot;: &quot;PASS&quot;,
+              &quot;actual&quot;: &quot;PASS&quot;,
+              &quot;artifacts&quot;: {
+                &quot;screenshot&quot;: [&quot;screenshots/page.png&quot;],
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  &quot;interrupted&quot;: false,
+  &quot;path_delimiter&quot;: &quot;.&quot;,
+  &quot;version&quot;: 3,
+  &quot;seconds_since_epoch&quot;: 1406662283.764424,
+  &quot;num_failures_by_type&quot;: {
+    &quot;FAIL&quot;: 0,
+    &quot;PASS&quot;: 1
+  },
+  &quot;artifact_types&quot;: {
+    &quot;screenshot&quot;: &quot;image/png&quot;
+  }
+}</pre>
+<p>As you can see, the format consists of a one top level dictionary containing a
+set of metadata fields describing the test run, plus a single <code>tests</code> key that
+contains the results of every test run, structured in a hierarchical trie format
+to reduce duplication of test suite names (as you can see from the deeply
+hierarchical Python test name).</p>
+<p>The file is strictly JSON-compliant. As a part of this, the fields in each
+object may appear in any order.</p>
+<h2 id="top-level-field-names">Top-level field names</h2>
+<table>
+<thead>
+<tr>
+<th>Field Name</th>
+<th>Data Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>interrupted</code></td>
+<td>boolean</td>
+<td><strong>Required.</strong> Whether the test run was interrupted and terminated early (either via the runner bailing out or the user hitting ctrl-C, etc.) If true, this indicates that not all of the tests in the suite were run and the results are at best incomplete and possibly totally invalid.</td>
+</tr>
+<tr>
+<td><code>num_failures_by_type</code></td>
+<td>dict</td>
+<td><strong>Required.</strong> A summary of the totals of each result type. If a test was run more than once, only the first invocation&#39;s result is included in the totals. Each key is one of the result types listed below. A missing result type is the same as being present and set to zero (0).</td>
+</tr>
+<tr>
+<td><code>path_delimiter</code></td>
+<td>string</td>
+<td><strong>Optional, will be mandatory.</strong> The separator string to use in between components of a tests name; normally &quot;.&quot; for GTest- and Python-based tests and &quot;/&quot; for web tests; if not present, you should default to &quot;/&quot; for backwards-compatibility.</td>
+</tr>
+<tr>
+<td><code>seconds_since_epoch</code></td>
+<td>float</td>
+<td><strong>Required.</strong> The start time of the test run expressed as a floating-point offset in seconds from the UNIX epoch.</td>
+</tr>
+<tr>
+<td><code>tests</code></td>
+<td>dict</td>
+<td><strong>Required.</strong> The actual trie of test results. Each directory or module component in the test name is a node in the trie, and the leaf contains the dict of per-test fields as described below.</td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td>integer</td>
+<td><strong>Required.</strong> Version of the file format. Current version is 3.</td>
+</tr>
+<tr>
+<td><code>artifact_types</code></td>
+<td>dict</td>
+<td><strong>Optional. Required if any artifacts are present for any tests.</strong> MIME Type information for artifacts in this json file. All artifacts with the same name must share the same MIME type.</td>
+</tr>
+<tr>
+<td><code>artifact_permanent_location</code></td>
+<td>string</td>
+<td><strong>Optional.</strong> The URI of the root location where the artifacts are stored. If present, any artifact locations are taken to be relative to this location. Currently only the <code>gs://</code> scheme is supported.</td>
+</tr>
+<tr>
+<td><code>build_number</code></td>
+<td>string</td>
+<td><strong>Optional.</strong> If this test run was produced on a bot, this should be the build number of the run, e.g., &quot;1234&quot;.</td>
+</tr>
+<tr>
+<td><code>builder_name</code></td>
+<td>string</td>
+<td><strong>Optional.</strong> If this test run was produced on a bot, this should be the builder name of the bot, e.g., &quot;Linux Tests&quot;.</td>
+</tr>
+<tr>
+<td><code>metadata</code></td>
+<td>dict</td>
+<td><strong>Optional.</strong> It maps to a dictionary that contains all the key value pairs used as metadata. This dictionary also includes the tags, test name prefix and test expectations file paths used during a test run.</td>
+</tr>
+<tr>
+<td><code>chromium_revision</code></td>
+<td>string</td>
+<td><strong>Optional.</strong> The revision of the current Chromium checkout, if relevant, e.g. &quot;356123&quot;.</td>
+</tr>
+<tr>
+<td><code>has_pretty_patch</code></td>
+<td>bool</td>
+<td><strong>Optional, layout test specific, deprecated.</strong> Whether the web tests&#39; output contains PrettyDiff-formatted diffs for test failures.</td>
+</tr>
+<tr>
+<td><code>has_wdiff</code></td>
+<td>bool</td>
+<td><strong>Optional, layout test specific, deprecated.</strong> Whether the web tests&#39; output contains wdiff-formatted diffs for test failures.</td>
+</tr>
+<tr>
+<td><code>layout_tests_dir</code></td>
+<td>string</td>
+<td><strong>Optional, layout test specific.</strong> Path to the web_tests directory for the test run (used so that we can link to the tests used in the run).</td>
+</tr>
+<tr>
+<td><code>pixel_tests_enabled</code></td>
+<td>bool</td>
+<td><strong>Optional, layout test specific.</strong> Whether the web tests&#39; were run with the --pixel-tests flag.</td>
+</tr>
+<tr>
+<td><code>flag_name</code></td>
+<td>string</td>
+<td><strong>Optional, layout test specific.</strong> The flags used when running tests</td>
+</tr>
+<tr>
+<td><code>fixable</code></td>
+<td>integer</td>
+<td><strong>Optional, deprecated.</strong> The number of tests that were run but were expected to fail.</td>
+</tr>
+<tr>
+<td><code>num_flaky</code></td>
+<td>integer</td>
+<td><strong>Optional, deprecated.</strong> The number of tests that were run more than once and produced different results each time.</td>
+</tr>
+<tr>
+<td><code>num_passes</code></td>
+<td>integer</td>
+<td><strong>Optional, deprecated.</strong> The number of successful tests; equivalent to <code>num_failures_by_type[&quot;Pass&quot;]</code></td>
+</tr>
+<tr>
+<td><code>num_regressions</code></td>
+<td>integer</td>
+<td><strong>Optional, deprecated.</strong> The number of tests that produced results that were unexpected failures.</td>
+</tr>
+<tr>
+<td><code>skips</code></td>
+<td>integer</td>
+<td><strong>Optional, deprecated.</strong> The number of tests that were found but not run (tests should be listed in the trie with &quot;expected&quot; and &quot;actual&quot; values of <code>SKIP</code>).</td>
+</tr>
+</tbody></table>
+<h2 id="per-test-fields">Per-test fields</h2>
+<p>Each leaf of the <code>tests</code> trie contains a dict containing the results of a
+particular test name. If a test is run multiple times, the dict contains the
+results for each invocation in the <code>actual</code> field. Unless otherwise noted,
+if the test is run multiple times, all of the other fields represent the
+overall / final / last value. For example, if a test unexpectedly fails and
+then is retried and passes, both <code>is_regression</code> and <code>is_unexpected</code> will be false).</p>
+<table>
+<thead>
+<tr>
+<th>Field Name</th>
+<th>Data Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>actual</code></td>
+<td>string</td>
+<td><strong>Required.</strong> An ordered space-separated list of the results the test actually produced. <code>FAIL PASS</code> means that a test was run twice, failed the first time, and then passed when it was retried. If a test produces multiple different results, then it was actually flaky during the run.</td>
+</tr>
+<tr>
+<td><code>expected</code></td>
+<td>string</td>
+<td><strong>Required.</strong> An unordered space-separated list of the result types expected for the test, e.g. <code>FAIL PASS</code> means that a test is expected to either pass or fail. A test that contains multiple values is expected to be flaky.</td>
+</tr>
+<tr>
+<td><code>artifacts</code></td>
+<td>dict</td>
+<td><strong>Optional.</strong> A dictionary describing test artifacts generated by the execution of the test. The dictionary maps the name of the artifact (<code>screenshot</code>, <code>crash_log</code>) to a list of relative locations of the artifact (<code>screenshot/page.png</code>, <code>logs/crash.txt</code>). Any &#39;/&#39; characters in the file paths are meant to be platform agnostic; tools will replace them with the appropriate per platform path separators. There is one entry in the list per test execution. If <code>artifact_permanent_location</code> is specified, then this location is relative to that path. Otherwise, the path is assumed to be relative to the location of the json file which contains this (i.e., <code>$ISOLATED_OUTDIR</code>). The actual locations of artifacts are implementation-defined by the test program and can follow any convention, since these entries will allow them to be looked up easily.</td>
+</tr>
+<tr>
+<td><code>bugs</code></td>
+<td>string</td>
+<td><strong>Optional.</strong> A comma-separated list of URLs to bug database entries associated with each test.</td>
+</tr>
+<tr>
+<td><code>shard</code></td>
+<td>int</td>
+<td><strong>Optional.</strong> The 0-based index of the shard that the test ran on, if the test suite was sharded across multiple bots.</td>
+</tr>
+<tr>
+<td><code>is_flaky</code></td>
+<td>bool</td>
+<td><strong>Optional.</strong> If present and true, the test was run multiple times and produced more than one kind of result. If false (or if the key is not present at all), the test either only ran once or produced the same result every time.</td>
+</tr>
+<tr>
+<td><code>is_regression</code></td>
+<td>bool</td>
+<td><strong>Optional.</strong> If present and true, the test failed unexpectedly. If false (or if the key is not present at all), the test either ran as expected or passed unexpectedly.</td>
+</tr>
+<tr>
+<td><code>is_unexpected</code></td>
+<td>bool</td>
+<td><strong>Optional.</strong> If present and true, the test result was unexpected. This might include an unexpected pass, i.e., it is not necessarily a regression. If false (or if the key is not present at all), the test produced the expected result.</td>
+</tr>
+<tr>
+<td><code>time</code></td>
+<td>float</td>
+<td><strong>Optional.</strong> If present, the time it took in seconds to execute the first invocation of the test.</td>
+</tr>
+<tr>
+<td><code>times</code></td>
+<td>array of floats</td>
+<td><strong>Optional.</strong> If present, the times in seconds of each invocation of the test.</td>
+</tr>
+<tr>
+<td><code>has_repaint_overlay</code></td>
+<td>bool</td>
+<td><strong>Optional, web test specific.</strong> If present and true, indicates that the test output contains the data needed to draw repaint overlays to help explain the results (only used in layout tests).</td>
+</tr>
+<tr>
+<td><code>is_missing_audio</code></td>
+<td>bool</td>
+<td><strong>Optional, we test specific.</strong> If present and true, the test was supposed to have an audio baseline to compare against, and we didn&#39;t find one.</td>
+</tr>
+<tr>
+<td><code>is_missing_text</code></td>
+<td>bool</td>
+<td><strong>Optional, web test specific.</strong> If present and true, the test was supposed to have a text baseline to compare against, and we didn&#39;t find one.</td>
+</tr>
+<tr>
+<td><code>is_missing_video</code></td>
+<td>bool</td>
+<td><strong>Optional, web test specific.</strong> If present and true, the test was supposed to have an image baseline to compare against and we didn&#39;t find one.</td>
+</tr>
+<tr>
+<td><code>is_testharness_test</code></td>
+<td>bool</td>
+<td><strong>Optional, web test specific.</strong> If present, indicates that the layout test was written using the w3c&#39;s test harness and we don&#39;t necessarily have any baselines to compare against.</td>
+</tr>
+<tr>
+<td><code>is_slow_test</code></td>
+<td>bool</td>
+<td><strong>Optional, web test specific.</strong> If present and true, the test is expected to take longer than normal to run.</td>
+</tr>
+<tr>
+<td><code>reftest_type</code></td>
+<td>string</td>
+<td><strong>Optional, web test specific.</strong> If present, one of <code>==</code> or <code>!=</code> to indicate that the test is a &quot;reference test&quot; and the results were expected to match the reference or not match the reference, respectively (only used in layout tests).</td>
+</tr>
+</tbody></table>
+<h2 id="test-result-types">Test result types</h2>
+<p>Any test may fail in one of several different ways. There are a few generic
+types of failures, and the web tests contain a few additional specialized
+failure types.</p>
+<table>
+<thead>
+<tr>
+<th>Result type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>CRASH</code></td>
+<td>The test runner crashed during the test.</td>
+</tr>
+<tr>
+<td><code>FAIL</code></td>
+<td>The test did not run as expected.</td>
+</tr>
+<tr>
+<td><code>PASS</code></td>
+<td>The test ran as expected.</td>
+</tr>
+<tr>
+<td><code>SKIP</code></td>
+<td>The test was not run.</td>
+</tr>
+<tr>
+<td><code>TIMEOUT</code></td>
+<td>The test hung (did not complete) and was aborted.</td>
+</tr>
+<tr>
+<td><code>AUDIO</code></td>
+<td><strong>Web test specific, deprecated.</strong> The test is expected to produce audio output that doesn&#39;t match the expected result. Normally you will see <code>FAIL</code> instead.</td>
+</tr>
+<tr>
+<td><code>IMAGE</code></td>
+<td><strong>Web test specific, deprecated.</strong> The test produces image (and possibly text output). The image output doesn&#39;t match what we&#39;d expect, but the text output, if present, does. Normally you will see <code>FAIL</code> instead.</td>
+</tr>
+<tr>
+<td><code>IMAGE+TEXT</code></td>
+<td><strong>Web test specific, deprecated.</strong> The test produces image and text output, both of which fail to match what we expect. Normally you will see <code>FAIL</code> instead.</td>
+</tr>
+<tr>
+<td><code>LEAK</code></td>
+<td><strong>Web test specific, deprecated.</strong> Memory leaks were detected during the test execution.</td>
+</tr>
+<tr>
+<td><code>MISSING</code></td>
+<td><strong>Web test specific, deprecated.</strong> The test completed but we could not find an expected baseline to compare against.</td>
+</tr>
+<tr>
+<td><code>NEEDSREBASELINE</code></td>
+<td><strong>Web test specific, deprecated.</strong> The expected test result is out of date and will be ignored (as above); the auto-rebaseline-bot will look for tests of this type and automatically update them. This should never show up as an <code>actual</code> result.</td>
+</tr>
+<tr>
+<td><code>REBASELINE</code></td>
+<td><strong>Web test specific, deprecated.</strong> The expected test result is out of date and will be ignored (any result other than a crash or timeout will be considered as passing). This test result should only ever show up on local test runs, not on bots (it is forbidden to check in a TestExpectations file with this expectation). This should never show up as an &quot;actual&quot; result.</td>
+</tr>
+<tr>
+<td><code>SLOW</code></td>
+<td><strong>Web test specific, deprecated.</strong> The test is expected to take longer than normal to run. This should never appear as an <code>actual</code> result, but may (incorrectly) appear in the expected fields.</td>
+</tr>
+<tr>
+<td><code>TEXT</code></td>
+<td><strong>Web test specific, deprecated.</strong> The test is expected to produce a text-only failure (the image, if present, will match). Normally you will see <code>FAIL</code> instead.</td>
+</tr>
+</tbody></table>
+<p>Unexpected results, failures, and regressions are different things.</p>
+<p>An unexpected result is simply a result that didn&#39;t appear in the <code>expected</code>
+field. It may be used for tests that <em>pass</em> unexpectedly, i.e. tests that
+were expected to fail but passed. Such results should <em>not</em> be considered
+failures.</p>
+<p>Anything other than <code>PASS</code>, <code>SKIP</code>, <code>SLOW</code>, or one of the REBASELINE types is
+considered a failure.</p>
+<p>A regression is a result that is both unexpected and a failure.</p>
+<h2 id="full_resultsjson-and-failing_resultsjson"><code>full_results.json</code> and <code>failing_results.json</code></h2>
+<p>The web tests produce two different variants of the above file. The
+<code>full_results.json</code> file matches the above definition and contains every test
+executed in the run. The <code>failing_results.json</code> file contains just the tests
+that produced unexpected results, so it is a subset of the <code>full_results.json</code>
+data. The <code>failing_results.json</code> file is also in the JSONP format, so it can be
+read via as a <code>&lt;script&gt;</code> tag from an html file run from the local filesystem
+without falling prey to the same-origin restrictions for local files.  The
+<code>failing_results.json</code> file is converted into JSONP by containing the JSON data
+preceded by the string &quot;ADD_RESULTS(&quot; and followed by the string &quot;);&quot;, so you
+can extract the JSON data by stripping off that prefix and suffix.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/json_test_results_format.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/json_test_results_format.md</a>
+  </p>
+</div>

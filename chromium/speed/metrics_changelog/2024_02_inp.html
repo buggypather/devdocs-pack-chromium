@@ -1,0 +1,47 @@
+<h1>Interaction to Next Paint Changes in Chrome 122</h1>
+<h2 id="enable-eventtimingmatchpresentationindex-by-default">Enable EventTimingMatchPresentationIndex by default</h2>
+<p>Events measured by Event Timing typically measure to Next Paint (and its
+presentation time). But sometimes we don&#39;t need a next paint, and can end
+measurement immediately at processingEnd.</p>
+<p>This detail come sometimes lead to multiple distinct events overlapping in time
+in non-intuitive ways. As one example:</p>
+<p>Let&#39;s say and event (A) arrives first, and requires next paint. It will
+measure:</p>
+<ul>
+<li>Input delay (for Event A)</li>
+<li>Processing Duration (for Event A)</li>
+<li>Presentation delay (for this Animation Frame)</li>
+</ul>
+<p>Because waiting for Presentation delay is not blocking the main thread, another
+event (B) might arrive next. If Event B does not require next paint, it will
+only measure:</p>
+<p>Input delay (for Event B)
+Processing Duration (for Event B)
+Now, even thought Event B arrived after Event A, its performance Event Timing
+measurement might be completed first... whenever we&#39;re still waiting to receive
+Event A&#39;s presentation time.</p>
+<p>In such cases, even though performance measurement for Event B &quot;wraps up&quot;
+first, we cannot assume that Event B actually ends first. This is because it
+takes time to schedule the feedback of a presentation time, which is itself an
+asynchronous process. And even when the measurement accounting work for Event B
+is available first, once we read the presentation time value for Event A, it
+might have actually been first.</p>
+<p>Previously, whenever this happened, we would flush all event timings and assign
+the current time as the end time to all these events, even those waiting for
+the next paint presentation time. Now, we will wait until the correct next
+paint presentation time actually arrives for those events.</p>
+<p>Note: this experiment was first landed in Chrome 114: <a href="https://chromium.googlesource.com/chromium/src/+/ce150839f2930a7d59b3850ca8e7d02210101f08">Event Timing Presentation Promise Handling Redesign</a>,
+but was rolled out slowly.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>This change improves the quality/accuracy of INP, but its impact on a specific
+site is unpredictable and can be different case by case depending on use cases.
+In general, we saw a overall decrease on INP on mobile and an increase on INP
+on desktop.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 122 was released the week of February 20, 2024.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2024_02_inp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2024_02_inp.md</a>
+  </p>
+</div>

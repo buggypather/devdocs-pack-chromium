@@ -1,0 +1,442 @@
+<h1>web-platform-tests</h1>
+<p>Interoperability between browsers is
+<a href="https://www.chromium.org/blink/platform-predictability">critical</a> to Chromium&#39;s
+mission of improving the web. We believe that leveraging and contributing to a
+shared test suite is one of the most important tools in achieving
+interoperability between browsers. The <a href="https://github.com/web-platform-tests/wpt">web-platform-tests
+repository</a> is the primary shared
+test suite where all browser engines are collaborating.</p>
+<p>Chromium has a 2-way import/export process with the upstream web-platform-tests
+repository, where tests are imported into
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt">web_tests/external/wpt</a>
+and any changes to the imported tests are also exported to web-platform-tests.</p>
+<p>See <a href="https://web-platform-tests.org/">https://web-platform-tests.org/</a> for general documentation on
+web-platform-tests, including tips for writing and reviewing tests.</p>
+<h2 id="writing-tests">Writing tests</h2>
+<p>To contribute changes to web-platform-tests, just commit your changes directly
+to <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt">web_tests/external/wpt</a>
+and the changes will be automatically upstreamed within 24 hours.</p>
+<p>Changes involving adding, removing or modifying tests can all be upstreamed.
+Any changes outside of
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt">external/wpt</a> will not be
+upstreamed, and any changes <code>*-expected.txt</code>, <code>OWNERS</code>, and <code>MANIFEST.json</code>,
+will also not be upstreamed.</p>
+<p>Running the web tests will automatically regenerate MANIFEST.json to pick up
+any local modifications.</p>
+<p>Most tests are written using testharness.js, see
+<a href="writing_web_tests">Writing Web Tests</a> and
+<a href="web_tests_tips">Web Tests Tips</a> for general guidelines.</p>
+<h3 id="write-tests-against-specifications">Write tests against specifications</h3>
+<p>Tests in web-platform-tests are expected to match behavior defined by the
+relevant specification. In other words, all assertions that a test makes
+should be derived from a specification&#39;s normative requirements, and not go
+beyond them. It is often necessary to change the specification to clarify what
+is and isn&#39;t required.</p>
+<p>When implementation experience is needed to inform the specification work,
+<a href="https://web-platform-tests.org/writing-tests/file-names.html">tentative tests</a>
+can be appropriate. It should be apparent in context why the test is tentative
+and what needs to be resolved to make it non-tentative.</p>
+<h3 id="test-coverage">Test coverage</h3>
+<p>A good test suite allows for independent interoperable implementations of a
+feature, where web developers don’t run into significant differences between
+browsers.</p>
+<ul>
+<li><strong>Test feature existence:</strong> This is typically done with surface-level tests
+  like idlharness.js for APIs or parsing-testcommon.js for CSS. These tests
+  don’t verify actual behavior.<ul>
+<li>API example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/idle-detection/idlharness.https.window.js">idle-detection/idlharness.https.window.js</a></li>
+<li>CSS example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/css/css-logical/parsing/inset-valid.html">css/css-logical/parsing/inset-valid.html</a></li>
+</ul>
+</li>
+<li><strong>Test common use cases:</strong> Use the feature in a realistic and straightforward
+  way and verify the expected behavior.<ul>
+<li>API example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/requestidlecallback/basic.html">requestidlecallback/basic.html</a></li>
+<li>CSS example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/css/css-flexbox/gap-001-ltr.html">css/css-flexbox/gap-001-ltr.html</a></li>
+<li>HTTP example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/cors/basic.htm">cors/basic.html</a></li>
+</ul>
+</li>
+<li><strong>Test likely error scenarios:</strong> Test realistic error scenarios like
+  out-of-bounds inputs, network errors, or the user rejecting a permission
+  prompt.<ul>
+<li>API example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/fetch/api/basic/error-after-response.any.js">fetch/api/basic/error-after-response.any.js</a></li>
+<li>CSS example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/css/css-color/hsl-clamp-negative-saturation.html">css/css-color/hsl-clamp-negative-saturation.html</a></li>
+<li>HTTP example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/client-hints/accept-ch-malformed-header.https.html">client-hints/accept-ch-malformed-header.https.html</a></li>
+</ul>
+</li>
+<li><strong>Test invalidation:</strong> Rendering or other output often needs to be invalidated
+  when the inputs change. This kind of test is common for CSS features, but
+  can make sense for other features too. Often called “dynamic” when an
+  initial state is updated by script.<ul>
+<li>API example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/dom/nodes/Element-childElementCount-dynamic-add.html">dom/nodes/Element-childElementCount-dynamic-add.html</a></li>
+<li>CSS example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/css/css-content/quotes-lang-dynamic-001.html">css/css-content/quotes-lang-dynamic-001.html</a></li>
+</ul>
+</li>
+<li><strong>Test integration with other features:</strong> If the feature integrates with other
+  features in some meaningful way, test that the combination of the two
+  features behaves as expected.<ul>
+<li>API example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/permissions-policy/reporting/fullscreen-reporting.html">permissions-policy/reporting/fullscreen-reporting.html</a></li>
+<li>CSS example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/css/css-anchor-position/anchor-scroll-to-sticky-001.html">css/css-anchor-position/anchor-scroll-to-sticky-001.html</a></li>
+<li>HTTP example: <a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/clear-site-data/set-cookie-before-clear-cookies.https.html">clear-site-data/set-cookie-before-clear-cookies.https.html</a></li>
+</ul>
+</li>
+</ul>
+<h3 id="tests-that-require-testing-apis">Tests that require testing APIs</h3>
+<h4 id="testdriverjs"><code>testdriver.js</code></h4>
+<p>For automation using <a href="https://web-platform-tests.org/writing-tests/testdriver.html">testdriver.js</a>,
+follow <a href="https://docs.google.com/document/d/1uQmNMUzznAH_JvJOTllpL2qNhOEzClTkmZliTnlsNIs/edit?usp=sharing">Guide to Adding New Web Features to WPT</a>.
+testdriver.js provides a means to automate tests that cannot be written purely
+using web platform APIs, similar to <code>internals.*</code> and <code>eventSender.*</code> in regular
+Blink web tests. It uses either <a href="https://www.w3.org/TR/webdriver/">WebDriver Classic</a>,
+or <a href="https://www.w3.org/TR/webdriver-bidi/">WebDriver BiDi</a> protocols.</p>
+<p><a href="https://docs.google.com/document/d/18BpD41vyX1cFZ77CE0a_DJYlGpdvyLlx3pwXVRxUzvI/edit?usp=sharing">WPT Test Automation for Chromium</a> overview.</p>
+<p>The recommended way to extend <code>testdriver.js</code> is by adding extending
+<a href="https://www.w3.org/TR/webdriver-bidi/">WebDriver BiDi</a> protocol.</p>
+<h5 id="webdriver-bidi-specification">WebDriver BiDi Specification</h5>
+<p>The WebDriver BiDi protocol was designed to support cross-browser testing. It is
+extensible by design, and can be extended by a separate specification.</p>
+<h6 id="example">Example</h6>
+<p>The <a href="https://www.w3.org/TR/webdriver-bidi/#protocol-modules">WebDriver BiDi extension module</a> <code>permissions</code> is outlined in an external specification: <a href="https://www.w3.org/TR/permissions/#automation-webdriver-bidi">https://www.w3.org/TR/permissions/#automation-webdriver-bidi</a>.</p>
+<h5 id="wpt-wdspec-tests">WPT wdspec tests</h5>
+<p>The specification part should be accompanied by WPT wdspec tests. These tests
+allow for implementations to verify they implement the BiDi extension properly.
+The process is described here: <a href="https://web-platform-tests.org/writing-tests/wdspec.html#extending-webdriver-bidi">https://web-platform-tests.org/writing-tests/wdspec.html#extending-webdriver-bidi</a>.</p>
+<h6 id="example-1">Example</h6>
+<p>WPT tests for permissions.setPermission command: webdriver/tests/bidi/external/permissions/set_permission.</p>
+<h5 id="implement-the-required-endpoints-in-cdp">Implement the required endpoints in CDP</h5>
+<p>Under the hood, Chromium is controlled by Chrome Devtools Protocol
+(<a href="https://chromedevtools.github.io/devtools-protocol/">https://chromedevtools.github.io/devtools-protocol/</a>). This means that in order
+to implement the WebDriver BiDi commands, the corresponding commands should be
+added to CDP.</p>
+<h5 id="implement-webdriver-bidi-commands-using-cdp">Implement WebDriver BiDi commands using CDP</h5>
+<p>The <a href="https://github.com/GoogleChromeLabs/chromium-bidi">BiDi-CDP Mapper</a> is an
+implementation of WebDriver BiDi in Chromium, and is used by ChromeDriver. It
+translates WebDriver BiDi commands into Chrome DevTools Protocol (CDP) commands.</p>
+<p><a href="https://github.com/GoogleChromeLabs/chromium-bidi#adding-new-command">How to add the new commands to BiDi-CDP Mapper and roll it in ChromeDriver</a>.</p>
+<h6 id="example-2">Example</h6>
+<p><a href="https://github.com/GoogleChromeLabs/chromium-bidi/pull/1645">Implement ”permissions.setPermission”</a>.</p>
+<h5 id="extend-testdriverjs">Extend <code>testdriver.js</code></h5>
+<p>In order to expose the new method to WPT tests, <code>testdriver.js</code> should be
+updated with the new method. This process is described in the <a href="https://web-platform-tests.org/writing-tests/testdriver-extension-tutorial.html">“Testdriver extension tutorial”</a>, referred to in “WebDriver BiDi” sections.</p>
+<h6 id="example-3">Example</h6>
+<p><a href="https://github.com/web-platform-tests/wpt/pull/49170">Add <code>test_driver.bidi.permissions.set_permission</code></a>.</p>
+<h4 id="mojojs">MojoJS</h4>
+<p>Some specs may define testing APIs (e.g.
+<a href="https://wicg.github.io/webusb/test/">WebUSB</a>), which may be polyfilled with
+internal API like <a href="https://github.com/chromium/chromium/blob/HEAD/mojo/public/js/README.md">MojoJS</a>.  MojoJS is only
+allowed in WPT for this purpose. Please reach out to
+<a href="mailto:blink-dev@chromium.org">blink-dev@chromium.org</a> before following the process below for adding a new
+test-only API:</p>
+<ol>
+<li>Create a full list of <code>*.mojom.m.js</code> files that you need, including all
+dependencies. Generated modules load dependencies recursively by default,
+so you can check the network panel of DevTools to see the full list of
+dependencies it loads.</li>
+<li>Check <a href="https://github.com/chromium/chromium/blob/HEAD/infra/archive_config/linux-archive-rel.json">linux-archive-rel.json</a> and add any
+missing <code>*.mojom.m.js</code> files to the <code>mojojs.zip</code> archive. Globs are
+supported in <code>filename</code>. Do not copy Mojom bindings into WPT.</li>
+<li>Meanwhile in Chromium, you can create a helper for your WPT tests to do
+browser-specific setup using
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/resources/test-only-api.js">test-only-api.js</a>.
+See
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt/webxr/resources/webxr_util.js">webxr_util.js</a>
+as an example. You can write tests using this helper right away, but they
+will not work upstream (i.e. on <a href="https://wpt.fyi">https://wpt.fyi</a> ) until your change in step
+2 is included in official channels, as <code>mojojs.zip</code> is built alongside with
+Chrome.</li>
+</ol>
+<h4 id="wpt_automation"><code>wpt_automation</code></h4>
+<p>An alternative to the above options is to write manual tests that are automated
+with scripts from
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt_automation">wpt_automation</a>.
+Injection of JS in manual tests is determined by <code>loadAutomationScript</code> in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/resources/testharnessreport.js">testharnessreport.js</a>.</p>
+<p>Such tests still require case-by-case automation to run for other browser
+engines, but are more valuable than purely manual tests.</p>
+<p>Manual tests that have no automation are still imported, but skipped in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/NeverFixTests">NeverFixTests</a>; see
+<a href="https://crbug.com/738489">issue 738489</a>.</p>
+<h3 id="contribution-process">Contribution process</h3>
+<p>Changes made in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt">web_tests/external/wpt</a> are
+<a href="#exporting-tests">automatically exported to GitHub</a>.</p>
+<p>It&#39;s still possible to make direct pull requests to web-platform-tests, see
+<a href="https://web-platform-tests.org/writing-tests/github-intro.html">https://web-platform-tests.org/writing-tests/github-intro.html</a>.</p>
+<h3 id="wpt_internal"><code>wpt_internal</code></h3>
+<p>It is sometimes desirable to write WPT tests that either test Chromium-specific
+behaviors, or that cannot yet be upstreamed to WPT (e.g. because the spec is
+very nascent). For these cases, we maintain a separate directory,
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/wpt_internal">wpt_internal</a> that runs under the
+WPT testing infrastructure (e.g. uses wptserve, etc), but which is not
+upstreamed to WPT.</p>
+<p>Please see the <code>wpt_internal</code>
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/wpt_internal/README.md">README</a> for more details.</p>
+<p><strong>Note</strong>: A significant downside of <code>wpt_internal</code> is that your tests may be
+broken by upstream changes to the resources scripts (e.g. <code>testharness.js</code>), as
+<code>wpt_internal</code> does not use the forked version of <code>testharness.js</code> used by all
+other non-<code>external/wpt</code> tests. Use of <a href="#new-failure-notifications">new failure
+notifications</a> is recommended to ensure you are
+notified of breakages.</p>
+<h2 id="running-tests">Running tests</h2>
+<p>Same as Blink web tests, you can use
+<a href="web_tests#running-the-tests"><code>run_web_tests.py</code></a> to run any WPT test. This
+will run WPT tests in Content Shell. You can also run <a href="run_web_platform_tests"><code>run_wpt_tests.py</code></a> to
+run WPT tests with Chrome.</p>
+<p>One thing to note is that glob patterns for WPT tests are not yet supported.</p>
+<p>See <a href="web_tests_in_content_shell#Running-WPT-Tests-in-Content-Shell">Running WPT tests in Content Shell</a>
+for debugging etc.</p>
+<h2 id="reviewing-tests">Reviewing tests</h2>
+<p>Anyone who can review code and tests in Chromium can also review changes in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt">external/wpt</a>
+that will be automatically upstreamed. There will be no additional review in
+web-platform-tests as part of the export process.</p>
+<p>If upstream reviewers have feedback on the changes, discuss on the pull request
+created during export, and if necessary work on a new pull request to iterate
+until everyone is satisfied.</p>
+<p>When reviewing tests, check that they match the relevant specification, which
+may not fully match the implementation. See also
+<a href="#Write-tests-against-specifications">Write tests against specifications</a>.</p>
+<h2 id="importing-tests">Importing tests</h2>
+<p>Chromium has a <a href="https://chromium.googlesource.com/external/w3c/web-platform-tests/">mirror</a>
+of the GitHub repo and periodically imports a subset of the tests to
+run as part of the regular Blink web test testing process.</p>
+<p>The goals of this process are to be able to run web-platform-tests unmodified
+locally just as easily as we can run the Blink tests, and ensure that we are
+tracking tip-of-tree in the web-platform-tests repository as closely as
+possible, and running as many of the tests as possible.</p>
+<h3 id="automatic-import-process">Automatic import process</h3>
+<p>There is an automatic process for updating the Chromium copy of
+web-platform-tests. The import is done by the builder <a href="https://ci.chromium.org/p/infra/builders/luci.infra.cron/wpt-importer">wpt-importer
+builder</a>.</p>
+<p>The easiest way to check the status of recent imports is to look at:</p>
+<ul>
+<li>Recent logs on LUCI for <a href="https://ci.chromium.org/p/infra/builders/luci.infra.cron/wpt-importer">wpt-importer builder</a></li>
+<li>Recent CLs created by <a href="https://chromium-review.googlesource.com/q/owner:wpt-autoroller%2540chops-service-accounts.iam.gserviceaccount.com">WPT
+Autoroller</a>.</li>
+</ul>
+<p>The import jobs will generally be green if either there was nothing to do,
+or a CL was successfully submitted.</p>
+<p>For maintainers:</p>
+<ul>
+<li>The source lives in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/tools/wpt_import.py">third_party/blink/tools/wpt_import.py</a>.</li>
+<li>If the importer starts misbehaving, it can be disabled by landing a
+<a href="https://crrev.com/c/1961906/">CL to skip the update step</a>.</li>
+</ul>
+<h3 id="new-failure-notifications">New failure notifications</h3>
+<p>The importer automatically file bugs against a component when imported changes
+introduce failures as long as test owners did not choose to opt-out the failure
+notification mechanism. This includes new tests that fail in Chromium, as well
+as new failures introduced to an existing test. Test owners are encouraged to
+create an <code>DIR_METADATA</code> file in the appropriate <code>external/wpt/</code> subdirectory
+that contains at least the <code>buganizer_public.component_id</code> field, which the
+importer will use to file bugs.
+For example, <code>external/wpt/css/css-grid/DIR_METADATA</code> looks like:</p>
+<pre>buganizer_public {
+  component_id: 1415957
+}
+team_email: &quot;layout-dev@chromium.org&quot;</pre>
+<p>When tests under <code>external/wpt/css/css-grid/</code> newly fail in a WPT import, the
+importer will automatically file a bug against the <code>Chromium&gt;Blink&gt;Layout&gt;Grid</code>
+component in <a href="https://issues.chromium.org/issues">issues.chromium.org</a>, with
+details of which tests failed and the outputs.
+The importer will also copy <code>layout-dev@chromium.org</code> (the <code>team_email</code>) and any
+<code>external/wpt/css/css-grid/OWNERS</code> on the bug.</p>
+<p>Failing tests are grouped according to the most specific <code>DIR_METADATA</code> that
+they roll up to.</p>
+<p>To opt-out of this notification, add <code>wpt.notify</code> field set to <code>NO</code> to the
+corresponding <code>DIR_METADATA</code>.
+For example, the following <code>DIR_METADATA</code> will suppress notification from tests
+under the located directory:</p>
+<pre>buganizer_public {
+  component_id: 1415957
+}
+team_email: &quot;layout-dev@chromium.org&quot;
+wpt {
+  notify: NO
+}</pre>
+<h3 id="skipped-tests-and-how-to-re-enable-them">Skipped tests (and how to re-enable them)</h3>
+<p>We control which tests are imported via a file called
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/W3CImportExpectations">W3CImportExpectations</a>,
+which has a list of directories to skip while importing.</p>
+<p>In addition to the directories and tests explicitly skipped there, tests may
+also be skipped for a couple other reasons, e.g. if the file path is too long
+for Windows. To check what files are skipped in import, check the recent logs
+for <a href="https://ci.chromium.org/p/infra/builders/luci.infra.cron/wpt-importer">wpt-importer builder</a>.</p>
+<p>If you wish to un-skip some of the directories currently skipped in
+<code>W3CImportExpectations</code>, you can modify that file locally and commit it, and on
+the next auto-import, the new tests should be imported.</p>
+<p>If you want to import immediately (in order to try the tests out locally, etc)
+you can also run <code>wpt-import</code>, but this is not required.</p>
+<p>Remember your import might fail due to GitHub&#39;s limit for unauthenticated
+requests, so consider <a href="#GitHub-credentials">passing your GitHub credentials</a> to
+the script.</p>
+<h3 id="waterfall-failures-caused-by-automatic-imports">Waterfall failures caused by automatic imports.</h3>
+<p>If there are new test failures that start after an auto-import,
+there are several possible causes, including:</p>
+<ol>
+<li>New baselines for flaky tests were added (<a href="https://crbug.com/701234">https://crbug.com/701234</a>).</li>
+<li>Modified tests should have new results for non-Release builds but they weren&#39;t added (<a href="https://crbug.com/725160">https://crbug.com/725160</a>).</li>
+<li>New baselines were added for tests with non-deterministic test results (<a href="https://crbug.com/705125">https://crbug.com/705125</a>).</li>
+</ol>
+<p>Because these tests are imported from the Web Platform tests, it is better
+to have them in the repository (and marked failing) than not, so prefer to
+<a href="web_test_expectations">add test expectations</a> rather than reverting.
+However, if a huge number of tests are failing, please revert the CL so we
+can fix it manually.</p>
+<h2 id="exporting-tests">Exporting tests</h2>
+<p>If you upload a CL with any changes in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/web_tests/external/wpt">third_party/blink/web_tests/external/wpt</a>,
+once your CL is ready to submit the exporter will create a provisional pull request with
+those changes in the <a href="https://github.com/web-platform-tests/wpt/">upstream WPT GitHub repository</a>.
+The exporter runs on <a href="https://ci.chromium.org/p/infra/builders/luci.infra.cron/wpt-exporter">wpt-exporter builder</a>.</p>
+<p>Once you&#39;re ready to land your CL, please follow the link posted by the bot and
+check the status of the required checks of the GitHub PR. If it&#39;s green, go
+ahead landing your CL and the exporter will automatically merge the PR.</p>
+<p>If GitHub status is red on the PR, please try to resolve the failures before
+merging. If you run into any issues, or if you have a CL with WPT changes that
+the exporter did not pick up, please reach out to <a href="mailto:blink-dev@chromium.org">blink-dev@chromium.org</a>.</p>
+<p>If you want to run the exporter before your CL is ready to submit, you can add
+the tag <code>Force-WPT-Export: true</code> to your CL description. This might be useful in
+order to check WPT results on GitHub before sending the CL for review.</p>
+<p>Conversely, if you want to prevent your WPT changes from being exported to
+upstream WPT, you can add the <code>No-Export: true</code> footer to your CL description.
+This footer should be used sparingly, but is useful to avoid reexporting
+imported changes that will conflict upstream.</p>
+<p>Additional things to note:</p>
+<ul>
+<li>CLs that change over 1000 files will not be exported.</li>
+<li>All PRs use the
+<a href="https://github.com/web-platform-tests/wpt/pulls?utf8=%E2%9C%93&amp;q=is%3Apr%20label%3Achromium-export"><code>chromium-export</code></a> label.</li>
+<li>All PRs for CLs that haven&#39;t yet been landed in Chromium also use the
+<a href="https://github.com/web-platform-tests/wpt/pulls?q=is%3Apr+is%3Aopen+label%3A%22do+not+merge+yet%22"><code>do not merge yet</code></a> label.</li>
+<li>The exporter cannot create upstream PRs for in-flight CLs with binary files
+(e.g. webm files). An export PR will still be made after the CL lands.</li>
+</ul>
+<h3 id="will-the-exported-commits-be-linked-to-my-github-profile">Will the exported commits be linked to my GitHub profile?</h3>
+<p>The email you commit with in Chromium will be the author of the commit on
+GitHub. You can <a href="https://help.github.com/articles/adding-an-email-address-to-your-github-account/">add it as a secondary address on your GitHub
+account</a>
+to link your exported commits to your GitHub profile.</p>
+<p>If you are a Googler, you can also register your GitHub account at go/github,
+making it easier for other Googlers to find you.</p>
+<h3 id="what-if-there-are-conflicts">What if there are conflicts?</h3>
+<p>This cannot be avoided entirely as the two repositories are independent, but
+should be rare with frequent imports and exports. When it does happen, manual
+intervention will be needed and in non-trivial cases you may be asked to help
+resolve the conflict.</p>
+<h2 id="notes-for-wpt-infra-maintainers">Notes for WPT infra maintainers</h2>
+<h3 id="importer">Importer</h3>
+<h4 id="rubber-stamper-bot">Rubber-Stamper bot</h4>
+<p>To allow the importer to land CLs without human intervention, it utilizes the
+<a href="https://chromium.googlesource.com/infra/infra/+/refs/heads/main/go/src/infra/appengine/rubber-stamper/README.md">Rubber-Stamper
+bot</a>
+to approve import CLs.</p>
+<p>Adding the Rubber-Stamper as a reviewer is one of the last steps the importer
+takes, once tests have been rebaselined and the CQ passes. If the Rubber-Stamper
+cannot approve a CL, it will leave a comment on the CL explaining why - this
+will also cause the importer to go red.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/wpt_import_rubber_stamper_reject.png" alt="Rubber-Stamber bot rejecting a CL"></p>
+<p>There are two possibilities when the Rubber-Stamper rejects an import: either it
+is a valid rejection, because the import changes code files (<code>.py</code>, <code>.bat</code>,
+<code>.sh</code>), or it is invalid and we&#39;re missing an allowlist rule for a file the
+importer is allowed to modify.</p>
+<p>For valid rejections, it is the job of the rotation sheriff to land the CL
+manually. You need to un-abandon the import, <code>CR+1</code> it yourself, and <code>CQ+2</code> it.
+If you don&#39;t have permission to do that (e.g. are not a committer), contact
+<a href="mailto:blink-dev@chromium.org">blink-dev@chromium.org</a>.</p>
+<p>For invalid rejections, message <a href="mailto:blink-dev@chromium.org">blink-dev@chromium.org</a> or add an exception
+rule yourself. <a href="https://chrome-internal-review.googlesource.com/c/infradata/config/+/3608170">This is an example
+CL</a>
+that adds an exception rule. (Note that you need internal access to access this
+repository).</p>
+<h4 id="manual-import">Manual import</h4>
+<p>To pull the latest versions of the tests that are currently being imported, you
+can also directly invoke the
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/tools/wpt_import.py">wpt-import</a> script.</p>
+<p>That script will pull the latest version of the tests from our mirrors of the
+upstream repositories. If any new versions of tests are found, they will be
+committed locally to your local repository. You may then upload the changes.</p>
+<p>Remember your import might fail due to GitHub&#39;s limit for unauthenticated
+requests, so consider <a href="#GitHub-credentials">passing your GitHub credentials</a> to
+the script.</p>
+<h3 id="exporter">Exporter</h3>
+<ul>
+<li>The source lives in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/tools/wpt_export.py">third_party/blink/tools/wpt_export.py</a>.</li>
+<li>If the exporter starts misbehaving (for example, creating the same PR over
+and over again), put it in &quot;dry run&quot; mode by landing <a href="https://crrev.com/c/462381/">this
+CL</a>.</li>
+</ul>
+<h3 id="wptfyi-integration">wpt.fyi Integration</h3>
+<p><a href="https://wpt.fyi/">https://wpt.fyi/</a> is a dashboard for comparing WPT results between browsers over
+time.
+WPT doesn&#39;t have robust mobile testing infrastructure, so <a href="https://wpt.fyi/runs?label=master&amp;product=chrome_android%5Bexperimental%5D&amp;product=chrome_ios%5Bexperimental%5D&amp;product=android_webview%5Bexperimental%5D&amp;product=chrome_android%5Bstable%5D">wpt.fyi results for
+Chrome&#39;s mobile products</a> (WebView, Clank, and Bling) are
+generated and uploaded from LUCI instead of wpt&#39;s GitHub Actions.</p>
+<p>Each product has CI builder(s) that run the entire WPT suite.
+The builders are meant to collect data, not verify code changes, so test
+failures will not trigger retries or turn builds red.
+The <a href="https://ci.chromium.org/ui/p/infra/builders/cron/wpt-uploader"><code>wpt-uploader</code> &quot;builder&quot;</a> periodically aggregates the latest
+results and sends them to <a href="https://github.com/web-platform-tests/wpt.fyi/blob/main/api/README.md#apiresultsupload">wpt.fyi&#39;s upload API</a>.</p>
+<h3 id="github-credentials">GitHub credentials</h3>
+<p>When manually running the <code>wpt-import</code> and <code>wpt-export</code> scripts, several
+requests are made to GitHub to query the status of pull requests, look for
+existing exported commits etc. GitHub has a <a href="https://developer.github.com/v3/#rate-limiting">fairly
+low</a> request limit for
+unauthenticated requests, so it is recommended that you let <code>wpt-export</code> and
+<code>wpt-import</code> use your GitHub credentials when sending requests:</p>
+<ol>
+<li>Generate a new <a href="https://github.com/settings/tokens">personal access token</a></li>
+<li>Set up your credentials by either:<ul>
+<li>Setting the <code>GH_USER</code> environment variable to your GitHub user name
+and the <code>GH_TOKEN</code> environment variable to the access token you have
+just created <strong>or</strong></li>
+<li>Creating a JSON file with two keys: <code>GH_USER</code>, your GitHub user name,
+and <code>GH_TOKEN</code>, the access token you have just generated. After that,
+pass <code>--credentials-json &lt;path-to-json&gt;</code> to <code>wpt-export</code> and
+<code>wpt-import</code>.</li>
+</ul>
+</li>
+</ol>
+<h3 id="debugging-failed-web-platform-tests">Debugging failed web platform tests</h3>
+<p>This section explains the way to debug web platform tests.
+Please build <code>blink_tests</code> before running commands below.
+It is explained in <a href="web_tests#running-web-tests">Running Web Tests</a>.</p>
+<h4 id="running-tests-1">Running test(s)</h4>
+<p>The way to run web tests is explained in <a href="web_tests#running-the-tests">Running the
+Tests</a>.</p>
+<p>Assume that you are writing the test named <code>wpt_internal/fake/foobar.html</code>.
+You may want to run only the tests and you do not want to run all tests under
+<code>wpt_internal/fake</code>.  The following command narrows down the test to only
+<code>wpt_internal/fake/foobar.html</code>.</p>
+<pre data-language="bash">third_party/blink/tools/run_web_tests.py -t Default \
+third_party/blink/web_tests/wpt_internal/fake/foobar.html</pre>
+<h4 id="logging">Logging</h4>
+<p>During the debug, you may want to log what happens during the test.
+You can use <code>console.log</code> in JavaScript to log arbitrary strings.</p>
+<pre>e.g.
+console.log('fake has been executed.');
+console.log('foo=' + foo);</pre>
+<p>Logs are written under <code>$root_build_dir/layout-test-results</code>.
+If you have tested <code>wpt_internal/fake/foobar.html</code>, the log will be stored in
+<code>$root_build_dir/layout-test-results/wpt_internal/fake/foobar-stderr.txt</code>.
+You can change output directory with <code>--results-directory=&lt;output directory&gt;</code>.</p>
+<h4 id="checking-http-servers">Checking HTTP servers</h4>
+<p>For some test cases, you may use .headers file to set arbitrary HTTP headers.
+To verify what is set to headers, you can run an HTTP server used for WPT
+by yourself. The following command starts the HTTP server for you:</p>
+<pre data-language="bash">third_party/blink/tools/run_blink_wptserve.py</pre>
+<p>To see headers returned by the server, you can use <code>curl -v</code>.
+<code>curl</code> will show headers in stderr. You may want to use <code>|&amp; less</code> to
+see output if it is too long.</p>
+<pre data-language="bash">curl -v http://localhost:8081/wpt_internal/fake/foobar.html |&amp; less</pre>
+<h4 id="debugging-with-a-debugger">Debugging with a debugger</h4>
+<p>You are able to debug the inside of Chromium with a debugger for particular
+WPT tests. Refer to <a href="https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/testing/web_tests_in_content_shell.md">Running web tests using the content shell</a>
+for details.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/web_platform_tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/web_platform_tests.md</a>
+  </p>
+</div>

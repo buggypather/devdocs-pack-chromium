@@ -1,0 +1,269 @@
+<h1>Code Reviews</h1>
+<p>Code reviews are a central part of developing high-quality code for Chromium.
+All change lists (CLs) must be reviewed.</p>
+<p>This page documents policy rules regarding code changes.</p>
+<p>See also:</p>
+<ul>
+<li>The general patch, upload, and land process in <a href="contributing#code-review">contributing code</a></li>
+<li><a href="https://github.com/chromium/chromium/blob/HEAD/CODE_OF_CONDUCT.md">Code of conduct</a></li>
+<li><a href="cl_respect">Respectful Changes</a></li>
+<li><a href="cr_respect">Respectful Code Reviews</a></li>
+<li>The code review changes and OWNERS policy changes launched on March 24, 2021, see
+<a href="code_review_owners">Mandatory Code Review and Native OWNERS</a>.</li>
+</ul>
+<h1 id="code-review-policies">Code review policies</h1>
+<p>Any <a href="https://www.chromium.org/getting-involved/become-a-committer/#what-is-a-committer">committer</a> can review code, but
+an owner must provide a review for each directory you are touching. Ideally you should choose
+reviewers who are familiar with the area of code you are touching. If you have doubts, look
+at the <code>git blame</code> for the file and the <code>OWNERS</code> files (<a href="#owners-files">more info</a>).</p>
+<p>To indicate a positive review, the reviewer provides a <code>Code-Review +1</code> in
+Gerrit, also known as an LGTM (&quot;Looks Good To Me&quot;). A score of &quot;-1&quot; indicates
+the change should not be submitted as-is.</p>
+<p>Submissions to the chromium/src repository by a change contributor who is not a Chromium
+committer require two committers to Code-Review+1 the submission. If the owner of the CL
+is already a committer, then only one other committer is needed to review.</p>
+<p>If you have multiple reviewers, provide a message indicating what you expect
+from each reviewer. Otherwise people might assume their input is not required
+or waste time with redundant reviews.</p>
+<p>Please also read <a href="cl_respect">Respectful Changes</a> and
+<a href="cr_respect">Respectful Code Reviews</a>.</p>
+<p>There are also a <a href="cl_tips">collection of tips</a> for productive reviews, though
+these are advisory and not policy.</p>
+<h4 id="expectations-for-all-reviewers">Expectations for all reviewers</h4>
+<ul>
+<li><p>As a reviewer, aim to provide actionable feedback 3 times per work day. The
+expectation is that if you&#39;re in the same time zone as the CL author, there
+are 3 review iterations. If there is a time zone divide, aim for 2 review
+iterations.</p>
+</li>
+<li><p>Use the &quot;Display name&quot; and &quot;About me&quot; fields in Gerrit settings to indicate
+if you&#39;re away and when you&#39;ll be back.</p>
+</li>
+<li><p>Don&#39;t generally discourage people from sending you code reviews. This
+includes using a blanket &quot;slow&quot; in your &quot;Display name&quot; or &quot;About me&quot;
+fields.</p>
+</li>
+</ul>
+<h4 id="expectations-for-all-authors">Expectations for all authors</h4>
+<ul>
+<li>If a reviewer does not respond within 2 works days, add another
+reviewer onto the CL. Do not remove the initial reviewer.</li>
+</ul>
+<h2 id="owners-files">OWNERS files</h2>
+<p>In various directories there are files named <code>OWNERS</code> that list the email
+addresses of people qualified to review changes in that directory. You must
+get a positive review from an owner of each directory your change touches.</p>
+<p>Owners files are recursive, so each file also applies to its subdirectories.
+It&#39;s generally best to pick more specific owners. People listed in higher-level
+directories may have less experience with the code in question. For example,
+the reviewers in the <code>//chrome/browser/component_name/OWNERS</code> file will likely
+be more familiar with code in <code>//chrome/browser/component_name/sub_component</code>
+than reviewers in the higher-level <code>//chrome/OWNERS</code> file.</p>
+<p>More detail on the owners file format is provided <a href="#owners-file-details">here</a>.</p>
+<p><em>Tip:</em> The <code>git cl owners</code> command can help find owners. Gerrit also provides
+this functionality in the Reviewers field of CLs.</p>
+<p>While owners must approve all patches, any committer can contribute to the
+review. In some directories the owners can be overloaded or there might be
+people not listed as owners who are more familiar with the low-level code in
+question. In these cases it&#39;s common to request a low-level review from an
+appropriate person, and then request a high-level owner review once that&#39;s
+complete. As always, be clear what you expect of each reviewer to avoid
+duplicated work.</p>
+<p>Owners do not have to pick other owners for reviews. Since they should already
+be familiar with the code in question, a thorough review from any appropriate
+committer is sufficient.</p>
+<h4 id="expectations-of-owners">Expectations of owners</h4>
+<p>The existing owners of a directory approve additions to the list. It is
+preferable to have many directories, each with a smaller number of specific
+owners rather than large directories with many owners. Owners must be
+<a href="https://www.chromium.org/getting-involved/become-a-committer/">committers</a>
+with at least 3 months&#39; tenure, and in addition should:</p>
+<ul>
+<li><p>Demonstrate excellent judgment, teamwork and ability to uphold
+<a href="contributing">Chromium development principles</a>.</p>
+</li>
+<li><p>Be already acting as an owner, providing high-quality reviews and design
+feedback.</p>
+</li>
+<li><p>Have submitted a substantial number of non-trivial changes to the affected
+directory.</p>
+</li>
+<li><p>Have committed or reviewed substantial work to the affected directory
+within the last ninety days.</p>
+</li>
+<li><p>Have the bandwidth to contribute to reviews in a timely manner. If the load
+is unsustainable, work to expand the number of owners. Don&#39;t try to
+discourage people from sending reviews, including writing &quot;slow&quot; or
+&quot;emeritus&quot; after your name.</p>
+</li>
+<li><p>OWNERS will be assigned <a href="security/security-issue-guide-for-devs">security
+issues</a> in their area of
+responsibility and these should be investigated and fixed within the
+project&#39;s SLOs.</p>
+</li>
+</ul>
+<p>Seldom-updated directories may have exceptions to the &quot;substantiality&quot; and
+&quot;recency&quot; requirements.</p>
+<p>Directories in <code>//third_party</code> should list those most familiar with the
+library, regardless of how often the code is updated.</p>
+<h4 id="addition-of-new-owners">Addition of new OWNERS</h4>
+<p>New OWNERS are added by consensus of the existing OWNERS.</p>
+<p>Some directories have more well-defined processes for updating their OWNERS
+file which will be documented at the top of the OWNERS file itself (such as in
+<a href="https://github.com/chromium/chromium/blob/HEAD/third_party/blink/renderer/OWNERS">blink/renderer/</a>).</p>
+<p>CLs for modifying OWNERS files should cc all other OWNERS for awareness (unless
+another awareness mechanism exists), and concerns may be raised even after
+the change has landed. Any disagreements should be escalated up to higher-level
+directory OWNERS or up to top-level <a href="https://github.com/chromium/chromium/blob/HEAD/ATL_OWNERS">ATL_OWNERS</a>.</p>
+<h4 id="removal-of-owners">Removal of owners</h4>
+<p>If a code owner is not meeting the <a href="#expectations-of-owners">expectations of
+owners</a> listed above for more than one quarter (and
+they are not on a leave during that time), then they may be removed by any
+co-owner or an owner from the parent directory after a 4-week notice, using
+the following process:</p>
+<ul>
+<li>Upload a change removing the owner and copy all owners in that directory,
+including the owner in question.</li>
+<li>If the affected owner approves the change, it may be landed immediately.</li>
+<li>Otherwise, the change author must wait five working days for feedback from
+the other owners.<ul>
+<li>After that time has elapsed, if the change has received 3 approvals
+with no objections from anyone else, the change may be landed.</li>
+<li>If the directory does not have 4 owners, then the decision should
+be escalated to the owners of the parent directory (or directories)
+as necessary to provide enough votes.</li>
+<li>If there are objections, then the decision should be escalated to
+the <a href="https://github.com/chromium/chromium/blob/HEAD/ATL_OWNERS">ATL_OWNERS</a> for resolution.</li>
+</ul>
+</li>
+</ul>
+<p>Note: For the purpose of not slowing down code review, Chromium removes
+inactive owners (e.g., those who made no contributions for multiple quarters)
+on a regular basis. The script does not take into account personal situations
+like a long leave. If you were inactive only for a certain period of time
+while you were on a long leave and have been meeting the above owner&#39;s
+expectations in other times, you can create a CL to re-add yourself and land
+after getting local owner&#39;s approval (you can refer to this policy in the CL).
+The removal script will cc the removed owner and one other owner to avoid spam.</p>
+<h3 id="owners-file-details">OWNERS file details</h3>
+<p>Refer to the <a href="https://github.com/GerritCodeReview/plugins_code-owners/blob/master/resources/Documentation/backend-find-owners.md">owners plugin</a>
+for all details on the file format.</p>
+<p>This example indicates that two people are owners, in addition to any owners
+from the parent directory. <code>git cl owners</code> will list the comment after an
+owner address, so this is a good place to include restrictions or special
+instructions.</p>
+<pre># You can include comments like this.
+a@chromium.org
+b@chromium.org  # Only for the frobinator.</pre>
+<p>A <code>*</code> indicates that all committers are owners:</p>
+<pre>*</pre>
+<p>The text <code>set noparent</code> will stop owner propagation from parent directories.
+This should be rarely used. If you want to use <code>set noparent</code> except for IPC
+related files, please first reach out to <a href="mailto:chrome-atls@google.com">chrome-atls@google.com</a>.</p>
+<p>You have to use <code>set noparent</code> together with a reference to a file that lists
+the owners for the given use case. Approved use cases are listed in
+<code>//build/OWNERS.setnoparent</code>. Owners listed in those files are expected to
+execute special governance functions such as ATL reviews or ipc security review.
+Every set of owners should implement their own means of auditing membership. The
+minimum expectation is that membership in those files is reevaluated on
+project, or affiliation changes.</p>
+<p>In this example, only the ATLs are owners:</p>
+<pre>set noparent
+file://ATL_OWNERS</pre>
+<p>The <code>per-file</code> directive allows owners to be added that apply only to files
+matching a pattern. In this example, owners from the parent directory
+apply, plus one person for some classes of files, and all committers are
+owners for the readme:</p>
+<pre>per-file foo_bar.cc=a@chromium.org
+per-file foo.*=a@chromium.org
+
+per-file readme.txt=*</pre>
+<p>Other <code>OWNERS</code> files can be included by reference by listing the path to the
+file with <code>file://...</code>. This example indicates that only the people listed in
+<code>//ipc/SECURITY_OWNERS</code> can review the messages files:</p>
+<pre>per-file *_messages*.h=set noparent
+per-file *_messages*.h=file://ipc/SECURITY_OWNERS</pre>
+<p>File globbing is supported using the
+<a href="https://github.com/GerritCodeReview/plugins_code-owners/blob/master/resources/Documentation/path-expressions.md#simple-path-expressions">simple path expression</a>
+format.</p>
+<p>Owners annotated with <code>#{LAST_RESORT_SUGGESTION}</code> in their comment will be
+omitted when suggesting code owners, except if dropping these code owners would
+make the suggestion result empty or if these code owners are already reviewers
+of the change.</p>
+<h3 id="owners-override">Owners-Override</h3>
+<p>Setting the <code>Owners-Override +1</code> label will bypass OWNERS enforcement. Active
+<a href="gardener">gardeners</a>, Release Program Managers,
+<a href="#large-scale-changes">Large Scale Changes</a>,
+<a href="#global-approvals">Global Approvers</a> reviewers,
+<a href="https://github.com/chromium/chromium/blob/HEAD/ATL_OWNERS">Chrome ATLs</a>
+have this capability. The power to use Owners-Override should be restricted
+as follows:</p>
+<ul>
+<li>Active gardeners and Release Program Managers can set Owners-Override only
+on CLs needed for gardening and releasing (e.g., revert, reland, test fix,
+cherry-pick).</li>
+<li>Large Scale Change reviewers can set Owners-Override only on gardening CLs
+and CLs about the approved Large Scale Change.</li>
+<li>Global approvers can set Owners-Override only on gardening CLs and
+mechanical CLs associated with their API changes. For example,
+//base/OWNERS can set Owners-Override on mechanical CLs associated with
+//base/ API changes.</li>
+<li>Chrome ATLs can set Owners-Override on any changes to help with cases that
+cannot be handled by the above groups and expedite CLs when LSC is too
+heavyweight. However, please use one of the above groups before asking
+Chrome ATLs.</li>
+</ul>
+<p>When you need Owners-Override on gardening CLs, please reach out to the
+Active Sheriffs and Release Program Managers first. If none of them is
+available, please send an email to <a href="mailto:lsc-owners-override@chromium.org">lsc-owners-override@chromium.org</a> for help.</p>
+<p>Note that Owners-Override by itself is not enough on your own CLs. Where this
+matters is when you are gardening. For example, if you want to revert or
+disable a test, your Owners-Override on the CL is not enough. You also need
+either another committer to LGTM the CL or, for clean reverts, a <code>Bot-Commit: +1</code> from the <a href="#automated-code_review">rubber-stamper bot</a>.</p>
+<p>When setting Owners-Override it is your responsibility to confirm that every
+file (and line) in the patch has been appropriately reviewed.</p>
+<h2 id="mechanical-changes">Mechanical changes</h2>
+<h3 id="global-approvals">Global Approvals</h3>
+<p>For one-off CLs, API owners of <code>base</code>, <code>build</code>, <code>content</code>,
+<code>third_party/blink/public</code> and <code>url</code> can <code>Owners-Override +1</code> a change to their
+APIs to avoid waiting for rubberstamp +1s from affected directories&#39; owners.
+This should only be used for mechanical updates, but global approvers are free
+to use their judgement in determining which mechanical changes they understand
+well enough to approve (rather than limit strictly to calls into code
+they own).</p>
+<p>For a change that impacts many directories but doesn&#39;t need area-specific
+expertise to review, please ask any global approver or Chrome ATL to
+approve the change rather than incur unnecessary review cost on a larger number
+of reviewers.</p>
+<h3 id="large-scale-changes">Large Scale Changes</h3>
+<p>You can use the <a href="process/lsc/large_scale_changes">Large Scale Changes</a>
+process to get approval to bypass OWNERS enforcement for large changes like
+refactoring, architectural changes, or other repetitive code changes across the
+whole codebase. This is used for work that span many dozen CLs.</p>
+<h2 id="documentation-updates">Documentation updates</h2>
+<p>Documentation updates require code review. We may revisit this decision in the
+future.</p>
+<h2 id="automated-code-review">Automated code-review</h2>
+<p>For verifiably safe changes like translation files, clean reverts, and clean
+cherry-picks, we have automation that will vote +1 on the <code>Bot-Commit</code> label
+allowing the CL to be submitted without human code-review. Add <code>Rubber Stamper</code>
+(<a href="mailto:rubber-stamper@appspot.gserviceaccount.com">rubber-stamper@appspot.gserviceaccount.com</a>) to your CL as a reviewer to
+activate this automation. It will scan the CL after about 1 minute and reply
+with its verdict. <code>Bot-Commit</code> votes are not sticky between patchsets and so
+only add the bot once the CL is finalized.</p>
+<p>When combined with the <a href="#owners_override"><code>Owners-Override</code></a> power, gardeners
+can effectively revert and reland on their own.</p>
+<p>Rubber Stamper never provides OWNERS approval, by design. It&#39;s intended to be
+used by those who have owners in the directory modified or who are gardeners. If
+it provided both code review and OWNERS approval, that would be an abuse vector:
+that would allow anyone who can create a revert or cherry-pick to land it
+without any other person being involved (e.g. the silent revert of security
+patches).</p>
+<p>Changes not supported by <code>Rubber Stamper</code> always need a +1 from another
+committer.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/code_reviews.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/code_reviews.md</a>
+  </p>
+</div>

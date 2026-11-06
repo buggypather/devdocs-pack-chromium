@@ -1,0 +1,214 @@
+<h1>Eclipse Configuration for Android</h1>
+<p>Instructions on using <strong>Android Studio</strong> are <a href="android_studio">here</a>.</p>
+<p>*** note
+This documentation was written for Eclipse 4.5 though other versions of Eclipse
+should work similarly.</p>
+<hr>
+<h2 id="one-time-eclipse-configuration">One time Eclipse Configuration</h2>
+<p>This section contains set up steps for the very first time you start Eclipse.
+You should only need to go through these once, even if you switch workspaces.</p>
+<ul>
+<li>Starting Eclipse. It can be started a couple of ways:<ul>
+<li>From Ubuntu main menu, select Applications &gt; Programming &gt; Eclipse 4.5</li>
+<li>From the command line, type eclipse45</li>
+</ul>
+</li>
+<li>Pick a workspace somewhere in your hard drive.</li>
+<li>Install CDT - C/C++ Development Tools<ul>
+<li>Select Help &gt; Install New Software... from the main menu</li>
+<li>For Work with, select mars - <a href="http://download.eclipse.org/releases/mars">http://download.eclipse.org/releases/mars</a>
+(or any other mirror that seems appropriate)</li>
+<li>Check Mobile and Device Development &gt; C/C++ Remote Launch</li>
+<li>Check Programming Languages &gt; C/C++ Development Tools</li>
+<li>Click through Next, Finish, etc to complete the wizard.</li>
+<li>If you get errors about a missing dependency on org.eclipse.rse.ui for the
+&quot;C++ Remote Launch&quot; install, add an available update path of
+<a href="http://download.eclipse.org/dsdp/tm/updates/3.2">http://download.eclipse.org/dsdp/tm/updates/3.2</a></li>
+<li>Click Restart Now when prompted to restart Eclipse</li>
+</ul>
+</li>
+<li>Memory<ul>
+<li><p>Close Eclipse</p>
+</li>
+<li><p>Add the following lines to <code>~/.eclipse/init.sh</code>:</p>
+<pre data-language="shell">ECLIPSE_MEM_START=1024m
+ECLIPSE_MEM_MAX=8192m</pre>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="general-workspace-configuration">General Workspace Configuration</h2>
+<p>These are settings that apply to all projects in your workspace. All the
+settings below are inside Window &gt; Preferences.</p>
+<ul>
+<li>Android formatting<ul>
+<li>Download <a href="https://raw.githubusercontent.com/android/platform_development/master/ide/eclipse/android-formatting.xml">android-formatting.xml</a></li>
+<li>Select Java &gt; Code Style &gt; Formatter from the tree on the left</li>
+<li>Click Import...</li>
+<li>Select the android-formatting.xml file</li>
+<li>Make sure Android is set as the Active Profile</li>
+</ul>
+</li>
+<li>Java import order<ul>
+<li>Select Java &gt; Code Style &gt; Organize Imports from the tree on the left</li>
+<li>Click Import...</li>
+<li>Select the <code>&lt;project root&gt;/tools/android/eclipse/android.importorder</code> file</li>
+</ul>
+</li>
+<li>Disable automatic refresh. Otherwise, Eclipse will constantly try to refresh
+your projects (which can be slow).<ul>
+<li>Select General &gt; Workspace from the tree on the left.</li>
+<li>Uncheck Refresh using native hooks or polling (if present)</li>
+<li>Select General &gt; Startup and Shutdown from the tree on the left.</li>
+<li>Uncheck Refresh workspace on startup (if present)</li>
+</ul>
+</li>
+<li>Disable build before launching<ul>
+<li>Select Run/Debug &gt; Launching</li>
+<li>Uncheck Build (if required) before launching</li>
+</ul>
+</li>
+<li>Tab ordering<ul>
+<li>If you prefer ordering your tabs by most recently used, go to General &gt;
+Appearance and check Show most recently used tabs</li>
+</ul>
+</li>
+<li>Autocomplete<ul>
+<li>Select Java &gt; Editor &gt; Content Assist</li>
+<li>Check Enable auto activation</li>
+<li>Change Auto activation triggers for Java: to
+<code>._abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ</code></li>
+</ul>
+</li>
+<li>Line Length<ul>
+<li>If you want to change the line length indicator, go to General &gt; Editors &gt;
+Text Editors</li>
+<li>Check Show print margin and change the Print margin column: to 100.</li>
+</ul>
+</li>
+</ul>
+<h2 id="project-configuration">Project Configuration</h2>
+<h3 id="create-the-project">Create the project</h3>
+<ul>
+<li>Select File &gt; New &gt; Project... from the main menu.</li>
+<li>Select C/C++ &gt; C++ from the project tree and click Next.<ul>
+<li>Note: not &quot;Makefile Project with Existing Code&quot;, even though that sounds
+sensible).</li>
+</ul>
+</li>
+<li>For Project name, use something meaningful to you. For example
+&quot;chrome-android”</li>
+<li>Uncheck Use default location. Click Browse... and select the src directory of
+your Chromium gclient checkout</li>
+<li>For Project type, use Makefile project &gt; Empty Project</li>
+<li>For Toolchains use -- Other Toolchain --</li>
+<li>Click Next</li>
+<li>Disable the default CDT builder<ul>
+<li>Click Advanced Settings...</li>
+<li>Select Builders from the tree on the left</li>
+<li>Uncheck CDT Builder</li>
+<li>Click OK if a dialog appears warning you that this is an
+&#39;advanced feature&#39;</li>
+<li>Click OK to close the project properties dialog and return to the project
+creation wizard</li>
+</ul>
+</li>
+<li>Click Finish to create the project</li>
+</ul>
+<h3 id="configure-the-project">Configure the project</h3>
+<ul>
+<li><p>Right click on the project and select Properties</p>
+</li>
+<li><p>Exclude Resources (OPTIONAL). This can speed Eclipse up a bit and may make
+the indexer happier.</p>
+<ul>
+<li>Select Resources &gt; Resource Filters</li>
+<li>Click Add...</li>
+<li>Select Exclude all, Select Folders, and check All children (recursive)</li>
+<li>Enter .git as the name</li>
+<li>Click OK</li>
+<li>Click Apply to commit the changes</li>
+</ul>
+</li>
+<li><p>C/C++ Indexer (deprecated, seems to be done by default)</span></p>
+<ul>
+<li>Select C/C++ General &gt; Indexer from the tree on the left</li>
+<li>Click Restore Defaults</li>
+<li>Check Enable project specific settings</li>
+<li>Uncheck Index source files not included in the build</li>
+<li>Uncheck Allow heuristic resolution of includes</li>
+<li>Click Apply to commit the changes</li>
+</ul>
+</li>
+<li><p>Java</p>
+<ul>
+<li>Create a link from <code>&lt;project root&gt;/.classpath</code> to
+<code>&lt;project root&gt;/tools/android/eclipse/.classpath</code>:<pre data-language="shell">ln -s tools/android/eclipse/.classpath .classpath</pre>
+</li>
+</ul>
+</li>
+<li><p>Edit <code>&lt;project root&gt;/.project</code> as follows to make your project a
+Java project:</p>
+<ul>
+<li>Add the following lines inside <code>&lt;buildSpec&gt;</code>:<pre data-language="xml">&lt;buildCommand&gt;
+  &lt;name&gt;org.eclipse.jdt.core.javabuilder&lt;/name&gt;
+  &lt;arguments&gt;&lt;/arguments&gt;
+&lt;/buildCommand&gt;</pre>
+</li>
+<li>Add the following line inside <code>&lt;natures&gt;</code>:<pre data-language="xml">&lt;nature&gt;org.eclipse.jdt.core.javanature&lt;/nature&gt;</pre>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="run-robolectric-junit-tests">Run Robolectric JUnit tests</h3>
+<ul>
+<li>Prerequisite: Install a Java 8 JRE and make sure it&#39;s available in Eclipse</li>
+<li>Create a new JUnit test target:<ul>
+<li><p>Run &gt; Run Configurations &gt; New launch configuration &gt; JUnit</p>
+</li>
+<li><p>Using Android JUnit test launcher</p>
+</li>
+<li><p>Test tab:</p>
+<ul>
+<li>Run a single test or all tests in the package you want</li>
+</ul>
+</li>
+<li><p>Arguments tab:</p>
+<ul>
+<li><p>VM arguments:</p>
+<pre>-Drobolectric.dependency.dir=out/Debug/lib.java/third_party/robolectric</pre>
+</li>
+</ul>
+</li>
+<li><p>Classpath tab:</p>
+<ul>
+<li>Bootstrap Entries:<ul>
+<li>Advanced... &gt; Add Library &gt; JRE System Library</li>
+<li>Select a Java 8 JRE</li>
+</ul>
+</li>
+<li>User Entries:<ul>
+<li>Add JARs...</li>
+<li>Select the following JAR file from <code>third_party/robolectric/cipd/lib</code>:<ul>
+<li><code>android-all-5.0.0_r2-robolectric-1.jar</code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>JRE tab:</p>
+<ul>
+<li>Execution environment: Select the Java 8 JRE</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Run or Debug the launch configuration</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/eclipse.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/eclipse.md</a>
+  </p>
+</div>

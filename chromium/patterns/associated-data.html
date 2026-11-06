@@ -1,0 +1,189 @@
+<h1>The Associated Data Pattern</h1>
+<p>The associated data pattern allows a class C that is used by multiple other
+classes <em>outside</em> its own module (which don&#39;t control or know the lifetime of C)
+to store data that is logically &quot;per instance of C&quot;. This document will call
+those other classes the &quot;consumer classes&quot; of C.</p>
+<p>Imagine that you have a class Pokemon, which is used by two other classes,
+PokemonGroomer and PokemonNurse. A PokemonGroomer wishes to store the last time
+a given Pokemon got a bath, and a PokemonNurse wishes to store the last time a
+given Pokemon got a checkup.</p>
+<p>You might implement that this way:</p>
+<pre>class Pokemon {
+  ...
+  Time last_bath_;
+  Time last_checkup_;
+  ...
+};
+
+bool PokemonNurse::NeedsCheckup(Pokemon* p) {
+  return Time::Now() - p-&gt;last_checkup_ &gt; kCheckupInterval;
+}</pre>
+<p>but then Pokemon ends up containing (and being responsible for enforcing
+invariants on) data that is only for the use of other objects, which might live
+in entirely separate modules.</p>
+<p>You might instead do this:</p>
+<pre>class PokemonNurse {
+  ...
+  map&lt;Pokemon*, Time&gt; last_checkup_;
+  ...
+};
+
+bool PokemonNurse::NeedsCheckup(Pokemon* p) {
+  if (!last_checkup_.contains(p))
+    last_checkup_[p] = 0;
+  return Time::Now() - last_checkup_[p] &gt; kCheckupInterval;
+}</pre>
+<p>but another problem appears: PokemonNurse has to know when Pokemon are released
+into the wild so it can clean up the map, which adds extra bookkeeping.</p>
+<p>The associated data pattern would look like this:</p>
+<pre>class Pokemon {
+  ...
+  struct Data {
+    virtual ~Data();
+  };
+  map&lt;Key, unique_ptr&lt;Data&gt;&gt; user_data_;
+  ...
+};
+
+class PokemonNurse::PokemonData : public Pokemon::Data {
+  Time last_checkup_;
+};
+
+bool PokemonNurse::NeedsCheckup(Pokemon* p) {
+  if (!p-&gt;user_data_[PokemonNurse::kDataKey])
+    p-&gt;user_data_[PokemonNurse::kDataKey] = make_unique&lt;PokemonData&gt;();
+  return Time::Now() - p-&gt;user_data_[PokemonNurse::kDataKey].last_checkup_
+      &gt; kCheckupInterval;
+}</pre>
+<p>This way, Pokemon manages the <em>lifetime</em> of the per-Pokemon data, but
+PokemonNurse manages the <em>invariants</em> of the data, and only PokemonNurse is
+aware of the per-Pokemon data belonging to PokemonNurse.</p>
+<h2 id="use-this-pattern-when">Use this pattern when:</h2>
+<ul>
+<li>You have a central class C, and many places in your code want to store some
+data for each instance of C.</li>
+<li>C can&#39;t directly contain your data for layering or code structure reasons.</li>
+<li>The data being stored is ephemeral and your consumer classes don&#39;t care
+about its lifetime.</li>
+</ul>
+<h2 id="dont-use-this-pattern-when">Don&#39;t use this pattern when:</h2>
+<ul>
+<li>The data being stored must expose any behavior other than a destructor to
+the central class; in that case, you need a richer pattern than this one.</li>
+<li>The data being stored has a complex lifetime.</li>
+<li>Deleting the data being stored has side effects.</li>
+<li>There might be a very large amount (thousands) of associated data entries
+for a particular client class; in that case, a domain-specific data model
+will provide better efficiency.</li>
+<li>The central class C and the consumer classes are close enough that it would
+make sense for C to store the data directly.</li>
+</ul>
+<h2 id="alternatives--see-also">Alternatives / See also:</h2>
+<ul>
+<li>Storing data for consumer classes directly on the object of class C.</li>
+<li>Having the consumer store a map between objects of class C and the
+consumer&#39;s C-specific data.</li>
+</ul>
+<h2 id="how-to-use-this-pattern-in-chromium">How to use this pattern in Chromium:</h2>
+<p>The two most commonly-used instances of this pattern in Chromium are
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/base/supports_user_data.h">SupportsUserData</a> (especially <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/content/public/browser/web_contents_user_data.h">WebContentsUserData</a> and <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/ios/web/public/web_state_user_data.h">WebStateUserData</a>) and
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/components/keyed_service/core/keyed_service.h">KeyedService</a> (usually via <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/components/keyed_service/content/browser_context_keyed_service_factory.h">BrowserContextKeyedServiceFactory</a> and
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/components/keyed_service/ios/browser_state_keyed_service_factory.h">BrowserStateKeyedServiceFactory</a>).</p>
+<h3 id="supportsuserdata">SupportsUserData</h3>
+<p>SupportsUserData is a mixin-type class that allows consumer classes to stash
+data on the class with the mixin. It exposes a very small interface
+<code>SupportsUserData::Data</code> which stored data items implement (in fact, any class
+with a virtual destructor already implements it), and adds a handful of new
+methods to the class with the mixin:</p>
+<pre>Data* GetUserData(const void* key);
+void SetUserData(const void* key, std::unique_ptr&lt;Data&gt; data);
+void RemoveUserData(const void* key);</pre>
+<p>For example, in //net, URLRequest inherits from SupportsUserData, so if you were
+running a RequestNicenessService that wanted to annotate URLRequests with a
+niceness value at one point and use that value later, you might do:</p>
+<pre>class RequestNicenessService {
+  static char kRequestDataKey;
+
+  void SetRequestNiceness(net::URLRequest* request, int niceness);
+  int GetRequestNiceness(net::URLRequest* request);
+};
+
+struct NicenessData : public SupportsUserData::Data {
+  int niceness;
+};
+
+void RequestNicenessService::SetRequestNiceness(...) {
+  request-&gt;SetUserData(&amp;kRequestDataKey,
+                       make_unique&lt;NicenessData&gt;(niceness));
+}
+
+int RequestNicenessService::GetRequestNiceness(...) {
+  SupportsUserData::Data* data = request-&gt;GetUserData(&amp;kRequestDataKey);
+  if (data)
+    return static_cast&lt;NicenessData*&gt;(data)-&gt;niceness;
+  return -1;
+}</pre>
+<p>Or, if there might be multiple RequestNicenessService instances, you could use
+the address of the RequestNicenessService instance itself as the key for the
+UserData on the URLRequest. That&#39;s actually a more common pattern, but for a
+singleton instance using the address of a static is also fine.</p>
+<h3 id="webcontentsuserdata--tabhelper">WebContentsUserData &amp; TabHelper</h3>
+<p>For the specific very common case of wanting to attach a SupportsUserData::Data
+to a WebContents, the helper class <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/content/public/browser/web_contents_user_data.h">WebContentsUserData</a> exists. This templated
+class handles casting to and from your concrete type for you. It is commonly
+used with the related <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/tab_helpers.md">TabHelper</a> pattern.</p>
+<h3 id="keyedservice--browsercontextkeyedservicefactory">KeyedService &amp; BrowserContextKeyedServiceFactory</h3>
+<p>KeyedService is an abstract interface that implements this pattern, but with an
+additional notion of dependencies between different pieces of associated data.
+It is usually concretely used via BrowserContextKeyedServiceFactory, by
+subclassing BrowserContextKeyedServiceFactory and overriding the
+<code>BuildServiceInstanceFor</code> method. Since a Profile is a BrowserContext, this
+provides a way to store data associated with a Profile. For example, if you
+were creating a UserNicenessController, you might do:</p>
+<pre>class UserNicenessData : public KeyedService {
+ public:
+  static UserNicenessData* FromProfile(Profile* profile);
+  int niceness;
+
+  // Maybe also:
+  //   void Shutdown() override;
+  // if you need to participate in KeyedService's two-phase destruction
+  // protocol.
+};
+
+class UserNicenessController :
+      public BrowserContextKeyedServiceFactory {
+  ...
+};
+
+// static
+UserNicenessData*
+UserNicenessData::FromProfile(Profile* profile) {
+  return static_cast&lt;UserNicenessData*&gt;(
+      UserNicenessController::GetInstance()-&gt;
+          GetServiceForBrowserContext(profile, true));
+}
+
+// in code somewhere:
+UserNicenessData::FromProfile(profile)-&gt;niceness++;</pre>
+<p>Any code that needs the UserNicenessData for a given Profile can call
+<code>UserNicenessData::FromProfile</code>, and KeyedService and
+BrowserContextKeyedServiceFactory will handle creation and lifetime as needed,
+as well as handling any dependencies UserNicenessData might declare on other
+services.</p>
+<p>Note that the naming of KeyedService <strong>implies</strong> that it is intended for
+services, as does the presence of a dependency mechanism, but the same approach
+can be used to store plain data, as in this example.</p>
+<p>Another note: Since <code>Profile</code> already SupportsUserData, if you simply want to
+store data on the profile, it is easier to do it that way rather than use
+KeyedService.</p>
+<p>A third note: on iOS, use <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/components/keyed_service/ios/browser_state_keyed_service_factory.h">BrowserStateKeyedServiceFactory</a> instead, which
+attaches a KeyedService to a <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/ios/web/public/browser_state.h">BrowserState</a>.</p>
+<p>A fourth note: on Android, C++ keyed services often have a corresponding Java
+object. The C++ part should own the Java one, as detailed in <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/docs/android_jni_ownership_best_practices.md">JavaCppOwnership</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/associated-data.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/associated-data.md</a>
+  </p>
+</div>

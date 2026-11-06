@@ -1,0 +1,114 @@
+<h1>GWP-ASan</h1>
+<p>GWP-ASan is a debug tool intended to detect heap memory errors in the wild. It
+samples allocations to a debug allocator, similar to ElectricFence or Page Heap,
+causing memory errors to crash and report additional debugging context about
+the error.</p>
+<p>It is also known by its recursive backronym, GWP-ASan Will Provide Allocation
+Sanity.</p>
+<p>To read a more in-depth explanation of GWP-ASan see <a href="https://www.chromium.org/Home/chromium-security/articles/gwp-asan">this
+post</a>.</p>
+<h2 id="allocator">Allocator</h2>
+<p>The GuardedPageAllocator returns allocations on pages buffered on both sides by
+guard pages. The allocations are either left- or right-aligned to detect buffer
+overflows and underflows. When an allocation is freed, the page is marked
+inaccessible so use-after-frees cause an exception (until that page is reused
+for another allocation.)</p>
+<p>The allocator saves stack traces on every allocation and deallocation to
+preserve debug context if that allocation results in a memory error.</p>
+<p>The allocator implements a quarantine mechanism by allocating virtual memory for
+more allocations than the total number of physical pages it can return at any
+given time. The difference forms a rudimentary quarantine.</p>
+<p>Because pages are re-used for allocations, it&#39;s possible that a long-lived
+use-after-free will cause a crash long after the original allocation has been
+replaced. In order to decrease the likelihood of incorrect stack traces being
+reported, we allocate a lot of virtual memory but don&#39;t store metadata for every
+allocation. That way though we may not be able to report the metadata for an old
+allocation, we will not report incorrect stack traces.</p>
+<h2 id="crash-handler">Crash handler</h2>
+<p>The allocator is designed so that memory errors with GWP-ASan allocations
+intentionally trigger invalid access exceptions. A hook in the crashpad crash
+handler process inspects crashes, determines if they are GWP-ASan exceptions,
+and adds additional debug information to the crash minidump if so.</p>
+<p>The crash handler hook determines if the exception was related to GWP-ASan by
+reading the allocator internals and seeing if the exception address was within
+the bounds of the allocator region. If it is, the crash handler hook extracts
+debug information about that allocation, such as thread IDs and stack traces
+for allocation (and deallocation, if relevant) and writes it to the crash dump.</p>
+<p>The crash handler runs with elevated privileges so parsing information from a
+lesser-privileged process is security sensitive. The GWP-ASan hook is specially
+structured to minimize the amount of allocator logic it relies on and to
+validate the allocator internals before reasoning about them.</p>
+<h2 id="status">Status</h2>
+<p>GWP-ASan is implemented for malloc and PartitionAlloc. It is enabled by default
+on Windows and macOS. The allocator parameters can be manually modified by using
+an invocation like the following:</p>
+<pre data-language="shell">chrome --enable-features=&quot;GwpAsanMalloc&lt;Study&quot; \
+       --force-fieldtrials=Study/Group1 \
+       --force-fieldtrial-params=Study.Group1:MaxAllocations/128/MaxMetadata/255/TotalPages/4096/AllocationSamplingFrequency/1000/ProcessSamplingProbability/1.0</pre>
+<p>GWP-ASan is tuned more aggressively in canary/dev, to increase the likelihood we
+catch newly introduced bugs, and for specific processes depending on the
+particular allocator.</p>
+<p>A <a href="https://bugs.chromium.org/p/chromium/issues/list?can=1&amp;q=Hotlist%3DGWP-ASan">hotlist of bugs discovered by by GWP-ASan</a>
+exists, though GWP-ASan crashes are filed Bug-Security, e.g. without external
+visibility, by default.</p>
+<h2 id="limitations">Limitations</h2>
+<ul>
+<li>GWP-ASan is configured with a small fixed-size amount of memory, so
+long-lived allocations can quickly deplete the page pool and lead the
+allocator to run out of memory. Depending on the sampling frequency and
+distribution of allocation lifetimes this may lead to only allocations early
+in the process lifetime being sampled.</li>
+<li>Allocations over a page in size are not sampled.</li>
+<li>The allocator skips zero-size allocations. Zero-size allocations on some
+platforms return valid pointers and may be subject to lifetime and bounds
+issues.</li>
+<li>GWP-ASan does not intercept allocations for Oilpan or the v8 GC.</li>
+<li>GWP-ASan does not hook PDFium&#39;s fork of PartitionAlloc.</li>
+<li>Right-aligned allocations to catch overflows are not perfectly right-aligned,
+so small out-of-bounds accesses may be missed.</li>
+<li>GWP-ASan does not sample some early allocations that occur before field trial
+initialization.</li>
+<li>Depending on the platform, GWP-ASan may or may not hook malloc allocations
+that occur in code not linked directly against Chrome.</li>
+</ul>
+<h2 id="testing">Testing</h2>
+<p>There is <a href="https://crbug.com/910751">not yet</a> a way to intentionally trigger a
+GWP-ASan exception.</p>
+<p>There is <a href="https://crbug.com/910749">not yet</a> a way to inspect GWP-ASan data in
+a minidump (crash report) without access to Google&#39;s crash service.</p>
+<h2 id="appendix-probabilities">Appendix: Probabilities</h2>
+<p>The question &quot;shall we enable GWP-ASan at all in this process?&quot; is
+answered by</p>
+<p><code>base::RandDouble()</code> &lt; <code>ProcessSamplingProbability</code> &times;
+<code>ProcessSamplingBoost2</code></p>
+<p>where</p>
+<ul>
+<li><p>0.0 &le; <code>ProcessSamplingProbability</code> &le; 1.0,</p>
+</li>
+<li><p><code>ProcessSamplingBoost2</code> &ge; 1, and</p>
+</li>
+<li><p><code>base::RandDouble()</code> has range [0, 1).</p>
+</li>
+</ul>
+<p>The question &quot;on average, how many allocations shall occur before
+GWP-ASan takes a sample?&quot; is answered by</p>
+<p><code>AllocationSamplingMultiplier</code> &times; (<code>AllocationSamplingRange</code>
+&lowast;&lowast; <code>base::RandDouble()</code>)</p>
+<p>where</p>
+<ul>
+<li><p><code>AllocationSamplingMultiplier</code> &ge; 1,</p>
+</li>
+<li><p><code>AllocationSamplingRange</code> &ge; 1, and</p>
+</li>
+<li><p>the final expression is &lt; <code>max(size_t)</code>.</p>
+</li>
+</ul>
+<p>As an example, on Linux, using the default parameters and
+<code>base::RandDouble() == 0.5</code>, we get</p>
+<p>1500 &times; (16 &lowast;&lowast; 0.5) = 6000</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gwp_asan.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gwp_asan.md</a>
+  </p>
+</div>

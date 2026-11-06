@@ -1,0 +1,451 @@
+<h1>Intro to Mojo &amp; Services</h1>
+<h2 id="overview">Overview</h2>
+<p>This document contains the minimum amount of information needed for a developer
+to start using Mojo effectively in Chromium, with example Mojo interface usage,
+service definition and hookup, and a brief overview of the Content layer&#39;s core
+services.</p>
+<p>See other <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/README.md#Mojo-Services">Mojo &amp; Services</a> documentation
+for introductory guides, API references, and more.</p>
+<h2 id="mojo-terminology">Mojo Terminology</h2>
+<p>A <strong>message pipe</strong> is a pair of <strong>endpoints</strong>. Each endpoint has a queue of
+incoming messages, and writing a message at one endpoint effectively enqueues
+that message on the other (<strong>peer</strong>) endpoint. Message pipes are thus
+bidirectional.</p>
+<p>A <strong>mojom</strong> file describes <strong>interfaces</strong>, which are strongly-typed collections
+of <strong>messages</strong>. Each interface message is roughly analogous to a single proto
+message, for developers who are familiar with Google protobufs.</p>
+<p>Given a mojom interface and a message pipe, one of the endpoints
+can be designated as a <strong><code>Remote</code></strong> and is used to <em>send</em> messages described by
+the interface. The other endpoint can be designated as a <strong><code>Receiver</code></strong> and is used
+to <em>receive</em> interface messages.</p>
+<p>*** aside
+NOTE: The above generalization is a bit oversimplified. Remember that the
+message pipe is still bidirectional, and it&#39;s possible for a mojom message to
+expect a reply. Replies are sent from the <code>Receiver</code> endpoint and received by the
+<code>Remote</code> endpoint.</p>
+<hr>
+<p>The <code>Receiver</code> endpoint must be associated with (<em>i.e.</em> <strong>bound</strong> to) an
+<strong>implementation</strong> of its mojom interface in order to process received messages.
+A received message is dispatched as a scheduled task invoking the corresponding
+interface method on the implementation object.</p>
+<p>Another way to think about all this is simply that <strong>a <code>Remote</code> makes
+calls on a remote implementation of its interface associated with a
+corresponding remote <code>Receiver</code>.</strong></p>
+<h2 id="example-defining-a-new-frame-interface">Example: Defining a New Frame Interface</h2>
+<p>Let&#39;s apply this to Chrome. Suppose we want to send a &quot;Ping&quot; message from a
+render frame to its corresponding <code>RenderFrameHostImpl</code> instance in the browser
+process. We need to define a nice mojom interface for this purpose, create a
+pipe to use that interface, and then plumb one end of the pipe to the right
+place so the sent messages can be received and processed there. This section
+goes through that process in detail.</p>
+<h3 id="defining-the-interface">Defining the Interface</h3>
+<p>The first step involves creating a new <code>.mojom</code> file with an interface
+definition, like so:</p>
+<pre data-language="cpp">// src/example/public/mojom/pingable.mojom
+module example.mojom;
+
+interface Pingable {
+  // Receives a &quot;Ping&quot; and responds with a random integer.
+  Ping() =&gt; (int32 random);
+};</pre>
+<p>This should have a corresponding build rule to generate C++ bindings for the
+definition here:</p>
+<pre data-language="python"># src/example/public/mojom/BUILD.gn
+import(&quot;//mojo/public/tools/bindings/mojom.gni&quot;)
+mojom(&quot;mojom&quot;) {
+  sources = [ &quot;pingable.mojom&quot; ]
+}</pre>
+<h3 id="creating-the-pipe">Creating the Pipe</h3>
+<p>Now let&#39;s create a message pipe to use this interface.</p>
+<p>*** aside
+As a general rule and as a matter of convenience when
+using Mojo, the <em>client</em> of an interface (<em>i.e.</em> the <code>Remote</code> side) is
+typically the party who creates a new pipe. This is convenient because the
+<code>Remote</code> may be used to start sending messages immediately without waiting
+for the InterfaceRequest endpoint to be transferred or bound anywhere.</p>
+<hr>
+<p>This code would be placed somewhere in the renderer:</p>
+<pre data-language="cpp">// src/third_party/blink/example/public/pingable.h
+mojo::Remote&lt;example::mojom::Pingable&gt; pingable;
+mojo::PendingReceiver&lt;example::mojom::Pingable&gt; receiver =
+    pingable.BindNewPipeAndPassReceiver();</pre>
+<p>In this example, <code>pingable</code> is the <code>Remote</code>, and <code>receiver</code>
+is a <code>PendingReceiver</code>, which is a <code>Receiver</code> precursor that will eventually
+be turned into a <code>Receiver</code>. <code>BindNewPipeAndPassReceiver</code> is the most common way to create
+a message pipe: it yields the <code>PendingReceiver</code> as the return
+value.</p>
+<p>*** aside
+NOTE: A <code>PendingReceiver</code> doesn&#39;t actually <strong>do</strong> anything. It is an
+inert holder of a single message pipe endpoint. It exists only to make its
+endpoint more strongly-typed at compile-time, indicating that the endpoint
+expects to be bound by a <code>Receiver</code> of the same interface type.</p>
+<hr>
+<h3 id="sending-a-message">Sending a Message</h3>
+<p>Finally, we can call the <code>Ping()</code> method on our <code>Remote</code> to send a message:</p>
+<pre data-language="cpp">// src/third_party/blink/example/public/pingable.h
+pingable-&gt;Ping(base::BindOnce(&amp;OnPong));</pre>
+<p>*** aside
+<strong>IMPORTANT:</strong> If we want to receive the response, we must keep the
+<code>pingable</code> object alive until <code>OnPong</code> is invoked. After all,
+<code>pingable</code> <em>owns</em> its message pipe endpoint. If it&#39;s destroyed then so is
+the endpoint, and there will be nothing to receive the response message.</p>
+<hr>
+<p>We&#39;re almost done! Of course, if everything were this easy, this document
+wouldn&#39;t need to exist. We&#39;ve taken the hard problem of sending a message from
+a renderer process to the browser process, and transformed it into a problem
+where we just need to take the <code>receiver</code> object from above and pass it to the
+browser process somehow where it can be turned into a <code>Receiver</code> that dispatches
+its received messages.</p>
+<h3 id="sending-a-pendingreceiver-to-the-browser">Sending a <code>PendingReceiver</code> to the Browser</h3>
+<p>It&#39;s worth noting that <code>PendingReceiver</code>s (and message pipe endpoints in general)
+are just another type of object that can be freely sent over mojom messages.
+The most common way to get a <code>PendingReceiver</code> somewhere is to pass it as a
+method argument on some other already-connected interface.</p>
+<p>One such interface which we always have connected between a renderer&#39;s
+<code>RenderFrameImpl</code> and its corresponding <code>RenderFrameHostImpl</code> in the browser
+is
+<a href="https://cs.chromium.org/chromium/src/third_party/blink/public/mojom/browser_interface_broker.mojom"><code>BrowserInterfaceBroker</code></a>.
+This interface is a factory for acquiring other interfaces. Its <code>GetInterface</code>
+method takes a <code>GenericPendingReceiver</code>, which allows passing arbitrary
+interface receivers.</p>
+<pre data-language="cpp">interface BrowserInterfaceBroker {
+  GetInterface(mojo_base.mojom.GenericPendingReceiver receiver);
+}</pre>
+<p>Since <code>GenericPendingReceiver</code> can be implicitly constructed from any specific
+<code>PendingReceiver</code>, it can call this method with the <code>receiver</code> object it created
+earlier via <code>BindNewPipeAndPassReceiver</code>:</p>
+<pre data-language="cpp">RenderFrame* my_frame = GetMyFrame();
+my_frame-&gt;GetBrowserInterfaceBroker().GetInterface(std::move(receiver));</pre>
+<p>This will transfer the <code>PendingReceiver</code> endpoint to the browser process
+where it will be received by the corresponding <code>BrowserInterfaceBroker</code>
+implementation. More on that below.</p>
+<h3 id="implementing-the-interface">Implementing the Interface</h3>
+<p>Finally, we need a browser-side implementation of our <code>Pingable</code> interface.</p>
+<pre data-language="cpp">#include &quot;example/public/mojom/pingable.mojom.h&quot;
+
+class PingableImpl : example::mojom::Pingable {
+ public:
+  explicit PingableImpl(mojo::PendingReceiver&lt;example::mojom::Pingable&gt; receiver)
+      : receiver_(this, std::move(receiver)) {}
+  PingableImpl(const PingableImpl&amp;) = delete;
+  PingableImpl&amp; operator=(const PingableImpl&amp;) = delete;
+
+  // example::mojom::Pingable:
+  void Ping(PingCallback callback) override {
+    // Respond with a random 4, chosen by fair dice roll.
+    std::move(callback).Run(4);
+  }
+
+ private:
+  mojo::Receiver&lt;example::mojom::Pingable&gt; receiver_;
+};</pre>
+<p><code>RenderFrameHostImpl</code> owns an implementation of <code>BrowserInterfaceBroker</code>.
+When this implementation receives a <code>GetInterface</code> method call, it calls
+the handler previously registered for this specific interface.</p>
+<pre data-language="cpp">// render_frame_host_impl.h
+class RenderFrameHostImpl
+  ...
+  void GetPingable(mojo::PendingReceiver&lt;example::mojom::Pingable&gt; receiver);
+  ...
+ private:
+  ...
+  std::unique_ptr&lt;PingableImpl&gt; pingable_;
+  ...
+};
+
+// render_frame_host_impl.cc
+void RenderFrameHostImpl::GetPingable(
+    mojo::PendingReceiver&lt;example::mojom::Pingable&gt; receiver) {
+  pingable_ = std::make_unique&lt;PingableImpl&gt;(std::move(receiver));
+}
+
+// browser_interface_binders.cc
+void PopulateFrameBinders(RenderFrameHostImpl* host,
+                          mojo::BinderMap* map) {
+...
+  // Register the handler for Pingable.
+  map-&gt;Add&lt;example::mojom::Pingable&gt;(base::BindRepeating(
+    &amp;RenderFrameHostImpl::GetPingable, base::Unretained(host)));
+}</pre>
+<p>And we&#39;re done. This setup is sufficient to plumb a new interface connection
+between a renderer frame and its browser-side host object!</p>
+<p>Assuming we kept our <code>pingable</code> object alive in the renderer long enough,
+we would eventually see its <code>OnPong</code> callback invoked with the totally random
+value of <code>4</code>, as defined by the browser-side implementation above.</p>
+<h2 id="services-overview--terminology">Services Overview &amp; Terminology</h2>
+<p>The previous section only scratches the surface of how Mojo IPC is used in
+Chromium. While renderer-to-browser messaging is simple and possibly the most
+prevalent usage by sheer code volume, we are incrementally decomposing the
+codebase into a set of services with a bit more granularity than the traditional
+Content browser/renderer/gpu/utility process split.</p>
+<p>A <strong>service</strong> is a self-contained library of code which implements one or more
+related features or behaviors and whose interaction with outside code is done
+<em>exclusively</em> through Mojo interface connections, typically brokered by the
+browser process.</p>
+<p>Each service defines and implements a main Mojo interface which can be used
+by the browser to manage an instance of the service.</p>
+<h2 id="example-building-a-simple-out-of-process-service">Example: Building a Simple Out-of-Process Service</h2>
+<p>There are multiple steps typically involved to get a new service up and running
+in Chromium:</p>
+<ul>
+<li>Define the main service interface and implementation</li>
+<li>Hook up the implementation in out-of-process code</li>
+<li>Write some browser logic to launch a service process</li>
+</ul>
+<p>This section walks through these steps with some brief explanations. For more
+thorough documentation of the concepts and APIs used herein, see the
+<a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/README.md">Mojo</a> documentation.</p>
+<h3 id="defining-the-service">Defining the Service</h3>
+<p>Typically service definitions are placed in a <code>services</code> directory, either at
+the top level of the tree or within some subdirectory. In this example, we&#39;ll
+define a new service for use by Chrome specifically, so we&#39;ll define it within
+<code>//chrome/services</code>.</p>
+<p>We can create the following files. First some mojoms:</p>
+<pre data-language="cpp">// src/chrome/services/math/public/mojom/math_service.mojom
+module math.mojom;
+
+interface MathService {
+  Divide(int32 dividend, int32 divisor) =&gt; (int32 quotient);
+};</pre>
+<pre data-language="python"># src/chrome/services/math/public/mojom/BUILD.gn
+import(&quot;//mojo/public/tools/bindings/mojom.gni&quot;)
+
+mojom(&quot;mojom&quot;) {
+  sources = [
+    &quot;math_service.mojom&quot;,
+  ]
+}</pre>
+<p>Then the actual <code>MathService</code> implementation:</p>
+<pre data-language="cpp">// src/chrome/services/math/math_service.h
+#include &quot;chrome/services/math/public/mojom/math_service.mojom.h&quot;
+
+namespace math {
+
+class MathService : public mojom::MathService {
+ public:
+  explicit MathService(mojo::PendingReceiver&lt;mojom::MathService&gt; receiver);
+  MathService(const MathService&amp;) = delete;
+  MathService&amp; operator=(const MathService&amp;) = delete;
+  ~MathService() override;
+
+ private:
+  // mojom::MathService:
+  void Divide(int32_t dividend,
+              int32_t divisor,
+              DivideCallback callback) override;
+
+  mojo::Receiver&lt;mojom::MathService&gt; receiver_;
+};
+
+}  // namespace math</pre>
+<pre data-language="cpp">// src/chrome/services/math/math_service.cc
+#include &quot;chrome/services/math/math_service.h&quot;
+
+namespace math {
+
+MathService::MathService(mojo::PendingReceiver&lt;mojom::MathService&gt; receiver)
+    : receiver_(this, std::move(receiver)) {}
+
+MathService::~MathService() = default;
+
+void MathService::Divide(int32_t dividend,
+                         int32_t divisor,
+                         DivideCallback callback) {
+  // Respond with the quotient!
+  std::move(callback).Run(dividend / divisor);
+}
+
+}  // namespace math</pre>
+<pre data-language="python"># src/chrome/services/math/BUILD.gn
+
+source_set(&quot;math&quot;) {
+  sources = [
+    &quot;math_service.cc&quot;,
+    &quot;math_service.h&quot;,
+  ]
+
+  deps = [
+    &quot;//base&quot;,
+    &quot;//chrome/services/math/public/mojom&quot;,
+  ]
+}</pre>
+<p>Now we have a fully defined <code>MathService</code> implementation that we can make
+available in- or out-of-process.</p>
+<h3 id="hooking-up-the-service-implementation">Hooking Up the Service Implementation</h3>
+<p>For an out-of-process Chrome service, we simply register a factory function
+in <a href="https://cs.chromium.org/chromium/src/chrome/utility/services.cc"><code>//chrome/utility/services.cc</code></a>.</p>
+<pre data-language="cpp">auto RunMathService(mojo::PendingReceiver&lt;math::mojom::MathService&gt; receiver) {
+  return std::make_unique&lt;math::MathService&gt;(std::move(receiver));
+}
+
+void RegisterMainThreadServices(mojo::ServiceFactory&amp; services) {
+  // Existing services...
+  services.Add(RunFilePatcher);
+  services.Add(RunUnzipper);
+
+  // We add our own factory to this list
+  services.Add(RunMathService);
+  //...</pre>
+<p>With this done, it is now possible for the browser process to launch new
+out-of-process instances of MathService.</p>
+<h3 id="launching-the-service">Launching the Service</h3>
+<p>If you&#39;re running your service in-process, there&#39;s really nothing interesting
+left to do. You can instantiate the service implementation just like any other
+object, yet you can also talk to it via a Mojo Remote as if it were
+out-of-process.</p>
+<p>To launch an out-of-process service instance after the hookup performed in the
+previous section, use Content&#39;s
+<a href="https://cs.chromium.org/chromium/src/content/public/browser/service_process_host.h?rcl=e7a1f6c9a24f3151c875598174a05167fb12c5d5&amp;l=47"><code>ServiceProcessHost</code></a>
+API:</p>
+<pre data-language="cpp">mojo::Remote&lt;math::mojom::MathService&gt; math_service =
+    content::ServiceProcessHost::Launch&lt;math::mojom::MathService&gt;(
+        content::ServiceProcessHost::Options()
+            .WithDisplayName(&quot;Math!&quot;)
+            .Pass());</pre>
+<p>Except in the case of crashes, the launched process will live as long as
+<code>math_service</code> lives. As a corollary, you can force the process to be torn
+down by destroying (or resetting) <code>math_service</code>.</p>
+<p>We can now perform an out-of-process division:</p>
+<pre data-language="cpp">// NOTE: As a client, we do not have to wait for any acknowledgement or
+// confirmation of a connection. We can start queueing messages immediately and
+// they will be delivered as soon as the service is up and running.
+math_service-&gt;Divide(
+    42, 6, base::BindOnce([](int32_t quotient) { LOG(INFO) &lt;&lt; quotient; }));</pre>
+<p>*** aside
+NOTE: To ensure the execution of the response callback, the
+<code>mojo::Remote&lt;math::mojom::MathService&gt;</code> object must be kept alive (see
+<a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/cpp/bindings/README.md#A-Note-About-Endpoint-Lifetime-and-Callbacks">this section</a>
+and <a href="#sending-a-message">this note from an earlier section</a>).</p>
+<hr>
+<h3 id="specifying-a-sandbox">Specifying a sandbox</h3>
+<p>All services must specify a sandbox. Ideally services will run inside the
+<code>kService</code> process sandbox unless they need access to operating system
+resources. For services that need a custom sandbox, a new sandbox type must be
+defined in consultation with <a href="mailto:security-dev@chromium.org">security-dev@chromium.org</a>.</p>
+<p>The preferred way to define the sandbox for your interface is by specifying a
+<code>[ServiceSandbox=type]</code> attribute on your <code>interface {}</code> in its <code>.mojom</code> file:</p>
+<pre>import &quot;sandbox/policy/mojom/sandbox.mojom&quot;;
+[ServiceSandbox=sandbox.mojom.Sandbox.kService]
+interface FakeService {
+  ...
+};</pre>
+<p>Valid values are those in
+<a href="https://cs.chromium.org/chromium/src/sandbox/policy/mojom/sandbox.mojom"><code>//sandbox/policy/mojom/sandbox.mojom</code></a>. Note
+that the sandbox is only applied if the interface is launched
+out-of-process using <code>content::ServiceProcessHost::Launch()</code>.</p>
+<p>As a last resort, dynamic or feature based mapping to an underlying platform
+sandbox can be achieved but requires plumbing through ContentBrowserClient
+(e.g. <code>ShouldSandboxNetworkService()</code>).</p>
+<h2 id="content-layer-services-overview">Content-Layer Services Overview</h2>
+<h3 id="interface-brokers">Interface Brokers</h3>
+<p>We define an explicit mojom interface with a persistent connection
+between a renderer&#39;s frame object and the corresponding
+<code>RenderFrameHostImpl</code> in the browser process.
+This interface is called
+<a href="https://cs.chromium.org/chromium/src/third_party/blink/public/mojom/browser_interface_broker.mojom?rcl=09aa5ae71649974cae8ad4f889d7cd093637ccdb&amp;l=11"><code>BrowserInterfaceBroker</code></a>
+and is fairly easy to work with: you add a new method on <code>RenderFrameHostImpl</code>:</p>
+<pre data-language="cpp">void RenderFrameHostImpl::GetGoatTeleporter(
+    mojo::PendingReceiver&lt;magic::mojom::GoatTeleporter&gt; receiver) {
+  goat_teleporter_receiver_.Bind(std::move(receiver));
+}</pre>
+<p>and register this method in <code>PopulateFrameBinders</code> function in <code>browser_interface_binders.cc</code>,
+which maps specific interfaces to their handlers in respective hosts:</p>
+<pre data-language="cpp">// //content/browser/browser_interface_binders.cc
+void PopulateFrameBinders(RenderFrameHostImpl* host,
+                          mojo::BinderMap* map) {
+...
+  map-&gt;Add&lt;magic::mojom::GoatTeleporter&gt;(base::BindRepeating(
+      &amp;RenderFrameHostImpl::GetGoatTeleporter, base::Unretained(host)));
+}</pre>
+<p>It&#39;s also possible to bind an interface on a different sequence by specifying a task runner:</p>
+<pre data-language="cpp">// //content/browser/browser_interface_binders.cc
+void PopulateFrameBinders(RenderFrameHostImpl* host,
+                          mojo::BinderMap* map) {
+...
+  map-&gt;Add&lt;magic::mojom::GoatTeleporter&gt;(base::BindRepeating(
+      &amp;RenderFrameHostImpl::GetGoatTeleporter, base::Unretained(host)),
+      GetIOThreadTaskRunner({}));
+}</pre>
+<p>Workers also have <code>BrowserInterfaceBroker</code> connections between the renderer and
+the corresponding remote implementation in the browser process. Adding new
+worker-specific interfaces is similar to the steps detailed above for frames,
+with the following differences:</p>
+<ul>
+<li>For Dedicated Workers, add a new method to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/worker_host/dedicated_worker_host.h"><code>DedicatedWorkerHost</code></a>
+and register it in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/browser_interface_binders.cc;l=1126;drc=e24e0a914ff0da18e78044ebad7518afe9e13847"><code>PopulateDedicatedWorkerBinders</code></a></li>
+<li>For Shared Workers, add a new method to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/worker_host/shared_worker_host.h"><code>SharedWorkerHost</code></a>
+and register it in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/browser_interface_binders.cc;l=1232;drc=e24e0a914ff0da18e78044ebad7518afe9e13847"><code>PopulateSharedWorkerBinders</code></a></li>
+<li>For Service Workers, add a new method to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/service_worker/service_worker_host.h"><code>ServiceWorkerHost</code></a>
+and register it in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/browser_interface_binders.cc;l=1326;drc=e24e0a914ff0da18e78044ebad7518afe9e13847"><code>PopulateServiceWorkerBinders</code></a></li>
+</ul>
+<p>Interfaces can also be added at the process level using the
+<code>BrowserInterfaceBroker</code> connection between the Blink <code>Platform</code> object in the
+renderer and the corresponding <code>RenderProcessHost</code> object in the browser
+process. This allows any thread (including frame and worker threads) in the
+renderer to access the interface, but comes with additional overhead because
+the <code>BrowserInterfaceBroker</code> implementation used must be thread-safe. To add a
+new process-level interface, add a new method to <code>RenderProcessHostImpl</code> and
+register it using a call to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/renderer_host/render_process_host_impl.h;l=918;drc=ec5eaba0e021b757d5cbbf2c27ac8f06809d81e9"><code>AddUIThreadInterface</code></a>
+in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/renderer_host/render_process_host_impl.cc;l=2317;drc=a817d852ea2f2085624d64154ad847dfa3faaeb6"><code>RenderProcessHostImpl::RegisterMojoInterfaces</code></a>.
+On the renderer side, use
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/public/platform/platform.h;l=781;drc=ee1482552c4c97b40f15605fe6a52565cfe74548"><code>Platform::GetBrowserInterfaceBroker</code></a>
+to retrieve the corresponding <code>BrowserInterfaceBroker</code> object to call
+<code>GetInterface</code> on.</p>
+<p>For binding an embedder-specific document-scoped interface, override
+<a href="https://cs.chromium.org/chromium/src/content/public/browser/content_browser_client.h?rcl=3eb14ce219e383daa0cd8d743f475f9d9ce8c81a&amp;l=999"><code>ContentBrowserClient::RegisterBrowserInterfaceBindersForFrame()</code></a>
+and add the binders to the provided map.</p>
+<p>*** aside
+NOTE: if BrowserInterfaceBroker cannot find a binder for the requested
+interface, it will call <code>ReportNoBinderForInterface()</code> on the relevant
+context host, which results in a <code>ReportBadMessage()</code> call on the host&#39;s
+receiver (one of the consequences is a termination of the renderer). To
+avoid this crash in tests (when content_shell doesn&#39;t bind some
+Chrome-specific interfaces, but the renderer requests them anyway),
+use the
+<a href="https://cs.chromium.org/chromium/src/content/browser/browser_interface_binders.cc?rcl=12e73e76a6898cb6df6a361a98320a8936f37949&amp;l=407"><code>EmptyBinderForFrame</code></a>
+helper in <code>browser_interface_binders.cc</code>. However, it is recommended
+to have the renderer and browser sides consistent if possible.</p>
+<hr>
+<h3 id="navigation-associated-interfaces">Navigation-Associated Interfaces</h3>
+<p>For cases where the ordering of messages from different frames is important,
+and when messages need to be ordered correctly with respect to the messages
+implementing navigation, navigation-associated interfaces can be used.
+Navigation-associated interfaces leverage connections from each frame to the
+corresponding <code>RenderFrameHostImpl</code> object and send messages from each
+connection over the same FIFO pipe that&#39;s used for messages relating to
+navigation. As a result, messages sent after a navigation are guaranteed to
+arrive in the browser process after the navigation-related messages, and the
+ordering of messages sent from different frames of the same document is
+preserved as well.</p>
+<p>To add a new navigation-associated interface, create a new method for
+<code>RenderFrameHostImpl</code> and register it with a call to
+<code>associated_registry_-&gt;AddInterface</code> in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:content/browser/renderer_host/render_frame_host_impl.cc;l=8365;drc=a817d852ea2f2085624d64154ad847dfa3faaeb6"><code>RenderFrameHostImpl::SetUpMojoConnection</code></a>.
+From the renderer, use
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/core/frame/local_frame.h;l=409;drc=19f17a30e102f811bc90a13f79e8ad39193a6403"><code>LocalFrame::GetRemoteNavigationAssociatedInterfaces</code></a>
+to get an object to call
+<code>GetInterface</code> on (this call is similar to
+<code>BrowserInterfaceBroker::GetInterface</code> except that it takes a
+<a href="https://chromium.googlesource.com/chromium/src/+/main/mojo/public/cpp/bindings/README.md#associated-interfaces">pending associated receiver</a>
+instead of a pending receiver).</p>
+<h2 id="additional-support">Additional Support</h2>
+<p>If this document was not helpful in some way, please post a message to your
+friendly
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/chromium-mojo">chromium-mojo@chromium.org</a>
+or
+<a href="https://groups.google.com/a/chromium.org/forum/#!forum/services-dev">services-dev@chromium.org</a>
+mailing list.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/mojo_and_services.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/mojo_and_services.md</a>
+  </p>
+</div>

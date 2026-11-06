@@ -1,0 +1,107 @@
+<h1>CHROMIUM Sync Token Internals</h1>
+<p>Chrome uses a mechanism known as &quot;sync tokens&quot; to synchronize different command
+buffers in the GPU process. This document discusses the internals of the sync
+token system.</p>
+<h2 id="rationale">Rationale</h2>
+<p>In Chrome, multiple processes, for example browser and renderer, submit work to
+the GPU process asynchronously in command buffer. However, there are
+dependencies between the work submitted by different processes, such as
+SkiaRenderer in the display compositor in the GPU process rendering a tile
+produced by the raster worker in the renderer process.</p>
+<p>Sync tokens are used to synchronize the work contained in command buffers
+without waiting for the work to complete. This improves pipelining, and with the
+introduction of GPU scheduling, allows prioritization of work. Although
+originally built for synchronizing command buffers, they can be used for other
+work in the GPU process.</p>
+<h2 id="generation">Generation</h2>
+<p>Sync tokens are represented by a namespace, identifier, and the <em>fence release
+count</em>. <code>CommandBufferId</code> is a 64-bit unsigned integer which is unique within a
+<code>CommandBufferNamespace</code>. For example IPC command buffers are in the <em>GPU_IO</em>
+CommandBufferNamespace, and are identified by CommandBufferId with process id as
+the MSB and IPC route id as the LSB.</p>
+<p>The fence release count marks completion of some work in a command buffer. Note:
+this is CPU side work done that includes command decoding, validation, issuing
+GL calls to the driver, etc. and not GPU side work. See
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/design/gpu_synchronization.md">gpu_synchronication.md</a> for more
+information about synchronizing GPU work.</p>
+<p>Fences are typically generated or inserted on the client using a sequential
+counter. The corresponding GL API is <code>GenSyncTokenCHROMIUM</code> which generates the
+fence using <code>CommandBufferProxyImpl::GenerateFenceSyncRelease()</code>, and also adds
+the fence to the command buffer using the internal <code>InsertFenceSync</code> command.</p>
+<h2 id="verification">Verification</h2>
+<p>Different client processes communicate with the GPU process using <em>channels</em>. A
+channel wraps around a message pipe which doesn&#39;t provide ordering guarantees
+with respect to other pipes. For example, a message from the browser process
+containing a sync token wait can arrive before the message from the renderer
+process that releases or fulfills the sync token promise.</p>
+<p>To prevent the above problem, client processes must verify sync tokens before
+sending to another process. Verification involves a synchronous nop IPC message,
+<code>GpuChannelMsg_Nop</code>, to the GPU process which ensures that the GPU process has
+read previous messages from the pipe.</p>
+<p>Sync tokens used within a process do not need to be verified, and the
+<code>GenSyncTokenUnverifiedCHROMIUM</code> GL API serves this common case. These sync
+tokens need to be verified using <code>VerifySyncTokensCHROMIUM</code>. Sync tokens
+generated using <code>GenSyncTokenCHROMIUM</code> are already verified. <code>SyncToken</code> has a
+<code>verified_flush</code> bit that guards against accidentally sending unverified sync
+tokens over IPC.</p>
+<h2 id="streams">Streams</h2>
+<p>In the GPU process, command buffers are organized into logical streams of
+execution that are called <em>sequences</em>. Within a sequence tasks are ordered, but
+are asynchronous with respect to tasks in other sequences. Dependencies between
+tasks are specified as sync tokens. For IPC command buffers, this implies flush
+ordering within a sequence.</p>
+<p>A sequence can be created by <code>Scheduler::CreateSequence</code> which returns a
+<code>SequenceId</code>. Tasks are posted to a sequence using <code>Scheduler::ScheduleTask</code>.
+Typically there is one sequence per channel, but sometimes there are more like
+raster, compositor, and media streams in renderer&#39;s channel.</p>
+<p>The scheduler also provides a means for co-operative scheduling through
+<code>Scheduler::ShouldYield</code> and <code>Scheduler::ContinueTask</code>. These allow a task to
+yield and continue once higher priority work is complete. Together with the GPU
+scheduler, multiple sequences provide the means for prioritization of UI work
+over raster prepaint work.</p>
+<h2 id="waiting-and-completion">Waiting and Completion</h2>
+<p>Sync tokens are managed in the GPU process by <code>SyncPointManager</code>, and its helper
+classes <code>SyncPointOrderData</code> and <code>SyncPointClientState</code>. <code>SyncPointOrderData</code>
+holds state for a logical stream of execution, typically containing work of
+multiple command buffers from one process. <code>SyncPointClientState</code> holds sync token
+state for a client which generated sync tokens, typically an IPC command buffer.</p>
+<p>GPU scheduler maintains a <code>SyncPointOrderData</code> per sequence. Clients must create
+SyncPointClientState using <code>SyncPointManager::CreateSyncPointClientState</code> and
+identify their namespace, id, and sequence.</p>
+<p>Waiting on a sync token is done by calling <code>SyncPointManager::Wait()</code> with a
+sync token, order number for the wait, and a callback. The callbacks are
+enqueued with the <code>SyncPointClientState</code> of the target with the release count of
+the sync token. The scheduler does this internally for sync token dependencies
+for scheduled tasks, but the wait can also be performed when running the
+<code>WaitSyncTokenCHROMIUM</code> GL command.</p>
+<p>Sync tokens are completed when the fence is released in the GPU process by
+calling <code>SyncPointClientState::ReleaseFenceSync()</code>. For GL command buffers, the
+<code>InsertFenceSync</code> command, which contains the release count generated in the
+client, calls this when executed in the service. This issues callbacks and
+allows waiting command buffers to resume their work.</p>
+<h2 id="correctness">Correctness</h2>
+<p>Correctness of waits and releases basically amounts to checking that there are
+no indefinite waits because of broken promises or circular wait chains. This is
+ensured by associating an order number with each wait and release and
+maintaining the invariant that the order number of release is less than or equal
+to the order number of wait.</p>
+<p>Each task is assigned a global sequential order number generated by
+<code>SyncPointOrderData::GenerateUnprocessedOrderNumber</code> which are stored in a queue
+of unprocessed order numbers. In <code>SyncPointManager::Wait()</code>, the callbacks are
+also enqueued with the order number of the waiting task in <code>SyncPointOrderData</code>
+in a queue called <code>OrderFenceQueue</code>.</p>
+<p><code>SyncPointOrderData</code> maintains the invariant that all waiting callbacks must
+have an order number greater than the sequence&#39;s next unprocessed order number.
+This invariant is checked when enqueuing a new callback in
+<code>SyncPointOrderData::ValidateReleaseOrderNumber</code>, and after completing a task in
+<code>SyncPointOrderData::FinishProcessingOrderNumber</code>.</p>
+<h2 id="see-also">See Also</h2>
+<p><a href="https://chromium.googlesource.com/chromium/src/+/main/gpu/GLES2/extensions/CHROMIUM/CHROMIUM_sync_point.txt">CHROMIUM_sync_point</a>
+<a href="https://chromium.googlesource.com/chromium/src/+/main/docs/design/gpu_synchronization.md">gpu_synchronication.md</a>
+<a href="https://docs.google.com/document/d/1XwBYFuTcINI84ShNvqifkPREs3sw5NdaKzKqDDxyeHk/edit">Lightweight GPU Sync Points</a></p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/sync_token_internals.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/sync_token_internals.md</a>
+  </p>
+</div>

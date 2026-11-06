@@ -1,0 +1,225 @@
+<h1>cppapifromrust</h1>
+<h2 id="introduction">Introduction</h2>
+<p><code>cpp_api_from_rust</code> (aka <code>cc_bindings_from_rs</code>) is a Crubit tool that takes
+a Rust crate as input and generates C++ APIs (a <code>.h</code> header) as output,
+enabling C++ to call Rust.
+This document provides instructions for using <code>cpp_api_from_rust</code> in Chromium.</p>
+<p>See <a href="crubit"><code>//docs/rust/crubit/README.md</code></a> for general information about
+Crubit.</p>
+<h2 id="enabling-cpp_api_from_rust-for-a-rust_static_library-crate">Enabling <code>cpp_api_from_rust</code> for a <code>rust_static_library</code> crate</h2>
+<p>Example:</p>
+<pre data-language="rust">// build/rust/tests/test_cpp_api_from_rust/lib.rs:
+pub fn mul_two_ints_via_rust(x: i32, y: i32) -&gt; i32 {
+    x * y
+}</pre>
+<pre data-language="gn"># build/rust/tests/test_cpp_api_from_rust/BUILD.gn
+
+import(&quot;//build/rust/rust_static_library.gni&quot;)
+
+rust_static_library(&quot;rust_lib&quot;) {
+  crate_root = &quot;lib.rs&quot;
+  sources = [ crate_root ]
+  cpp_api_from_rust = {
+    target_name = &quot;rust_lib_bindings&quot;
+    cpp_namespace = &quot;rust_lib&quot;
+  }
+}
+
+source_set(&quot;unittests&quot;) {
+  sources = [ &quot;unittests.cc&quot; ]
+  deps = [
+    &quot;:rust_lib_bindings&quot;,
+  ]
+}</pre>
+<pre>// build/rust/tests/test_cpp_api_from_rust/unittests.cc:
+
+// `rust_lib` part of the `#include` path comes from the target name
+// (i.e. from `rust_static_library(&quot;rust_lib&quot;)` above).
+#include &quot;build/rust/tests/test_cpp_api_from_rust/rust_lib.h&quot;
+
+void foo() {
+  auto product = rust_lib::mul_two_ints_via_rust(3, 4);
+}</pre>
+<h2 id="enabling-cpp_api_from_rust-for-a-third_partyrust-crate">Enabling <code>cpp_api_from_rust</code> for a <code>third_party/rust</code> crate</h2>
+<p>Set <code>cpp_api_from_rust = true</code> in <code>gnrt_config.toml</code> as follows:</p>
+<pre>[crate.qr_code.extra_kv]
+allow_unsafe = false
+cpp_api_from_rust = true</pre>
+<p>After modifying <code>gnrt_config.toml</code> you have to re-run
+<code>tools/crates/run_gnrt.py gen</code> to regenerate the crate&#39;s <code>BUILD.gn</code> file.</p>
+<p>At this point you should be able to depend on the bindings and use them
+as follows.  Note that <code>check_includes_strict = true</code> and <code>public</code> are set so
+that C++ targets depending on <code>:my_cpp_code</code> do not have to wait for the Rust
+compilation (see <a href="build_performance">Crubit and build performance</a>):</p>
+<pre># My BUILD.gn:
+source_set(&quot;my_cpp_code&quot;) {
+  # Enforces that `my_cpp_code.h` does not #include headers from private
+  # `deps`, which also stops GN from forwarding the bindings-related
+  # order-only dependencies to C++ targets that depend on `:my_cpp_code`.
+  check_includes_strict = true
+  public = [ &quot;my_cpp_code.h&quot; ]
+  sources = [ &quot;my_cpp_code.cc&quot; ]
+  # ...
+  deps += [ &quot;//third_party/rust/qr_code/v2:cpp_api_from_rust&quot; ]
+}</pre>
+<pre>// my_cpp_code.cc
+
+// The last `qr_code` part of the `#include` path comes from the `crate_name`
+// attribute of the `//third_party/rust/qr_code/v2:lib` target.
+#include &quot;third_party/rust/qr_code/v2/qr_code.h&quot;
+
+void foo() {
+  // ...
+  rs::SliceRef&lt;const uint8_t&gt; rs_in(in);
+  auto result = ::qr_code::QrCode::new_(rs_in);
+  // ...
+}</pre>
+<h2 id="inspecting-the-generated-bindings">Inspecting the generated bindings</h2>
+<p>Let&#39;s assume that <code>cpp_api_from_rust</code> bindings are generated for
+<code>//some/dir:some_target</code> - e.g.:</p>
+<pre data-language="gn"># some/dir/BUILD.gn
+
+import(&quot;//build/rust/rust_static_library.gni&quot;)
+
+rust_static_library(&quot;some_target&quot;) {
+  crate_root = &quot;lib.rs&quot;
+  sources = [ crate_root ]
+  cpp_api_from_rust = {
+    target_name = &quot;some_target_bindings&quot;
+  }
+}</pre>
+<p>The generated bindings can then be found and inspected in
+<code>&lt;out_dir&gt;/gen/some/dir/some_target.h</code>.  For example:</p>
+<pre data-language="sh">$ cat out/rel/gen/build/rust/tests/test_cpp_api_from_rust/rust_lib.h | head -3
+// Automatically @generated C++ bindings for the following Rust crate:
+// rust_lib_1dc874e1
+// Features: &lt;none&gt;</pre>
+<h2 id="specifying-binding-dependencies">Specifying binding dependencies</h2>
+<p>If public APIs of a crate depend on types from another crate, then the
+dependency on the other crate needs to be explicitly specified in <code>BUILD.gn</code>.</p>
+<h3 id="bindings-dependencies-for-1st-party-rust-libraries">Bindings dependencies for 1st-party Rust libraries</h3>
+<p>1st-party Rust libraries can specify dependencies of their bindings
+as follows:</p>
+<pre data-language="rust">// build/rust/tests/test_cpp_api_from_rust/lib.rs:
+
+chromium::import! {
+    &quot;//build/rust/tests/test_cpp_api_from_rust:internal_helper&quot;;
+    &quot;//build/rust/tests/test_cpp_api_from_rust:other_lib&quot;;
+}
+
+pub fn create_multiplier(x: i32) -&gt; other_lib::Multiplier {
+    internal_helper::do_something();
+
+    other_lib::Multiplier::new(x)
+}</pre>
+<pre data-language="gn"># build/rust/tests/test_cpp_api_from_rust/BUILD.gn
+
+import(&quot;//build/rust/rust_static_library.gni&quot;)
+
+rust_static_library(&quot;rust_lib&quot;) {
+  crate_root = &quot;lib.rs&quot;
+  sources = [ crate_root ]
+  deps = [
+    &quot;:other_lib&quot;,
+    &quot;:internal_helper&quot;,
+  ]
+
+  cpp_api_from_rust = {
+    target_name = &quot;rust_lib_bindings&quot;
+    cpp_namespace = &quot;rust_lib&quot;
+    bindings_deps = [ &quot;//some/other/lib:other_lib_bindings&quot; ]
+  }
+}</pre>
+<p>Note how <code>other_lib_bindings</code> are listed in <code>bindings_deps</code> of
+<code>cpp_api_from_rust</code> above.</p>
+<p>Note that types from <code>internal_helper</code> are <em>not</em> used in public APIs of
+<code>rust_lib</code> and therefore <code>internal_helper</code> is <em>not</em> listed
+in <code>bindings_deps</code> attribute of <code>cpp_api_from_rust</code>.</p>
+<h3 id="bindings-dependencies-for-c-types">Bindings dependencies for C++ types</h3>
+<p>If public APIs of the Rust crate use C++ types (from Rust bindings generated by
+<a href="rust_api_from_cpp"><code>rust_api_from_cpp</code></a>), then <code>bindings_deps</code> should list
+the <code>rust_api_from_cpp</code> target.  The C++ bindings will then refer to the
+original C++ types.  See <code>rust_lib_using_cpp_type</code> in
+<code>build/rust/tests/test_rust_api_from_cpp/round_trip/BUILD.gn</code> for an example.</p>
+<h3 id="bindings-dependencies-for-third_partyrust-libraries">Bindings dependencies for <code>//third_party/rust</code> libraries</h3>
+<p>3rd-party Rust crates can specify dependencies of their bindings
+with the following <code>gnrt_config.toml</code> entry:</p>
+<pre>[crate.my_crate_name.extra_kv]
+allow_unsafe = false
+cpp_api_from_rust = { bindings_deps = [&quot;some_other_crate/v123&quot;] }</pre>
+<p>After modifying <code>gnrt_config.toml</code> you have to re-run
+<code>tools/crates/run_gnrt.py gen</code> to regenerate the crate&#39;s <code>BUILD.gn</code> file.</p>
+<h3 id="bindings-dependencies-for-rust-standard-library">Bindings dependencies for Rust standard library</h3>
+<p>C++ bindings for Rust standard library
+are automatically injected as a dependency of all other bindings.
+Therefore usually there is no need to explicitly depend on these bindings,
+but if needed other targets can depend on <code>//build/rust/crubit</code>.</p>
+<p>C++ bindings for Rust standard library are placed in a C++ namespace
+that corresponds to the original Rust crate as follows:</p>
+<ul>
+<li><code>std</code> crate =&gt; <code>rs::std</code> namespace</li>
+<li><code>alloc</code> crate =&gt; <code>rs::alloc</code> namespace</li>
+<li><code>core</code> crate =&gt; <code>rs::core</code> namespace</li>
+</ul>
+<p>The bindings can be <code>#include</code>d from the following paths:</p>
+<ul>
+<li><code>#include &quot;third_party/crubit/support/rs_std/rs_std.h&quot;</code></li>
+<li><code>#include &quot;third_party/crubit/support/rs_std/rs_alloc.h&quot;</code></li>
+<li><code>#include &quot;third_party/crubit/support/rs_std/rs_core.h&quot;</code></li>
+</ul>
+<blockquote>
+<p>Side-note: The auto-generated <code>build/rust/std/rules/BUILD.gn</code> overrides the
+include paths to make sure that Chromium can use the canonical paths (ones
+that are unified across other major Crubit clients).  There is no actual
+<code>third_party/crubit/support</code> directory in the root of the Chromium repo.</p>
+</blockquote>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>The sections below should help diagnose and fix some issues you may encounter.
+If your issue is not covered, then please see
+<a href="crubit"><code>docs/rust/crubit/README.md</code></a> for instructions
+how to report a new bug.</p>
+<h3 id="apis-missing-from-the-generated-bindings">APIs missing from the generated bindings</h3>
+<p>If <code>cpp_api_from_rust</code> is unable to generate bindings for a given Rust API,
+then the generated <code>.h</code> file will contain a comment explaining why.
+The sections below describe a few errors that are somewhat related to
+how Chromium integrates Crubit into its build system.</p>
+<h4 id="no---crate-header-was-specified-for-this-crate">No <code>--crate-header</code> was specified for this crate</h4>
+<p>If you see an error like:</p>
+<pre>$ cat out/rel/gen/build/rust/tests/test_cpp_api_from_rust/rust_lib.h
+...
+// Error generating bindings for `create_multiplier` defined at
+// ../../build/rust/tests/test_cpp_api_from_rust/lib.rs;l=22: Error formatting
+// function return type `other_lib::Multiplier`: Type `other_lib::Multiplier`
+// comes from the `other_lib_1dc874e1` crate, but no `--crate-header` was
+// specified for this crate
+...</pre>
+<p>Then you want to read the &quot;Specifying binding dependencies&quot; section above.</p>
+<h3 id="build-performance">Build performance</h3>
+<p>C++ targets that depend on the bindings (directly or transitively) have to wait
+for the Rust compilation, unless the target that depends on the bindings sets
+<code>check_includes_strict = true</code> (with the bindings in private <code>deps</code>) or
+isolates the <code>.cc</code> files in a <code>source_set</code> with <code>public = []</code>.  Most bindings
+end up being transitively used by many C++ targets, so please follow
+<a href="build_performance">Crubit and build performance</a> when adding a
+dependency on the bindings.</p>
+<h3 id="known-issues">Known issues</h3>
+<ul>
+<li><a href="https://crbug.com/545486505">https://crbug.com/545486505</a>:
+Crubit link failure: <code>lld-link: error: undefined symbol: ___crubit_thunk_foo_bar_baz</code><ul>
+<li><code>cpp_api_from_rust</code>-generated APIs cannot be called from another build
+component (another <code>.so</code> or <code>.dll</code>) than the one that contains the
+Crubit-generated <code>source_set</code>.</li>
+<li>A workaround is to define and call out-of-line functions.  See for example
+<a href="https://crbug.com/545486505#comment2">https://crbug.com/545486505#comment2</a></li>
+</ul>
+</li>
+<li><a href="https://crbug.com/549864599">https://crbug.com/549864599</a>:
+<code>cpp_api_from_rust</code> is not supported in the host toolchain (e.g. when
+generating bindings for host-side build tools).</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/rust/crubit/cpp_api_from_rust.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/rust/crubit/cpp_api_from_rust.md</a>
+  </p>
+</div>

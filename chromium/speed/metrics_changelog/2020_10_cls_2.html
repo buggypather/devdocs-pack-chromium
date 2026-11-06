@@ -1,0 +1,42 @@
+<h1>Cumulative Layout Shift Changes in Chrome 87</h1>
+<h2 id="changes-in-chrome-87">Changes in Chrome 87</h2>
+<h3 id="bug-fix-to-impact-fraction-calculation">Bug fix to impact fraction calculation</h3>
+<p>In Chrome 86, a <a href="2020_10_cls">problem was introduced</a> to the way the area of
+the <a href="https://web.dev/cls/#impact-fraction">impact fraction</a> is calculated
+for layout shifts of nodes containing positioned content that overflows to the
+other side of the viewport. In Chrome 87, the problem is fixed by using visual
+rects to calculate the impact area instead of layout overflow rects (source code
+for the change
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2503330">here</a>).</p>
+<table>
+<thead>
+<tr>
+<th>Before change</th>
+<th>After</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/metrics_changelog/images/CLS_M86_Problem.png" alt="Example of M86 problem"></td>
+<td><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/metrics_changelog/images/CLS_M87_Fix.png" alt="Example of M87 fix"></td>
+</tr>
+</tbody></table>
+<h3 id="bug-fix-to-elements-with-containpaint-styling">Bug fix to elements with contain:paint styling</h3>
+<p>A bug fix was made to how the overflow of shifted elements inside a container
+that is styled <code>contain:paint</code> is calculated, reducing the computed size of the
+shift area for these nodes.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2417061">Source code for this change</a>.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>Sites whose CLS scores were negatively impacted by the
+<a href="2020_10_cls">regression in impact fraction calculation</a> in Chrome 86 should
+return to accurate layout shift scores in Chrome 87. Developers can test in
+Chrome 87.0.4280.51 and later to see the impact of this change.</p>
+<p>Sites with contain:paint styling on elements may see an improvement in CLS
+scores in Chrome 87.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Most users will be updated to Chrome 87 the week of November 17, 2020.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_10_cls_2.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_10_cls_2.md</a>
+  </p>
+</div>

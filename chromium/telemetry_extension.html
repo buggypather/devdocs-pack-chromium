@@ -1,0 +1,277 @@
+<h1>Telemetry Extension API</h1>
+<p>This document describes the Architecture for the third-party Telemetry
+Extensions Platform.</p>
+<h1 id="overview">Overview</h1>
+<p>The Telemetry Extension Platform provides means for accessing Telemetry and
+Diagnostics data of a ChromeOS device. The Telemetry Extension Platform
+consists of 2 parts:</p>
+<ol>
+<li><p>A Chrome headless extension for API access, background data gathering and
+processing (Telemetry Extension)</p>
+</li>
+<li><p>A companion <a href="https://web.dev/progressive-web-apps/">Progressive Web App (PWA)</a>
+to show UI to a user.</p>
+</li>
+</ol>
+<p>The Telemetry Extension uses
+<a href="https://developer.chrome.com/docs/extensions/mv3/intro/">Manifest V3</a> to
+benefit from using
+<a href="https://developer.chrome.com/docs/workbox/service-worker-overview/">Service Workers</a>
+instead of a background script. Only when the PWA is open, the Telemetry
+Extension periodically receives user driven requests from the PWA to fetch
+telemetry and run diagnostics routines. The PWA also has its own launch icon
+and it doesn’t have direct access to the telemetry and diagnostics API, but it
+communicates with the Telemetry Extension using message passing.</p>
+<p>This image shows an overview of the architecture.
+<br>
+<br>
+<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/telemetry_extension/images/TelemetryExtensionArchitecture.png" alt=""></p>
+<h1 id="components">Components</h1>
+<h2 id="telemetry-extension">Telemetry Extension</h2>
+<p>The Telemetry Extension&#39;s role is to handle requests from the UI and gather
+telemetry and diagnostics data. The Telemetry Extension has a service worker
+and does not have a launch icon. For this specific situation a new Chrome
+extension type was declared, the ChromeOS System extension. In a ChromeOS
+System extension, the service worker has direct access to normal
+<a href="https://developer.mozilla.org/en-US/docs/Web/API">web APIs</a>. Most of the
+<a href="https://developer.chrome.com/docs/extensions/reference/">common Chrome Extension APIs</a>
+are disabled (except <code>chrome.runtime</code> to communicate with the PWA) and access
+to the Telemetry API is granted either directly through <code>os.</code> or via DPSL.js
+the recommended way of using the API). Please note that each extension ID needs
+to be allowlisted by Google in the Chrome codebase to have access to APIs.</p>
+<h2 id="pwa">PWA</h2>
+<p>It is the role of the PWA to show UI to the user and communicate with the
+Telemetry Extension to get telemetry and diagnostics data. The PWA has a
+launch icon, UI, and access to web APIs.</p>
+<h2 id="dpsljs">DPSL.js</h2>
+<p><em>The Company Products defined in Exhibit A will be granted the ability to call
+the Chrome OS Telemetry Extension APIs using the methods defined here.</em></p>
+<p><strong>(Update: Google provides clients with the ability to query the API by calling
+chrome.os.* directly. Migration guide can be found <a href="telemetry_extension/dpsl_migration">here</a>.)</strong>
+DPSL.js stands for Diagnostic Processor Support Library for Javascript, it’s a
+JS wrapper around the underlying Telemetry Extensions APIs. It offers an
+abstracted way for querying the API and is developed by Google. The library is
+hosted on <a href="https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos">Github</a>
+and published to <a href="https://www.npmjs.com/package/cros-dpsl-js">npm</a>, please refer
+to the documentation.
+<a href="https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos/tree/main/src#functions">These tables</a>
+show an overview of all available API functions.</p>
+<h2 id="communication">Communication</h2>
+<p>A Chrome extension and a PWA can communicate with each other using message
+passing. Only PWAs can initiate communication because a PWA is running only
+when the user launches it.
+The following example shows how the communication between the two components
+could look like. The PWA uses <code>chrome.runtime.sendMessage</code> to communicate with
+the Chrome extension:</p>
+<pre data-language="javascript">// PWA code
+
+// The ID of the extension we want to talk to.
+var editorExtensionId = &quot;abcdefghijklmnoabcdefhijklmnoabc&quot;;
+
+// Make a simple request:
+chrome.runtime.sendMessage(
+  /* extensionId */ editorExtensionId,
+  /* message in JSON */ {openUrlInEditor: url},
+  /* callback */ function(response) {
+    if (!response.success)
+      handleError(url);
+  });</pre>
+<p>The extension side can handle incoming requests as follows:</p>
+<pre data-language="javascript">// Extension code
+
+chrome.runtime.onMessageExternal.addListener(
+ function(request, sender, sendResponse) {
+   if (sender.url == blocklistedWebsite)
+     return;  // don't allow this web page access
+   if (request.openUrlInEditor)
+     openUrl(request.openUrlInEditor);
+ });</pre>
+<h2 id="permission-to-api-functionality-mapping">Permission to API Functionality Mapping</h2>
+<p>For an overview of all exposed function under <code>chrome.os.telemetry</code> and
+<code>chrome.os.diagnostics</code>, please visit
+<a href="https://github.com/GoogleChromeLabs/telemetry-support-extension-for-chromeos/blob/main/src/README.md#functions">this page</a>.
+Some telemetry data requires special permissions to be accessed:</p>
+<ol>
+<li><p><code>VpdInfo.serialNumber</code> requires additional permission:
+&quot;os.telemetry.serial_number&quot; with string
+&quot;Read Chrome OS device and component serial numbers&quot;</p>
+</li>
+<li><p><code>OemData.oemData</code> requires additional permission:
+&quot;os.telemetry.serial_number&quot; with string
+&quot;Read Chrome OS device and component serial numbers&quot;</p>
+</li>
+<li><p><code>Batteryinfo.serialNumber</code> requires additional permission:
+&quot;os.telemetry.serial_number&quot; with string
+&quot;Read Chrome OS device and component serial numbers&quot;</p>
+</li>
+<li><p>MAC Address in <code>InternetConnectivity</code> requires additional permission:
+“os.telemetry.network_info” with string “Read ChromeOS network information”</p>
+</li>
+</ol>
+<h1 id="the-chrome-extension">The Chrome extension</h1>
+<p>In order for a Chrome extension to have access to telemetry and diagnostics
+APIs, the following requirements need to be satisfied:</p>
+<ol>
+<li><p>The user must be either:</p>
+<p> a. managed and the Telemetry extension was force-installed via policy, or</p>
+<p> b. The user is the device owner (the first user of the device).</p>
+<p> c. The user is in Shimless RMA flow.</p>
+</li>
+<li><p>The PWA UI associated with the Telemetry extension must be opened for the
+extension to have access to APIs.</p>
+</li>
+<li><p>The device hardware must belong to the OEM associated with the Telemetry
+extension (e.g. HP Support Assist only runs on HP devices).</p>
+</li>
+<li><p>Only an allowlisted extension ID can access Telemetry Extension APIs. Each
+allowlisted extension ID can be connected to one PWA origin. It is mandatory
+to declare one entry in <code>externally_connectable.matches</code> list.
+An example can be found here:</p>
+</li>
+</ol>
+<pre data-language="json">&quot;externally_connectable&quot;: {
+ &quot;matches&quot;: [&quot;https://third-party.com/*&quot;]
+}</pre>
+<p>The <code>externally_connectable</code> key determines whether or not a website (or other
+Chrome extension) can initiate communication with a Telemetry Extension. A
+Telemetry Extension can always choose to communicate with sites indirectly via
+content scripts injected into a tab. Please note that no matter what,
+extensions should always validate and sanitize messages.  An extension should
+never have a listener that evals random code sent in a message. This helps
+mitigate the damage a sender (whether untrusted or compromised) may be able to
+perform. This is also critical because other Chrome extensions may be running
+on the site that tries to connect to the Telemetry Extension and can initiate
+that connection.</p>
+<h1 id="development--testing-support">Development / Testing support</h1>
+<h2 id="overriding-pwa-origin-since-m98--manufacturer-since-m105">Overriding PWA origin (Since M98) / Manufacturer (Since M105)</h2>
+<p>Support for overriding the PWA origin and manufacturer to use while development
+and testing was added in version M98 and M105. The PWA origin option overrides
+the allowlisted PWA origin while the manufacturer overrides the actual device
+manufacturer fetched from cros_config. Here is what you need to do in order to
+access the flags (you can skip to step 3 if you already have read/write access
+to rootfs):</p>
+<ol>
+<li><p>On your testing device, make sure you enable developer mode.</p>
+</li>
+<li><p>Make sure you have write access to rootfs, if not run <code>/usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification</code></p>
+</li>
+<li><p>Open <code>/etc/chrome_dev.conf</code> and add these lines to the end:</p>
+</li>
+</ol>
+<pre>--telemetry-extension-pwa-origin-override-for-testing=&lt;new-pwa-origin&gt;
+--telemetry-extension-manufacturer-override-for-testing=&lt;new-manufacturer&gt;</pre>
+<ol start="4">
+<li>In your Telemetry Extension's manifest.json, set the
+externally_connectable.matches entry to match <new-pwa-origin>.</li>
+</ol><p>After following those steps, the new PWA and the Telemetry Extension should be
+able to communicate via message passing.</p>
+<h2 id="a-note-on-serial-number">A Note on Serial Number</h2>
+<p>The device serial number can be accessed using <code>dpsl.telemetry.getVpdInfo()</code>
+and the battery serial number is accessed using <code>dpsl.telemetry.getOemDataInfo()</code>.
+Because of the sensitive nature of serial numbers, this information is guarded
+using a runtime permission: <code>os.telemetry.serial_number</code>.
+For technical limitation, this is now a mandatory permission, meaning the
+chrome extension’s manifest.json needs to include it in the permissions list in
+order to have access to serial numbers.</p>
+<h2 id="setup-a-secure-connection-on-localhost">Setup a secure connection on localhost</h2>
+<p>The Telemetry Extension enforces <code>https</code> as the protocol for communicating with
+the PWA. During development, this leads to a rejection of a PWA hosted under
+<code>http://localhost/</code> or another origin that does not have a valid certificate
+that is trusted by Chrome. The following steps describe how to set up a secure
+development PWA under crostini (Linux on ChromeOS). For this guide we assume
+<code>localhost</code> as the host. Please note that the <code>openssl</code> commands for this
+guide were taken from
+<a href="https://www.section.io/engineering-education/how-to-get-ssl-https-for-localhost/">this</a>
+blog post.</p>
+<ul>
+<li>Setup crostini (<code>Settings&gt;Developers&gt;Linux development environment</code>) and make
+sure that &quot;My Files&quot; are shared with Linux (right click on the &quot;My Files&quot; folder
+and then select &quot;Share with Linux&quot;).</li>
+<li>Navigate to a shared folder under <code>mnt/chromeos/..</code> and run the following
+command to create a root certificate:</li>
+</ul>
+<pre>openssl genrsa -out CA.key -des3 2048</pre>
+<ul>
+<li>Using this key, generate a root certificate:</li>
+</ul>
+<pre>openssl req -x509 -sha256 -new -nodes -days 3650 -key CA.key -out CA.pem</pre>
+<ul>
+<li>Next up, create a file named <code>localhost.ext</code> with the following content:</li>
+</ul>
+<pre>authorityKeyIdentifier = keyid,issuer
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+IP.1 = 127.0.0.1</pre>
+<ul>
+<li>Now create a key and a Certificate Signing Request (CSR) for localhost using
+the following commands:</li>
+</ul>
+<pre>openssl genrsa -out localhost.key -des3 2048
+openssl req -new -key localhost.key -out localhost.csr</pre>
+<ul>
+<li>Finally generate a Certificate for localhost with the following command:</li>
+</ul>
+<pre>openssl x509 -req -in localhost.csr -CA ../CA.pem -CAkey ../CA.key -CAcreateserial -days 3650 -sha256 -extfile localhost.ext -out localhost.crt</pre>
+<ul>
+<li>For your convenience create a decrypted version of your key for localhost.
+This can be used by your development instance.</li>
+</ul>
+<pre>openssl rsa -in localhost.key -out localhost.decrypted.key</pre>
+<p>You can now use the generated key and certificate for localhost in your
+development environment. In order for Chrome to trust the key used by your
+application, you need to add the CA root certificate to Chrome.
+Under <code>Settings&gt;Privacy and security&gt;Security&gt;Manage certificates</code> you are
+able to set the root CA. Just select the <code>Authorities</code> tab and click <code>Import</code>.
+Select the generated <code>CA.pem</code> file and click open. Now your Chrome instance
+and testing environment trust each other.</p>
+<h1 id="restrictions-on-data-use">Restrictions on Data Use</h1>
+<p>Due to the powerful nature of this API there are limits on how the data can be
+utilized:</p>
+<ol>
+<li><p>This API can only be used to receive telemetry data and diagnostic
+information from ChromeOS-based devices to provide Customer Support Services.</p>
+</li>
+<li><p>This API will only be used, access or otherwise process personal data or
+device identifiers at the Customer’s express direction in each instance.</p>
+</li>
+<li><p>Company will not access the ChromeOS API on an ongoing basis, or at recurring
+intervals, without express direction by the Customer.</p>
+</li>
+<li><p>Company will not store (on device or server), or use for geolocation
+purposes, the device SSID or BSSID.</p>
+</li>
+<li><p>Company will not use data obtained through the API for marketing purposes.</p>
+</li>
+<li><p>Company will provide and adhere to a privacy policy that clearly and
+accurately describes to Customers what data is collected and how the data is
+used and shared.</p>
+</li>
+</ol>
+<h1 id="further-reads">Further reads</h1>
+<p>For information around configuration of certain cros-config values please visit:</p>
+<ol>
+<li><p><a href="telemetry_extension/add_oem_name">Customization Guide - OEM Name</a></p>
+</li>
+<li><p><a href="telemetry_extension/fingerprint_diag">Customization Guide - Fingerprint Diagnostics</a></p>
+</li>
+<li><p><a href="telemetry_extension/api_overview">Telemetry Extension API overview</a></p>
+</li>
+</ol>
+<h1 id="faqs">FAQs</h1>
+<p>Q: I found a bug, how do I report it?<br>
+A: Thank you for your contribution. Please create a new bug with the description
+and logs (if possible) on our
+<a href="https://partnerissuetracker.corp.google.com/issues/new?component=1225577&amp;template=1725782">bugtracker</a>.
+You need a partner account to do that.</p>
+<p>Q: Have a question?<br>
+A: Please reach out to <a href="mailto:chromeos-oem-services@google.com">chromeos-oem-services@google.com</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/README.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/telemetry_extension/README.md</a>
+  </p>
+</div>

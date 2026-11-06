@@ -1,0 +1,336 @@
+<h1>Integrating a feature with the Origin Trials framework</h1>
+<p>To expose your feature via the <a href="https://googlechrome.github.io/OriginTrials/developer-guide.html">Origin Trials framework</a>, there are a few code
+changes required.</p>
+<p>*** note
+<strong>WARNING:</strong> This is only available for features implemented in Blink.</p>
+<hr>
+<h2 id="code-changes">Code Changes</h2>
+<p>*** promo
+<strong>NOTE:</strong> You can land these code changes before requesting to run an origin
+trial.
+These code changes make it possible to control a feature via an origin trial,
+but don&#39;t require an origin trial to be approved. For more on the process, see
+<a href="https://www.chromium.org/blink/origin-trials/running-an-origin-trial">Running an Origin Trial</a>.</p>
+<hr>
+<h3 id="step-1-add-runtime-enabled-feature-in-blink-for-origin-trial">Step 1: Add Runtime Enabled Feature in Blink for Origin Trial</h3>
+<p>First, you’ll need to configure <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/runtime_enabled_features.json5"><code>runtime_enabled_features.json5</code></a>. If you don&#39;t
+have a Blink&#39;s <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/RuntimeEnabledFeatures.md">Runtime Enabled Feature</a> flag yet, you will need to add an entry
+in this file.</p>
+<p>The following fields of an entry are relevant:</p>
+<ul>
+<li><code>name</code>: The name of your runtime enabled feature, e.g. <code>&quot;MyFeature&quot;</code>.</li>
+<li><code>origin_trial_feature_name</code>: The name of your runtime enabled feature in the
+origin trial. This can be the same as your runtime feature flag (i.e. <code>name</code>
+field), or different. Eventually, this configured name will be used in the
+origin trials developer console.</li>
+<li><code>origin_trial_os</code>: Specifies a <code>[list]</code> of platforms where they will allow the
+trial to be enabled. The list values are case-insensitive, but must match one
+of the defined <code>OS_&lt;platform&gt;</code> macros (see <a href="https://chromium.googlesource.com/chromium/src/+/main/build/build_config.h"><code>build_config.h</code></a>).</li>
+<li><code>origin_trial_allows_third_party</code>: Must be enabled to allow third-party tokens
+to work correctly. Set to true, if (and only if) you intend to support
+third-party matching.</li>
+<li><code>base_feature</code>: Generates a <code>base::Feature</code> in the <code>blink::features</code>
+namespace if the value is not <code>&quot;none&quot;</code>. It helps to control the Origin Trial
+remotely. See also <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/RuntimeEnabledFeatures.md#generate-a-instance-from-a-blink-feature">Generate a <code>base::Feature</code> instance from a Blink Feature</a>.</li>
+</ul>
+<p>Not specific to Origin Trial:</p>
+<ul>
+<li><code>status</code>: Controls when the runtime enabled feature is enabled in Blink. See
+also <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/RuntimeEnabledFeatures.md#adding-a-runtime-enabled-feature">the Status table</a>.</li>
+<li><code>base_feature_status</code>: Controls when the <code>base::Feature</code> defined by
+<code>base_feature</code> is enabled.</li>
+</ul>
+<p>More details are explained in the json5 file and in the above linked doc.</p>
+<p>If the runtime enabled feature flag is <a href="#1_in-c">used in C++</a>, you will have to
+change all callers of the no-argument overload of
+<code>RuntimeEnabledFeatures::MyFeatureEnabled()</code> to the overload that takes a
+<code>const FeatureContext*</code>. You can pass an <code>ExecutionContext</code> here, e.g. using
+<code>ExecutionContext::From(ScriptState*)</code>.</p>
+<h4 id="examples">Examples</h4>
+<p>RuntimeEnabledFeature flag name, trial name and <code>base::Feature</code> are all the
+same:</p>
+<pre data-language="json">{
+  name: &quot;MyFeature&quot;,  // Generates `RuntimeEnabledFeatures::MyFeatureEnabled()`
+  origin_trial_feature_name: &quot;MyFeature&quot;,
+  status: &quot;experimental&quot;,
+  // No need to specify base_feature.
+},</pre>
+<p>RuntimeEnabledFeature flag name, trial name, and <code>base::Feature</code> name are
+different:</p>
+<pre data-language="json">{
+  name: &quot;MyFeature&quot;,
+  origin_trial_feature_name: &quot;MyFeatureTrial&quot;,
+  base_feature: &quot;MyBaseFeature&quot;,  // Generates blink::features::kMyBaseFeature
+  status: &quot;experimental&quot;,
+},</pre>
+<p>Trial limited to specific platform:</p>
+<pre data-language="json">{
+  name: &quot;MyFeature&quot;,
+  origin_trial_feature_name: &quot;MyFeature&quot;,
+  origin_trial_os: [&quot;android&quot;],
+  status: &quot;experimental&quot;,
+},</pre>
+<h4 id="webview-considerations">WebView considerations</h4>
+<p>Because WebView is built as part of the <code>&quot;android&quot;</code> os target, it is not
+possible to exclude a trial from WebView if it is enabled on Android.</p>
+<p>If the feature under trial can be enabled on WebView alongside other Android
+platforms, this is preferred.</p>
+<p>In situations where this is not feasible, the recommended solution is to
+explicitly disable the origin trial in
+<code>AwMainDelegate::BasicStartupComplete()</code> in <a href="https://chromium.googlesource.com/chromium/src/+/main/android_webview/lib/aw_main_delegate.cc"><code>aw_main_delegate.cc</code></a> by
+appending the <code>embedder_support::kOriginTrialDisabledFeatures</code> switch with the
+disabled trial names as values.</p>
+<p>See <a href="https://crrev.com/c/3733267">https://crrev.com/c/3733267</a> for an example of how this can be done.</p>
+<h3 id="step-2-gating-access">Step 2: Gating Access</h3>
+<p>Once configured, there are two mechanisms to gate access to your feature behind
+an origin trial. You can use either mechanism, or both, as appropriate to your
+feature implementation.</p>
+<h4 id="1-in-c">1) In C++</h4>
+<p>A native C++ method that you can call in Blink code at runtime to expose your
+feature:</p>
+<pre data-language="cpp">bool RuntimeEnabledFeatures::MyFeatureEnabled(ExecutionContext*)</pre>
+<p>*** note
+<strong>WARNING:</strong> Your feature implementation must not persist the result of the
+enabled check. Your code should simply call
+<code>RuntimeEnabledFeatures::MyFeatureEnabled(ExecutionContext*)</code> as often as
+necessary to gate access to your feature.</p>
+<hr>
+<h4 id="2-1-in-web-idl">2-1) In Web IDL</h4>
+<p>An IDL attribute [<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/bindings/IDLExtendedAttributes.md#RuntimeEnabled">RuntimeEnabled</a>] that you can use to automatically generate
+code to expose and hide JavaScript methods/attributes/objects.</p>
+<pre data-language="cpp">[RuntimeEnabled=MyFeature]
+partial interface Navigator {
+     readonly attribute MyFeatureManager myFeature;
+}</pre>
+<h4 id="2-2-css-properties">2-2) CSS Properties</h4>
+<p>*** promo
+<strong>NOTE:</strong> For CSS properties, you do not need to edit the IDL files, as the
+exposure on the <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/core/css/css_style_declaration.idl">CSSStyleDeclaration</a> is handled at runtime.</p>
+<hr>
+<p>You can also run experiment for new CSS properties with origin trial. After you
+have configured your feature in <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/runtime_enabled_features.json5"><code>runtime_enabled_features.json5</code></a> as above,
+head to <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/core/css/css_properties.json5"><code>css_properties.json5</code></a>. As explained in the file, you use
+<code>runtime_flag</code> to associate the CSS property with the feature you just defined.
+This will automatically link the CSS property to the origin trial defined in the
+runtime feature. It will be available in both JavaScript (<code>Element.style</code>) and
+CSS (including <code>@supports</code>) when the trial is enabled.</p>
+<p>*** promo
+<strong>EXAMPLE:</strong> <a href="https://chromium.googlesource.com/chromium/src/+/ff2ab8b89745602c8300322c2a0158e210178c7e/third_party/blink/renderer/core/css/css_properties.json5#2635">origin-trial-test-property</a> defines a test css property controlled
+via runtime feature <code>OriginTrialsSampleAPI</code> and subsequently an origin trial
+named <code>Frobulate</code>.</p>
+<hr>
+<p>*** note
+<strong>ISSUE:</strong> In the rare cases where the origin trial token is added via script
+after the css style declaration, the css property will be enabled and is fully
+functional, however it will not appear on the <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/core/css/css_style_declaration.idl">CSSStyleDeclaration</a> interface,
+i.e. not accessible in <code>Element.style</code>. This issue is tracked in crbug/1041993.</p>
+<hr>
+<h3 id="step-3-mapping-runtime-enabled-feature-to-basefeature-optional">Step 3: Mapping Runtime Enabled Feature to <code>base::Feature</code> (optional)</h3>
+<p>Given the following example:</p>
+<pre data-language="json">{
+  name: &quot;MyFeature&quot;,
+  origin_trial_feature_name: &quot;MyFeature&quot;,
+  base_feature: &quot;MyFeature&quot;,
+  status: &quot;experimental&quot;,
+},</pre>
+<pre data-language="cpp">[RuntimeEnabled=MyFeature]
+interface MyFeatureAPI {
+  readonly attribute bool dummy;
+}</pre>
+<pre data-language="cpp">// third_party/blink/.../my_feature_api.cc
+bool MyFeatureAPI::ConnectToBrowser() {
+  if (base::FeatureList::IsEnabled(blink::features::kMyFeature) {
+    // Do something
+  }
+  return false;
+}</pre>
+<p>The above example shows a new feature relies on a <code>base::Feature</code> generated from
+the <code>base_feature</code> definition in json file, e.g. <code>blink::features::kMyFeature</code>,
+in addition to the runtime enabled feature flag <code>MyFeature</code>.
+However, their values are not associated.</p>
+<p>In addition, due to the <a href="#limitations">limitation</a>, the runtime enabled feature
+flag is not available in the browser process <strong>by default</strong>:</p>
+<blockquote>
+<p>if you need to know in the browser process whether a feature should
+be enabled, then you will have to either have the renderer inform it at
+runtime, or else just assume that it&#39;s always enabled, and gate access to the
+feature from the renderer.</p>
+</blockquote>
+<p>*** note
+<strong>TLDR:</strong> Turning on <code>MyFeature</code> doesn&#39;t automatically turning on
+<code>blink::features::kMyFeature</code>, and vice versa.</p>
+<hr>
+<p>To mitigate the issue, there are several options:</p>
+<h4 id="option-1-fully-enabling-basefeature-eg-kmyfeature">Option 1: Fully Enabling <code>base::Feature</code>, e.g. <code>kMyFeature</code></h4>
+<p>And letting Origin Trial decide when your feature (via runtime enabled feature
+flag <code>blink::features::MyFeature</code>) is available, as suggested in the above
+quote. The <code>base::Feature</code> can be enabled via a remote Finch config, or by
+updating the default value in C++.</p>
+<p>However, after the Origin Trial ends, it will be impossible to ramp up the
+feature by Finch if the part controlled by <code>MyFeature</code> cannot be enabled
+independently. For example, if you have a new Web API <code>MyFeatureAPI</code>, enabling
+<code>MyFeature</code> will just make the IDL available to everyone without the
+Blink/browser implementation.</p>
+<p>*** note
+<strong>Example Bug:</strong> <a href="https://crbug.com/1360678">https://crbug.com/1360678</a>.</p>
+<hr>
+<h4 id="option-2-setting-up-a-custom-mapping">Option 2: Setting Up a Custom Mapping</h4>
+<ol>
+<li><p>Make <code>MyFeature</code> depend on <code>blink::features::kMyFeature</code> so that the feature
+is not enabled if <code>features::kMyFeatures</code> is not enabled. In
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/core/origin_trials/origin_trial_context.cc">third_party/blink/renderer/core/origin_trials/origin_trial_context.cc</a>:</p>
+<pre data-language="cpp">bool OriginTrialContext::CanEnableTrialFromName(const StringView&amp; trial_name) {
+  ...
+  if (trial_name == &quot;MyFeature&quot;) {
+    return base::FeatureList::IsEnabled(blink::features::kMyFeatures);
+  }
+}</pre>
+</li>
+<li><p>Add custom relationship for <code>MyFeature</code> and <code>blink::features::kMyFeature</code> to
+handle your use case.</p>
+<p> Read
+ <a href="initialize_blink_features#step-2_determine-how-your-feature-is-initialized"><strong>Determine how your feature is initialized: Depends on the status of a base::Feature</strong></a>
+ first. If the mappings described there don&#39;t meet your use case, refer to
+ the following examples.</p>
+<p> In <a href="https://source.chromium.org/chromium/chromium/src/+/main:content/child/runtime_features.cc">content/child/runtime_features.cc</a>:</p>
+<pre data-language="cpp">void SetCustomizedRuntimeFeaturesFromCombinedArgs(
+    const base::CommandLine&amp; command_line) {
+  // Example 1: https://bit.ly/configuring-trust-tokens
+  // Example 2: https://crrev.com/c/3878922/14/content/child/runtime_features.cc
+}</pre>
+</li>
+</ol>
+<h3 id="step-4-web-feature-counting">Step 4: Web Feature Counting</h3>
+<p>Once the feature is created, in order to run the origin trial you need to track
+how often users use your feature. You can do it in two ways.</p>
+<h4 id="increment-counter-in-your-c-code">Increment counter in your C++ code</h4>
+<ol>
+<li><p>Add your feature counter to the end of <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/public/mojom/use_counter/metrics/webdx_feature.mojom"><code>webdx_feature.mojom</code></a> (or
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom"><code>web_feature.mojom</code></a> if it&#39;s a feature that&#39;s somehow not expected to be
+described in the <a href="https://github.com/web-platform-dx/web-features/">web platform dx
+repository</a>)&quot;</p>
+<pre data-language="cpp">enum WebDXFeature {
+  // ...
+  kLastFeatureBeforeYours = 1235,
+  // Here, increment the last feature count before yours by 1.
+  kMyFeature = 1236,
+
+  kNumberOfFeatures,  // This enum value must be last.
+};</pre>
+</li>
+<li><p>Run <a href="https://chromium.googlesource.com/chromium/src/+/main/tools/metrics/histograms/update_use_counter_feature_enum.py"><code>update_use_counter_feature_enum.py</code></a> to update the UMA mappings.</p>
+</li>
+<li><p>Increment your feature counter in C++ code.</p>
+<pre data-language="cpp">#include &quot;third_party/blink/renderer/platform/instrumentation/use_counter.h&quot;
+
+// ...
+
+  if (RuntimeEnabledFeatures::MyFeatureEnabled(context)) {
+    UseCounter::Count(context, WebFeature::kMyFeature);
+  }</pre>
+</li>
+</ol>
+<h4 id="update-counter-with-measureas-idl-attribute">Update counter with [MeasureAs] IDL attribute</h4>
+<ol>
+<li><p>Add [[MeasureAs=&quot;WebDXFeature::kMyFeature&quot;]] IDL attribute</p>
+<pre data-language="cpp">partial interface Navigator {
+  [RuntimeEnabled=MyFeature, MeasureAs=&quot;WebDXFeature::kMyFeature&quot;]
+  readonly attribute MyFeatureManager myFeature;</pre>
+<p>Alternatively, if your feature counter doesn&#39;t fit as a WebDXFeature use
+counter, make it a WebFeature instead and drop the WebDXFeature:: prefix (and
+quotes) in the [[MeasureAs]] attribute above, or use [<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/bindings/IDLExtendedAttributes.md#Measure">Measure</a>] instead
+and follow the [<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/bindings/IDLExtendedAttributes.md#Measure">Measure</a>] IDL attribute naming convention.</p>
+</li>
+<li><p>Add your use counter to <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/public/mojom/use_counter/metrics/webdx_feature.mojom"><code>webdx_feature.mojom</code></a> (or alternatively to
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/public/mojom/use_counter/metrics/web_feature.mojom"><code>web_feature.mojom</code></a>). The code to increment your feature counter will be
+generated in the V8 bindings code automatically.</p>
+<pre data-language="cpp">enum WebDXFeature {
+  // ...
+  kLastFeatureBeforeYours = 1235,
+  // Here, increment the last feature count before yours by 1.
+  kMyFeature = 1236,
+
+  kNumberOfFeatures,  // This enum value must be last.
+};</pre>
+</li>
+</ol>
+<h3 id="step-5-add-web-tests">Step 5: Add Web Tests</h3>
+<p>When using the [<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/bindings/IDLExtendedAttributes.md#RuntimeEnabled">RuntimeEnabled</a>] IDL attribute, you should add web tests
+to verify that the V8 bindings code is working as expected. Depending on how
+your feature is exposed, you&#39;ll want tests for the exposed interfaces, as well
+as tests for script-added tokens. For examples, refer to the existing tests in
+<a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/web_tests/http/tests/origin_trials/webexposed/">origin_trials/webexposed</a>.</p>
+<h2 id="limitations">Limitations</h2>
+<p>What you can&#39;t do, because of the nature of these origin trials, is know at
+either browser or renderer startup time whether your feature is going to be used
+in the current page/context. This means that if you require lots of expensive
+processing to begin (say you index the user&#39;s hard drive, or scan an entire city
+for interesting weather patterns,) that you will have to either do it on browser
+startup for <em>all</em> users, just in case it&#39;s used, or do it on first access. (If
+you go with first access, then only people trying the experiment will notice the
+delay, and hopefully only the first time they use it.). We are investigating
+providing a method like <code>OriginTrials::myFeatureShouldInitialize()</code> that will
+hint if you should do startup initialization.  For example, this could include
+checks for trials that have been revoked (or throttled) due to usage, if the
+entire origin trials framework has been disabled, etc.  The method would be
+conservative and assume initialization is required, but it could avoid expensive
+startup in some known scenarios.</p>
+<p>Similarly, if you need to know in the browser process whether a feature should
+be enabled, then you will have to either have the renderer inform it at runtime,
+or else just assume that it&#39;s always enabled, and gate access to the feature
+from the renderer.</p>
+<h2 id="manual-testing">Manual Testing</h2>
+<p>To test an origin trial feature during development, follow these steps:</p>
+<ol>
+<li><p>Use <a href="https://chromium.googlesource.com/chromium/src/+/main/tools/origin_trials/generate_token.py"><code>generate_token.py</code></a> to generate a token signed with the test private key.
+You can generate signed tokens for any origin that you need to help you test,
+including localhost or 127.0.0.1. Example:</p>
+<pre data-language="bash">tools/origin_trials/generate_token.py http://localhost:8000 MyFeature</pre>
+<p>There are additional flags to generate third-party tokens, set the expiry
+date, and control other options. See the command help for details (<code>--help</code>).
+For example, to generate a third-party token, with <a href="https://docs.google.com/document/d/1xALH9W7rWmX0FpjudhDeS2TNTEOXuPn4Tlc9VmuPdHA/edit#heading=h.myaz1twlipw">user subset exclusion</a>:</p>
+<pre data-language="bash">tools/origin_trials/generate_token.py --is-third-party --usage-restriction=subset http://localhost:8000 MyFeature</pre>
+</li>
+<li><p>Copy the token from the end of the output and use it in a <code>&lt;meta&gt;</code> tag or
+an <code>Origin-Trial</code> header as described in the <a href="https://github.com/jpchase/OriginTrials/blob/gh-pages/developer-guide.md">Developer Guide</a>.</p>
+</li>
+<li><p>Run Chrome with the test public key by passing:
+<code>--origin-trial-public-key=dRCs+TocuKkocNKa0AtZ4awrt9XKH2SQCI6o4FY6BNA=</code></p>
+</li>
+</ol>
+<p>You can also run Chrome with both the test public key and the default public key
+along side by passing:
+<code>--origin-trial-public-key=dRCs+TocuKkocNKa0AtZ4awrt9XKH2SQCI6o4FY6BNA=,fMS4mpO6buLQ/QMd+zJmxzty/VQ6B1EUZqoCU04zoRU=</code></p>
+<p>*** promo
+<strong>TIP:</strong> See
+<a href="https://www.chromium.org/developers/how-tos/run-chromium-with-flags/">this doc</a>
+to apply commandline switches for Chrome for Android and
+<a href="https://chromium.googlesource.com/chromium/src/+/main/android_webview/docs/commandline-flags.md">this doc</a> to apply commandline
+switches for Android WebView.</p>
+<hr>
+<p>The <code>--origin-trial-public-key</code> switch is not needed with <code>content_shell</code>, as it
+uses the test public key by default.</p>
+<p>The test private key is stored in the repo at <code>tools/origin_trials/eftest.key</code>.
+It&#39;s also used by Origin Trials unit tests and web tests.</p>
+<p>If you cannot set command-line switches (e.g., on Chrome OS), you can also
+directly modify <a href="https://chromium.googlesource.com/chromium/src/+/main/chrome/common/origin_trials/chrome_origin_trial_policy.cc"><code>chrome_origin_trial_policy.cc</code></a>.</p>
+<p>To see additional information about origin trial token parsing (including
+reasons for failures, or token names for successful tokens), you can add these
+switches:</p>
+<p>  <code>--vmodule=trial_token=2,origin_trial_context=1</code></p>
+<p>If you are building with <code>is_debug=false</code>, then you will also need to add
+<code>dcheck_always_on=true</code> to your build options, and add this to the command line:</p>
+<p>  <code>--enable-logging=stderr</code></p>
+<h2 id="related-documents">Related Documents</h2>
+<ul>
+<li><a href="http://go/finch-feature-api">Chromium Feature API &amp; Finch (Googler-only)</a></li>
+<li><a href="configuration">Configuration: Prefs, Settings, Features, Switches &amp; Flags</a></li>
+<li><a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/RuntimeEnabledFeatures.md">Runtime Enabled Features</a></li>
+<li><a href="initialize_blink_features">Initialization of Blink runtime features in content layer</a></li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/origin_trials_integration.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/origin_trials_integration.md</a>
+  </p>
+</div>

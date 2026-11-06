@@ -1,0 +1,58 @@
+<h1>Linux Plugins</h1>
+<h2 id="background-reading-materials">Background reading materials</h2>
+<h3 id="plugins-in-general">Plugins in general</h3>
+<ul>
+<li><a href="https://developer.mozilla.org/en-US/docs/Plugins/Guide">Gecko Plugin API reference</a>
+-- most important to read</li>
+<li><a href="http://www.mozilla.org/projects/plugins/">Mozilla plugins site</a></li>
+<li><a href="https://developer.mozilla.org/en/XEmbed_Extension_for_Mozilla_Plugins">XEmbed extension</a>
+-- newer X11-specific plugin API</li>
+<li><a href="http://gplflash.sourceforge.net/gplflash2_blog/npapi.html">NPAPI plugin guide</a>
+from GPLFlash project</li>
+</ul>
+<h3 id="chromium-specific">Chromium-specific</h3>
+<ul>
+<li><a href="https://dev.chromium.org/developers/design-documents/plugin-architecture">Chromium&#39;s plugin architecture</a>
+-- may be out of date but will be worth reading</li>
+</ul>
+<h2 id="code-to-reference">Code to reference</h2>
+<ul>
+<li><a href="http://mxr.mozilla.org/firefox/source/modules/plugin/base/src/">Mozilla plugin code</a>
+-- useful reference</li>
+<li><a href="http://gwenole.beauchesne.info//en/projects/nspluginwrapper">nspluginwrapper</a>
+-- does out-of-process plugins itself</li>
+</ul>
+<h2 id="terminology">Terminology</h2>
+<ul>
+<li><em>Internal plugin</em>: &quot;a plugin that&#39;s implemented in the chrome dll, i.e.
+there&#39;s no external dll that services that mime type. For Linux you&#39;ll just
+have to worry about the default plugin, which is what shows a puzzle icon
+for content that you don&#39;t have a plugin for.  We use that to allow the user
+to download and install the missing plugin.&quot;</li>
+</ul>
+<h2 id="flash">Flash</h2>
+<ul>
+<li><a href="http://www.adobe.com/devnet/flashplayer/">Adobe Flash player dev center</a></li>
+<li><a href="http://blogs.adobe.com/penguin.swf/">penguin.swf</a> -- blog about Flash on
+Linux</li>
+<li><a href="http://macromedia.mplug.org/">tips and tricks</a> -- user-created page, with
+some documentation of special flags in <code>/etc/adobe/mms.cfg</code></li>
+<li><a href="https://bugs.adobe.com/flashplayer/">official Adobe bug tracker</a></li>
+</ul>
+<h2 id="useful-tools">Useful Tools</h2>
+<ul>
+<li><code>xwininfo -tree</code> -- lets you inspect the window hierarchy of a window and
+get the layout of child windows.</li>
+<li>&quot;<a href="http://multimedia.cx/diamondx/">DiamondX</a> is a simple NPAPI plugin built
+to run on Unix platforms and exercise the XEmbed browser extension.&quot;<ul>
+<li>To build a 32-bit binary:
+<code>./configure CFLAGS=&#39;-m32&#39; LDFLAGS=&#39;-L/usr/lib32 -m32&#39;</code></li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/linux/plugins.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/linux/plugins.md</a>
+  </p>
+</div>

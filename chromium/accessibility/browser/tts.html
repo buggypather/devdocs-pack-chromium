@@ -1,0 +1,96 @@
+<h1>Text to Speech in Chrome and Chrome OS</h1>
+<p>Chrome and Chrome OS allow developers to produce synthesized speech. This
+document is an overview of the relevant code and code structure around
+synthesized speech.</p>
+<h2 id="code-structure">Code structure</h2>
+<p>A brief outline of the flow from speech request to the resulting speech on any
+platform.</p>
+<h3 id="input">Input</h3>
+<ul>
+<li><p>chrome.tts extension API</p>
+<ul>
+<li><p>The <a href="https://developer.chrome.com/apps/tts">chrome.tts extension API</a>
+  allows extensions to request speech across Windows, Mac or Chrome OS, using
+  native speech synthesis.</p>
+</li>
+<li><p>Input to the extension is first processed in the
+  <a href="https://cs.chromium.org/chromium/src/chrome/browser/speech/extension_api/tts_extension_api.h">TtsExtensionApi</a>.</p>
+</li>
+<li><p>The extension is passed an <a href="https://developer.chrome.com/apps/tts#method-speak">Options object</a>
+  in chrome.tts.speak, which is translated into a
+  <a href="https://cs.chromium.org/chromium/src/content/public/browser/tts_controller.h?dr=CSs&amp;l=120">tts_controller Utterance</a>.</p>
+</li>
+</ul>
+</li>
+<li><p>Web Speech API</p>
+<ul>
+<li><p>Chrome implements
+  <a href="https://developer.mozilla.org/en-US/docs/Web/API/Window/speechSynthesis">Window.SpeechSynthesis</a>
+  from the <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API">Web Speech API</a>.
+  This allows web apps to do text-to-speech via the device&#39;s speech
+  synthesizer.</p>
+</li>
+<li><p>A <a href="https://cs.chromium.org/chromium/src/third_party/blink/public/platform/web_speech_synthesis_utterance.h">WebSpeechSynthesisUtterance</a>
+  is created by window.SpeechSynthesis</p>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="processing">Processing</h3>
+<ul>
+<li><p>The <a href="https://cs.chromium.org/chromium/src/content/browser/speech/tts_controller_impl.h">TtsControllerImpl</a>
+(in content/) processes utterances and sends them to the correct output engine.</p>
+</li>
+<li><p>The <a href="https://cs.chromium.org/chromium/src/chrome/browser/speech/tts_controller_delegate_chromeos_impl.h">TtsControllerDelegateChromeOSImpl</a>
+(in chrome/) provides chrome OS specific functionality.</p>
+</li>
+</ul>
+<h3 id="output">Output</h3>
+<ul>
+<li><p>May differ by system, including Mac, Wind, Android, Arc++, and Chrome OS</p>
+<ul>
+<li>Platform APIs are in <a href="https://cs.chromium.org/chromium/src/content/browser/speech/">content/browser/speech</a>, expect for
+  Chrome OS&#39;s, which is in <a href="https://cs.chromium.org/chromium/src/chrome/browser/speech/">chrome/browser/speech</a>.</li>
+</ul>
+</li>
+<li><p>In Chrome OS:</p>
+<ul>
+<li><p><a href="https://cs.chromium.org/chromium/src/chrome/browser/speech/extension_api/tts_engine_extension_api.h">TtsEngineExtensionAPI</a>
+  forwards speech events to PATTS, or the network speech engine, or,
+  coming soon, third-party speech engines.</p>
+</li>
+<li><p><a href="../os/patts">PATTS</a> is the built-in Chrome OS text-to-speech engine.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="testing">Testing</h3>
+<ul>
+<li><p>Unit tests</p>
+<ul>
+<li><p>TtsControllerUnittest in content/browser/speech</p>
+</li>
+<li><p>TtsControllerDelegateChromeOSImplTest in chrome/browser/speech</p>
+</li>
+<li><p>ArcTtsServiceUnittest for ARC++ voices</p>
+</li>
+</ul>
+</li>
+<li><p>Browser tests</p>
+<ul>
+<li>TtsApiTest tests Chrome TTS extension APIs</li>
+</ul>
+</li>
+<li><p>Fuzzer</p>
+<ul>
+<li>In content_unittests, content/browser/speech/tts_platform_fuzzer.cc
+  (currently Windows only).</li>
+</ul>
+</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/tts.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/accessibility/browser/tts.md</a>
+  </p>
+</div>

@@ -1,0 +1,194 @@
+<h1>User Data Directory</h1>
+<h2 id="introduction">Introduction</h2>
+<p>The user data directory contains profile data such as history, bookmarks, and
+cookies, as well as other per-installation local state.</p>
+<p>Each <a href="https://support.google.com/chrome/answer/2364824">profile</a> is a
+subdirectory (often <code>Default</code>) within the user data directory.</p>
+<h2 id="current-location">Current Location</h2>
+<p>To determine the user data directory for a running Chrome instance:</p>
+<ol>
+<li>Navigate to <code>chrome://version</code></li>
+<li>Look for the <code>Profile Path</code> field.  This gives the path to the profile
+directory.</li>
+<li>The user data directory is the parent of the profile directory.</li>
+</ol>
+<p>Example (Windows):</p>
+<ul>
+<li>[Profile Path] <code>C:\Users\Alice\AppData\Local\Google\Chrome\User Data\Default</code></li>
+<li>[User Data Dir] <code>C:\Users\Alice\AppData\Local\Google\Chrome\User Data</code></li>
+</ul>
+<h2 id="default-location">Default Location</h2>
+<p>The default location of the user data directory is computed by
+<a href="https://cs.chromium.org/chromium/src/chrome/common/chrome_paths_internal.h?q=GetDefaultUserDataDirectory"><code>chrome::GetDefaultUserDataDirectory</code></a>.</p>
+<p>Generally it varies by</p>
+<ul>
+<li>OS platform,</li>
+<li>branding (<a href="chromium_browser_vs_google_chrome">Chrome vs. Chromium</a>, based
+on <code>is_chrome_branded</code> in <a href="https://www.chromium.org/developers/gn-build-configuration">GN
+args</a>), and</li>
+<li><a href="https://www.chromium.org/getting-involved/dev-channel">release channel</a>
+(stable / beta / dev / canary).</li>
+</ul>
+<h3 id="windows">Windows</h3>
+<p>The default location is in the local app data folder:</p>
+<ul>
+<li>[Chrome] <code>%LOCALAPPDATA%\Google\Chrome\User Data</code></li>
+<li>[Chrome Beta] <code>%LOCALAPPDATA%\Google\Chrome Beta\User Data</code></li>
+<li>[Chrome Dev] <code>%LOCALAPPDATA%\Google\Chrome Dev\User Data</code></li>
+<li>[Chrome Canary] <code>%LOCALAPPDATA%\Google\Chrome SxS\User Data</code></li>
+<li>[Chrome for Testing] <code>%LOCALAPPDATA%\Google\Chrome for Testing\User Data</code></li>
+<li>[Chromium] <code>%LOCALAPPDATA%\Chromium\User Data</code></li>
+</ul>
+<p>(The channel suffix is determined using
+<a href="https://cs.chromium.org/chromium/src/chrome/install_static/install_constants.h?q=install_suffix"><code>InstallConstants::install_suffix</code></a>.)</p>
+<h3 id="mac-os-x">Mac OS X</h3>
+<p>The default location is in the <code>Application Support</code> folder:</p>
+<ul>
+<li>[Chrome] <code>~/Library/Application Support/Google/Chrome</code></li>
+<li>[Chrome Beta] <code>~/Library/Application Support/Google/Chrome Beta</code></li>
+<li>[Chrome Dev] <code>~/Library/Application Support/Google/Chrome Dev</code></li>
+<li>[Chrome Canary] <code>~/Library/Application Support/Google/Chrome Canary</code></li>
+<li>[Chrome for Testing] <code>~/Library/Application Support/Google/Chrome for Testing</code></li>
+<li>[Chromium] <code>~/Library/Application Support/Chromium</code></li>
+</ul>
+<p>(The channel suffix is determined using the <code>CrProductDirName</code> key in the
+browser app&#39;s <code>Info.plist</code>.)</p>
+<h3 id="linux">Linux</h3>
+<p>The default location is in <code>~/.config</code>:</p>
+<ul>
+<li>[Chrome Stable] <code>~/.config/google-chrome</code></li>
+<li>[Chrome Beta] <code>~/.config/google-chrome-beta</code></li>
+<li>[Chrome Dev] <code>~/.config/google-chrome-unstable</code></li>
+<li>[Chrome Canary] <code>~/.config/google-chrome-canary</code></li>
+<li>[Chrome for Testing] <code>~/.config/google-chrome-for-testing</code></li>
+<li>[Chromium] <code>~/.config/chromium</code></li>
+</ul>
+<p>(The beta, dev, and canary channel suffixes are determined from
+<code>$CHROME_VERSION_EXTRA</code>, which is passed by the
+<a href="https://cs.chromium.org/chromium/src/chrome/installer/linux/common/wrapper?q=CHROME_VERSION_EXTRA">launch wrapper script</a>.)</p>
+<p>The <code>~/.config</code> portion of the default location can be overridden by
+<code>$CHROME_CONFIG_HOME</code> (since M61) or by <code>$XDG_CONFIG_HOME</code>.</p>
+<p>Note that <code>$XDG_CONFIG_HOME</code> affects all applications conforming to the
+<a href="https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html">XDG Base Directory Spec</a>,
+while <code>$CHROME_CONFIG_HOME</code> is specific to Chrome and Chromium.</p>
+<h3 id="chrome-os">Chrome OS</h3>
+<p>The default location is: <code>/home/chronos</code></p>
+<h3 id="android">Android</h3>
+<p>The default location comes from
+<a href="https://developer.android.com/reference/android/content/Context.html#getDir%28java.lang.String,%20int%29">Context.getDir</a>
+and is specific to the app.</p>
+<p>Example: <code>/data/user/0/com.android.chrome/app_chrome</code></p>
+<h3 id="ios">iOS</h3>
+<p>The default location is inside the application support directory in the app
+sandbox.</p>
+<ul>
+<li>[Chrome] <code>Library/Application Support/Google/Chrome</code></li>
+<li>[Chromium] <code>Library/Application Support/Chromium</code></li>
+</ul>
+<h2 id="overriding-the-user-data-directory">Overriding the User Data Directory</h2>
+<h3 id="command-line">Command Line</h3>
+<p>On most platforms, the user data directory can be overridden by passing the
+<code>--user-data-dir</code> command-line flag to the Chrome binary.</p>
+<p>The override happens in <code>chrome/app/chrome_main_delegate.cc</code>. Platforms not
+building with the file may not have implemented the override. Overriding the
+user data directory via the command line is not supported on iOS.</p>
+<p>Example:</p>
+<ul>
+<li>[Windows] <code>chrome.exe --user-data-dir=c:\foo</code></li>
+<li>[Linux] <code>google-chrome --user-data-dir=/path/to/foo</code></li>
+</ul>
+<h3 id="environment-linux">Environment (Linux)</h3>
+<p>On Linux, the user data directory can also be overridden with the
+<code>$CHROME_USER_DATA_DIR</code> environment variable.</p>
+<p>The <code>--user-data-dir</code> flag takes precedence if both are present.</p>
+<h3 id="chrome-remote-desktop-sessions-linux">Chrome Remote Desktop sessions (Linux)</h3>
+<p><a href="https://support.google.com/chrome/answer/1649523">Chrome Remote
+Desktop</a> (CRD) used to set
+<code>$CHROME_USER_DATA_DIR</code> or <code>$CHROME_CONFIG_HOME</code> on the virtual session on a
+Linux host, since a single Chrome instance cannot show windows on multiple X
+displays, and two running Chrome instances cannot share the same user data
+directory. However, with the obsolescence of <code>dbus-x11</code>, most modern Linux
+distros have lost the ability to simultaneously run multiple graphical sessions
+for the same user without running into difficult-to-trace dbus cross talk
+issues, and Chrome can only be run on a single X display per user in reality.
+Therefore, CRD no longer sets these environment variables for new installations
+after CRD host M105.</p>
+<p>The CRD host will continue to set these environment variables if either
+<code>chrome-config/</code> or <code>chrome-profile/</code> exists in
+<code>~/.config/chrome-remote-desktop/</code>. If you want to use the local Chrome profile
+in CRD sessions, quit Chrome and delete these folders from
+<code>~/.config/chrome-remote-desktop/</code>, then reboot the host device.</p>
+<h3 id="writing-an-applescript-wrapper-mac-os-x">Writing an AppleScript wrapper (Mac OS X)</h3>
+<p>On Mac OS X, you can create an application that runs Chrome with a custom
+<code>--user-data-dir</code>:</p>
+<ol>
+<li><p>Open Applications &gt; Utilities &gt; Script Editor.</p>
+</li>
+<li><p>Enter:</p>
+</li>
+</ol>
+<pre>set chrome to &quot;\&quot;/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\&quot;&quot;
+set userdatadir to &quot;\&quot;$HOME/Library/Application Support/Google/Chrome Alt\&quot;&quot;
+do shell script chrome &amp; &quot; --user-data-dir=&quot; &amp; userdatadir &amp; &quot; &gt; /dev/null 2&gt;&amp;1 &amp;&quot;</pre>
+<ol start="3">
+<li><p>Modify as needed for your installation path, Chrome versus Chromium, and
+desired user data directory.</p>
+</li>
+<li><p>Save the script in your Applications directory with the file format
+&quot;Application&quot;.</p>
+</li>
+<li><p>Close the Script Editor, find your newly created application, and run it.
+This opens a Chrome instance pointing to your new profile.</p>
+</li>
+</ol>
+<p>If you want, you can give this application the same icon as Chrome:</p>
+<ol>
+<li>Select the Google Chrome application and choose File &gt; Get Info.</li>
+<li>Select the icon at the top left of the info dialog.  You will see a blue
+highlight around the icon.</li>
+<li>Press ⌘C to copy the icon.</li>
+<li>Open the info dialog for the new application and select the icon in the
+top left.</li>
+<li>Press ⌘V to paste the copied icon.</li>
+</ol>
+<h2 id="user-cache-directory">User Cache Directory</h2>
+<p>On Windows and ChromeOS, the user cache dir is the same as the profile dir.
+(The profile dir is inside the user data dir.)</p>
+<p>On Mac OS X and iOS, the user cache dir is derived from the profile dir as
+follows:</p>
+<ol>
+<li>If <code>Library/Application Support</code> is an ancestor of the profile dir, the user
+cache dir is <code>Library/Caches</code> plus the relative path from <code>Application Support</code> to the profile dir.</li>
+<li>Otherwise, the user cache dir is the same as the profile dir.</li>
+</ol>
+<p>Example (Mac OS X):</p>
+<ul>
+<li>[user data dir] <code>~/Library/Application Support/Google/Chrome</code></li>
+<li>[profile dir] <code>~/Library/Application Support/Google/Chrome/Default</code></li>
+<li>[user cache dir] <code>~/Library/Caches/Google/Chrome/Default</code></li>
+</ul>
+<p>On Linux, the user cache dir is derived from the profile dir as follows:</p>
+<ol>
+<li>Determine the system config dir.  This is <code>~/.config</code>, unless overridden by
+<code>$XDG_CONFIG_HOME</code>.  (This step ignores <code>$CHROME_CONFIG_HOME</code>.)</li>
+<li>Determine the system cache dir.  This is <code>~/.cache</code>, unless overridden by
+<code>$XDG_CACHE_HOME</code>.</li>
+<li>If the system config dir is an ancestor of the profile dir, the user cache
+dir is the system cache dir plus the relative path from the system config
+dir to the profile dir.</li>
+<li>Otherwise, the user cache dir is the same as the profile dir.</li>
+</ol>
+<p>Example (Linux):</p>
+<ul>
+<li>[user data dir] <code>~/.config/google-chrome</code></li>
+<li>[profile dir] <code>~/.config/google-chrome/Default</code></li>
+<li>[user cache dir] <code>~/.cache/google-chrome/Default</code></li>
+</ul>
+<p>On Android, the user cache directory comes from
+<a href="https://developer.android.com/reference/android/content/Context.html#getCacheDir%28%29">Context.getCacheDir</a>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_dir.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_dir.md</a>
+  </p>
+</div>

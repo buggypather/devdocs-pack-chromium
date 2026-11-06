@@ -1,0 +1,77 @@
+<h1>How to Write Cross-Platform UI (Native components)</h1>
+<p>Chrome runs on many platforms such as Desktop (Windows, Mac, Linux, and
+ChromeOS), Android, iOS, and VR. These platforms have different UIs, written in
+different languages. Chrome also has WebUI, which is browser UI implemented in
+the HTML content area. This can be considered another UI toolkit.</p>
+<h2 id="separating-out-platform-independent-business-logic">Separating out platform-independent business logic</h2>
+<p>For UI that appears on multiple platforms, it&#39;s best to share as much of the
+business logic (model behavior backing the UI) as possible. The
+platform-specific views should be as minimal and &quot;dumb&quot; as possible. One caveat:
+sharing everything may not be feasible if there are performance or latency
+concerns.</p>
+<p>The cross-platform model will be in native C++ code, likely in the
+//components/foobar directory. Model layer code should handle the business
+logic, and be richly observable. Platform-specific views/controllers should
+observe the model, update the UI, and mutate the model as needed. This model
+should have tests.</p>
+<p>Note that there can be model state that is applicable to only a subset of
+platforms. For instance, mobile devices can change device rotation or layout. On
+Mobile, the platform itself may provide extended text editing capabilities that
+don&#39;t exist on Desktop.</p>
+<h2 id="lifetime-issues">Lifetime Issues</h2>
+<p>Different platforms may have different UI lifetime semantics, so it&#39;s helpful to
+keep the business logic stateless or with a flexible lifetime model. Android
+Java object lifetimes are well-defined, but has gotchas for cross-platform code.
+For instance: the Java side of Android is available immediately on startup, but
+the C++ side needs to wait for the native library to be loaded. Having a native
+object &quot;own&quot; a garbage-collected Java object or vice versa can also be tricky.</p>
+<ol>
+<li><p>Pure static functions are the easiest, if this works for your use case. In
+addition to being easy to bridge to Java, these are also easy to unit test,
+since they don&#39;t require setting up state.</p>
+<p>You can usually use pure static functions for simpler cases that don&#39;t
+involve state. These are easy to bridge to Java. See
+<a href="https://cs.chromium.org/chromium/src/components/url_formatter/android/java/src/org/chromium/components/url_formatter/UrlFormatter.java"><code>UrlFormatter</code></a>
+for an example of this.</p>
+</li>
+<li><p>For objects that are associated with a specific <code>Profile</code>, use a
+<code>KeyedService</code> instance with
+<a href="https://cs.chromium.org/chromium/src/components/keyed_service/content/browser_context_keyed_service_factory.h"><code>BrowserContextKeyedServiceFactory</code></a>.
+If your object depends on other <code>KeyedService</code> instances, there&#39;s a strong
+chance your object should also be a <code>KeyedService</code>. </p>
+<p>These are also pretty easy to bridge to Java. In most cases, the Java code
+will need to pass a <code>Profile</code> object, so that the native <code>KeyedService</code> can
+be fetched.</p>
+<p>A neat trick is that the Java code can be all-static, even if the native
+code isn&#39;t, if every method also includes a <code>Profile</code> parameter.</p>
+</li>
+<li><p>Objects tied to WebContents lifetimes are also commonly used, and can be
+implemented using a WebContentsObserver and WebContentsUserData.</p>
+</li>
+<li><p>For lifetimes tied to UI instances, or other custom lifetimes, you will need
+to do custom lifetime management. For Java bridging advice, see the JNI
+documentation for details.</p>
+</li>
+</ol>
+<h2 id="more-advice-on-bridging-to-java">More Advice on Bridging to Java</h2>
+<p>Bridging a code module to Java will have three parts:</p>
+<ol>
+<li><p>components/omnibox/browser/foobar.h/cc - Cross-platform code you already
+wrote and have unit tests for.</p>
+</li>
+<li><p>chrome/browser/android/omnibox/foo_feature_android.h/cc - C++ side of the
+bridge. You might only need the cc file.</p>
+</li>
+<li><p>chrome/android/java/src/org/chromium/chrome/browser/omnibox/FooFeature.java</p>
+<ul>
+<li>Java side of the bridge.</li>
+</ul>
+</li>
+</ol>
+<p>See the <a href="https://chromium.googlesource.com/chromium/src/+/main/third_party/jni_zero/README.md">JNI README</a> for more details.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/cross_platform_ui.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/cross_platform_ui.md</a>
+  </p>
+</div>

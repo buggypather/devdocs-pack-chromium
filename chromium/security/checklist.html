@@ -1,0 +1,78 @@
+<h1>Top security things for Chromies to remember</h1>
+<h2 id="why">Why:</h2>
+<ol>
+<li><strong>This is not a rehearsal</strong>. Exploit brokers trade in Chrome security bugs and
+they&#39;re used by <a href="https://blog.google/threat-analysis-group/countering-threats-north-korea/">foreign governments in harmful ways</a>.</li>
+<li><strong>Security bugs are not theoretical bugs</strong>: If it&#39;s marked as a security bug,
+the security team believes it&#39;s exploitable in practice. Attackers have
+incredible toolkits to turn niche, timing-dependent, obscure conditions into
+powerful primitives. Unfortunately, they don&#39;t need a reliably reproducing bug.
+If you can&#39;t see a way forward, talk to us.</li>
+<li><strong>Attackers deliver data via malicious websites</strong>. Be paranoid when you&#39;re
+handling data delivered from a website. Do not make any assumptions about its
+format or contents. Code defensively. If you&#39;re talking to a lower privilege
+process (e.g. a renderer process) from a higher privilege process (e.g.
+browser) assume it&#39;s compromised and is sending you crafted data.</li>
+<li><strong>Chromium C++ object lifetimes are often too complicated for human brains</strong>.
+You will introduce use-after-free and data race bugs (readily exploitable).
+Assume the worst and protect against errors using sandboxes, CHECKs and
+fuzzing. If your object lifetimes depend on JavaScript or website data, keep
+ownership very simple (avoid raw pointers, avoid <code>base::Unretained</code>, single
+ownership wherever possible).</li>
+</ol>
+<h2 id="dos">Do&#39;s:</h2>
+<ol>
+<li><strong>Get in touch</strong> (<a href="mailto:security@chromium.org">security@chromium.org</a>). We
+are here to help, and we are humans. We won&#39;t give you questionnaires or forms
+to fill out, and we will do everything we can to help get you to a secure
+outcome.</li>
+<li><strong>Use checked
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/base/numerics/">numerics</a>
+and use C++
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/base/containers/">containers</a></strong>
+(Chromium, absl or STL are all OK - they&#39;re hardened, or soon-to-be). Prefer
+<a href="https://chromium.googlesource.com/chromium/src/+/HEAD/base/containers/span.h#155"><code>base::span</code></a>
+over pointer arithmetic.</li>
+<li><strong>Merge fixes with great urgency</strong>. <a href="security-issue-guide-for-devs">You fixed a
+bug?</a> Thank you! It&#39;s now
+easier to exploit. N-day attackers are now weaponizing your publicly-visible
+git commit. Work urgently with the security and release TPMs to handle merges,
+to get the fix out to users before n-day exploitation gets widespread. Step
+one: simply mark the bug as Fixed, and then sheriffbot and the TPMs will get in
+touch to ask for the correct merges.</li>
+<li><strong>Keep things simple</strong>. If your object lifetimes confuse you, or if your
+data structure can be modified in three places, or if you have to keep two data
+structures synchronized at all times, you&#39;ve probably got a security bug.</li>
+<li><strong>Intentionally crash</strong>: it&#39;s better than being exploited. <code>DCHECK</code>s don&#39;t
+prevent security incidents, because release builds don&#39;t have them, so use
+<code>CHECK</code>s unless calculating the condition is expensive.</li>
+<li><strong>Write fuzzers</strong> for any data that your code is ingesting. It can be <a href="https://github.com/chromium/chromium/blob/HEAD/testing/libfuzzer/getting_started.md">just
+a few lines of code</a>
+and it can be mesmerizing to see the fuzzer explore your code.</li>
+</ol>
+<h2 id="donts">Don&#39;ts:</h2>
+<ol>
+<li><strong>Don&#39;t use <code>base::Unretained</code></strong> without a comment explaining how you can
+prove the object lifetimes are safe - it&#39;s responsible for a high percentage of
+our exploitable bugs. The best alternative? Consider <code>SafeRef&lt;T&gt;</code> or
+<code>WeakPtr&lt;T&gt;</code> - or ask us!</li>
+<li><strong>Don&#39;t run unnecessary code in the browser process</strong>: it has all the
+secrets. Run the code elsewhere if you can. If it must run in the browser
+process, be extra paranoid.</li>
+<li><strong>Don&#39;t mess with security UX</strong>. Humankind vaguely knows to trust UI drawn
+by the browser, but not to trust UI drawn by the website. Don&#39;t blur the lines.
+This awareness is <a href="web-platform-security-guidelines#security-ux">like a fragile
+butterfly</a>. <a href="url_display_guidelines/url_display_guidelines">URL display is
+equally delicate</a>.</li>
+</ol>
+<p>For more information, see our security <a href="rules">guidelines</a>, <a href="faq">FAQ</a>
+and <a href="security-issue-guide-for-devs">suggestions for what to do if you get a security
+bug</a>. And don&#39;t hesitate to contact
+<a href="mailto:security@chromium.org">security@chromium.org</a> - we want to help. Thanks
+for reading!</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/checklist.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/checklist.md</a>
+  </p>
+</div>

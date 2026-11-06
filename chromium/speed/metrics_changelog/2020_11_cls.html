@@ -1,0 +1,55 @@
+<h1>Cumulative Layout Shift Changes in Chrome 88</h1>
+<h2 id="changes-in-chrome-88">Changes in Chrome 88</h2>
+<h3 id="bug-fix-for-descendents-of-sticky-elements">Bug fix for descendents of sticky elements</h3>
+<p>Before Chrome 88, Cumulative Layout Shift did not take shifts of descendents of
+sticky elements into account. This has been fixed in Chrome 88.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2519360">Source code for this change</a>.</p>
+<h3 id="bug-fix-for-fixed-position-elements">Bug fix for fixed position elements</h3>
+<p>Prior to Chrome 88, Cumulative Layout Shift did not take shifts of fixed
+position elements into account. This has been fixed in Chrome 88.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2520330">Source code for this change</a>.</p>
+<h3 id="bug-fix-for-content-visibility-auto">Bug fix for content-visibility: auto</h3>
+<p>When the <code>content-visibility: auto</code> feature was shipped in Chrome 85, a
+CLS-impacting flaw was present: changes between the skipped and not-skipped
+state of a <code>content-visibility: auto</code> subtree caused an observed layout shift
+in the <code>content;visibility: auto</code> element as it resized.</p>
+<p>In Chrome 88, the CLS issue was <a href="https://crbug.com/1151526">fixed</a>.
+Going forward, there should be no CLS penalty for such elements. (Note that
+there still may be a layout shift for onscreen elements adjacent to (but not
+descendants of) the <code>content-visibility: auto</code> element.</p>
+<h3 id="ignore-layout-shift-when-visibilityhidden-becomes-visible">Ignore layout shift when visibility:hidden becomes visible</h3>
+<p>We have been always ignoring layout shifts when the element has
+visibility:hidden. However before Chrome 89, if the element having
+visibility:hidden became visible and shift at the same time, we reported layout
+shift. Now we also consider the previous visibility and ignore layout shift in
+the case.
+<a href="https://chromium-review.googlesource.com/c/chromium/src/+/2591367">Source code for this change</a></p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>All of these changes only affect sites with specific types of content. Here are
+the specifics for each change:</p>
+<h3 id="bug-fix-for-descendents-of-sticky-elements-1">Bug fix for descendents of sticky elements</h3>
+<p>Sites with descendents of  sticky position elements which shift unexpectedly
+should see an increase in their Cumulative Layout Shift scores.</p>
+<h3 id="bug-fix-for-fixed-position-elements-1">Bug fix for fixed position elements</h3>
+<p>Sites with fixed position elements which shift unexpectedly should see an
+increase in their Cumulative Layout Shift scores.</p>
+<h3 id="bug-fix-for-content-visibility-auto-1">Bug fix for content-visibility: auto</h3>
+<p>Sites using <code>content-visibility: auto</code> should no longer see any impact of this
+feature on their Cumulative Layout Shift scores, resulting in a decrease in
+their scores.</p>
+<h3 id="ignore-layout-shift-when-visibilityhidden-becomes-visible-1">Ignore layout shift when visibility:hidden becomes visible</h3>
+<p>Sites using visibility:hidden to hide layout changes may see a decrease in
+their Cumulative Layout Shift scores.</p>
+<h3 id="fixed-bug-when-recording-paint-offset-translation-deltas">Fixed bug when recording paint offset translation deltas</h3>
+<p>A bug was introduced in Chrome 86 in which Cumulative Layout Shift was measured
+incorrectly for certain cases involving nested out-of-flow elements
+(absolute-position or fixed-position). This caused reported shifts even in
+some cases where there was not actually a shift.</p>
+<h2 id="when-were-users-affected">When were users affected?</h2>
+<p>Chrome 88 is currently scheduled to be released the week of January 19, 2021.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_11_cls.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2020_11_cls.md</a>
+  </p>
+</div>

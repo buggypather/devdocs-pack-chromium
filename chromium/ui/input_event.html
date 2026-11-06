@@ -1,0 +1,372 @@
+<h1>The Life of an Input Event in Desktop Chrome UI</h1>
+<h2 id="background">Background</h2>
+<p>The goal of this document is to improve the understanding of the input event
+system in the desktop Chrome UI.</p>
+<h2 id="overview">Overview</h2>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/high-level-input-pipeline.png" alt="High-level overview of Chrome input pipeline"></p>
+<p>The Chrome UI system handles input events (typically key downs or mouse clicks)
+in three stages:</p>
+<ul>
+<li>At the very beginning, the OS generates a native input event and sends it to a
+Chrome browser window.</li>
+<li>Then, the Chrome Windowing system receives the event and converts it into a
+platform-independent ui::Event. It then sends the event to the Views system. <br>The interaction with IME (<a href="https://en.wikipedia.org/wiki/Input_method">Input Method</a>,
+for non-English text input) is also handled at this stage.</li>
+<li>Lastly, the Views system sends the event to the control that expects to
+receive it. For example, a character key event will insert one letter to a
+focused textfield.</li>
+</ul>
+<h2 id="window-abstraction">Window Abstraction</h2>
+<h3 id="aura">Aura</h3>
+<p>Aura is the window abstraction layer used on Windows, Linux, and ChromeOS. An
+event goes through several phases in Aura and is eventually passed into views.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/aura-event-flow.png" alt="Typical event routing in Aura"></p>
+<p><strong>Phase 0</strong> - DesktopWindowTreeHost</p>
+<p>After the user presses a key or clicks the mouse, the OS generates a low-level
+input event and pumps it into a message loop. After some low-level os-specific
+plumbing, the event is then delivered to a DesktopWindowTreeHost that hosts a
+native window and handles events in DesktopWindowTreeHost::DispatchEvent().</p>
+<p><strong>Phase 1</strong> - EventProcessor pre-dispatch</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/event-processor.png" alt="Event routing in EventProcessor"></p>
+<p>Next, the event is passed to a WindowEventDispatcher which is an EventProcessor
+owned by the DesktopWindowTreeHost. On ChromeOS, some ui::EventRewriters may
+rewrite the event before passing.</p>
+<p>An EventProcessor delivers the event to the right target. It provides a root
+EventTarget and a default EventTargeter. EventTargeter is responsible for
+finding the event target. An EventTarget can also provide an EventTargeter and
+the EventProcessor prefers its root EventTarget’s targeter over the default
+targeter.</p>
+<p>The EventProcessor delivers the event to the first target found by the targeter.
+If the event is not marked as handled, it will ask the targeter to find the next
+target and repeat the procedure until the event is handled.</p>
+<p>The EventProcessor can also have pre- and post-dispatch phases that happen
+before and after the event is dispatched to the target.</p>
+<p>In the case of WindowEventDispatcher, it has a pre-dispatch phase for different
+types of events.</p>
+<ul>
+<li>For mouse move events, it may synthesize and dispatch a
+EventType::kMouseExited event to notify that mouse exits from previous UI
+control.</li>
+<li>For key events, it
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/aura/window_event_dispatcher.cc;drc=d9fa208c0b5d3d454df1ff1cbc724b5fd708cf7a;l=1053">forwards</a>
+the key to ui::InputMethod::DispatchKeyEvent() and the event will be handled
+there. Depending on IME involvement, later phases of WindowEventDispatcher may
+be <strong>SKIPPED</strong>. Details are explained later.</li>
+</ul>
+<p>If the event is not marked handled in the EventProcessor pre-dispatch phase, it
+will be passed to the target. For key events, the target is the aura::Window
+that owns the focus. For mouse events, the target is the aura::Window under the
+cursor.</p>
+<p>Each browser window comes with an aura::Window. It is worth noting that the web
+content and dialog bubble live in their own aura::Windows. These different
+aura::Windows treat accelerators differently and the detail will be explained
+later.</p>
+<p><strong>Phase 2</strong> - EventTarget pre-target</p>
+<p>Like EventProcessor, an EventTarget consumes the event in three phases. it owns
+one target handler and optionally multiple pre-targets and post-target handlers.
+An event will first be passed to pre-target handlers, and if not consumed by
+them, then to the default target handler, and lastly to post-target handlers.</p>
+<p>Non-content aura::Window uses pre-handler to forward key events to FocusManager
+in views. If the key is an accelerator, the event will be intercepted and later
+phases will be SKIPPED.</p>
+<p>Mouse events at present are not processed in pre-handlers. Content aura::Window
+does not have any pre-handlers, either.</p>
+<p><strong>Phase 3</strong> - EventTarget regular</p>
+<p>At this phase, non-content aura::Window asks (Desktop)NativeWidgetAura::OnEvent()
+to handle the event.</p>
+<p>DesktopNativeWidgetAura is the native implementation of a top-level
+Widget. Non top-level widgets, e.g. dialog bubble, use NativeWidgetAura instead.
+The native widget then passes the event to Widget::OnMouseEvent(),
+Widget::OnClickEvent(), or other Widget methods depending on the event type. The
+event is then handled in views and is explained in a later section.</p>
+<p>Content aura::Window instead asks RenderWidgetHostViewAura::OnEvent() to handle
+the event. The event will be sent to Blink and then to BrowserCommandController
+if not consumed by the webpage. Some important shortcuts, e.g. Ctrl+T, are
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/browser_command_controller.cc;drc=02f28360f2f6588ca2428ef93c8129e0a8cc231c;l=210">preserved</a>
+and will not be sent to the web page.</p>
+<p><strong>Phase 4</strong> - EventTarget post-target</p>
+<p>This phase is not effective in window abstraction.</p>
+<p><strong>Phase 5</strong> - EventProcessor post-dispatch</p>
+<p>For touch events, WindowEventDispatcher may
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/aura/window_event_dispatcher.cc;drc=d9fa208c0b5d3d454df1ff1cbc724b5fd708cf7a;l=574">recognize</a>
+the event as a gesture event and dispatch it.</p>
+<p><strong>Key event handling and IME interoperability</strong></p>
+<p>We mentioned in phase 1 pre-dispatch that a key event may be consumed in <em>this</em>
+phase and no later phases. This is because we need to interact with IME through
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/base/ime/input_method.h;drc=d9fa208c0b5d3d454df1ff1cbc724b5fd708cf7a;l=101">InputMethod::DispatchKeyEvent()</a>
+in pre-dispatch.</p>
+<p>If the IME accepts this key event, Chrome will stop any further event handling
+because IMEs have their own interpretation to the event. Instead, Chrome
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/base/ime/linux/input_method_auralinux.cc;drc=d9fa208c0b5d3d454df1ff1cbc724b5fd708cf7a;l=109">exits</a>
+phase 1 with a fake VKEY_PROCESSKEY event indicating the event has been
+processed by IME, and waits for new events emitted by IME and handles them
+accordingly. For example, Chrome on Linux
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/gtk/input_method_context_impl_gtk.cc;drc=340909edba6daccd34d5875de93599551b218902;l=74">listens</a>
+for the GTK <code>preedit-changed</code> event that indicates a change in the composition
+text.</p>
+<p>If the IME does not accept this key event, WindowEventDispatcher will re-enter
+phase 1 but with
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/aura/window_tree_host.cc;drc=d9fa208c0b5d3d454df1ff1cbc724b5fd708cf7a;l=277">IME explicitly skipped</a>,
+so that the event can be passed to phase 2 where accelerators are handled.</p>
+<h3 id="macviews">MacViews</h3>
+<p><em>MacViews</em> is an umbrella term that covers the broader effort to adopt views in
+Chrome Mac. Before this, Chrome Mac was using native Cocoa controls. In this
+document, we use MacViews to refer to the windows abstraction part of Chrome
+Mac.</p>
+<p>Mac does not use Aura and is significantly different from Aura in that it hosts
+native NSWindow in
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/">RemoteCocoa</a>
+that talks to views through a mojo interface. This design allows RemoteCocoa to
+either live within the browser process or in a separate process for PWA mode.
+This design is largely due to the requirement of PWAs on Mac.
+[<a href="https://docs.google.com/document/d/1Cym6LpmrYZU6Jl1BYKhuWqzRJV_OL8LYYepGGAJw7oE/edit">ref</a>]</p>
+<p>Mac’s event handling borrows heavily from
+<a href="https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/EventOverview/EventArchitecture/EventArchitecture.html">Cocoa’s Event architecture</a>
+but applies its own handling where appropriate.</p>
+<p>During startup ChromeBrowserMainParts will kick off NSApp’s main run loop that
+will continue to service Chrome application event messages for the life of the
+program. These messages are picked up by BrowserCrApplication (NSApplication
+subclass) and for the most part forwarded to the appropriate
+NativeWidgetMacNSWindow (NSWindow subclass).</p>
+<p>A key departure from how typical Cocoa applications are architected is that
+Chrome uses a single root NSView (the BridgedContentView) as the contentView for
+it’s NSWindow. This view is largely responsible for adapting native NSEvents and
+funneling them through to the Views framework.</p>
+<p>The below two examples demonstrate two key event flows through the Cocoa layers
+of Chrome through to the Views framework.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/mac-event-flow.png" alt="Event routing on Mac"></p>
+<h4 id="right-mouse-down-event-clicking-a-button-in-the-browser-window">Right mouse down event (clicking a button in the browser window)</h4>
+<p>The below diagram demonstrates points of interest during dispatch of a right
+mouse down event on a Chrome browser window button.</p>
+<p>Summary:</p>
+<ul>
+<li>The Window Server is responsible for determining which NSWindow a mouse event
+belongs to.</li>
+<li>Once the NSWindow has been identified the Window Server will place the mouse
+down event in Chrome’s
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/chrome_browser_application_mac.h">BrowserCrApplication </a>(NSApplication)
+event queue.</li>
+<li>BrowserCrApplication’s main run loop reads from the event queue.</li>
+<li>BrowserCrApplication delivers the event to the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/app_shim/native_widget_mac_nswindow.h">NativeWidgetMacNSWindow </a>(NSWindow)
+which delivers the mouseDown event to its root NSView
+<a href="https://developer.apple.com/documentation/appkit/nswindow/1419160-contentview">contentView</a>.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/app_shim/bridged_content_view.h">BridgedContentView</a>
+aggregates all mouse related
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/base/cocoa/base_view.mm;l=114;drc=3930cf3f0e2404a517b4580b21e598a3fc648ff0">NSResponder messages</a>
+(rightMouseDown, mouseMoved, leftMouseUp etc) into the mouseEvent: method.</li>
+<li>The
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/app_shim/bridged_content_view.mm;l=580;drc=dd5a8d8907f60050eeaaac0299be624fe36cad8a">mouseEvent method</a>
+performs NSEvent conversion into ui::Event and sends the event to the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/cocoa/native_widget_mac_ns_window_host.h">NativeWidgetMacNSWindowHost</a>’s
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/cocoa/native_widget_mac_ns_window_host.mm;l=790;drc=d18ea8bb2c8089e74838b8f781ba5f08420b8516">OnMouseEvent()</a>
+method.</li>
+<li>BridgedContentView communicates to the NativeWidgetMacNSWindowHost via a
+bridge.<ul>
+<li>NativeWidgetMacNSWindowHost implements a Mojo remote
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/common/native_widget_ns_window_host.mojom;l=41;drc=e6d7cbba3a95a52176a5d5ca37572296f9b9aaa8">remote_cocoa::mojom::NativeWidgetNSWindowHost</a>
+such that the BridgedContentView and the NativeWidgetMacNSWindowHost can
+communicate via message passing (needed in the case these exist across
+process boundaries).</li>
+</ul>
+</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/native_widget_mac.mm;l=118;drc=1748fd17d0e2b542b0051955a9cccb2153ff6ea7">NativeWidgetMac</a>
+owns a NativeWidgetMacNSWindowHost instance.</li>
+</ul>
+<h4 id="key-down-event-entering-text-into-the-browsers-omnibox">Key Down event (entering text into the browser’s omnibox)</h4>
+<p>The following demonstrates key points of interest in the event flow that occurs
+when a user presses a character key with the intention to enter text into the
+browser’s omnibox.</p>
+<p>Summary:</p>
+<ul>
+<li>The Window Server will deliver key events to the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/chrome_browser_application_mac.h">CrBrowserApplication’s </a>(NSApplication)
+event queue.</li>
+<li>Provided the keyDown event is not a key equivalent or keyboard interface
+control, the BrowserCrApplication sends the event to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/app_shim/native_widget_mac_nswindow.h">NativeWidgetMacNSWindow </a>(NSWindow)
+that is associated with the first responder.</li>
+<li>The window dispatches the event as a keyDown event to it’s first responder (in
+this case the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/app_shim/bridged_content_view.h">BridgedContentView </a>which
+serves as the NSWindow’s
+<a href="https://developer.apple.com/documentation/appkit/nswindow/1419160-contentview">contentView</a>).</li>
+<li>BridgedContentView inherits from NSTextInputClient which is required for
+Chrome to interact properly with Cocoa’s text input management system.</li>
+<li>BridgedContentView forwards the keyEvent to
+<a href="https://developer.apple.com/documentation/appkit/nsresponder/1531599-interpretkeyevents">interpretKeyEvents</a>:
+method.<ul>
+<li>This invokes Cocoa’s input management system.</li>
+<li>This checks the pressed key against all key-binding dictionaries.</li>
+<li>If there is a match in the keybinding dictionary it sends a
+doCommandBySelector: message back to the view. (commands include insertTab,
+insertNewline, insertLineBreak, moveLeft etc).</li>
+<li>If no command matches it sends an insertText: message back to the
+BridgedContentView.</li>
+</ul>
+</li>
+<li>BridgedContentView
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/app_shim/bridged_content_view.mm;l=504;drc=dd5a8d8907f60050eeaaac0299be624fe36cad8a">converts the NSString to UFT16 and sends it through to it’s TextInputHost</a>.<ul>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/cocoa/text_input_host.h">TextInputHost </a>implements
+the remote Mojo interface
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/common/text_input_host.mojom;l=13;drc=4692fed3d7ff9afec997e3cd5fc5cc7050022cc7">remote_cocoa::mojom::TextInputHost</a>
+and BridgedContextView communicates with the TextInputHost via Mojo message
+passing.</li>
+</ul>
+</li>
+<li>The TextInputHost calls
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/cocoa/text_input_host.mm;l=254;drc=7d9087d7348118b8ea5b12df100f4267dc56cadf">InsertText()</a>
+on it’s
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/base/ime/text_input_client.h">ui::TextInputClient</a>.<ul>
+<li>This should be the TextInputClient of the currently focused view.</li>
+</ul>
+</li>
+</ul>
+<h2 id="views">Views</h2>
+<p>The Window Abstraction layer will pass the input event to Views. Views is
+Chrome’s (mostly) platform-independent UI framework that orchestrates UI
+elements in a tree structure. Every node in the views tree is a
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;bpv=1;bpt=1">View</a>,
+which is a UI element similar to an HTML DOM element.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/views-tree.png" alt="A simplified diagram of a views tree"></p>
+<p>A
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/widget.h;l=93;bpv=1;bpt=1?q=Widget&amp;sq=&amp;ss=chromium%2Fchromium%2Fsrc">Widget</a>
+hosts the views tree and is a window-like surface that draws its content onto a
+canvas provided by the underlying window abstraction. Every widget can have at
+most one focused view which is tracked by a FocusManager owned by the widget.</p>
+<p>The root of Views tree is a
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/root_view.h;drc=62bf27aca5418212ceadd8daf9188d2aa437bfcc;l=52">RootView</a>,
+which is a special subclass of View that helps bridging between children views
+and the wrapping Widget.</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/views-event-flow.png" alt="Event routing in views"></p>
+<h3 id="character-key-event">Character Key Event</h3>
+<p>Suppose the omnibox is focused and the user presses down a key, say character
+‘a’. How is this key routed through the system and delivered to the omnibox? We
+will only study the stack after the Window Abstraction layer passes the event to
+Views.</p>
+<p>Surprisingly, the stack that the event needs to go through is not deep. On Aura,
+it can be summarized as a path of Widget -&gt; RootView -&gt; focused View. RootView
+will ask FocusManger for the focused view and the event will be directly
+delivered to it. There is no tree traversal. The details can be broken down
+into:</p>
+<ol>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/widget.cc;drc=5b8933e94139a0ab5be46141666fdfcce0f624f6;l=1250">Widget::OnKeyEvent()</a>:
+The key event will be passed from platform-dependent NativeWidget to Widget.
+<br>The event is then processed by <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/events/event_source.cc;drc=17cd6070f4da0bb1c0396778afba06910f98fd7b;l=139">EventRewriter</a>(s)
+attached to the Widget. Rewriters are used <strong>only</strong> on ChromeOS.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/events/event_processor.cc;drc=0cd9a52effdb8f2a02b99e8044d680001ba8090f;l=16">EventProcessor::OnEventFromSource()</a>:
+The key event is then passed to the root view of the widget. Note that a
+RootView <em>is an</em> EventProcessor. <br>An EventProcessor is a <em>multicaster</em>. It tries to deliver the event to multiple
+targets <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/events/event_processor.cc;drc=5b8933e94139a0ab5be46141666fdfcce0f624f6;l=48">until the event is marked as handled</a>:
+It delegates the target enumeration task to an EventTargeter. <br>In the case of RootView, the EventTargeter is a <strong>ViewTargeter</strong>. A
+ViewTargeter will return the currently focused view as the target for the key
+event.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/events/event_handler.cc;drc=5b8933e94139a0ab5be46141666fdfcce0f624f6;l=29">EventHandler::OnEvent()</a>:
+OmniboxViewViews receives the event. Every view is an EventHandler and
+OmniboxViewViews is no exception.</li>
+<li><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/omnibox/omnibox_view_views.cc;drc=5b8933e94139a0ab5be46141666fdfcce0f624f6;l=2171">OmniboxViewViews::HandleKeyEvent()</a>:
+Eventually where the event is consumed and the text in the omnibox gets
+updated.</li>
+</ol>
+<p>On Mac, the event will be funneled directly from the Window Abstraction layer to
+the focused view, i.e. Widget and RootView are not involved in event routing.
+This is achieved by having NativeWidgetMacNSWindowHost save a pointer to the
+focused view in a
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/cocoa/text_input_host.mm;drc=7d9087d7348118b8ea5b12df100f4267dc56cadf;l=268">TextInputHost</a>.
+NativeWidgetMac
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/native_widget_mac.mm;drc=1748fd17d0e2b542b0051955a9cccb2153ff6ea7;l=895">registers</a>
+itself as an observer of focus change in FocusManager and updates
+NativeWidgetMacNSWindowHost’s TextInputHost on focus change.</p>
+<h3 id="accelerator-key-event">Accelerator Key Event</h3>
+<p>In the case when the keystroke is an accelerator, for example, a Ctrl+T to open
+a new tab, the focused view is not the expected view to handle it.</p>
+<p>On Aura, when the focus is not on the web content, accelerators are handled by a
+<strong><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/focus_manager_event_handler.cc;drc=df872ce8fcce25af51aa6b0f9fe8b1135b687524;l=17">pre-handler</a></strong>
+that happens before the handler for character keys. This pre-handlers is hooked
+on aura::Window in the Window Abstraction layer. If a key event is consumed as
+accelerators, the character key handler path will be skipped.</p>
+<p>In the accelerator path, the <strong>FocusManager</strong>
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/focus_manager_event_handler.cc;drc=df872ce8fcce25af51aa6b0f9fe8b1135b687524;l=26">relays</a>
+the event from Window Abstraction to views::AcceleratorManager, and finally to
+chrome::BrowserCommandController.</p>
+<p>Not all accelerators are handled by views::AcceleratorManager. A notable
+exception is the Tab key which is used to switch the focused view and will be
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/focus/focus_manager.cc;drc=df872ce8fcce25af51aa6b0f9fe8b1135b687524;l=70">handled</a>
+directly by the FocusManager.</p>
+<p>If the focus is on the web content, the event will be handled by
+RenderWidgetHostViewEventHandler where the web content has the priority to
+receive most keys except for important navigation accelerators.</p>
+<p>Mac interprets accelerators early in the event pipeline.
+<a href="https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/EventOverview/HandlingKeyEvents/HandlingKeyEvents.html#//apple_ref/doc/uid/10000060i-CH7-SW11">Key Equivalents</a>
+like Cmd+T will be
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/app_shim/native_widget_mac_nswindow.mm;drc=6bf8746951f47dda5ce87be9a6218a1abfa064d0;l=291">handled</a>
+early in the Window Abstraction layer and the event never goes into Views.</p>
+<h3 id="mouse-click-event">Mouse Click Event</h3>
+<p>Views like textfield will grab focus on a click event.</p>
+<p>After the Widget has received the event from the window abstraction, the
+RootView
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/root_view.cc;drc=5b8933e94139a0ab5be46141666fdfcce0f624f6;l=387">traverses</a>
+the views tree from leaf to root and looks for the first view that accepts the
+click event. Here, the leaf view is the lowest descendant view that contains the
+cursor location of the event. The task of searching for this view is delegated
+to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view_targeter_delegate.cc;drc=df872ce8fcce25af51aa6b0f9fe8b1135b687524;l=33">ViewTargeter</a>.</p>
+<p>When the click event is dispatched to a Textfield, it will
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/textfield/textfield.cc;drc=281086aeca412de952c180411560c7ca68a5b97b;l=2172">notify</a>
+the FocusManager to update the focused view.</p>
+<h2 id="focus-management">Focus Management</h2>
+<p>A focused control receives keyboard events. Focus change can be triggered by
+mouse click or pressing Tab key to switch to the next focusable view. Chrome
+usually draws a
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/focus_ring.h;bpv=1;bpt=1;l=30?q=FocusRing&amp;ss=chromium&amp;gsn=FocusRing&amp;gs=kythe%3A%2F%2Fchromium.googlesource.com%2Fchromium%2Fsrc%3Flang%3Dc%252B%252B%3Fpath%3Dsrc%2Fui%2Fviews%2Fcontrols%2Ffocus_ring.h%23FocusRing%253Aviews%2523c%2523oPBiT3XRtlN&amp;gs=kythe%3A%2F%2Fchromium.googlesource.com%2Fchromium%2Fsrc%3Flang%3Dc%252B%252B%3Fpath%3Dsrc%2Fui%2Fviews%2Fcontrols%2Ffocus_ring.h%23FocusRing%253Aviews%2523c%2523ljYID0QylaH">FocusRing</a>
+around the focused view. Focus rings are drawn separate from its view drawing.</p>
+<h3 id="focusable-controls">Focusable Controls</h3>
+<p>On all desktop platforms other than Mac, all the controls should be focusable by
+default. However, on Mac, by default, only TextField and List are focusable.
+Other controls such as Button, Combobox are not focusable. Full keyboard access
+in system settings needs to be enabled to have navigation of all controls on the
+screen.</p>
+<p>To comply with Mac’s behavior, Chrome sets
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/style/platform_style.h?q=kDefaultFocusBehavior">kDefaultFocusBehavior</a> in
+the platform style to ACCESSIBLE_ONLY on Mac as opposed to ALWAYS on other
+platforms. Controls that are
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/toolbar/toolbar_button.cc;drc=93819857a690b79b1524052513747846c068ca90;l=104">marked</a>
+as ACCESSIBLE_ONLY will be skipped in search of the next view to focus if the
+Full keyboard access is off.</p>
+<h3 id="focus-handling-in-window-abstraction">Focus Handling in Window Abstraction</h3>
+<p>Windows and Linux have more resemblance to handling focus on the window level.
+They both have a ‘top-level’ window concept. A top-level window is a window that
+has no parent. Chrome uses only top-level windows and the focus changing event
+is only triggered between top-level windows.</p>
+<p><strong>Windows</strong></p>
+<p>Chrome observes WM_ACTIVATE messages to monitor the active window change
+[<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/win/hwnd_message_handler.cc?q=WM_ACTIVATE">ref</a>].</p>
+<p>The event is then routed up through the NativeWidget (DesktopNativeWidgetAura)
+and eventually to Widget. Chrome then uses its own focus management to further
+route those focus events to the view which is supposed to have the actual
+keyboard focus.</p>
+<p><strong>Linux</strong></p>
+<p>Chrome on Linux observes the platform native focus change events FocusIn and
+FocusOut
+[<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/ozone/platform/x11/x11_window.cc?q=x11::Input::CrossingEvent::FocusIn">ref</a>]
+to respond to focus change events. Nevertheless, eventually just like on
+Windows, the events will be interpreted as active window change.</p>
+<p><strong>Mac</strong></p>
+<p>On Mac, the ‘key window’ is the window that receives keyboard events. Chrome
+observes the key status change by implementing
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:components/remote_cocoa/app_shim/views_nswindow_delegate.mm;drc=e6d7cbba3a95a52176a5d5ca37572296f9b9aaa8;l=115">windowDidBecomeKey</a>
+on an NSWindow and handles according
+[<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/native_widget_mac.mm?q=NativeWidgetMac::OnWindowKeyStatusChanged">ref</a>],
+which is similar to Windows’ active window change.</p>
+<h3 id="focus-handling-in-views">Focus Handling in Views</h3>
+<p>We have almost identical focus handling in views across different platforms. In
+views, a widget owns a FocusManager who manages the focus for all the widgets in
+this tree. FocusManager handles proper routing of keyboard events, including the
+handling of keyboard accelerators. The FocusManager also handles focus traversal
+among child widgets in addition to between Views.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/input_event/index.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/input_event/index.md</a>
+  </p>
+</div>

@@ -1,0 +1,22 @@
+<h1>Prefer enums over bools for parameters</h1>
+<p>When you want to add a bool parameter to a function, consider giving the
+function a two-value enum parameter instead.</p>
+<p>Compare these call sites:</p>
+<pre>my_function1(false, true);</pre>
+<pre>my_function1(Sandbox::Disable, RecordStats::Yes);</pre>
+<p>Not only is the latter easier to read, it&#39;s also impossible to accidentally
+swap the order of parameters.</p>
+<p>It&#39;s not much more code to declare either:</p>
+<pre>enum class Sandbox { Disable, Enable };
+enum class RecordStats { Disable, Enable };
+void my_function1(Sandbox enable_sandbox, RecordStats record_stats);</pre>
+<p>If <code>my_function1()</code> is a member function and the enum is used only for
+that one function, you can declare the enum class right above the member
+function, so that call sites become
+<code>instance-&gt;set_flag(Class::Enum::Yes)</code>.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/prefer-enums.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/patterns/prefer-enums.md</a>
+  </p>
+</div>

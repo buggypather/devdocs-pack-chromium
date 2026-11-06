@@ -1,0 +1,92 @@
+<h1>EV UI Moving to Page Info</h1>
+<p>As part of a series of data-driven
+<a href="https://blog.chromium.org/2018/05/evolving-chromes-security-indicators.html">changes</a>
+to Chrome’s security indicators, the Chrome Security UX team is announcing a
+change to the
+<a href="https://en.wikipedia.org/wiki/Extended_Validation_Certificate">Extended Validation</a>
+certificate indicator on certain websites starting in Chrome 77. This doc
+explains what’s being changed and why, as well as the supporting research
+that guided this decision.</p>
+<p>On HTTPS websites using <a href="https://en.wikipedia.org/wiki/Extended_Validation_Certificate">EV</a>
+certificates, Chrome 76 currently displays an EV badge to the left
+of the URL bar that looks like this:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/ev-to-page-info-images/chrome-76-ev-bar.png" alt="Chrome 76 EV UI" title="Chrome 76 EV
+UI"></p>
+<p>Starting in Version 77, Chrome will move this UI to Page Info, which is accessed
+by clicking the lock icon:</p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/ev-to-page-info-images/chrome-77-page-info.png" alt="Chrome 77 Page Info UI" title="Chrome
+77 Page Info UI"></p>
+<p>Through our own research as well as a survey of prior academic work, the Chrome
+Security UX team has determined that the EV UI does not protect users as
+intended (see <a href="#Further-Reading">Further Reading</a> below). Users do not appear
+to make secure choices (such as not entering password or credit card
+information) when the UI is altered or removed, as would be necessary for EV UI
+to provide meaningful protection. Further, the EV badge takes up valuable
+screen real estate, can present
+<a href="https://www.typewritten.net/writer/ev-phishing/">actively confusing company names</a>
+in prominent UI, and interferes with Chrome&#39;s product direction towards
+neutral, rather than positive,
+<a href="https://blog.chromium.org/2018/05/evolving-chromes-security-indicators.html">display for secure connections</a>.
+Because of these problems and its limited utility, we believe it belongs better
+in Page Info.</p>
+<p>Altering the EV UI is a part of a wider trend among browsers to improve their
+Security UI surfaces in light of recent advances in understanding of this
+problem space. In 2018, Apple
+<a href="https://cabforum.org/2018/06/06/minutes-for-ca-browser-forum-f2f-meeting-44-london-6-7-june-2018/#Apple-Root-Program-Update">announced a similar change</a>
+to Safari that coincided with the release of iOS 12 and macOS 10.14 and has
+been implemented as such ever since.</p>
+<h3 id="information-for-embedders">Information for embedders</h3>
+<p>This change is being incorporated into the Chrome-specific UI code and will not
+affect embedders that are based solely on the underlying content layer.
+Embedders that incorporate the Chrome-specific code will either take up these
+changes or maintain a diff from the <code>main</code> Chromium branch.</p>
+<h2 id="further-reading">Further Reading</h2>
+<p>A series of academic research in the 2000s studied the EV UI in lab and survey
+settings, and found that the EV UI was not protecting against phishing attacks
+as intended. The Chrome Security UX team recently published a study that updated
+these findings with a large-scale field experiment, as well as a series of
+survey experiments.</p>
+<p>No one single study conclusively determines that EV UI is completely ineffective
+or cannot be made to be effective. However, we believe that the body of
+research, as well as the product principles outlined above, together strongly
+suggest that the EV UI does not belong in Chrome’s most visible UI surface.</p>
+<h3 id="external-research">External Research:</h3>
+<ul>
+<li><a href="https://www.adambarth.com/papers/2007/jackson-simon-tan-barth.pdf">An evaluation of extended validation and picture-in-picture phishing attacks</a>:
+surveys participants about IE 7’s EV UI and concludes that it did not help
+users identify two types of phishing attacks, even after participants
+received education about the UI.</li>
+<li><a href="https://www.ccsl.carleton.ca/paper-archive/sobey-esorics-08.pdf">Exploring User Reactions to New Browser Cues for Extended Validation Certificates</a>:
+studies Firefox 3’s EV UI and found
+that users did not notice it. The researchers presented a re-designed
+indicator which some users did notice but did not use in their decision-
+making.</li>
+<li><a href="http://people.scs.carleton.ca/~paulv/papers/ccsw09.pdf">Browser interfaces and extended validation SSL certificates: An empirical study</a>:
+explores a new EV UI design in comparison to IE 7’s design. The researchers
+showed promising results on some axes but did not study whether the new
+design actually helps users detect attacks.</li>
+<li><a href="http://andyozment.com/papers/emperor.pdf">The Emperor’s New Security Indicators: An evaluation of website authentication and the effect of role playing on usability studies</a>:
+does not study EV specifically, but studies other positive (non-warning)
+security indicators for website authentication via lab study and finds that
+users do not notice their absence.</li>
+</ul>
+<h3 id="chrome-research">Chrome Research:</h3>
+<ul>
+<li><a href="https://www.usenix.org/conference/usenixsecurity19/presentation/thompson">The Web’s Identity Crisis: Understanding the Effectiveness of Website Identity Indicators</a>:
+a large-scale field experiment in which the EV UI was removed for a random
+subset of users, and a wide variety of user behavior metrics did not change,
+suggesting that the EV UI is not having its intended effect. Survey
+experiments also confirm that users do not react as intended to positive or
+neutral security UI.</li>
+<li><a href="https://www.usenix.org/conference/soups2016/technical-sessions/presentation/porter-felt">Rethinking Connection Security Indicators</a>:
+does not study EV specifically, but studies users’ reaction to other
+connection security indicators like the lock icon via survey, and finds that
+users are widely confused about their meaning. Informs Chrome’s overall
+direction to remove positive security indicators.</li>
+</ul>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/security/ev-to-page-info.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/security/ev-to-page-info.md</a>
+  </p>
+</div>

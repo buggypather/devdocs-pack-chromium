@@ -1,0 +1,18 @@
+<h1>Largest Contentful Paint bug in Chrome 117</h1>
+<p>Chromium 117 introduced a bug in LCP, where web applications that trigger 
+<a href="https://github.com/WICG/soft-navigations">soft navigation heuristics</a> may get
+spurious LCP entries, if they do not stop listening to LCP entries upon user
+interaction. This bug impacted only web-exposed LCP entries, and was not
+reflected in CrUX.</p>
+<p>The bug was
+<a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1488273">reported</a> 
+and fixed on the Chromium 118 branch.</p>
+<h2 id="how-does-this-affect-a-sites-metrics">How does this affect a site&#39;s metrics?</h2>
+<p>As a result of this issue, you may see outsized LCP results in your Chromium 117
+traffic, which includes Chrome as well as other Chromium-based browsers.</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_10_lcp.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/metrics_changelog/2023_10_lcp.md</a>
+  </p>
+</div>

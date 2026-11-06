@@ -1,0 +1,1112 @@
+<h1>Best practice: layout</h1>
+<p>The most important principles when working with Views layout are abstraction
+and encapsulation. The goal of the guidance here is to split the broad work of
+&quot;layout&quot; into many discrete pieces, each of which can be easily understood,
+tested, and changed in isolation. Compliant code should be more readable,
+performant, and maintainable; more adaptable to future modifications; and more
+stylistically consistent with other UI elements both now and in the future.</p>
+<h2 id="express-layout-values-logically">Express layout values logically</h2>
+<p>Both in mocks and code, <strong>layout values should be described in functional terms
+that conform to the relevant specs</strong> (particularly the
+<a href="https://docs.google.com/presentation/d/1EO7TOpIMJ7QHjaTVw9St-q6naKwtXX2TwzMirG5EsKY/edit#slide=id.g3232c09376_6_794">Material Refresh</a> and older <a href="https://folio.googleplex.com/chrome-ux-specs-and-sources/Chrome%20browser%20%28MD%29/Secondary%20UI%20Previews%20and%20specs%20%28exports%29/Spec">Harmony</a> specs). Rather than a mock saying
+a dialog title is &quot;15 pt high&quot;, it should say it is the &quot;Title 1&quot; or
+&quot;DIALOG_TITLE&quot; style; two non-interacting controls on the same line should not
+be separated by &quot;16 dip&quot; but by <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/chrome_layout_provider.h;l=56;drc=ec62c9ac3ef71a7014e27c5d2cf98917a89e3524"><code>DISTANCE_UNRELATED_CONTROL_HORIZONTAL</code></a>.
+Designers and engineers can reference a <a href="http://go/DesktopDictionary">dictionary</a> to agree on common
+terminology. Don&#39;t simply back-figure the constant to use based on what
+produces the same value as the mock, as future design system changes will
+cause subtle and confusing bugs. Similarly, don&#39;t hardcode designer-provided
+values that aren&#39;t currently present in Chrome, as the semantics of such
+one-off values are unclear and will cause maintenance problems.
+Work with the Toolkit and UX teams to modify the design and overall spec so
+the desired results can be achieved in a centralized way.</p>
+<p>Note: the concept in this section is general, but the linked specs are
+<strong>Googlers Only</strong>.</p>
+<h2 id="obtain-layout-values-from-provider-objects">Obtain layout values from provider objects</h2>
+<p>Once layout styles and values are expressed functionally, <strong>the exact values
+should be obtained from relevant provider objects, not computed directly.</strong>
+Code should not have any magic numbers for sizes, positions, elevations, and
+the like; this includes transformations like scaling values up or down by a
+fraction, or tweaking a provided value by a few DIPs. The most commonly used
+provider object is the <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/layout_provider.h;l=129;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38"><code>LayoutProvider</code></a> (or its <code>chrome</code>/-side extension,
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/chrome_layout_provider.h;drc=ec62c9ac3ef71a7014e27c5d2cf98917a89e3524;l=76"><code>ChromeLayoutProvider</code></a>); <code>View</code>s can obtain the global instance via a
+relevant <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/layout_provider.h;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38;l=135"><code>Get()</code></a> method and ask it for relevant <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/layout_provider.h;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38;l=148">distances</a>, <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/layout_provider.h;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38;l=144">insets</a>,
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/layout_provider.h;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38;l=168">corner radii</a>, <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/layout_provider.h;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38;l=172">shadow elevations</a>, and the like. For text-setting
+controls like <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/controls/label.h;l=30;drc=59135b4042aa469752899e8e4bf2a0a81d3d320c"><code>Label</code></a>, the <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/style/typography_provider.h;l=22;drc=b5e29e075e814ed41e6727c281b69f797d8a1e10"><code>TypographyProvider</code></a> (or its
+<code>chrome</code>/-side extension, <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/chrome_typography_provider.h;l=13;drc=a7ee000c95842e2dce6397ca36926924f4cb322b"><code>ChromeTypographyProvider</code></a>),
+usually accessed via <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/style/typography.h;l=109;drc=8f7db479018a99e5906876954de93ae6d23bee58">global helper functions</a>, can provide appropriate
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/style/typography_provider.h;l=28;drc=b5e29e075e814ed41e6727c281b69f797d8a1e10">fonts</a>, <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/style/typography_provider.h;l=32;drc=b5e29e075e814ed41e6727c281b69f797d8a1e10">colors</a>, and <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/style/typography_provider.h;l=37;drc=b5e29e075e814ed41e6727c281b69f797d8a1e10">line heights</a>. Most <code>View</code>s should not use these
+directly, but use <code>Label</code> and other such controls, providing the appropriate
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/style/typography.h;l=23;drc=8f7db479018a99e5906876954de93ae6d23bee58">context</a> and <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/style/typography.h;l=67;drc=8f7db479018a99e5906876954de93ae6d23bee58">style</a>.</p>
+<p>|||---|||</p>
+<h5 id="section"></h5>
+<p><strong>Avoid</strong></p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/subtle_notification_view.cc;l=142;drc=787d0aacc071674dc83f6059072d15f8cfffbf84">Current code</a> uses file scoped hard-coded padding values for its layout
+constants.</p>
+<h5 id="section-1"></h5>
+<p><strong>Best practice</strong></p>
+<p>A better approach would be to use layout constants sourced from the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/chrome_layout_provider.h;drc=ec62c9ac3ef71a7014e27c5d2cf98917a89e3524;l=76"><code>ChromeLayoutProvider</code></a>.</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-2"></h5>
+<pre data-language="cpp">namespace {
+// Space between the site info label.
+const int kMiddlePaddingPx = 30;
+
+const int kOuterPaddingHorizPx = 40;
+const int kOuterPaddingVertPx = 8;
+} // namespace
+
+SubtleNotificationView::SubtleNotificationView()
+    : instruction_view_(nullptr) {
+  ...
+  instruction_view_ =
+      new InstructionView(std::u16string());
+
+  int outer_padding_horiz = kOuterPaddingHorizPx;
+  int outer_padding_vert = kOuterPaddingVertPx;
+  AddChildView(instruction_view_);
+
+  SetLayoutManager(std::make_unique&lt;views::BoxLayout&gt;(
+      views::BoxLayout::Orientation::kHorizontal,
+      gfx::Insets(outer_padding_vert,
+                  outer_padding_horiz),
+      kMiddlePaddingPx));
+}</pre>
+<h5 id="section-3"></h5>
+<pre data-language="cpp">
+
+
+
+
+
+
+
+SubtleNotificationView::SubtleNotificationView()
+    : instruction_view_(nullptr) {
+  ...
+  AddChildView(std::make_unique&lt;InstructionView&gt;(
+      std::u16string()));
+
+  const gfx::Insets kDialogInsets =
+      ChromeLayoutProvider::Get()-&gt;GetInsetsMetric(
+      views::INSETS_DIALOG);
+  const int kHorizontalPadding =
+      ChromeLayoutProvider::Get()-&gt;GetDistanceMetric(
+          views::DISTANCE_RELATED_LABEL_HORIZONTAL);
+  SetLayoutManager(std::make_unique&lt;views::BoxLayout&gt;(
+      views::BoxLayout::Orientation::kHorizontal,
+      kDialogInsets, kHorizontalPadding));
+}</pre>
+<p>|||---|||</p>
+<h2 id="use-hierarchy-liberally">Use hierarchy liberally</h2>
+<p>While not a layout-specific tactic, it simplifies many layout issues
+<strong>to break a high-level UI construct into a hierarchy of <code>View</code>s</strong>,
+with as many levels as necessary to make each <code>View</code> as simple as possible.
+In such hierarchies, most non-leaf <code>View</code>s will be nameless &quot;containers&quot; that
+simply size or group their immediate children, perhaps with padding between
+them or a margin around the outside. Each such <code>View</code> is easy to lay out,
+and you can later combine or factor out pieces of the hierarchy as appropriate,
+including adding helpers for common Material Design idioms to the core toolkit.</p>
+<h2 id="use-layoutmanagers">Use LayoutManagers</h2>
+<p><strong>Avoid overriding <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=730;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38"><code>Layout()</code></a> to programmatically lay out children.</strong>
+In nearly all cases, the built-in <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/layout_manager.h;l=33;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38"><code>LayoutManager</code></a>s can achieve the desired
+layout, and do so in a declarative rather than imperative fashion. The
+resulting code is often simpler and easier to understand. Writing a <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/try_chrome_dialog_win/button_layout.h;l=30;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38">bespoke
+<code>LayoutManager</code></a> is also possible, but less common.</p>
+<p>|||---|||</p>
+<h5 id="section-4"></h5>
+<p><strong>Avoid</strong></p>
+<p>The following old code used Layout() to have its label text fill the dialog.</p>
+<h5 id="section-5"></h5>
+<p><strong>Best practice</strong></p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/relaunch_notification/relaunch_required_dialog_view.cc;l=91;drc=1ec33e7c19e2d63b3f918df115c12f77f419645b">Current code</a> uses a <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/fill_layout.h">FillLayout</a> to achieve the same result.</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-6"></h5>
+<pre data-language="cpp">int RelaunchRequiredDialogView::GetHeightForWidth(
+    int width) const {
+  const gfx::Insets insets = GetInsets();
+  return body_label_-&gt;GetHeightForWidth(
+      width - insets.width()) + insets.height();
+}
+
+void RelaunchRequiredDialogView::Layout(PassKey) {
+  body_label_-&gt;SetBoundsRect(GetContentsBounds());
+}</pre>
+<h5 id="section-7"></h5>
+<pre data-language="cpp">RelaunchRequiredDialogView::RelaunchRequiredDialogView(
+    base::Time deadline,
+    base::RepeatingClosure on_accept)
+    : ...{
+  SetLayoutManager(
+      std::make_unique&lt;views::FillLayout&gt;());
+  ...
+}
+</pre>
+<p>|||---|||</p>
+<h2 id="prefer-intrinsic-constraints-to-extrinsic-computation">Prefer intrinsic constraints to extrinsic computation</h2>
+<p>Where possible, <strong>express the desired outcome of layout in terms of intrinsic
+constraints for each <code>View</code>,</strong> instead of trying to conditionally compute
+the desired output metrics. For example, using a <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/base/class_property.h;l=55;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38"><code>ClassProperty</code></a>
+to set each child&#39;s <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view_class_properties.h;l=30;drc=1449b8c60358c4cdea1722e4c1e8079bd1b5f306">margins</a> is less error-prone than trying to
+conditionally add padding <code>View</code>s between children. When coupled with
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/flex_layout.h;l=87;drc=62bf27aca5418212ceadd8daf9188d2aa437bfcc">margin collapsing</a> and <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view_class_properties.h;l=40;drc=1449b8c60358c4cdea1722e4c1e8079bd1b5f306">internal padding</a>, it&#39;s possible to do things
+like use <a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/toolbar/toolbar_view.cc;l=974;drc=34a8c4215229379ced3586125399c7ad3c65b87f">different padding amounts between different children</a>
+or visually align elements without manually computing offsets.
+Such manual computation is prone to bugs if someone changes a size, padding
+value, or child order in one place without also updating related computations
+elsewhere.</p>
+<p>|||---|||</p>
+<h5 id="section-8"></h5>
+<p><strong>Avoid</strong></p>
+<p>The following is old code that calculated bubble padding through calculations
+involving the control insets.</p>
+<h5 id="section-9"></h5>
+<p><strong>Best practice</strong></p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/tabs/tab_group_editor_bubble_view.cc;l=89;drc=542c4c6ac89bc665807351d3fb4aca5ebddc82f8">Current code</a> uses a combination of margin and padding on the
+ColorPickerView to ensure proper alignment.</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-10"></h5>
+<pre data-language="cpp">TabGroupEditorBubbleView::TabGroupEditorBubbleView(
+    const Browser* browser,
+    const tab_groups::TabGroupId&amp; group,
+    TabGroupHeader* anchor_view,
+    std::optional&lt;gfx::Rect&gt; anchor_rect,
+    bool stop_context_menu_propagation)
+    : ... {
+
+  ...
+  const auto* layout_provider =
+      ChromeLayoutProvider::Get();
+  const int horizontal_spacing =
+      layout_provider-&gt;GetDistanceMetric(
+          views::DISTANCE_RELATED_CONTROL_HORIZONTAL);
+  const int vertical_menu_spacing =
+      layout_provider-&gt;GetDistanceMetric(
+          views::DISTANCE_RELATED_CONTROL_VERTICAL);
+
+  // The vertical spacing for the non menu items within
+  // the editor bubble.
+  const int vertical_dialog_content_spacing = 16;
+
+
+
+
+
+
+
+
+
+
+  views::View* group_modifier_container =
+      AddChildView(std::make_unique&lt;views::View&gt;());
+
+  gfx::Insets color_element_insets =
+      ChromeLayoutProvider::Get()-&gt;GetInsetsMetric(
+          views::INSETS_VECTOR_IMAGE_BUTTON);
+  group_modifier_container-&gt;SetBorder(
+      views::CreateEmptyBorder(
+          gfx::Insets(vertical_dialog_content_spacing,
+              horizontal_spacing -
+                  color_element_insets.left(),
+              vertical_dialog_content_spacing,
+              horizontal_spacing -
+                  color_element_insets.right())));
+  ...
+  // Add the text field for editing the title.
+  views::View* title_field_container =
+      group_modifier_container-&gt;AddChildView(
+          std::make_unique&lt;views::View&gt;());
+  title_field_container-&gt;SetBorder(
+      views::CreateEmptyBorder(gfx::Insets(
+          0, color_element_insets.left(),
+          vertical_dialog_content_spacing,
+          color_element_insets.right()))
+  ...
+  color_selector_ =
+    group_modifier_container-&gt;AddChildView(
+        std::make_unique&lt;ColorPickerView&gt;(
+            colors_, background_color(), initial_color,
+            base::BindRepeating(
+                &amp;TabGroupEditorBubbleView::UpdateGroup,
+                base::Unretained(this))));
+  ...
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+<h5 id="section-11"></h5>
+<pre data-language="cpp">TabGroupEditorBubbleView::TabGroupEditorBubbleView(
+    const Browser* browser,
+    const tab_groups::TabGroupId&amp; group,
+    views::View* anchor_view,
+    std::optional&lt;gfx::Rect&gt; anchor_rect,
+    TabGroupHeader* header_view,
+    bool stop_context_menu_propagation)
+    : ... {
+  ...
+  const auto* layout_provider =
+      ChromeLayoutProvider::Get();
+  const int horizontal_spacing =
+      layout_provider-&gt;GetDistanceMetric(
+          views::DISTANCE_RELATED_CONTROL_HORIZONTAL);
+  const int vertical_spacing =
+      layout_provider-&gt;GetDistanceMetric(
+          views::DISTANCE_RELATED_CONTROL_VERTICAL);
+
+  // The padding of the editing controls is adaptive,
+  // to improve the hit target size and screen real
+  // estate usage on touch devices.
+  const int group_modifier_vertical_spacing =
+      ui::TouchUiController::Get()-&gt;touch_ui() ?
+          vertical_spacing / 2 : vertical_spacing;
+  const gfx::Insets control_insets =
+      ui::TouchUiController::Get()-&gt;touch_ui()
+          ? gfx::Insets(5 * vertical_spacing / 4,
+            horizontal_spacing)
+          : gfx::Insets(vertical_spacing,
+                        horizontal_spacing);
+
+  views::View* group_modifier_container =
+      AddChildView(std::make_unique&lt;views::View&gt;());
+  group_modifier_container-&gt;SetBorder(
+      views::CreateEmptyBorder(gfx::Insets(
+          group_modifier_vertical_spacing, 0)));
+
+  views::FlexLayout* group_modifier_container_layout =
+      group_modifier_container-&gt;SetLayoutManager(
+          std::make_unique&lt;views::FlexLayout&gt;());
+  group_modifier_container_layout
+      -&gt;SetOrientation(
+          views::LayoutOrientation::kVertical)
+      .SetIgnoreDefaultMainAxisMargins(true);
+
+
+  // Add the text field for editing the title.
+  views::View* title_field_container =
+      group_modifier_container-&gt;AddChildView(
+          std::make_unique&lt;views::View&gt;());
+  title_field_container-&gt;SetBorder(
+      views::CreateEmptyBorder(
+          control_insets.top(), control_insets.left(),
+          group_modifier_vertical_spacing,
+          control_insets.right()));
+
+  ...
+  const tab_groups::TabGroupColorId initial_color_id =
+      InitColorSet();
+  color_selector_ =
+      group_modifier_container-&gt;AddChildView(
+          std::make_unique&lt;ColorPickerView&gt;(
+              this, colors_, initial_color_id,
+              base::BindRepeating(
+                &amp;TabGroupEditorBubbleView::UpdateGroup,
+                base::Unretained(this))));
+  color_selector_-&gt;SetProperty(
+      views::kMarginsKey,
+      gfx::Insets(0, control_insets.left(), 0,
+                  control_insets.right()));
+  ...
+}
+
+ColorPickerView::ColorPickerView(
+    const views::BubbleDialogDelegateView* bubble_view,
+    const TabGroupEditorBubbleView::Colors&amp; colors,
+    tab_groups::TabGroupColorId initial_color_id,
+    ColorSelectedCallback callback)
+    : callback_(std::move(callback)) {
+  ...
+  // Set the internal padding to be equal to the
+  // horizontal insets of a color picker element,
+  // since that is the amount by which the color
+  // picker's margins should be adjusted to make it
+  // visually align with other controls.
+  gfx::Insets child_insets = elements_[0]-&gt;GetInsets();
+  SetProperty(views::kInternalPaddingKey,
+              gfx::Insets(0, child_insets.left(), 0,
+                          child_insets.right()));
+}</pre>
+<p>|||---|||</p>
+<h2 id="use-tablelayout-with-caution">Use TableLayout with caution</h2>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/table_layout.h;l=73;drc=f513afe81fca508d22153b192f1fab33e2c444fa"><code>TableLayout</code></a> is a <code>LayoutManager</code> used for tabular layouts. Much like
+table-based layout in HTML, it can achieve almost any desired effect, and in
+some scenarios (e.g.  creating an actual table) is the best tool. Used
+indiscriminately, it can be cryptic, verbose, and error-prone. Accordingly,
+<strong>use <code>TableLayout</code> only when creating a true grid or table, not simply for
+selective horizontal and vertical alignment.</strong> For simple layouts,
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/box_layout.h;l=28;drc=5b9e43d976aca377588875fc59c5348ede02a8b5"><code>BoxLayout</code></a> and <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/flex_layout.h;l=73;drc=62bf27aca5418212ceadd8daf9188d2aa437bfcc"><code>FlexLayout</code></a> are better choices; for more complex
+layouts, representing sections or groups hierarchically may result in simpler
+inner layouts that can be nested within an overall layout.</p>
+<p>|||---|||</p>
+<h5 id="section-12"></h5>
+<p><strong>Avoid</strong></p>
+<p>The following old code uses a <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/table_layout.h;l=73;drc=f513afe81fca508d22153b192f1fab33e2c444fa"><code>TableLayout</code></a> to create a HoverButton with
+a stacked title and subtitle flanked on by views on both sides.</p>
+<h5 id="section-13"></h5>
+<p><strong>Best practice</strong></p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/controls/hover_button.cc;l=129;drc=0139ceffb2f8e1f64b7c30834e57d5793e529ed7">Current code</a> uses <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/layout/flex_layout.h;l=73;drc=62bf27aca5418212ceadd8daf9188d2aa437bfcc"><code>FlexLayout</code></a> to achieve the desired result, resulting
+in clearer code.</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-14"></h5>
+<pre data-language="cpp">// Used to create the following layout
+// +-----------+---------------------+----------------+
+// | icon_view | title               | secondary_view |
+// +-----------+---------------------+----------------+
+// |           | subtitle            |                |
+// +-----------+---------------------+----------------+
+HoverButton::HoverButton(
+    ...
+    std::unique_ptr&lt;views::View&gt; icon_view,
+    const std::u16string&amp; title,
+    const std::u16string&amp; subtitle,
+    std::unique_ptr&lt;views::View&gt; secondary_view,
+    ...) {
+  ...
+  views::TableLayout* table_layout =
+      SetLayoutManager(
+          std::make_unique&lt;views::TableLayout&gt;());
+  ...
+  table_layout-&gt;AddColumn(
+      views::LayoutAlignment::kCenter,
+      views::LayoutAlignment::kCenter,
+      views::TableLayout::kFixedSize,
+      views::TableLayout::kUsePreferred, 0, 0);
+  table_layout-&gt;AddPaddingColumn(
+      views::TableLayout::kFixedSize,
+      icon_label_spacing);
+  table_layout-&gt;AddColumn(
+      views::LayoutAlignment::kStretch,
+      views::LayoutAlignment::kStretch, 1.0f,
+      views::TableLayout::kUsePreferred, 0, 0);
+  ...
+  table_layout-&gt;AddRows(
+      1, views::TableLayout::kFixedSize,
+      row_height);
+  icon_view_ = AddChildView(
+      std::move(icon_view), 1, num_labels);
+  ...
+  auto title_wrapper =
+      std::make_unique&lt;SingleLineStyledLabelWrapper&gt;(
+          title);
+  title_ = title_wrapper-&gt;label();
+  AddChildView(std::move(title_wrapper));
+
+  if (secondary_view) {
+    table_layout-&gt;AddColumn(
+        views::LayoutAlignment::kCenter,
+        views::LayoutAlignment::kCenter,
+        views::TableLayout::kFixedSize,
+        views::TableLayout::kUsePreferred, 0, 0);
+    ...
+    secondary_view_ = AddChildView(
+        std::move(secondary_view), 1, num_labels);
+    ...
+  }
+  if (!subtitle.empty()) {
+    table_layout-&gt;AddRows(
+        1, views::TableLayout::kFixedSize,
+        row_height);
+    auto subtitle_label =
+        std::make_unique&lt;views::Label&gt;(
+            subtitle, views::style::CONTEXT_BUTTON,
+            views::style::STYLE_SECONDARY);
+    ...
+    AddChildView(std::make_unique&lt;views::View&gt;());
+    subtitle_ =
+        AddChildView(std::move(subtitle_label));
+  }
+  ...
+}
+
+
+</pre>
+<h5 id="section-15"></h5>
+<pre data-language="cpp">// Used to create the following layout
+// +-----------+---------------------+----------------+
+// |           | title               |                |
+// | icon_view |---------------------| secondary_view |
+// |           | subtitle            |                |
+// +-----------+---------------------+----------------+
+HoverButton::HoverButton(
+    ...
+    std::unique_ptr&lt;views::View&gt; icon_view,
+    const std::u16string&amp; title,
+    const std::u16string&amp; subtitle,
+    std::unique_ptr&lt;views::View&gt; secondary_view,
+    ...) {
+  ...
+  // Set the layout manager to ignore the
+  // ink_drop_container to ensure the ink drop tracks
+  // the bounds of its parent.
+  ink_drop_container()-&gt;SetProperty(
+      views::kViewIgnoredByLayoutKey, true);
+
+  SetLayoutManager(
+      std::make_unique&lt;views::FlexLayout&gt;())
+      -&gt;SetCrossAxisAlignment(
+          views::LayoutAlignment::kCenter);
+  ...
+  icon_view_ =
+    AddChildView(std::make_unique&lt;IconWrapper&gt;(
+        std::move(icon_view), vertical_spacing))
+    -&gt;icon();
+
+  // |label_wrapper| will hold both the title and
+  // subtitle if it exists.
+  auto label_wrapper = std::make_unique&lt;views::View&gt;();
+  title_ = label_wrapper-&gt;AddChildView(
+      std::make_unique&lt;views::StyledLabel&gt;(
+          title, nullptr));
+
+  if (!subtitle.empty()) {
+    auto subtitle_label =
+        std::make_unique&lt;views::Label&gt;(
+            subtitle, views::style::CONTEXT_BUTTON,
+            views::style::STYLE_SECONDARY);
+    ...
+    subtitle_ = label_wrapper-&gt;AddChildView(
+        std::move(subtitle_label));
+  }
+
+  label_wrapper-&gt;SetLayoutManager(
+      std::make_unique&lt;views::FlexLayout&gt;())
+      -&gt;SetOrientation(
+          views::LayoutOrientation::kVertical)
+      .SetMainAxisAlignment(
+          views::LayoutAlignment::kCenter);
+  label_wrapper-&gt;SetProperty(
+      views::kFlexBehaviorKey,
+      views::FlexSpecification(
+          views::MinimumFlexSizeRule::kScaleToZero,
+          views::MaximumFlexSizeRule::kUnbounded));
+  label_wrapper-&gt;SetProperty(
+      views::kMarginsKey,
+      gfx::Insets(vertical_spacing, 0));
+  label_wrapper_ =
+      AddChildView(std::move(label_wrapper));
+  ...
+
+  if (secondary_view) {
+    ...
+    secondary_view-&gt;SetProperty(
+        views::kMarginsKey,
+        gfx::Insets(secondary_spacing,
+                    icon_label_spacing,
+                    secondary_spacing, 0));
+    secondary_view_ =
+        AddChildView(std::move(secondary_view));
+  }
+  ...
+}</pre>
+<p>|||---|||</p>
+<h2 id="compute-preferredminimum-sizes-recursively-from-children">Compute preferred/minimum sizes recursively from children</h2>
+<p><strong>Avoid hardcoding preferred or minimum sizes,</strong> including via metrics like
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/chrome_layout_provider.h;l=68;drc=ec62c9ac3ef71a7014e27c5d2cf98917a89e3524"><code>DISTANCE_BUBBLE_PREFERRED_WIDTH</code></a>.
+In many cases, <code>LayoutManager</code>s will provide reasonable values for these,
+and common codepaths like <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/bubble/bubble_frame_view.cc;l=688;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38"><code>BubbleFrameView::GetFrameWidthForClientWidth()</code></a>
+can help ensure that the returned values are <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/bubble/bubble_frame_view.cc;l=698;drc=f5df5da5753795298349b2dd6325e2c5e6e13e38">conformed to spec</a>.
+When a <code>View</code> does need to calculate these manually, it should do so based on
+the corresponding values returned by its children, not by returning specific
+numbers (e.g. dialog preferred size is 300 by 150). In particular, assuming
+fonts will be in a certain size, or that a given fixed area is sufficient to
+display all necessary information, can cause hard-to-find localization and
+accessibility bugs for users with verbose languages or unusually large fonts.</p>
+<p>|||---|||</p>
+<h5 id="section-16"></h5>
+<p><strong>Avoid</strong></p>
+<p>Current code overloads CalculatePreferredSize() in the dialog view.</p>
+<h5 id="section-17"></h5>
+<p><strong>Best practice</strong></p>
+<p>A better approach would be to omit the overload completely and let leaf views
+size the dialog appropriately, relying on the minimum size fallbacks
+if necessary.</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-18"></h5>
+<pre data-language="cpp">...
+gfx::Size
+CastDialogView::CalculatePreferredSize() const {
+  const int width =
+      ChromeLayoutProvider::Get()-&gt;GetDistanceMetric(
+          DISTANCE_BUBBLE_PREFERRED_WIDTH);
+  return gfx::Size(width, GetHeightForWidth(width));
+}</pre>
+<h5 id="section-19"></h5>
+<pre data-language="cpp">...
+
+
+
+
+
+</pre>
+<p>|||---|||</p>
+<h2 id="handle-events-directly-not-via-layout">Handle events directly, not via Layout()</h2>
+<p>In addition to using <code>LayoutManager</code>s in place of manual layout,
+<strong>avoid overriding <code>Layout()</code> to perform non-layout actions.</strong> For example,
+instead of updating properties tied to a <code>View</code>&#39;s size in <code>Layout()</code>,
+do so in <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=1377;drc=34a8c4215229379ced3586125399c7ad3c65b87f"><code>OnBoundsChanged()</code></a>;
+when the <code>View</code> in question is a child, make the child a <code>View</code> subclass
+with an <code>OnBoundsChanged()</code> override instead of having the parent both lay
+the child out and update its properties. Modify the
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=919;drc=34a8c4215229379ced3586125399c7ad3c65b87f">hit-testing and event-handling functions</a> directly instead of laying out
+invisible <code>View</code>s to intercept events. Toggle child visibility directly in
+response to external events rather than calculating it inside <code>Layout()</code>.</p>
+<p>|||---|||</p>
+<h5 id="section-20"></h5>
+<p><strong>Avoid</strong></p>
+<p>Old code updated hit testing and button properties in the Layout() method.</p>
+<h5 id="section-21"></h5>
+<p><strong>Best practice</strong></p>
+<p>Current code wraps the buttons in a file scoped class with an
+OnBoundsChanged() method and modifies the hit testing functions directly to
+achieve the same result.</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-22"></h5>
+<pre data-language="cpp">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FindBarView::FindBarView(FindBarHost* host)
+    : find_bar_host_(host) {
+  auto find_text = std::make_unique&lt;views::Textfield&gt;();
+  find_text_ = AddChildView(std::move(find_text));
+  ...
+  auto find_previous_button =
+      views::CreateVectorImageButton(this);
+  find_previous_button_ =
+      AddChildView(std::move(find_previous_button));
+  ...
+  auto find_next_button =
+      views::CreateVectorImageButton(this);
+  find_next_button_ =
+      AddChildView(std::move(find_next_button));
+  ...
+  auto close_button =
+      views::CreateVectorImageButton(this);
+  close_button_ =
+      AddChildView(std::move(close_button));
+}
+
+void FindBarView::Layout(PassKey) {
+  LayoutSuperclass&lt;views::View&gt;(this);
+  // The focus forwarder view is a hidden view that
+  // should cover the area between the find text box
+  // and the find button so that when the user clicks
+  // in that area we focus on the find text box.
+  const int find_text_edge =
+      find_text_-&gt;x() + find_text_-&gt;width();
+  focus_forwarder_view_-&gt;SetBounds(
+      find_text_edge, find_previous_button_-&gt;y(),
+      find_previous_button_-&gt;x() - find_text_edge,
+      find_previous_button_-&gt;height());
+
+  for (auto* button :
+       {find_previous_button_, find_next_button_,
+        close_button_}) {
+    constexpr int kCircleDiameterDp = 24;
+    auto highlight_path = std::make_unique&lt;SkPath&gt;();
+    // Use a centered circular shape for inkdrops and
+    // focus rings.
+    gfx::Rect circle_rect(button-&gt;GetLocalBounds());
+    circle_rect.ClampToCenteredSize(
+        gfx::Size(kCircleDiameterDp,
+                  kCircleDiameterDp));
+    highlight_path-&gt;addOval(
+        gfx::RectToSkRect(circle_rect));
+    button-&gt;SetProperty(views::kHighlightPathKey,
+                        highlight_path.release());
+  }
+}</pre>
+<h5 id="section-23"></h5>
+<pre data-language="cpp">// An ImageButton that has a centered circular
+// highlight.
+class FindBarView::FindBarButton
+    : public views::ImageButton {
+ public:
+  using ImageButton::ImageButton;
+ protected:
+  void OnBoundsChanged(
+      const gfx::Rect&amp; previous_bounds) override {
+    const gfx::Rect bounds = GetLocalBounds();
+    auto highlight_path = std::make_unique&lt;SkPath&gt;();
+    const gfx::Point center = bounds.CenterPoint();
+    const int radius = views::LayoutProvider::Get()
+        -&gt;GetCornerRadiusMetric(
+            views::Emphasis::kMaximum, bounds.size());
+    highlight_path-&gt;addCircle(
+        center.x(), center.y(), radius);
+    SetProperty(views::kHighlightPathKey,
+                highlight_path.release());
+  }
+};
+
+bool FindBarView::OnMousePressed(
+    const ui::MouseEvent&amp; event) {
+  // The find text box only extends to the match count
+  // label.  However, users expect to be able to click
+  // anywhere inside what looks like the find text
+  // box (including on or around the match_count label)
+  // and have focus brought to the find box. Cause
+  // clicks between the textfield and the find previous
+  // button to focus the textfield.
+  const int find_text_edge =
+      find_text_-&gt;bounds().right();
+  const gfx::Rect focus_area(
+      find_text_edge, find_previous_button_-&gt;y(),
+      find_previous_button_-&gt;x() - find_text_edge,
+      find_previous_button_-&gt;height());
+  if (!GetMirroredRect(focus_area).Contains(
+      event.location()))
+    return false;
+  find_text_-&gt;RequestFocus();
+  return true;
+
+FindBarView::FindBarView(FindBarHost* host)
+    : find_bar_host_(host) {
+  auto find_text = std::make_unique&lt;views::Textfield&gt;();
+  find_text_ = AddChildView(std::move(find_text));
+  ...
+  auto find_previous_button =
+      std::make_unique&lt;FindBarButton&gt;(this);
+  views::ConfigureVectorImageButton(
+      find_previous_button.get());
+  ...
+  auto find_next_button =
+      std::make_unique&lt;FindBarButton&gt;(this);
+  views::ConfigureVectorImageButton(
+      find_next_button.get());
+  ...
+  auto close_button =
+      std::make_unique&lt;FindBarButton&gt;(this);
+  views::ConfigureVectorImageButton(close_button.get());
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+<p>|||---|||</p>
+<h2 id="dont-invoke-deprecatedlayoutimmediately">Don&#39;t invoke DeprecatedLayoutImmediately()</h2>
+<p><strong>Avoid calls to <code>DeprecatedLayoutImmediately()</code>.</strong>
+These are typically used for three purposes:</p>
+<ol>
+<li><p><em>Calling <code>DeprecatedLayoutImmediately()</code> on <code>this</code>, when something that
+affects layout has changed.</em> This forces a synchronous layout, which can lead to
+needless work (e.g. if several sequential changes each trigger layout). Use
+asynchronous layout* instead. In many cases (such as
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.cc;l=1673;drc=bc9a6d40468646be476c61b6637b51729bec7b6d">the preferred size changing</a> or
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.cc;l=777;drc=bc9a6d40468646be476c61b6637b51729bec7b6d">a child needing layout</a>,
+a <code>View</code> will automatically mark itself as needing layout; when necessary, call
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=735;drc=c06f6b339b47ce2388624aa9a89334ace38a71e4"><code>InvalidateLayout()</code></a> to mark it manually.</p>
+</li>
+<li><p><em>Calling <code>DeprecatedLayoutImmediately()</code> or <code>InvalidateLayout()</code> on some
+<code>View</code> to notify it that something affecting its layout has changed.</em> Instead,
+ensure that <code>View</code> is notified of the underlying change (via specific method
+overrides or plumbing from a model object), and then invalidates its own layout
+when needed.</p>
+</li>
+<li><p><em>Calling <code>DeprecatedLayoutImmediately()</code> on some <code>View</code> to &quot;ensure it&#39;s up
+to date&quot; before reading some layout-related property off it.</em> Instead, plumb any
+relevant events to the current object, then handle them directly (e.g. override
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;l=1381;drc=c06f6b339b47ce2388624aa9a89334ace38a71e4"><code>ChildPreferredSizeChanged()</code></a> or use a <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view_observer.h;l=17;drc=eb20fd77330dc4a89eecf17459263e5895e7f177"><code>ViewObserver</code></a>
+to monitor the target <code>View</code>; then update local state as necessary and trigger
+handler methods).</p>
+</li>
+</ol>
+<p>* <em>How does asynchronous layout work?</em> In the browser, the compositor
+periodically <a href="https://source.chromium.org/chromium/chromium/src/+/main:cc/trees/layer_tree_host.cc;l=304;drc=c06f6b339b47ce2388624aa9a89334ace38a71e4">requests a LayerTreeHost update</a>.
+This ultimately calls back to <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/widget.h;l=946;drc=b1dcb398c454a576092d38d0d67db3709b2b2a9b"><code>Widget::LayoutRootViewIfNecessary()</code></a>,
+recursively laying out invalidated <code>View</code>s within the <code>Widget</code>. In unittests,
+this compositor-driven sequence never occurs, so it&#39;s necessary to
+<a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/test/views_test_utils.h;l=17;drc=3e1a26c44c024d97dc9a4c09bbc6a2365398ca2c">call RunScheduledLayout() manually</a> when a test needs to ensure a <code>View</code>&#39;s
+layout is up-to-date.  Many tests fail to do this, but currently pass because
+something triggers Layout() directly; accordingly, changing existing code from
+synchronous to asynchronous layout may require adding <code>RunScheduledLayout()</code>
+calls to (possibly many) tests, and this is not a sign that the change is wrong.</p>
+<p>|||---|||</p>
+<h5 id="section-24"></h5>
+<p><strong>Avoid</strong></p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:chrome/browser/ui/views/media_router/cast_dialog_view.cc;l=283;drc=7db01ff4534c04419f3fa10d75e0b97b0a5a4f99">Current code</a> makes an unnecessary call to DeprecatedLayoutImmediately()</p>
+<h5 id="section-25"></h5>
+<p><strong>Best practice</strong></p>
+<p>A better approach would be to call InvalidateLayout() and update the necessary tests.</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-26"></h5>
+<pre data-language="cpp">void CastDialogView::PopulateScrollView(
+    const std::vector&lt;UIMediaSink&gt;&amp; sinks) {
+  ...
+  DeprecatedLayoutImmediately();
+}
+
+TEST_F(CastDialogViewTest, PopulateDialog) {
+  CastDialogModel model =
+      CreateModelWithSinks({CreateAvailableSink()});
+  InitializeDialogWithModel(model);
+
+  EXPECT_TRUE(dialog_-&gt;ShouldShowCloseButton());
+  EXPECT_EQ(model.dialog_header(),
+            dialog_-&gt;GetWindowTitle());
+  EXPECT_EQ(static_cast&lt;int&gt;(ui::mojom::DialogButton::kNone),
+            dialog_-&gt;GetDialogButtons());
+}
+</pre>
+<h5 id="section-27"></h5>
+<pre data-language="cpp">void CastDialogView::PopulateScrollView(
+    const std::vector&lt;UIMediaSink&gt;&amp; sinks) {
+  ...
+  InvalidateLayout();
+}
+
+TEST_F(CastDialogViewTest, PopulateDialog) {
+  CastDialogModel model =
+      CreateModelWithSinks({CreateAvailableSink()});
+  InitializeDialogWithModel(model);
+  CastDialogView::GetCurrentDialogWidget()
+      -&gt;LayoutRootViewIfNecessary();
+
+  EXPECT_TRUE(dialog_-&gt;ShouldShowCloseButton());
+  EXPECT_EQ(model.dialog_header(),
+            dialog_-&gt;GetWindowTitle());
+  EXPECT_EQ(static_cast&lt;int&gt;(ui::mojom::DialogButton::kNone),
+            dialog_-&gt;GetDialogButtons());
+}</pre>
+<p>|||---|||</p>
+<h2 id="consider-different-objects-for-different-layouts">Consider different objects for different layouts</h2>
+<p>If a surface needs very different appearances in different states (e.g. a
+dialog whose content changes at each of several steps, or a container whose
+layout toggles between disparate orientations), <strong>use different <code>View</code>s to
+contain the distinct states</strong> instead of manually adding and removing
+children and changing layout properties at each step. It&#39;s easier to reason
+about several distinct fixed-layout <code>View</code>s than a single object whose layout
+and children vary over time, and often more performant as well.</p>
+<p>|||---|||</p>
+<h5 id="section-28"></h5>
+<p><strong>Avoid</strong></p>
+<p><a href="https://source.chromium.org/chromium/chromium/src/+/main:ash/system/time/time_view.h;l=35;drc=7d8bc7f807a433e6a127806e991fe780aa27ce77;bpv=1;bpt=0?originalUrl=https:%2F%2Fcs.chromium.org%2F">Current code</a> holds both horizontal and vertical time views and replaces
+the children and LayoutManager on orientation change.</p>
+<h5 id="section-29"></h5>
+<p><strong>Best practice</strong></p>
+<p>A better approach would encapsulate the horizontal and vertical time views
+into separate views.</p>
+<p>|||---|||</p>
+<p>|||---|||</p>
+<h5 id="section-30"></h5>
+<pre data-language="cpp">class ASH_EXPORT TimeView : public ActionableView,
+                            public ClockObserver {
+  ...
+ private:
+  ...
+  std::unique_ptr&lt;views::Label&gt; horizontal_label_;
+  std::unique_ptr&lt;views::Label&gt; vertical_label_hours_;
+  std::unique_ptr&lt;views::Label&gt; vertical_label_minutes_;
+  ...
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void TimeView::SetupLabels() {
+  horizontal_label_.reset(new views::Label());
+  SetupLabel(horizontal_label_.get());
+  vertical_label_hours_.reset(new views::Label());
+  SetupLabel(vertical_label_hours_.get());
+  vertical_label_minutes_.reset(new views::Label());
+  SetupLabel(vertical_label_minutes_.get());
+  ...
+}
+
+
+
+void TimeView::UpdateClockLayout(
+    ClockLayout clock_layout) {
+  // Do nothing if the layout hasn't changed.
+  if (((clock_layout == ClockLayout::HORIZONTAL_CLOCK) ?
+      horizontal_label_ : vertical_label_hours_)
+      -&gt;parent() == this)
+    return;
+
+  SetBorder(views::NullBorder());
+  if (clock_layout == ClockLayout::HORIZONTAL_CLOCK) {
+    RemoveChildView(vertical_label_hours_.get());
+    RemoveChildView(vertical_label_minutes_.get());
+    SetLayoutManager(
+        std::make_unique&lt;views::FillLayout&gt;());
+    AddChildView(horizontal_label_.get());
+  } else {
+    RemoveChildView(horizontal_label_.get());
+    // Remove the current layout manager since it could
+    // be the FillLayout which only allows one child.
+    SetLayoutManager(nullptr);
+    // Pre-add the children since ownership is being
+    // retained by this.
+    AddChildView(vertical_label_hours_.get());
+    AddChildView(vertical_label_minutes_.get());
+    views::GridLayout* layout =
+        SetLayoutManager(
+            std::make_unique&lt;views::GridLayout&gt;());
+    const int kColumnId = 0;
+    views::ColumnSet* columns =
+        layout-&gt;AddColumnSet(kColumnId);
+    columns-&gt;AddPaddingColumn(
+        0, kVerticalClockLeftPadding);
+    columns-&gt;AddColumn(views::GridLayout::TRAILING,
+                       views::GridLayout::CENTER,
+                       0, views::GridLayout::USE_PREF,
+                       0, 0);
+    layout-&gt;AddPaddingRow(0, kClockLeadingPadding);
+    layout-&gt;StartRow(0, kColumnId);
+    // Add the views as existing since ownership isn't
+    // being transferred.
+    layout-&gt;AddExistingView(
+        vertical_label_hours_.get());
+    layout-&gt;StartRow(0, kColumnId);
+    layout-&gt;AddExistingView(
+        vertical_label_minutes_.get());
+    layout-&gt;AddPaddingRow(
+        0, kVerticalClockMinutesTopOffset);
+  }
+  DeprecatedLayoutImmediately();
+}</pre>
+<h5 id="section-31"></h5>
+<pre data-language="cpp">class ASH_EXPORT TimeView : public ActionableView,
+                            public ClockObserver {
+  ...
+ private:
+  class HorizontalLabelView;
+  class VerticalLabelView;
+  ...
+  HorizontalLabelView* horizontal_label_;
+  VerticalLabelView* vertical_label_;
+  ...
+};
+
+TimeView::HorizontalLabelView::HorizontalLabelView() {
+  SetLayoutManager(
+      std::make_unique&lt;views::FillLayout&gt;());
+  views::Label* time_label =
+      AddChildView(std::make_unique&lt;views::Label&gt;());
+  SetupLabels(time_label);
+  ...
+}
+
+TimeView::VerticalLabelView::VerticalLabelView() {
+  views::Label* label_hours =
+      AddChildView(std::make_unique&lt;views::Label&gt;());
+  views::Label* label_minutes =
+      AddChildView(std::make_unique&lt;views::Label&gt;());
+  SetupLabel(label_hours);
+  SetupLabel(label_minutes);
+  SetLayoutManager(
+      std::make_unique&lt;views::TableLayout&gt;())
+      -&gt;AddPaddingColumn(
+          views::TableLayout::kFixedSize,
+          kVerticalClockLeftPadding)
+      .AddColumn(
+          views::LayoutAlignment::kEnd,
+          views::LayoutAlignment::kCenter,
+          views::TableLayout::kFixedSize,
+          views::TableLayout::kUsePreferred, 0, 0)
+      .AddPaddingRow(
+          views::TableLayout::kFixedSize,
+          kClockLeadingPadding)
+      .AddRows(2, views::TableLayout::kFixedSize)
+      .AddPaddingRow(
+          views::TableLayout::kFixedSize,
+          kVerticalClockMinutesTopOffset);
+  ...
+}
+
+void TimeView::TimeView(ClockLayout clock_layout,
+                        ClockModel* model) {
+  ...
+  horizontal_label_ =
+     AddChildView(
+        std::make_unique&lt;HorizontalLabelView&gt;());
+  vertical_label_ =
+     AddChildView(
+        std::make_unique&lt;VerticalLabelView&gt;());
+  ...
+}
+
+void TimeView::UpdateClockLayout(
+    ClockLayout clock_layout) {
+  ...
+  const bool is_horizontal =
+      clock_layout == ClockLayout::HORIZONTAL_CLOCK;
+  horizontal_label_-&gt;SetVisible(is_horizontal);
+  vertical_label_-&gt;SetVisible(!is_horizontal);
+  InvalidateLayout();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</pre>
+<p>|||---|||</p>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/bestpractices/layout.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/ui/learn/bestpractices/layout.md</a>
+  </p>
+</div>

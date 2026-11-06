@@ -1,0 +1,77 @@
+<h1>Fixing web test flakiness</h1>
+<p>We&#39;d like to stamp out all the tests that have ordering dependencies. This helps
+make the tests more reliable and, eventually, will make it so we can run tests
+in a random order and avoid new ordering dependencies being introduced. To get
+there, we need to weed out and fix all the existing ordering dependencies.</p>
+<h2 id="diagnosing-test-ordering-flakiness">Diagnosing test ordering flakiness</h2>
+<p>These are steps for diagnosing ordering flakiness once you have a test that you
+believe depends on an earlier test running.</p>
+<h3 id="bisect-test-ordering">Bisect test ordering</h3>
+<ol>
+<li>Run the tests such that the test in question fails.</li>
+<li>Run <code>./tools/print_web_test_ordering.py</code> and save the output to a file. This
+outputs the tests run in the order they were run on each content_shell
+instance.</li>
+<li>Create a file that contains only the tests run on that worker in the same
+order as in your saved output file. The last line in the file should be the
+failing test.</li>
+<li>Run
+<code>./tools/bisect_web_test_ordering.py --test-list=path/to/file/from/step/3</code></li>
+</ol>
+<p>The bisect_web_test_ordering.py script should spit out a list of tests at the
+end that causes the test to fail.</p>
+<p>*** promo
+At the moment bisect_web_test_ordering.py only allows you to find tests that
+fail due to a previous test running. It&#39;s a small change to the script to make
+it work for tests that pass due to a previous test running (i.e. to figure out
+which test it depends on running before it). Contact ojan@chromium if you&#39;re
+interested in adding that feature to the script.</p>
+<hr>
+<h3 id="manual-bisect">Manual bisect</h3>
+<p>Instead of running <code>bisect_web_test_ordering.py</code>, you can manually do the work
+of step 4 above.</p>
+<ol>
+<li><code>run_web_tests.py --child-processes=1 --order=none --test-list=path/to/file/from/step/3</code></li>
+<li>If the test doesn&#39;t fail here, then the test itself is probably just flaky.
+If it does, remove some lines from the file and repeat step 1. Continue
+repeating until you&#39;ve found the dependency. If the test fails when run by
+itself, but passes on the bots, that means that it depends on another test to
+pass. In this case, you need to generate the list of tests run by
+<code>run_web_tests.py --order=natural</code> and repeat this process to find which test
+causes the test in question to <em>pass</em> (e.g.
+<a href="https://crbug.com/262793">crbug.com/262793</a>).</li>
+<li>File a bug and give it the
+<a href="https://crbug.com/?q=label:LayoutTestOrdering">LayoutTestOrdering</a> label,
+e.g. <a href="https://crbug.com/262787">crbug.com/262787</a> or
+<a href="https://crbug.com/262791">crbug.com/262791</a>.</li>
+</ol>
+<h3 id="finding-test-ordering-flakiness">Finding test ordering flakiness</h3>
+<h4 id="run-tests-in-a-random-order-and-diagnose-failures">Run tests in a random order and diagnose failures</h4>
+<ol>
+<li>Run <code>run_web_tests.py --order=random --no-retry</code></li>
+<li>Run <code>./tools/print_web_test_ordering.py</code> and save the output to a file. This
+outputs the tests run in the order they were run on each content_shell
+instance.</li>
+<li>Run the diagnosing steps from above to figure out which tests</li>
+</ol>
+<p>Run <code>run_web_tests.py --run-singly --no-retry</code>. This starts up a new
+content_shell instance for each test. Tests that fail when run in isolation but
+pass when run as part of the full test suite represent some state that we&#39;re not
+properly resetting between test runs or some state that we&#39;re not properly
+setting when starting up content_shell. You might want to run with
+<code>--timeout-ms=60000</code> to weed out tests that timeout due to waiting on
+content_shell startup time.</p>
+<h4 id="diagnose-especially-flaky-tests">Diagnose especially flaky tests</h4>
+<ol>
+<li>Load
+<a href="https://test-results.appspot.com/dashboards/overview.html#group=%40ToT%20Blink&amp;flipCount=12">https://test-results.appspot.com/dashboards/overview.html#group=%40ToT%20Blink&amp;flipCount=12</a></li>
+<li>Tweak the flakiness threshold to the desired level of flakiness.</li>
+<li>Click on <em>webkit_tests</em> to get that list of flaky tests.</li>
+<li>Diagnose the source of flakiness for that test.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/identifying_tests_that_depend_on_order.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/identifying_tests_that_depend_on_order.md</a>
+  </p>
+</div>

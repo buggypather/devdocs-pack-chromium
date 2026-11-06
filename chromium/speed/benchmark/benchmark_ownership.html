@@ -1,0 +1,42 @@
+<h1>Updating a Benchmark Owner</h1>
+<h2 id="who-is-a-benchmark-owner">Who is a benchmark owner?</h2>
+<p>A benchmark owner is the main point of contact for a given benchmark. The owner is responsible for:</p>
+<ul>
+<li>Triaging breakages and ensuring they are fixed</li>
+<li>Following up when CL authors who regressed performance have questions about the benchmark and metric</li>
+<li>Escalating when a regression is WontFix-ed and they disagree with the decision.</li>
+</ul>
+<p>There can be multiple owners of a benchmark, for example if there are multiple types of metrics, or if one owner drives metric development and another drives performance improvements in an area.</p>
+<h2 id="how-do-i-update-the-owner-on-a-benchmark">How do I update the owner on a benchmark?</h2>
+<h3 id="telemetry-benchmarks">Telemetry Benchmarks</h3>
+<ol>
+<li>Open &lt;benchmark_harness&gt;.py under <a href="https://cs.chromium.org/chromium/src/tools/perf/benchmarks/"><code>src/tools/perf/benchmarks/</code></a>. The &lt;benchmark_harness&gt; is the part of the benchmark name before the “.”. For example, when looking for &#39;blink_perf.paint&#39;, you need to open &#39;blink_perf.py&#39;.</li>
+<li>Find the class for the benchmark. It has a <code>Name</code> method that should match the full name of the benchmark.</li>
+<li>Add a <code>benchmark.Info</code> decorator above the class.</li>
+</ol>
+<p>  Example:</p>
+<pre>@benchmark.Info(
+    emails=['owner1@chromium.org', 'owner2@samsung.com'],
+    component=’GoatTeleporter&gt;Performance’,
+    documentation_url='http://link.to/your_benchmark_documentation')</pre>
+<p>  In this example, there are two owners for the benchmark, specified by email; a bug component,
+  which will be automatically added to the bug by the perf dashboard; and a link
+  to documentation (which will be added to regression bugs in Q3 2018).</p>
+<ol>
+<li>Run <code>tools/perf/generate_perf_data</code> to update <code>tools/perf/benchmark.csv</code>.</li>
+<li>Upload the benchmark python file and <code>benchmark.csv</code> to a CL for review. Please add any previous owners to the review.</li>
+</ol>
+<h3 id="c-perf-benchmarks">C++ Perf Benchmarks</h3>
+<ol>
+<li>Open <a href="https://cs.chromium.org/chromium/src/tools/perf/core/perf_data_generator.py"><code>src/tools/perf/core/perf_data_generator.py</code></a>.</li>
+<li>Find the BenchmarkMetadata for the benchmark. It will be in a dictionary named <code>GTEST_BENCHMARKS</code>.</li>
+<li>Update the email (first field of <code>BenchmarkMetadata</code>).</li>
+<li>Run <code>tools/perf/generate_perf_data</code> to update <code>tools/perf/benchmark.csv</code>.</li>
+<li>Upload <code>perf_data_generator.py</code> and <code>benchmark.csv</code> to a CL for review. Please add any previous owners to the review.</li>
+</ol>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/benchmark_ownership.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/speed/benchmark/benchmark_ownership.md</a>
+  </p>
+</div>

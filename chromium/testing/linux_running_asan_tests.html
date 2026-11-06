@@ -1,0 +1,19 @@
+<h1>Running Chrome tests with AddressSanitizer (asan) and LeakSanitizer (lsan)</h1>
+<p>Running asan/lsan tests requires changing the build and setting a few
+environment variables.</p>
+<p>Changes to args.gn (ie, <code>out/Release/args.gn</code>):</p>
+<pre data-language="python">is_asan = true
+is_lsan = true</pre>
+<p>Setting up environment variables and running the test:</p>
+<pre data-language="sh">$ export ASAN_OPTIONS=&quot;symbolize=1 external_symbolizer_path=./third_party/llvm-build/Release+Asserts/bin/llvm-symbolizer detect_leaks=1 detect_odr_violation=0&quot;
+$ export LSAN_OPTIONS=&quot;&quot;
+$ out/Release/browser_tests</pre>
+<p>Stack traces (such as those emitted by <code>base::debug::StackTrace().Print()</code>) may
+not be fully symbolized. The following snippet can symbolize them:</p>
+<pre data-language="sh">$ out/Release/browser_tests 2&gt;&amp;1 | ./tools/valgrind/asan/asan_symbolize.py</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/testing/linux_running_asan_tests.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/testing/linux_running_asan_tests.md</a>
+  </p>
+</div>

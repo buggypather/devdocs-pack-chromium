@@ -1,0 +1,226 @@
+<h1>GPU Expectation Files</h1>
+<p>This file goes over details of the expectation files which are critical for
+ensuring that GPU tests only run where they should and that flakes are
+suppressed to avoid red bots.</p>
+<h2 id="overview">Overview</h2>
+<p>The GPU Telemetry-based integration tests (tests that use the
+<code>telemetry_gpu_integration_test</code> target)
+<a href="https://github.com/chromium/chromium/blob/HEAD/docs/gpu/gpu_expectations">utilize expectation files</a> in order to define when certain
+tests should not be run or are expected to fail. The core expectation format is
+defined by <a href="https://github.com/chromium/chromium/blob/HEAD/docs/gpu/typ_expectations">typ</a>, although there are some Chromium-specific
+extensions as well. Each expectation consists of the following fields, separated
+by a space:</p>
+<ol>
+<li>An optional bug identifier. While optional, it is heavily encouraged that GPU
+expectations have this field filled.</li>
+<li>A set of tags that the expectation applies to. This is technically optional,
+as omitting tags will cause the expectation to be applied everywhere, but
+there are very few, if any, instances where tags will not be specified for
+GPU expectations.</li>
+<li>The name of the test that the expectation applies to. A single wildcard (<code>*</code>)
+character is allowed at the end of the string, but use of a wildcard anywhere
+but the end of the string is an error.</li>
+<li>A set of expected results for the test. This technically supports multiple
+values, but for GPU purposes, it will always be a single value.</li>
+</ol>
+<p>Additionally, comments are supported, which begin with <code>#</code>.</p>
+<p>Thus, a sample expectation entry might look like:</p>
+<pre># Flakes regularly but infrequently.
+crbug.com/1234 [ win amd ] foo/test [ RetryOnFailure ]</pre>
+<h2 id="core-format">Core Format</h2>
+<p>The following are further details on each of the parts of an expectation that
+are part of the core expectation file format.</p>
+<h3 id="bug-identifier">Bug Identifier</h3>
+<p>An optional string(s) pointing to the bug(s) tracking the reason why the
+expectation exists. For GPU uses, this is usually a single bug, but multiple
+space-separated strings are supported.</p>
+<p>The format of the string is enforced by <a href="https://github.com/chromium/chromium/blob/HEAD/docs/gpu/bug_regexes">these</a> regular
+expressions, so CLs that introduce malformed bugs will not be submittable.</p>
+<h3 id="tags">Tags</h3>
+<p>One or more tags are used to specify which configuration(s) an expectation
+applies to. For GPU tests, this is often things such as the OS, the GPU vendor,
+or the specific GPU model.</p>
+<p>Tag sets are defined at the top of the expectation file using <code># tags:</code>
+comments. Each comment defines a different set of mutually exclusive tags, e.g.
+all of the OS tags are in a single set. An expectation is only allowed to use
+one tag from each set, but can use tags from an arbitrary number of sets. For
+example, <code>[ win win10 ]</code> would be invalid since both are OS tags, but
+<code>[ win amd release ]</code> would be valid since there is one tag each from the OS,
+GPU, and browser type tag sets.</p>
+<p>Additionally, tags used for expectations with the same test must be unambiguous
+so that the same test cannot have multiple expectations applied to it at once.
+Take the following expectations as an example:</p>
+<pre>[ mac intel ] foo/test [ Failure ]
+[ mac debug ] foo/test [ RetryOnFailure ]</pre>
+<p>These expectations would be considered to be conflicting since <code>[ mac intel ]</code>
+does not make any distinctions about the browser type, and <code>[ mac debug ]</code> does
+not make any distinctions about the GPU type. As written, <code>foo/test</code> running
+on a configuration that produced the <code>mac</code>, <code>intel</code>, and <code>debug</code> tags would try
+to use both expectations.</p>
+<p>This can be fixed by adding a tag from the same tag set but with a different
+value so that the configurations are no longer ambiguous.
+<code>[ mac intel release ]</code> would work since a configuration cannot be both
+<code>release</code> and <code>debug</code> at the same time. Similarly, <code>[ mac amd debug ]</code> would
+work since a configuration cannot be both <code>intel</code> and <code>amd</code> at the same time.</p>
+<p>Such conflicts will be caught and reported by presubmit tests, so you should not
+have to worry about accidentally landing bad expectations, but you will need to
+fix any found conflicts before you can submit your CL.</p>
+<h4 id="addingmodifying-tags">Adding/Modifying Tags</h4>
+<p>Actually updating the test harness to generate new tags is out of scope for this
+documentation. However, if a new tag needs to be added to an expectation file
+or an existing one modified (e.g. renamed), it is important to note that the
+tag header should not be manually modified in the expectation file itself.</p>
+<p>Instead, modify the header in <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/validate_tag_consistency.py">validate_tag_consistency.py</a> and run
+<code>validate_tag_consistency.py apply</code> to apply the new header to all expectation
+files. This ensures that all files remain in sync.</p>
+<p>Tag consistency is checked as part of presubmit, so it will be apparent if you
+accidentally modify the tag header in a file directly.</p>
+<p><strong>Note:</strong> The WebGPU CTS expectation
+files in Dawn (<code>//third_party/dawn/webgpu-cts/expectations.txt</code>,
+<code>compat-expectations.txt</code> and <code>slow_tests.txt</code>) share the same header but are
+not automatically checked. Since the unexpected pass finder parses those files
+using the header from <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/validate_tag_consistency.py">validate_tag_consistency.py</a>, any tag added to the Dawn
+header must also be added to <a href="https://chromium.googlesource.com/chromium/src/+/main/content/test/gpu/validate_tag_consistency.py">validate_tag_consistency.py</a> in Chromium. Otherwise, the WebGPU Unexpected Pass Finder builder will fail with
+<code>ParseError: Unknown tag</code> as soon as an expectation uses the new tag.</p>
+<h3 id="test-name">Test Name</h3>
+<p>A single string with either a test name or part of a test name suffixed with a
+wildcard character. Note that the test name is just the test case as reported
+by the test harness, not the fully qualified name that is sometimes reported in
+places such as the &quot;Test Results&quot; tab on bots.</p>
+<p>As an example,
+<code>gpu_tests.webgl1_conformance_integration_test.WebGL1ConformanceIntegrationTest.WebglExtension_EXT_blend_minmax</code>
+is a fully qualified name, while <code>WebglExtension_EXT_blend_minmax</code> is what would
+actually be used in the expectation file for the <code>webgl1_conformance</code> suite.</p>
+<h3 id="expected-results">Expected Results</h3>
+<p>Usually one, but potentially multiple, results that are expected on the
+configuration that the expectation is for. Like tags, expected results are
+defined at the top of each expectation file and have the same caveat about
+addition/modification with the helper script. However, unlike tags, there is
+only one set of values which are not expected to be added to/changed on any
+sort of regular basis. The following expected results are used by GPU tests:</p>
+<h4 id="skip">Skip</h4>
+<p>Skips the test entirely. The benefit of this is that no time is wasted on a bad
+test. However, it also means that it is impossible to check if the test is still
+failing or not by just looking at historical results. This is problematic for
+humans, but even more problematic for scripts we have to automatically remove
+expectations that are no longer needed.</p>
+<p>As such, it is heavily discouraged to add new Skip expectations except under the
+following circumstances:</p>
+<ol>
+<li>The test is invalid on a configuration for some reason, e.g. a feature is not
+and will not be supported on a certain OS, and so should never be run. These
+sorts of expectations are expected to be permanent.</li>
+<li>The act of running the test is significantly detrimental to other tests, e.g.
+running the test kills the test device. These are expected to be temporary,
+so the root cause should be fixed relatively quickly.</li>
+</ol>
+<p>If presubmit thinks you are adding new Skip expectations, it will warn you, but
+the warning can be ignored if the addition falls into one of the above
+categories or it is a false positive, such as due to modifying tags on an
+existing expectation.</p>
+<h4 id="failure">Failure</h4>
+<p>Lets the test run normally, but hides the fact that it failed during result
+reporting. This is the preferred way to suppress frequent failures on bots, as
+it keeps the bots green while still reporting results that can be used later.</p>
+<h4 id="retryonfailure">RetryOnFailure</h4>
+<p>Allows the test to be retried up to two additional times before being marked as
+failing, as by default GPU tests do not retry on failure. This is preferred if
+the test fails occasionally, but not enough to warrant marking it as failing
+consistently.</p>
+<h4 id="slow">Slow</h4>
+<p>Only has an effect in a subset of test suites. Currently, those are suites that
+use a heartbeat mechanism instead of a fixed timeout:</p>
+<ul>
+<li><code>webgpu_cts</code></li>
+<li><code>webgl1_conformance</code></li>
+<li><code>webgl2_conformance</code></li>
+</ul>
+<p>Since these tests use a relatively short timeout that gets refreshed as long as
+the test does not hang, they are more susceptible to timeouts if the test does a
+lot of work or other parallel tests are using a large number of resources. In
+these cases, the <code>Slow</code> expectation can be used to increase the heartbeat
+timeout for a test, reducing the chance that one of these timeouts is hit.</p>
+<p>If the reported failure for a test is along the lines of &quot;Timed out waiting for
+websocket message&quot;, prefer to use a <code>Slow</code> expectation first over a <code>Failure</code> or
+<code>RetryOnFailure</code> one.</p>
+<h2 id="extensions">Extensions</h2>
+<p>In addition to the normal expectation functionality, Chromium has several
+extensions to the expectation file format.</p>
+<h3 id="unexpected-pass-finder-annotations">Unexpected Pass Finder Annotations</h3>
+<p>Chromium has several unexpected pass finder scripts (sometimes called stale
+expectation removers) to automatically reclaim test coverage by modifying
+expectation files. These mostly work as intended, but can occasionally make
+changes that don&#39;t align with what we actually want. Thus, there are several
+annotations that can be inserted into expectation files to adjust the behavior
+of these scripts.</p>
+<h4 id="disable">Disable</h4>
+<p>There are several annotations that can be used to prevent the scripts from
+automatically removing expectations. All of these start with <code>finder:disable</code>
+with some suffix.</p>
+<p><code>finder:disable-general</code> prevents the expectation from being removed under any
+circumstances.</p>
+<p><code>finder:disable-stale</code> prevents the expectation from being removed if it is
+still applicable to at least one bot, but all queried results point to the
+expectation no longer being needed. This is most likely to be used for
+expectations for very infrequent flakes, where the flake might not occur within
+the data range that we query.</p>
+<p><code>finder:disable-unused</code> prevents the expectation from being removed if it is
+found to not be used on any bots, i.e. the specified configuration does not
+appear to actually be tested. This is most likely to be used for expectations
+for failures reported by third parties with their own testing configurations.</p>
+<p><code>finder:disable-narrowing</code> prevents the expectation from having its scope
+automatically narrowed to only apply to configurations that are found to need
+it. This is most likely to be used for expectations that are intentionally
+broad to prevent failures that aren&#39;t planned on being fixed.</p>
+<p>All of these annotations can either be used inline for a single expectation:</p>
+<pre>[ mac intel ] foo/test [ Failure ]  # finder:disable-general</pre>
+<p>or with their <code>finder:enable</code> equivalent for blocks:</p>
+<pre># finder:disable-general
+[ mac intel ] foo/test [ Failure ]
+[ mac intel ] bart/test [ Failure ]
+# finder:enable-general</pre>
+<p>Nested blocks are not allowed. The <code>finder:disable</code> annotations can be followed
+with a description of why the disable is necessary, which will be output by the
+script when it encounters a case where one of the disabled expectations would
+have been removed if the annotation was not present:</p>
+<pre># finder:disable-stale Very low flake rate
+[ mac intel ] foo/test [ Failure ]
+[ mac intel ] bar/test [ Failure ]
+# finder:enable-stale</pre>
+<h4 id="group-startend">Group Start/End</h4>
+<p>There may be cases where groups of expectations should only be removed together,
+e.g. if a flake affects a large number of tests but the chance of any individual
+test hitting the flake is low. In these cases, the expectations can be grouped
+together so one is only removed if all of them are being removed.</p>
+<pre># finder:group-start Some group description or name
+[ mac intel ] foo/test [ Failure ]
+[ mac intel ] bar/test [ Failure ]
+# finder:group-end</pre>
+<p>The group name/description is required and is used to uniquely identify each
+group. This means that groups with the same name string in different parts of
+the file will be treated as the same group, as if they were all in a single
+group block together.</p>
+<pre># finder:group-start group_name
+[ mac ] foo/test [ Failure ]
+[ mac ] bar/test [ Failure ]
+# finder:group-end
+
+...
+
+# finder:group-start group_name
+[ android ] foo/test [ Failure ]
+[ android ] bar/test [ Failure ]
+# finder:group-end</pre>
+<p>is equivalent to</p>
+<pre># finder:group-start group_name
+[ mac ] foo/test [ Failure ]
+[ mac ] bar/test [ Failure ]
+[ android ] foo/test [ Failure ]
+[ android ] bar/test [ Failure ]
+# finder:group-end</pre>
+<div class="_attribution">
+  <p class="_attribution-p">
+    &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>
+    <a href="https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu_expectation_files.md" class="_attribution-link">https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/gpu_expectation_files.md</a>
+  </p>
+</div>
