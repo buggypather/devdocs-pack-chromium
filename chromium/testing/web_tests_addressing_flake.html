@@ -12,15 +12,15 @@ your test has flaked. You will need the name of the specific build step that has
 flaked; usually for Web Tests this is <code>blink_web_tests</code> but there are variations
 (e.g. <code>not_site_per_process_blink_web_tests</code>).</p>
 <p>On the builder page, find the appropriate step:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/web_tests_blink_web_tests_step.png" alt="web_tests_blink_web_tests_step"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/web_tests_blink_web_tests_step.png" alt="web_tests_blink_web_tests_step"></p>
 <p>While you can examine the individual shard logs to find your test output, it is
 easier to view the consolidated information, so scroll down to the <strong>archive
 results for blink_web_tests</strong> step and click the <code>web_test_results</code> link:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/web_tests_archive_blink_web_tests_step.png" alt="web_tests_archive_blink_web_tests_step"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/web_tests_archive_blink_web_tests_step.png" alt="web_tests_archive_blink_web_tests_step"></p>
 <p>This will open a new tab with the results viewer. By default your test should be
 shown, but if it isn&#39;t then you can click the &#39;All&#39; button in the &#39;Query&#39; row,
 then enter the test filename in the textbox beside &#39;Filters&#39;:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/web_tests_results_viewer_query_filter.png" alt="web_tests_results_viewer_query_filter"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/web_tests_results_viewer_query_filter.png" alt="web_tests_results_viewer_query_filter"></p>
 <p>There are a few ways that a Web Test can flake, and what the result means may
 depend on the <a href="writing_web_tests#Test-Types">test type</a>:</p>
 <ol>
@@ -50,7 +50,7 @@ including actual/expected results and browser logs if they exist.</p>
 compared to its (default) expected <code>PASS</code> result. The test results (<code>TEXT</code> - as
 explained above this is equivalent to <code>FAIL</code>), output, and browser log links are
 highlighted.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/web_tests_results_viewer_flaky_test.png" alt="web_tests_results_viewer_flaky_test"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/web_tests_results_viewer_flaky_test.png" alt="web_tests_results_viewer_flaky_test"></p>
 <h2 id="reproducing-web-test-flakes">Reproducing Web Test flakes</h2>
 <blockquote>
 <p>TODO: document how to get the args.gn that the bot used</p>

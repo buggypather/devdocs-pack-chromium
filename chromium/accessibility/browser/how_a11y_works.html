@@ -18,7 +18,7 @@ its own corresponding accessibility element, implementing that platform&#39;s
 accessibility API. So if you add a button, checkbox, scroll container, or
 text field to your application, you don&#39;t need to do any work to make it
 accessible - the built-in UI toolkit has provided all of that already.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/ax_tree.png" alt="Simple accessibility tree"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/ax_tree.png" alt="Simple accessibility tree"></p>
 <h3 id="changing-accessibility-properties">Changing accessibility properties</h3>
 <p>There are some cases where a bit of extra information may be required on the
 part of the app author. If you add an image button, you may need to ensure
@@ -53,7 +53,7 @@ suppose an application is implementing a &quot;cover flow&quot; image picker, su
 one found in the original iTunes album picker.  Conceptually the user is picking
 one album from a large list, but visually it&#39;s shown as a horizontally scrolling
 list of album cover images that fly by in three dimensions.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/images/cover_flow.jpg" alt="Screenshot of a cover flow image picker"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/images/cover_flow.jpg" alt="Screenshot of a cover flow image picker"></p>
 <p>While this control may be implemented as a single UI element, from the
 perspective of accessibility APIs it would typically be represented as
 a parent element with a &quot;list box&quot; role and children with &quot;option&quot; roles.
@@ -66,7 +66,7 @@ AccessibilityDelegate on Android. In addition to setting properties such as the
 name and role (like ComboBox on Windows, or Choice on Android), we&#39;d want to
 override any methods that are used to walk the tree, in order to give this
 object accessible children - one for each option the user can pick.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/cover_flow.png" alt="Figure showing a single CoverFlow control in the UI object tree, and a tree of
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/cover_flow.png" alt="Figure showing a single CoverFlow control in the UI object tree, and a tree of
 controls in the accessibility tree"></p>
 <p>Each option would be another instance of our subclass of an accessibility
 interface. Each one might need to implement a role, name, and very
@@ -104,7 +104,7 @@ or destroyed, the corresponding accessible objects need to
 be updated accordingly.</p>
 <p>Here&#39;s an example of a DOM tree and a corresponding accessibility
 tree. There&#39;s a 1:1 correspondence in this example.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/single_process.png" alt="Figure showing a tree of DOM nodes for a web page and a corresponding
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/single_process.png" alt="Figure showing a tree of DOM nodes for a web page and a corresponding
 tree of accessibility nodes"></p>
 <p>Objects in the accessibility tree are sometimes called &quot;wrappers&quot; in this
 design. Each accessible object &quot;wraps&quot; its corresponding DOM element. The DOM
@@ -123,7 +123,7 @@ unless they&#39;re utilized.</p>
 <p>The overall system so far is pretty simple - the DOM tree is used to
 build the accessibility tree, which is used to communicate with the
 platform accessibility APIs.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/single_process_system.png" alt="System diagram showing a browser consisting of a DOM tree that&#39;s used
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/single_process_system.png" alt="System diagram showing a browser consisting of a DOM tree that&#39;s used
 to build an accessibility tree, which is used to communicate with
 assistive technology using platform accessibility APIs."></p>
 <h2 id="a-single-process-browser-with-css-and-aria">A single-process browser with CSS and ARIA</h2>
@@ -150,17 +150,17 @@ generated content) or other layout objects with no corresponding node (such as
 images that are children of pseudoelements).</p>
 <p>Here&#39;s an example where the DOM tree has list items and the corresponding
 accessibility tree has nodes for the list item markers:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/generated_content.png" alt="Figure showing a DOM tree with an ordered list of two items and the
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/generated_content.png" alt="Figure showing a DOM tree with an ordered list of two items and the
 accessibility tree containing extra nodes for the generated list items"></p>
 <p>Here&#39;s a different example where some of the content is excluded from the
 accessibility tree using aria-hidden:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/hidden_content.png" alt="Figure showing a DOM tree with a sidebar with aria-hidden=true on it
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/hidden_content.png" alt="Figure showing a DOM tree with a sidebar with aria-hidden=true on it
 and the corresponding accessibility tree where the sidebar isn&#39;t present
 at all"></p>
 <p>This new system diagram reflects the complexity of the system when
 you consider both HTML, CSS, and ARIA all affecting the accessibility
 tree.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/single_process_css_system.png" alt="System diagram showing a browser consisting of a DOM tree that along
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/single_process_css_system.png" alt="System diagram showing a browser consisting of a DOM tree that along
 with CSS is used to build a Layout tree, then together the DOM and Layout
 trees build an accessibility tree, which is used to communicate with
 assistive technology using platform accessibility APIs."></p>

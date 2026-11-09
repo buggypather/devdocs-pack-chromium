@@ -7,7 +7,7 @@ it to ensure you only submit well-tested code</strong>.</p>
 <p>To see code coverage for a Chromium CL, <strong>trigger a CQ dry run</strong>, and once the
 builds finish and code coverage data is processed successfully, <strong>look at the
 change view to see absolute and incremental code coverage percentages</strong>:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_percentages.png" alt="code_coverage_percentages"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_percentages.png" alt="code_coverage_percentages"></p>
 <p>Absolute coverage percentage is the percentage of lines covered by tests
 out of <strong>all the lines</strong> in the file, while incremental coverage percentage only
 accounts for <strong>newly added or modified lines</strong>. Both these coverage metrics, are further
@@ -19,7 +19,7 @@ missing coverage and a light blue color indicates existing coverage. Moreover
 hovering over the line number shows an informative tooltip with
 &quot;Not covered by tests&quot; or &quot;Covered by tests&quot; text respectively. It only shows
 All Tests Coverage right now</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_annotations.png" alt="code_coverage_annotations"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_annotations.png" alt="code_coverage_annotations"></p>
 <p><strong>Code coverage data is shared between patchsets that are commit-message-edit or
 trivial-rebase away</strong>, however, if a newly uploaded patchset has
 non-trivial code change, a new CQ dry run must be triggered before coverage data
@@ -27,7 +27,7 @@ shows up again.</p>
 <p>The code coverage tool supports coverage for C/C++, JAVA and Javascript on all major platforms(Linux, MacOS, Windows, Android, iOS and ChromeOS)</p>
 <h2 id="cls-blocked-due-to-low-coverage">CLs Blocked Due to Low Coverage</h2>
 <p>For some teams in Chrome, we have turned on a coverage check, which blocks a CL from submission if the incremental coverage is below a preset threshold(default = 70%). CLs with insufficient test coverage have a <code>CodeCoverage-1</code> label added to them, which prevents them from being submitted. Also, a descriptive message is added to the CL, notifying developer of why the CL was blocked, and how to resolve it.
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/low_coverage_message.png" alt="low_coverage_message"></p>
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/low_coverage_message.png" alt="low_coverage_message"></p>
 <p>Once the tests are added, another run of coverage builders (through CQ+1 or CQ+2) changes the label to <code>CodeCoverage+1</code>, allowing CLs to proceed with submission.</p>
 <p>Tests themselves, as well as test-only files, are generally excluded from coverage checks based on their path or filename. If you are getting coverage warnings for test-related files themselves, check whether the files end in &quot;test&quot; or &quot;tests&quot; (for example, &quot;SomethingTest.java&quot; or &quot;something_unittests.cc&quot;) or that their path contains a directory named exactly &quot;test&quot;, &quot;tests&quot;, or &quot;testing&quot;. There is no manual list to which files can be added for long-term exclusion.</p>
 <p>Devs can also choose to bypass this block, in case they think they are being unfairly punished. They can do so by adding a <em>Low-Coverage-Reason: reason</em> footer to the change description. This should follow certain formatting constraints which are mentioned below</p>
@@ -45,17 +45,17 @@ shows up again.</p>
 <li><strong>OTHER</strong>: None of the above categories are the right fit</li>
 </ul>
 <p>In case the developer doesn&#39;t specify the coverage category as prescribed, a warning will be shown in the UI, with details on how to fix
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/improperly_formatted_coverage_footer.png" alt="impropery_formatted_coverage_footer"></p>
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/improperly_formatted_coverage_footer.png" alt="impropery_formatted_coverage_footer"></p>
 <h3 id="no-empty-line-after-the-footer">No empty line after the footer</h3>
 <p>In order for <em>Low-Coverage-Reason: reason</em> to work properly, it should occur after the last empty line in CL description, otherwise gerrit recognizes it as part of the commit message, rather than the footer i.e. Following would not work
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/empty_line_after_footer.png" alt="empty_line_after_footer"></p>
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/empty_line_after_footer.png" alt="empty_line_after_footer"></p>
 <p>Removing the empty line should fix it
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/no_empty_line_after_footer.png" alt="no_empty_line_after_footer"></p>
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/no_empty_line_after_footer.png" alt="no_empty_line_after_footer"></p>
 <h3 id="be-careful-with-long-footer-strings">Be careful with long footer strings</h3>
 <p>Either keep the footer message in one line i.e. do not add line breaks; or if you do, add whitespace on new footer lines, otherwise <a href="https://bugs.chromium.org/p/chromium/issues/detail?id=1459714#c9">gerrit doesn’t parse them right</a>. e.g. a long footer message can be written as
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/long_footer.png" alt="long_footer">
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/long_footer.png" alt="long_footer">
 or
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/line_break_footer.png" alt="line_break_footer"></p>
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/line_break_footer.png" alt="line_break_footer"></p>
 <h2 id="contacts">Contacts</h2>
 <h3 id="reporting-problems">Reporting problems</h3>
 <p>For any breakage report and feature requests, please <a href="https://bugs.chromium.org/p/chromium/issues/entry?components=Infra%3ETest%3ECodeCoverage">file a bug</a>.</p>

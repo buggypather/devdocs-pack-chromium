@@ -57,13 +57,13 @@ enhanced user experiences on top of the new LUCI UI.</p>
 <p><strong>URL:</strong> <a href="http://ci.chromium.org/">ci.chromium.org</a></p>
 <p>This is the &quot;Home&quot; page for LUCI. It contains a listing of all of the projects
 configured in LUCI.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Home.png" alt="Home page for LUCI" title="LUCI Home Page"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Home.png" alt="Home page for LUCI" title="LUCI Home Page"></p>
 <h4 id="search">Search</h4>
 <p><strong>URL:</strong> <a href="http://ci.chromium.org/search">ci.chromium.org/search</a></p>
 <p>This is the builder search page for LUCI. Find a specific builder serviced by
 LUCI by name. Search results are sorted by bucket and groups. This can also be
 accessed by typing &quot;ci.<tab>&quot; in the Chrome Omnibox.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Search.png" alt="Search page for LUCI" title="LUCI Search Page"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Search.png" alt="Search page for LUCI" title="LUCI Search Page"></p>
 <h4 id="project-page">Project page</h4>
 <p><strong>URL:</strong> <code>ci.chromium.org/p/&lt;project_id&gt;</code></p>
 <p>Example: <a href="http://ci.chromium.org/p/chromium">ci.chromium.org/p/chromium</a></p>
@@ -75,7 +75,7 @@ last-completed-build-status for each builder.</p>
 status.</p>
 <p><strong>Note:</strong> Initially, we have defined &quot;groups&quot; of builders corresponding to a
 Buildbot master and included builders that used to be attached to it. </p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Project.png" alt="An example project page on LUCI" title="LUCI Project Page"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Project.png" alt="An example project page on LUCI" title="LUCI Project Page"></p>
 <h4 id="builders-list-page-per-project">Builders list page per project</h4>
 <p><strong>URL:</strong> <code>ci.chromium.org/p/&lt;project_id&gt;/builders</code></p>
 <p>Example:
@@ -85,7 +85,7 @@ shows number of builds pending, in-progress and the build statuses of the last
 30 recently completed builds by default (option available to show more).</p>
 <p>Refer to the build results <a href="#Color-Key">color key</a> on how to interpret the build
 status.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Project-Builders.png" alt="An example builders per project page" title="LUCI
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Project-Builders.png" alt="An example builders per project page" title="LUCI
 builders page per project"></p>
 <h3 id="project-resource-pages">Project Resource pages</h3>
 <p>These pages display a singular resource that <em>belongs to</em> the project
@@ -97,7 +97,7 @@ builders page per project"></p>
 <p>This is the page describing the builder and lists machine pool, current builds,
 pending builds and recent builds completed. The layout is equivalent to Buildbot
 layout of builder pages.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Builder.png" alt="An example builder page" title="LUCI Builder Page"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Builder.png" alt="An example builder page" title="LUCI Builder Page"></p>
 <h4 id="build-results-page">Build Results page</h4>
 <p><strong>Buildbot Build URL:</strong> <code> ci.chromium.org/buildbot/&lt;group_id&gt;/&lt;builder_name&gt;/&lt;build_#&gt;</code></p>
 <p><strong>LUCI Build URL:</strong>
@@ -110,7 +110,7 @@ is equivalent to Buildbot layout of build result pages.</p>
 <code>ci.chromium.org/p/&lt;project_id&gt;/builds/b&lt;buildbucket_build_id&gt;</code> if the build does
 not have a “buildnumber” property. This does not apply to Chromium builds since
 all Chromium builds have a buildnumber property.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Build.png" alt="An example build result page" title="LUCI Build Page"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Build.png" alt="An example build result page" title="LUCI Build Page"></p>
 <h3 id="view-pages">View pages</h3>
 <p>Each group has multiple views (currently &quot;console&quot; and &quot;builders&quot; views).
 Later, we may add additional views (e.g. &quot;stats&quot;). Views are the primary reason
@@ -125,7 +125,7 @@ information on the Group, including tree status, on-call information, important
 links, sub groups, and builds ordered by latest commits by users over all
 platform builders. Refer to the build results <a href="#Color-Key">color key</a> on how to
 interpret the build status.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Console-View.png" alt="An example console view page for a group" title="LUCI
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Console-View.png" alt="An example console view page for a group" title="LUCI
 console view page"></p>
 <p><strong>Tree Status</strong></p>
 <p>The &quot;tree&quot; represents the various source repositories used to build the project,
@@ -166,7 +166,7 @@ status.</p>
 group. Each builder shows number of builds pending, in-progress and the build
 statuses of the last 30 recently completed builds by default (option available
 to show more).</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Builders-View.png" alt="An example builders view page for a group" title="LUCI
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Builders-View.png" alt="An example builders view page for a group" title="LUCI
 builders view Page"></p>
 <h3 id="color-key">Color Key</h3>
 <p>Throughout LUCI, we visualize a build results using colored boxes, where the
@@ -205,7 +205,7 @@ project contains <strong>builders</strong>, which describe how a given builder w
 recipe to run, gn args to use, etc.). Each <strong>builder</strong> has <strong>builds</strong>, which
 contain build information, build properties details, success or failure status,
 blamelists, steps and links to log files.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Site-Project.png" alt="Project layout diagram"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Site-Project.png" alt="Project layout diagram"></p>
 <p>For the LUCI UI, to organize builders in each project, we introduce the idea of
 <strong>groups</strong>. Builders of each project are organized into **groups **of ordered
 builders (A single builder can be referenced by multiple groups). For example,
@@ -217,11 +217,11 @@ as many groups as they like, for whatever purpose they need them.</p>
 <p>A group of builders and their builds can be visualized in a couple ways; we call
 these <strong>views</strong>. We have currently implemented 2 views; a <strong>console view</strong> and a
 <strong>builders view</strong> for each group.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Project-Diagram.png" alt="Project hierarchy diagram"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Project-Diagram.png" alt="Project hierarchy diagram"></p>
 <p>To get started with LUCI, go to <a href="http://ci.chromium.org">ci.chromium.org</a>. Drill
 down to build results from the list of projects. The search page is available to
 find a specific builder by name.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/LUCI-Home-Hierarchy.png" alt="LUCI Home page site layout" title="LUCI Home"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/LUCI-Home-Hierarchy.png" alt="LUCI Home page site layout" title="LUCI Home"></p>
 <h2 id="known-issues">Known Issues</h2>
 <p>A list of <a href="https://bugs.chromium.org/p/chromium/issues/list?q=label%3Aluci-knownissues-ui">known
 issues</a>

@@ -37,7 +37,7 @@ key</a> registered with your
 Google account.</p>
 <p>To register a key or check your existing keys, go to
 <a href="https://myaccount.google.com/signinoptions/passkeys">https://myaccount.google.com/signinoptions/passkeys</a></p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_key_registration.png" alt="Security key registration"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_key_registration.png" alt="Security key registration"></p>
 <p>The line &quot;This key can only be used with a password&quot; indicates a <strong>U2F</strong>
 security key. If the line is missing, the key is a <strong>FIDO2</strong> security key.
 Please include this info when reporting issues.</p>
@@ -51,12 +51,12 @@ to the screenshot below).
 Otherwise the key won&#39;t be usable for ReAuth (you&#39;ll see BAD_REQUEST error in
 the log). If you&#39;ve already registered the key, remove it from the security key
 list, then add it again.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_firefox_sk.png" alt="Firefox security key popup"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_firefox_sk.png" alt="Firefox security key popup"></p>
 <h3 id="turn-on-2sv">Turn on 2SV</h3>
 <p><strong>If you’re using a Google Workspace account</strong>, make sure
 &quot;<a href="https://myaccount.google.com/signinoptions/twosv">2-Step Verification</a>&quot; is
 turned on.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_2sv.png" alt="Two-step verification"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_2sv.png" alt="Two-step verification"></p>
 <h3 id="correct-time-and-timezone">Correct time and timezone</h3>
 <p>Make sure your device&#39;s timezone and time are set correctly.</p>
 <p>If you’re behind a corporate network or network proxy, your system’s auto
@@ -128,7 +128,7 @@ GUI-based pinentry program.</p>
 <p>During normal usage, when you perform actions such as voting Code-Review or
 editing commit descriptions on Gerrit Web UI, you will see a ReAuth popup once
 every 20 hours:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_ui_prompt.png" alt="Gerrit UI prompt"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_ui_prompt.png" alt="Gerrit UI prompt"></p>
 <p>Click &quot;Continue&quot;. You&#39;ll be asked to touch your security key to perform ReAuth,
 after which everything will proceed as normal.</p>
 <h3 id="local-cli-tools-git-depot_tools-git-cl-upload-etc">Local CLI tools (git, depot_tools, git cl upload, etc.)</h3>
@@ -187,8 +187,8 @@ below).</p>
 <p>Click &quot;OK&quot; to save your settings, then go back to the &quot;General&quot; tab, input the
 remote desktop server with your development machine’s hostname (or IP address)
 and user name, then click &quot;Connect&quot;.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_thincast1.png" alt=""></p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_thincast2.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_thincast1.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_thincast2.png" alt=""></p>
 <p>In the remote desktop session, open a command prompt (CMD), then run the
 following command to ReAuth:</p>
 <pre>git credential-luci reauth</pre>
@@ -211,7 +211,7 @@ Git-on-Windows):</p>
 <p>If you’re using PuTTY, set up port forwarding on the &quot;Connection &gt; SSH &gt;
 Tunnels&quot; page in the connection dialog (see screenshot). Remember to &quot;Save&quot; your
 configuration in the &quot;Session&quot; page if you want to persist the configuration.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_putty.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_putty.png" alt=""></p>
 <p>Inside your SSH session, set <code>SSH_AUTH_SOCK</code> to the forwarding port, then run
 the ReAuth command.</p>
 <pre>export SSH_AUTH_SOCK=localhost:10899
@@ -228,8 +228,8 @@ you can register it to start as a service on login.</p>
 <code>mstsc</code>), make sure &quot;WebAuthn (Windows Hello or security keys)&quot; is enabled in
 &quot;Show Options &gt; Local Resources &gt; More…&quot; (refer to screenshots below). Then
 connect to the remote Windows machine as usual.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_rdp1.png" alt=""></p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_rdp2.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_rdp1.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_rdp2.png" alt=""></p>
 <p>Then, in the remote desktop session, run the following command in command prompt
 (CMD):</p>
 <pre data-language="shell">git credential-luci reauth</pre>
@@ -258,7 +258,7 @@ template</a></p>
 <h2 id="faqs">FAQs</h2>
 <p><strong>Why can&#39;t I submit this CL?</strong></p>
 <p>There is a dialog in the Gerrit Web UI that will explain what is missing:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/gerrit_reauth_explanation.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/gerrit_reauth_explanation.png" alt=""></p>
 <p>Likely one of the committers who reviewed the CL did not do ReAuth,
 you can send them a link to the next question.</p>
 <p><strong>My Code-Review on Gerrit is missing ReAuth</strong></p>

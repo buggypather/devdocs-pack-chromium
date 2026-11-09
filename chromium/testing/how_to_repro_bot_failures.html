@@ -18,15 +18,15 @@ on linux platform.</p>
 and understand the platform.</p>
 <h2 id="prepare-the-compile-and-test-devices">Prepare the compile and test devices</h2>
 <p>For compile devices, if you see a &quot;compilator steps&quot;(usually for CQ jobs),</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/bot_repro_compilator_step.png" alt="compilator step"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/bot_repro_compilator_step.png" alt="compilator step"></p>
 <p>then
 click the &quot;compilator build&quot; and then bot on the right.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/bot_repro_bot_link.png" alt="bot link"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/bot_repro_bot_link.png" alt="bot link"></p>
 <p>Otherwise just click bot on right.</p>
 <p>For test devices, for most builders, click the shard and then click on bot.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/bot_repro_test_shard.png" alt="test shard"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/bot_repro_test_shard.png" alt="test shard"></p>
 <p>The bot page would look like this</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/bot_repro_bot_page.png" alt="bot page"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/bot_repro_bot_page.png" alt="bot page"></p>
 <p>You would want to prepare the exact same environment when possible. e.g.
 many tests are using e2-standard-8 GCE bot, you will want to create a
 e2-standard-8 GCE VM. If you see python 3.8, then install python 3.8.</p>
@@ -34,7 +34,7 @@ e2-standard-8 GCE VM. If you see python 3.8, then install python 3.8.</p>
 <p>Follow the platform specific workflow to checkout the code.</p>
 <h2 id="revision">Revision</h2>
 <p>On bot, you can see revision like this.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/bot_repro_revision.png" alt="revision"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/bot_repro_revision.png" alt="revision"></p>
 <p>First sync to that revision. For tryjobs, you also need to cherry-pick the
 changelist with correct patchset after sync to correct revision.</p>
 <p>Note: Don&#39;t just download a patch from gerrit to repro tryjob failures.
@@ -43,11 +43,11 @@ But on gerrit, what you see is your local revision when you upload with
 the patchset. On gerrit you see code at an older base revision.</p>
 <h2 id="change-gclient-config">Change gclient config</h2>
 <p>On bot, there is a step named &#39;gclient config&#39;.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/bot_repro_gclient.png" alt="gclient"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/bot_repro_gclient.png" alt="gclient"></p>
 <p>Apply the same gclient config and then rerun &#39;gclient sync&#39;.</p>
 <h2 id="gn-args">gn args</h2>
 <p>On bot, there is a step named &#39;lookup GN args&#39;.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/bot_repro_gn_args.png" alt="gn args"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/bot_repro_gn_args.png" alt="gn args"></p>
 <p>Apply the same gn args locally.
 Note: most of the time, some path based flags can be omitted. Examples:</p>
 <ul>
@@ -71,7 +71,7 @@ we calculate what files are needed for testing using build maps and copy them
 from compile machine to test machine. But locally you don&#39;t have this step.
 Usually the fix is to add some &#39;data&#39; or &#39;data_deps&#39; in BUILD.gn.</p>
 <p>Open the bot test result page</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/bot_repro_test_page.png" alt="test page"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/bot_repro_test_page.png" alt="test page"></p>
 <p>You should see all the information you need including system environment and
 commandlines.</p>
 <p>Note: Set system environment. Especially important for gtest GTEST_SHARD_INDEX

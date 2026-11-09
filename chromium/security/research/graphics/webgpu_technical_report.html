@@ -16,7 +16,7 @@ we might encounter in the future.</p>
 <p>The graphics stack has long been an area of interest for Chrome Security. Before
 we dive into WebGPU internals, consider the diagram below showing a simplified
 view of the Chrome graphics architecture.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--nb3icxsvqik.png" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--nb3icxsvqik.png" alt="image"></p>
 <p>Show above: Attackers&#39; perspective of Chrome graphics.</p>
 <p>The Chrome process model uses sandboxing to create layered security boundaries
 between untrusted content from the web and protected user data. However, the
@@ -58,7 +58,7 @@ Chrome graphics stack required for WebGPU. While WebGPU has many pieces and
 inter-connections, we omitted a great many notable portions of Chrome&#39;s graphics
 attack surface, including WebGL, Skia, Canvas2D, Widevine DRM, and video
 decoding for the sake of avoiding complexity explosion.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--25zv8cth637j.png" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--25zv8cth637j.png" alt="image"></p>
 <p>Shown above: The full Chrome WebGPU stack.</p>
 <h2 id="webgpu-api">WebGPU API</h2>
 <p>The <strong>WebGPU</strong> API is exposed via JavaScript which calls into <strong>Dawn</strong>, the
@@ -77,7 +77,7 @@ WebGPU that wraps the underlying platform&#39;s GPU APIs.</p>
 <strong>Vulkan Backend</strong> because it is reachable on every WebGPU platform and it is
 the only platform that&#39;s fuzzable with ClusterFuzz since most of the Vulkan
 Backend code can be exercised without a physical GPU.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--6mue8ablsri.png" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--6mue8ablsri.png" alt="image"></p>
 <p>Shown above: The subset of the Chrome WebGPU stack we focused on during this
 portion of the review, with out-of-scope portions de-emphasized in white.</p>
 <h3 id="finding-incorrect-state-tracking-in-dawn-native-leads-to-uaf">Finding: Incorrect State Tracking in Dawn Native leads to UAF</h3>
@@ -109,7 +109,7 @@ IPC to the GPU process.</p>
 Object</strong>. Finally, the <strong>Dawn Native Object</strong> holds a raw pointer to the
 underlying Vulkan Object (or other graphics API platform object on non-Vulkan
 platforms.)</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--dxtg69vpyxl.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--dxtg69vpyxl.jpg" alt="image"></p>
 <p>Through this long chain of reference counted objects we hold a pointer to a
 resource in the <strong>Usermode Graphics Driver (UMD)</strong> through our Oilpan managed
 <code>gpuBuffer</code> object in JavaScript. This is a lot of state to track!</p>
@@ -125,11 +125,11 @@ gc();</pre>
 <p>Under the covers, the destruction of an Oilpan object drops a reference to its
 Dawn Wire Client object which when destructed sends a <code>wgpuDestroyObject</code> IPC
 command to the GPU process.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--y3qar9s40vd.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--y3qar9s40vd.jpg" alt="image"></p>
 <p>Situations can arise where multiple objects within Dawn Native hold references
 to the same object, so this destruction won&#39;t actually free the Dawn Native
 Buffer.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--m5a1m5mf2h.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--m5a1m5mf2h.jpg" alt="image"></p>
 <p>When we began auditing these references we checked for many of the &quot;classic&quot;
 reference counting implementation issues. For example, sending multiple
 <code>wgpuDestroyObject</code> commands from a compromised renderer does not allow the
@@ -139,13 +139,13 @@ objects use <a href="https://source.chromium.org/chromium/chromium/src/+/refs/he
 tracking on all architectures which prevents integer overflow style bugs.
 However, we did come across instances where raw pointers were being held without
 taking a reference to the reference counted pointer.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--x4oroth0usm.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--x4oroth0usm.jpg" alt="image"></p>
 <h4 id="whats-happening-inside-webgpu">What&#39;s happening inside WebGPU?</h4>
 <p>WebGPU gives developers an API to queue up operations and then run them in
 batches using modern graphics APIs. Under the hood, a lot goes on to make this
 work. The diagram below shows the simplified life cycle of creating and running
 a compute shader.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--gms7nqwczp.png" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--gms7nqwczp.png" alt="image"></p>
 <p>The Dawn Native <code>GPUCommandBuffer</code> object, created by the step highlighted in
 <span style="background-color:blue">Blue</span>, holds a pre-recorded set of
 commands that can then be executed at an arbitrary time. Herein lies the magic
@@ -237,7 +237,7 @@ execution.</p>
 <p>The <code>ClearBuffer</code> call leads to many other state changing effects and function
 calls. One of those code paths adds a Buffer&#39;s raw pointer to
 <code>mappableBuffersForEagerTransition</code>.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--umacwcr8c1p.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--umacwcr8c1p.jpg" alt="image"></p>
 <p>This <code>TrackResourceAndGetResourceBarrier</code> call occurs outside of WebGPU
 <code>GPUCommandBuffer</code> command execution, which is unexpected, so the only other
 reference to the <strong>Dawn Native Buffer</strong> is the reference from the renderer
@@ -296,7 +296,7 @@ are polled on every logical <code>wgpuTick</code> within <strong>Dawn</strong>. 
 completes, <strong>Dawn</strong> will execute a callback in the GPU process that will then
 change state within the GPU process and send any results to the renderer process
 using <strong>Dawn Wire</strong>.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--vcq2rype4h7.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--vcq2rype4h7.jpg" alt="image"></p>
 <p>This creates a point of reentrancy during callback execution in <code>wgpuTick</code> when
 the pending callbacks are executed. State can change in unexpected ways during
 callback execution within <code>wgpuTick</code> and state can change in unexpected ways
@@ -304,11 +304,11 @@ before callback execution. This creates room for bugs similar to the classic
 Javascript engine callback bugs that we&#39;ve seen in the
 <a href="https://googleprojectzero.blogspot.com/2019/04/virtually-unlimited-memory-escaping.html">browser</a>
 and <a href="https://tiszka.com/blog/CVE_2021_21225.html">renderer</a> processes.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--594gh2o328e.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--594gh2o328e.jpg" alt="image"></p>
 <p>Luckily, as of May 2023, there aren&#39;t that many asynchronous calls in WebGPU and
 these callbacks do not introduce unbounded re-entrancy (i.e. it is not possible
 to call <code>ApiTick</code> within an <code>ApiTick</code>).</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--suavcw9636c.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--suavcw9636c.jpg" alt="image"></p>
 <h4 id="the-bug-1">The Bug</h4>
 <p>The bug we&#39;re looking at occurred because of an unexpected state change between
 callback registration and callback execution. WebGPU registers a callback
@@ -418,7 +418,7 @@ executes it using <strong>Dawn Wire Server.</strong></p>
   }
   ...
 }</pre>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--ttzz54pb83l.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--ttzz54pb83l.jpg" alt="image"></p>
 <p>WebGPU improved on the <code>GLES2CommandBuffer</code> implementation in many ways. For
 example, the <code>GLES2CommandBuffer</code> has been plagued with
 time-of-check/time-of-use (TOCTOU) <a href="https://crbug.com/1422594">vulnerabilities</a>
@@ -486,7 +486,7 @@ then within Chrome. This will increase its complexity.</p>
 <p>This section focuses on the portions of WebGPU that ingest and process shaders.
 Refer again to the high level picture below for an illustration of the
 components of interest in this section.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--fci4atgmk2e.png" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--fci4atgmk2e.png" alt="image"></p>
 <p>Show above: The subset of the Chrome WebGPU stack we focused on during this
 portion of the review, with out-of-scope portions de-emphasized in white.</p>
 <p>There is not much information out there about threats facing Chrome&#39;s existing
@@ -499,7 +499,7 @@ similar manner.</p>
 <strong>WGSL</strong>. <strong>Tint</strong> compiles <strong>WGSL</strong> into a platform dependent intermediate
 language - <strong>SPIR-V</strong>, <strong>HLSL</strong>, <strong>MSL</strong> -  that the underlying Usermode
 Graphics Drivers will further compile.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/dawn_wgsl_pipeline.png" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/dawn_wgsl_pipeline.png" alt="image"></p>
 <p>With the addition of <strong>WebGPU</strong>, Chrome now has two front-end compilers in the
 GPU process that can compile some high-level language into <strong>SPIR-V</strong>: the
 <strong>ANGLE Translator</strong> for WebGL shaders (not discussed here) and <strong>Tint</strong> for
@@ -507,7 +507,7 @@ WebGPU shaders. Interestingly, the <strong>SPIR-V</strong> emitted by <strong>Ti
 same subset of <strong>SPIR-V</strong> emitted by the <strong>ANGLE Translator</strong>. However, both
 compilers end up passing their emitted <strong>SPIR-V</strong> to the same underlying
 <strong>Usermode Graphics Drivers</strong> for further backend compilation.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--ct2njhd1x14.png" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--ct2njhd1x14.png" alt="image"></p>
 <h3 id="integer-overflow-in-swiftshader-jit-leads-to-out-of-bounds-readwrite">Integer Overflow in SwiftShader JIT leads to out-of-bounds read/write</h3>
 <blockquote>
 <p><em><strong>tl;dr - Systemic Concerns</strong></em></p>
@@ -576,7 +576,7 @@ allocation will lead to out-of-bounds reads/writes.</p>
 <p>As we mentioned earlier, both <strong>WebGPU</strong> and <strong>WebGL</strong> shaders are compiled to
 <strong>SPIR-V</strong> in <strong>Vulkan</strong> environments. SwiftShader implements the <strong>Vulkan</strong>
 Graphics API.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--utbsiqyq43e.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--utbsiqyq43e.jpg" alt="image"></p>
 <p>We found a bug, but there are many many layers to dig through to figure out if
 the bug is reachable. The <strong>ANGLE Translator</strong> will emit an
 <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/angle/src/common/spirv/spirv_instruction_builder_autogen.cpp;l=567;drc=bec40d7684688eaf8a5ca4747341dcea4243c996"><code>spv::Op::OpVariable</code></a>
@@ -585,16 +585,16 @@ WebGL SL it is compiling. <strong>Tint</strong> will also emit an
 <a href="https://source.chromium.org/chromium/chromium/src/+/main:third_party/dawn/src/tint/writer/spirv/builder.cc;l=835;drc=9543f74739118a853dd5e5a46297f5442c3352f8"><code>spv::Op::OpVariable</code></a>
 <strong>SPIR-V</strong> instruction whenever it encounters a variable declaration within the
 WGSL it is compiling.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--hummy4droud.png" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--hummy4droud.png" alt="image"></p>
 <p>When the <strong>SwiftShader SPIR-V compiler</strong> encounters the
 <a href="https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/swiftshader/src/Pipeline/SpirvShader.cpp;l=1768;drc=004227a1fc7355a9080146c2621d072bd2327701"><code>spv::Op::OpVariable</code></a>
 instruction it will generate a Variable IR.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--xef89t24uli.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--xef89t24uli.jpg" alt="image"></p>
 <p>Whenever this Variable IR is being converted from Reactor IR into Subzero IR it
 calls into
 <a href="https://source.chromium.org/chromium/chromium/src/+/refs/heads/main:third_party/swiftshader/src/Reactor/Reactor.cpp;l=106;drc=004227a1fc7355a9080146c2621d072bd2327701"><code>allocateStackVariable()</code></a>
 which emits a SubZero InstAlloca instruction.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--i5ooq44jbrq.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--i5ooq44jbrq.jpg" alt="image"></p>
 <pre data-language="cpp">Value *Nucleus::allocateStackVariable(Type *t, int arraySize)
 {
 	Ice::Type type = T(t);
@@ -612,7 +612,7 @@ which emits a SubZero InstAlloca instruction.</p>
 }</pre>
 <p><code>allocateStackVariable()</code> generates the <strong>SubZero</strong> <code>InstAlloca</code> IR instruction
 that <code>sortAndCombineAllocas</code> incorrectly optimizes.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/research/graphics/resources/chromeoffensiv--86bdvm4zaei.jpg" alt="image"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/research/graphics/resources/chromeoffensiv--86bdvm4zaei.jpg" alt="image"></p>
 <p>When the assembly emitted by <strong>SubZero</strong> is executed on the CPU and the
 undersized allocation is read/written to, it leads to out-of-bounds memory
 accesses.</p>

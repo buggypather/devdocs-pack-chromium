@@ -99,15 +99,15 @@ example I picked the latest:
 <a href="https://ci.chromium.org/ui/p/chrome/builders/ci/android-arm64-pgo/12831/overview">https://ci.chromium.org/ui/p/chrome/builders/ci/android-arm64-pgo/12831/overview</a></p>
 <p><strong>Step 2</strong>: grab its chromium commit hash, your local CL should be rebased on
 it:
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/pgo/images/find_commit_hash.png" alt="Chromium CI build details showing the commit hash"></p>
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/pgo/images/find_commit_hash.png" alt="Chromium CI build details showing the commit hash"></p>
 <p>In this case it is <code>a26eb2940c446b477ffa908081083aefad361ead</code></p>
 <p><strong>Step 3</strong>: upload your change to gerrit and trigger the <code>android-arm64-pgo</code>
 trybot:
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/pgo/images/add_pgo_trybot.png" alt="Gerrit UI for adding the android-arm64-pgo trybot"></p>
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/pgo/images/add_pgo_trybot.png" alt="Gerrit UI for adding the android-arm64-pgo trybot"></p>
 <p>See <a href="https://crrev.com/c/6979965?tab=checks">https://crrev.com/c/6979965?tab=checks</a></p>
 <p><strong>Step 4</strong>: find a successful run of <code>android-arm64-pgo</code> (you may need to do
 this several times), and copy the gsutil artifact name:
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/pgo/images/find_artifact_name.png" alt="Chromium CI build steps showing the gsutil artifact name"></p>
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/pgo/images/find_artifact_name.png" alt="Chromium CI build steps showing the gsutil artifact name"></p>
 <p>For this one I got:
 <code>chrome-android64-main-1759253260-88cce76848485c7544e4c3c3318a2d5ca1e4c3ec-2d4ffc91620fc1cae131415e81c8fed36dfabfaa.profdata</code>
 (note that the second hash is not <code>a26eb2940c446b477ffa908081083aefad361ead</code>
@@ -124,7 +124,7 @@ them, in this case, both based on top of
 profiles <code>chromium-optimization-profiles</code>)</p>
 <p><strong>Step 6</strong>: Create a pinpoint job comparing the two above CLs:
 <a href="https://pinpoint-dot-chromeperf.appspot.com/">https://pinpoint-dot-chromeperf.appspot.com/</a> Example:
-<img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/pgo/images/example_pinpoint_settings.png" alt="Example Pinpoint job settings for a PGO experiment"></p>
+<img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/pgo/images/example_pinpoint_settings.png" alt="Example Pinpoint job settings for a PGO experiment"></p>
 <p>This used <code>android-pixel6-perf-pgo</code> and 150 attempts to make results less noisy.</p>
 <p>This is the actual pinpoint run that worked (some tweaks were needed):
 <a href="https://pinpoint-dot-chromeperf.appspot.com/job/118daa5a510000">https://pinpoint-dot-chromeperf.appspot.com/job/118daa5a510000</a></p>

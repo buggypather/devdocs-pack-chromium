@@ -25,7 +25,7 @@ attached devices)</li>
 <p>We use the phrase &quot;raw Swarming task&quot; to refer to any instance of a Swarming
 task used without a layer of abstraction around it. Such raw tasks will be
 identified in this doc&#39;s diagrams by the following component:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/infra/images/raw_task.png" alt="raw_task"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/infra/images/raw_task.png" alt="raw_task"></p>
 <h3 id="builds">Builds</h3>
 <p>Buildbucket builds (or just &quot;builds&quot; as they are often referred to) are a
 level removed from Swarming tasks, and have many additional features that make
@@ -39,10 +39,10 @@ is backed by a Swarming task</p>
 as a Swarming task whose command is its &quot;recipe&quot;.</p>
 <p>Buildbucket builds will be identified in this doc&#39;s diagrams by the following
 component:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/infra/images/build.png" alt="build"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/infra/images/build.png" alt="build"></p>
 <p>A recipe&#39;s steps within a build will be identified in this doc&#39;s diagrams by the
 following component:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/infra/images/step.png" alt="step"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/infra/images/step.png" alt="step"></p>
 <h2 id="builder-patterns">Builder patterns</h2>
 <p>How one build or task triggers another is where much of the variance in builder
 patterns emerges. The following are the most commonly-used builder patterns.</p>
@@ -55,7 +55,7 @@ steps #3-4 compile the code, and steps #5-6 test the code. Every step here
 runs on the same machine running the build, even the tests. So we refer to
 tests running in this patter as &quot;local tests&quot;. (Note that even the most basic
 build will have many more steps. They&#39;re elided here for simplicity.)</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/infra/images/all_in_one_local.png" alt="all_in_one_local"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/infra/images/all_in_one_local.png" alt="all_in_one_local"></p>
 <p>Adding new &quot;local tests&quot; onto Chromium builders is strongly discouraged these
 days unless absolutely necessary, as they can inflate build cycle time. See the
 following pattern for the alternative to local tests.</p>
@@ -73,7 +73,7 @@ simply sleeps and waits for them to complete, after which it collates their
 results. Given that swarmed tests are <strong>much</strong> faster than local tests due to
 the parallelization, you&#39;ll find many more builders using this pattern than the
 prev pattern.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/infra/images/all_in_one_remote.png" alt="all_in_one_remote"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/infra/images/all_in_one_remote.png" alt="all_in_one_remote"></p>
 <p>Since this pattern experiences significant speed-up from its test
 parallelization while still being somewhat simple, it&#39;s the suggested pattern
 for most new builders. But if the requirements for a builder warrant it, there
@@ -101,7 +101,7 @@ since the second builder computationaly does very little (i.e. mostly just
 Swarming RPCs &amp; the busy-wait step), we can run it on very <em>under</em>-provisioned
 machines with just 2 or 4 cores. This pattern gives us the speed-up of running
 all tests remotely in parallel, while avoiding wasting machine resources.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/infra/images/parent_child.png" alt="parent_child"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/infra/images/parent_child.png" alt="parent_child"></p>
 <p>The parent builder isn&#39;t restricted to just triggering a single child. If the
 parent builder compiles binaries applicable for different platforms, it can
 trigger one child builder for each of those platforms. For example, the
@@ -111,7 +111,7 @@ for testing, one for each Mac version:
 <a href="https://ci.chromium.org/ui/p/chromium/builders/ci/Mac13%20Tests">Mac13 Tests</a>,
 and
 <a href="https://ci.chromium.org/ui/p/chromium/builders/ci/mac14-tests">mac14-tests</a>.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/infra/images/parent_childs.png" alt="parent_childs"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/infra/images/parent_childs.png" alt="parent_childs"></p>
 <p>In this model, the builder that first compiles is often referred to as the
 <strong>parent</strong> , <strong>parent builder</strong>, or (confusingly) just the <strong>builder</strong>. The
 builder that then gets triggered and runs the tests is often referred to as
@@ -141,7 +141,7 @@ lightweight, which lets it run on 2 or 4 core machines. And similar to the
 builder-tester split, we&#39;re able to provision the compilator machines with
 extra machine resources since once it&#39;s done compiling + running the static
 analysis tests, it can immediately move on to pick up a new build.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/infra/images/orchestrator_compilator.png" alt="orchestrator_compilator"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/infra/images/orchestrator_compilator.png" alt="orchestrator_compilator"></p>
 <div class="_attribution">
   <p class="_attribution-p">
     &copy; The Chromium Authors<br>Licensed under the BSD 3-Clause License.<br>

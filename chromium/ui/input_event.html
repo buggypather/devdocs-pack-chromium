@@ -3,7 +3,7 @@
 <p>The goal of this document is to improve the understanding of the input event
 system in the desktop Chrome UI.</p>
 <h2 id="overview">Overview</h2>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/high-level-input-pipeline.png" alt="High-level overview of Chrome input pipeline"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/ui/input_event/images/high-level-input-pipeline.png" alt="High-level overview of Chrome input pipeline"></p>
 <p>The Chrome UI system handles input events (typically key downs or mouse clicks)
 in three stages:</p>
 <ul>
@@ -20,14 +20,14 @@ focused textfield.</li>
 <h3 id="aura">Aura</h3>
 <p>Aura is the window abstraction layer used on Windows, Linux, and ChromeOS. An
 event goes through several phases in Aura and is eventually passed into views.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/aura-event-flow.png" alt="Typical event routing in Aura"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/ui/input_event/images/aura-event-flow.png" alt="Typical event routing in Aura"></p>
 <p><strong>Phase 0</strong> - DesktopWindowTreeHost</p>
 <p>After the user presses a key or clicks the mouse, the OS generates a low-level
 input event and pumps it into a message loop. After some low-level os-specific
 plumbing, the event is then delivered to a DesktopWindowTreeHost that hosts a
 native window and handles events in DesktopWindowTreeHost::DispatchEvent().</p>
 <p><strong>Phase 1</strong> - EventProcessor pre-dispatch</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/event-processor.png" alt="Event routing in EventProcessor"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/ui/input_event/images/event-processor.png" alt="Event routing in EventProcessor"></p>
 <p>Next, the event is passed to a WindowEventDispatcher which is an EventProcessor
 owned by the DesktopWindowTreeHost. On ChromeOS, some ui::EventRewriters may
 rewrite the event before passing.</p>
@@ -134,7 +134,7 @@ it’s NSWindow. This view is largely responsible for adapting native NSEvents a
 funneling them through to the Views framework.</p>
 <p>The below two examples demonstrate two key event flows through the Cocoa layers
 of Chrome through to the Views framework.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/mac-event-flow.png" alt="Event routing on Mac"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/ui/input_event/images/mac-event-flow.png" alt="Event routing on Mac"></p>
 <h4 id="right-mouse-down-event-clicking-a-button-in-the-browser-window">Right mouse down event (clicking a button in the browser window)</h4>
 <p>The below diagram demonstrates points of interest during dispatch of a right
 mouse down event on a Chrome browser window button.</p>
@@ -228,7 +228,7 @@ Chrome’s (mostly) platform-independent UI framework that orchestrates UI
 elements in a tree structure. Every node in the views tree is a
 <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/view.h;bpv=1;bpt=1">View</a>,
 which is a UI element similar to an HTML DOM element.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/views-tree.png" alt="A simplified diagram of a views tree"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/ui/input_event/images/views-tree.png" alt="A simplified diagram of a views tree"></p>
 <p>A
 <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/widget.h;l=93;bpv=1;bpt=1?q=Widget&amp;sq=&amp;ss=chromium%2Fchromium%2Fsrc">Widget</a>
 hosts the views tree and is a window-like surface that draws its content onto a
@@ -238,7 +238,7 @@ most one focused view which is tracked by a FocusManager owned by the widget.</p
 <a href="https://source.chromium.org/chromium/chromium/src/+/main:ui/views/widget/root_view.h;drc=62bf27aca5418212ceadd8daf9188d2aa437bfcc;l=52">RootView</a>,
 which is a special subclass of View that helps bridging between children views
 and the wrapping Widget.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/ui/input_event/images/views-event-flow.png" alt="Event routing in views"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/ui/input_event/images/views-event-flow.png" alt="Event routing in views"></p>
 <h3 id="character-key-event">Character Key Event</h3>
 <p>Suppose the omnibox is focused and the user presses down a key, say character
 ‘a’. How is this key routed through the system and delivered to the omnibox? We

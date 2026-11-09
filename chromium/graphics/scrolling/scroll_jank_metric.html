@@ -2,7 +2,7 @@
 <p>Chromium uses a scroll jank metric on Android that tracks the percentage of dropped frames in a given window of 64 frames, and uses this metric to benchmark the end user&#39;s scrolling experience.</p>
 <h2 id="how-it-works">How it works</h2>
 <p>Chromium assumes that if scrolling input events arrive in sequence during a scroll, then frames should be produced in sequence, without any drops or delays.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/chromium_dropped_frame.png" alt="Chromium Dropped Frame"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/chromium_dropped_frame.png" alt="Chromium Dropped Frame"></p>
 <h1 id="how-is-it-decided-that-scrolling-events-arrived-in-sequence">How is it decided that scrolling events arrived in sequence</h1>
 <p>If the time difference between two consecutive scrolling input events (i.e., the time between two consecutive screen touches during a scroll gesture) is less than the device&#39;s refresh rate interval (vsync interval), then it is expected that these two input events will generate two distinct frames, unless those inputs are coalesced for arriving too close within a single Vsync interval (input sampling rate higher than refresh rate).</p>
 <pre>scrolling_input_event_timestamp[i] - scrolling_input_event_timestamp[i - 1] &lt; vsync_interval</pre>

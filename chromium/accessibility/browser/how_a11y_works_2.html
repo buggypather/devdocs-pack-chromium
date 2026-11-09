@@ -27,7 +27,7 @@ directly to the screen - because it&#39;s sandboxed - it either sends pixels (in
 software rendering mode) or sends the drawing commands to Chromium&#39;s separate
 gpu process.</p>
 <p>A simplified diagram of Chromium&#39;s multi-process architecture is shown here:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/multi_process_browser.png" alt="Multi process system diagram showing a web page renderer sitting inside a
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/multi_process_browser.png" alt="Multi process system diagram showing a web page renderer sitting inside a
 sandboxed render process; it receives user input events from a browser window
 in the browser process and sends pixels to that browser window; the browser
 window communicates with the operating system."></p>
@@ -46,7 +46,7 @@ web page renderers might all be in one process, they might all be in
 different processes, or they might be split across processes in any
 arbitrary way, as shown in this diagram:</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/multi_process_multiple_tabs.png" alt="Diagram showing two browser windows with two tabs each, communicating
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/multi_process_multiple_tabs.png" alt="Diagram showing two browser windows with two tabs each, communicating
 with four web page renderers that are split across three render processes,
 illustrating what the system diagram might look like when there are
 multiple windows and tabs open, and showing that there&#39;s no correspondence
@@ -84,7 +84,7 @@ Another possible approach is that each tab could be in its own process,
 but each tab still communicates directly with the operating system.
 In this model, the operating system can send input events directly to
 the active tab, and the tab can paint its own contents directly.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/other_multi_process_browser.png" alt="System diagram showing how some other browsers use multiple processes.
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/other_multi_process_browser.png" alt="System diagram showing how some other browsers use multiple processes.
 In this diagram, a browser process communicates with two tab processes
 that each own both the web rendering but also the UI for their tabs;
 these tabs also communicate directly with the operating system."></p>
@@ -125,7 +125,7 @@ each one corresponding to a node in the accessibility tree in the render
 process. Upon receiving a call to getState, the browser process would make a
 blocking IPC to the render process, get the state of that particular node, then
 reply to the accessibility API call with that result.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/proxy_approach.png" alt="In this diagram, when the operating system wants to call an accessibility
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/proxy_approach.png" alt="In this diagram, when the operating system wants to call an accessibility
 API, it&#39;s calling it on a node in the Proxy accessibility tree in the
 Browser process. The diagram shows how this node makes a blocking IPC call
 to a corresponding node in the accessibility tree in the Render process,
@@ -156,7 +156,7 @@ handled immediately out of the cache, never blocking on a render process.
 Separately, renderers send atomic updates to the browser process to keep
 the accessibility tree up-to-date.</p>
 <p>Here&#39;s a diagram of this approach:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/caching_approach.png" alt="In this diagram, when the operating system calls an accessibility API in
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/caching_approach.png" alt="In this diagram, when the operating system calls an accessibility API in
 the browser process, the API is satisfied directly from the cached
 accessibility tree. Separately, atomic updates flow from the accessibility
 tree in the render process to the cache in the browser process."></p>
@@ -448,7 +448,7 @@ specific tree. We use an implementation BlinkAXTreeSource that maps all
 of the tree-walking and serialization calls into calls to Blink&#39;s
 AXObject class.</p>
 <p>This figure shows the overall system diagram covered so far:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/accessibility/browser/figures/multi_process_ax.png" alt="Inside Blink, which is inside the Render process, a Node and CSS both
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/accessibility/browser/figures/multi_process_ax.png" alt="Inside Blink, which is inside the Render process, a Node and CSS both
 influence a LayoutObject; the Node and the LayoutObject both influence the
 AXObject. The AXObject communicates with RenderAccessibilityImpl, which is
 outside of Blink but in the Render process. RenderAccessibilityImpl uses

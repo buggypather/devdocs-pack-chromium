@@ -29,14 +29,14 @@ load() on the element when responding to a user gesture.</p>
 <h2 id="autoplay-flowchart">Autoplay flowchart</h2>
 <p>The treatments of autoplay by different methods are different. For autoplay by
 attribute, it is:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/media/autoplay_by_attribute.png" alt="Autoplay by attribute"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/media/autoplay_by_attribute.png" alt="Autoplay by attribute"></p>
 <p>This means if autoplay is initiated by attribute, it enters the autoplaying
 phase, we play it as long as the video is visible. When the page explicitly
 calls <code>play()</code>, <code>pause()</code>, we leave the autoplaying phase. When the page tries
 to unmute the video, we check the gesture lock and pause the video if it is
 still <code>true</code>.</p>
 <p>For autoplay by <code>play()</code> method, it is:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/media/autoplay_by_play_method.png" alt="Autoplay by play() method"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/media/autoplay_by_play_method.png" alt="Autoplay by play() method"></p>
 <p>This means if autoplay is initiated by <code>play()</code> method, we continue playing the
 video as normal <code>play()</code>. However if the page tries to unmute the video, we check
 the gesture lock and pause the video if it is still <code>true</code>.</p>

@@ -33,7 +33,7 @@ specific CLs in Gerrit. For the latter, refer to
 <li>The second part talks about how to generate code coverage locally for Clang-compiled languages like C++. Refer to <a href="https://chromium.googlesource.com/chromium/src/+/HEAD/build/android/docs/coverage.md">android code coverage instructions</a> for instructions for java code.</li>
 </ul>
 <h2 id="coverage-infrastructure">Coverage Infrastructure</h2>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_infra_diagram.png" alt="coverage infra diagram"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_infra_diagram.png" alt="coverage infra diagram"></p>
 <p>There are 3 layers in the system:</p>
 <h3 id="coverage-builders">Coverage Builders</h3>
 <p>The first layer is the LUCI builders that</p>
@@ -67,10 +67,10 @@ down to the single line of code level of detail.</p>
 <p>Refer to the following screenshots:</p>
 <h5 id="directory-view">Directory View</h5>
 <p>See coverage breakdown by directories (default landing page).</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_directory_view.png" alt="coverage dashboard directory view"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_dashboard_directory_view.png" alt="coverage dashboard directory view"></p>
 <h5 id="component-view">Component View</h5>
 <p>Use the view dropdown menu to switch between directory and component.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_component_view.png" alt="coverage dashboard component view"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_dashboard_component_view.png" alt="coverage dashboard component view"></p>
 <h5 id="source-view">Source View</h5>
 <p>Click on a particular source file in one of the views above to see line-by-line
 coverage breakdown, and it&#39;s useful to identify:</p>
@@ -79,15 +79,15 @@ coverage breakdown, and it&#39;s useful to identify:</p>
 <li>Potentially dead code. See <a href="https://chromium.googlesource.com/chromium/src/+/ac6e09311fcc7e734be2ef21a9ccbbe04c4c4706">dead code example</a>.</li>
 <li>Hot spots in your code.</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_file_view.png" alt="coverage dashboard file view"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_dashboard_file_view.png" alt="coverage dashboard file view"></p>
 <h5 id="project-view">Project View</h5>
 <p>Click on &quot;Previous Reports&quot; to check out the coverage history of the project.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_link_to_previous_reports.png" alt="coverage dashboard link to previous reports"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_dashboard_link_to_previous_reports.png" alt="coverage dashboard link to previous reports"></p>
 <p>List of historical coverage reports are in reverse chronological order.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_dashboard_previous_reports.png" alt="coverage dashboard previous reports"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_dashboard_previous_reports.png" alt="coverage dashboard previous reports"></p>
 <h4 id="gerrit-coverage-view">Gerrit Coverage View</h4>
 <p>The other client supported at the moment is the gerrit plugin for code coverage.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_annotations.png" alt="gerrit coverage view"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_annotations.png" alt="gerrit coverage view"></p>
 <p>See <a href="code_coverage_in_gerrit">this doc</a> for information about the feature
 that allows gerrit to display code coverage information generated for a given CL
 by CQ bot. Or see this
@@ -121,7 +121,7 @@ views in the <a href="#coverage-dashboard">coverage dashboard</a> above.</p>
 unit test targets in Chromium repo as an example: <code>crypto_unittests</code> and
 <code>url_unittests</code>, and the following diagram shows a step-by-step overview of the
 process.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/testing/images/code_coverage_workflow.png" alt="code coverage generation workflow"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/testing/images/code_coverage_workflow.png" alt="code coverage generation workflow"></p>
 <h3 id="step-0-download-tooling">Step 0 Download Tooling</h3>
 <p>Generating code coverage reports requires llvm-profdata and llvm-cov tools.
 You can get them by adding <code>&quot;checkout_clang_coverage_tools&quot;: True,</code> to

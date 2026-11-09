@@ -20,11 +20,11 @@ new instance of chrome in a test-only temporary profile (using
 <li>Open up chrome:tracing in a new tab (or in a new window).</li>
 <li>Click ‘Record’:</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/click-record-button.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/click-record-button.png" alt=""></p>
 <ul>
 <li>Select ‘Rendering’ in the dialog, and click ‘Record’:</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/click-record.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/click-record.png" alt=""></p>
 <ul>
 <li>Switch to the tab with the page in question.</li>
 <li>Perform the action, e.g. scroll, or allow the animation to happen. Do this a
@@ -36,12 +36,12 @@ trace-buffer can fill up pretty quickly.</li>
 <li>Once you have noticed a jank, you can switch back to the chrome:tracing
 page, and click on ‘Stop’.</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/click-stop.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/click-stop.png" alt=""></p>
 <ul>
 <li>Click ‘Save’ to save the trace. This step is optional, but can be useful
 when sharing the trace with other developers, or attaching to a crbug, etc..</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/click-save.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/click-save.png" alt=""></p>
 <h2 id="quick-tips-for-the-trace-viewer">Quick tips for the trace-viewer</h2>
 <p>This document does not explain all the ways of navigating the trace-viewer, but
 some quick tips:</p>
@@ -54,18 +54,18 @@ track are: the browser process, the gpu process, and the renderer process
 hosting the page you are investigating. You can click on ‘Processes’ to
 filter out the processes that are not interesting/relevant.</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/click-processes.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/click-processes.png" alt=""></p>
 <ul>
 <li>You can also click on the close-buttons for each process separately to hide
 them. You can always click on ‘Processes’ any time to show the process again
 if you want.</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/click-process-close.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/click-process-close.png" alt=""></p>
 <ul>
 <li>You can turn on ‘flow’ events, which are sometimes very useful (M79 or
 earlier; see more below).</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/click-flow-check.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/click-flow-check.png" alt=""></p>
 <ul>
 <li>In some cases, there can be too many types of flow events. In newer versions
 of chrome (M80+), there is a ‘Flow events’ button you can click to select
@@ -73,7 +73,7 @@ which flow events you are interested in. For janks in animations, ‘viz’
 flow-events would be useful. For janks in touch/wheel scrolls, the ‘viz’ and
 ‘input’ flow-events would be useful.</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/click-flow-events.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/click-flow-events.png" alt=""></p>
 <h2 id="find-the-jank">Find the Jank</h2>
 <p>We have instrumented the code to record <code>FrameSequenceTracker</code> trace-events for
 scrolling, or animations. There can be many <code>FrameSequenceTracker</code> events, but
@@ -83,7 +83,7 @@ MainThreadAnimation, CompositorAnimation, RAF etc.)</p>
 corresponding to the janky scroll/animation. Each such event reports the number
 of frames expected and the number of frames actually produced that became
 visible.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/frame-sequence-tracker.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/frame-sequence-tracker.png" alt=""></p>
 <p>From these numbers, you can determine how many frames were dropped during the
 sequence. For example, in the above screenshot, the scroll lasted for almost 1
 second (59 frames), but only 54 frames were produced. This means there were 5
@@ -91,28 +91,28 @@ dropped frames during this scroll.</p>
 <p>The next step is to figure out when these frames were dropped during the
 sequence. To find this, look for the <code>FramePresented</code> sub-events for the
 <code>FrameSequenceTracker</code> event.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/frame-presented-traces.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/frame-presented-traces.png" alt=""></p>
 <p>In the above screenshot, frames were presented at <code>A</code>, <code>B</code>, and <code>C</code>. Within this
 duration, it appears a frame was presented every vsync. So there were no dropped
 frames here. Contrast this with the following screenshot, where frames were
 presented at <code>A</code>, <code>B</code>, <code>C</code>, <code>D</code>, <code>E</code>, <code>F</code> etc. The duration between <code>D</code> and <code>E</code>
 is roughly double the duration between other <code>FramePresented</code> events as a result
 of a dropped frame.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/frame-presented-dropped.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/frame-presented-dropped.png" alt=""></p>
 <p>Now would be a good time to turn on flow events for <code>viz</code>. You can track the
 flow events to see what may have caused the frame to be dropped. For example,
 see the following screenshot:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/frame-submitted-not-submitted.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/frame-submitted-not-submitted.png" alt=""></p>
 <p>A begin-frame is received at ~5828ms, and if we follow the flow-arrows, we see
 that a corresponding compositor-frame is submitted at ~5837ms. However, for the
 next begin-frame received at ~5842ms, we see that there is no outgoing flow
 from there. Looking more closely at these trace-events:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/frame-not-submitted-reason.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/frame-not-submitted-reason.png" alt=""></p>
 <p>We see that the frame was deliberately skipped over to recover latency (notice
 the <code>SkipBeginImplFrameToReduceLatency</code> event). At this point, we would want to
 look at what else is happening around that time. You can use the
 timing-selection in the trace-viewer to help with this:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/timing-selection.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/timing-selection.png" alt=""></p>
 <p>The interesting things to look for are usually the <code>Compositor</code> thread and
 <code>CrRendererMain</code> threads under the same process, or the <code>CrGpuMain</code> thread and
 <code>VizCompositorThread</code> threads under the GPU Process. The
@@ -120,11 +120,11 @@ timing-selection in the trace-viewer to help with this:</p>
 good idea of what is happening in the GPU process. Similarly, the
 <code>PipelineReporter</code> events in the renderer process also give a good overview of
 how each begin-frame message is handled.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/show-gpu-process-tracks.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/show-gpu-process-tracks.png" alt=""></p>
 <h2 id="examples">Examples</h2>
 <p>Let’s look at some examples of janks:</p>
 <h3 id="example-1-jank-caused-by-main-thread">Example 1: jank caused by main-thread</h3>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/missed-frame-main-thread-timer.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/missed-frame-main-thread-timer.png" alt=""></p>
 <p>In the above screenshot: the <code>FramePresented</code> event is ~62ms long, i.e.
 there were 3 dropped frames here. Looking closely, we can see that the
 compositor thread receives all the begin-frame messages, including for the
@@ -134,7 +134,7 @@ can assume there are no pending updates for the compositor-thread to handle
 (i.e. there are no compositor-driven animations/scrolls in-progress at the
 moment), so the compositor must wait on the main-thread before it is able to
 submit a new frame. Following is the same screenshot with some annotations:</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/missed-frame-main-thread-timer-annotation.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/missed-frame-main-thread-timer-annotation.png" alt=""></p>
 <p>The begin-frames are received in <code>A</code>, <code>B</code>, <code>C</code>. The compositor is unable to
 produce any updates for <code>A</code> and <code>B</code> because the main-thread is blocked running
 some javascript code. Once the JS processing ends, the begin-frame received in
@@ -149,7 +149,7 @@ dropped frames (no frames produced for <code>A</code> and <code>B</code>, and up
 delayed and presented to the user with <code>F</code>) caused by the long-runner javascript
 in the main-thread.</p>
 <h3 id="example-2-jank-caused-by-gpu-process">Example 2: jank caused by gpu-process</h3>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/speed/debug-janks-resources/jank-because-gpu-process.png" alt=""></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/speed/debug-janks-resources/jank-because-gpu-process.png" alt=""></p>
 <p>In the above screenshot (from a different trace), you can see a begin-frame sent
 from the display-compositor (<code>VizCompositorThread</code>) to the renderer in <code>A</code>, the
 renderer receives the begin-frame in <code>B</code>, and submits a CompositorFrame in <code>C</code>,

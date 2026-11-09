@@ -18,7 +18,7 @@ In general, the browser uses the single-threaded version as its main thread is c
 The one exception (a third mode that is only used in one place) is Blink web tests and sim tests, which do not (always) use a scheduler and tell cc when to composite synchronously, via LayerTreeHost::CompositeForTest.
 This is for historical reasons, and also to have more control during testing.</p>
 <h2 id="content-data-flow-overview">Content Data Flow Overview</h2>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/how_cc_works-data_flow.png" alt="data flow diagram"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/how_cc_works-data_flow.png" alt="data flow diagram"></p>
 <p>The main interface to cc by embedders is a LayerTreeHost (created with various LayerTreeSettings) and a <a href="#trees-commit-activation">tree</a> of <a href="#layers">Layers</a>.
 A Layer is a rectangle of content, with various properties describing how that content should appear on screen.
 cc is responsible for turning a painted representation of that content (e.g. a PaintRecord) into a rasterized representation (a software bitmap or a gpu texture) and figuring out where that rectangle appears on screen.</p>
@@ -42,7 +42,7 @@ This input flow follows the opposite path of the content data flow in the sectio
 <h2 id="commit-flow">Commit Flow</h2>
 <p>Commit is a method of getting data atomically from the main thread to the compositor thread.
 (Even when running in single threaded mode, this operation occurs to move data into the right data structures.) Rather than sending an ipc, commit is done by blocking the main thread and copying data over.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/how_cc_works-commit_flow.png" alt="commit flow diagram"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/how_cc_works-commit_flow.png" alt="commit flow diagram"></p>
 <p>The main thread can request a commit in several ways.
 Most webpages request one via requestAnimationFrame, which eventually calls SetNeedsAnimate on LayerTreeHost.
 Additionally, modifying any of cc’s inputs (e.g. a layer property, such as its transform or a change to the layer’s content), will call either SetNeedsAnimate, SetNeedsUpdate, or SetNeedsCommit on LayerTreeHost.
@@ -252,7 +252,7 @@ This produces a set of quads that fill (without overlapping or intersecting) the
 <p>There are various types of quads that roughly correspond to different layer types (ContentDrawQuad, TextureDrawQuad, SolidColorDrawQuad).
 Because layers that produce many quads (i.e. PictureLayerImpl) produce many quads with the same info, SharedQuadState is an optimization that collects this shared information so that each individual quad is slimmer.
 RenderSurfaceImpls are 1:1 with render passes and exist mostly to provide the same AppendQuads logic that Layers do for their quads, in that RenderSurfaceImpl produces RenderPassDrawQuads.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/how_cc_works-compositor_frame.png" alt="compositor frame diagram"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/how_cc_works-compositor_frame.png" alt="compositor frame diagram"></p>
 <p>A render pass exists to support composited effects (see: effect tree).
 These can be cases where compositing is required to perform an effect.
 It can also be cases where doing compositing first can make the effect easier to implement (because then it applies to a single render pass texture, instead of an arbitrary set of quads produced by some subtree of layers).

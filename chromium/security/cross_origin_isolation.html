@@ -155,7 +155,7 @@ have at most the kIsolated WEIL.</p>
 <p>This means that WEIL and WEII will differ in workers or iframes if their
 process is locked to a different origin than the WEII, and will differ in
 frames if the “cross-origin-isolated” feature was not delegated to the frame.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/security/cross_origin_isolation_levels_diagram.png" alt="Diagram of WEII vs WEIL"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/security/cross_origin_isolation_levels_diagram.png" alt="Diagram of WEII vs WEIL"></p>
 <!-- Source: https://docs.google.com/drawings/d/1tCeworrk7qYkbyAbjeWVgmBrqe5XOenxJbLlNmm4lN8/edit --><h2 id="guarding-apis-on-isolation-level">Guarding APIs on Isolation Level</h2>
 <p>API access should be guarded on RenderFrameHost::GetWebExposedIsolationLevel(),
 which takes permissions policy into account, when a RenderFrameHost is

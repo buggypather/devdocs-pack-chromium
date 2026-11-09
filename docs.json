@@ -5,10 +5,10 @@
       "name": "Chromium",
       "slug": "chromium",
       "type": "simple",
-      "source_commit": "6d8da6cca732bc79b00d9977c04a860339dad8ff",
-      "mtime": 1793979543,
-      "db_size": 7811368,
-      "db_hash": "0fda2fb0f95d8795",
+      "source_commit": "965715222a942389bd39b8eb6adb5c6bfd5a8a72",
+      "mtime": 1794241055,
+      "db_size": 7811493,
+      "db_hash": "2d7c4972ff5d15b3",
       "links": {
         "home": "https://www.chromium.org/developers/",
         "code": "https://chromium.googlesource.com/chromium/src/+/main/docs/"

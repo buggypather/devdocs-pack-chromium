@@ -1,6 +1,6 @@
 <h1>Life of a frame</h1>
 <p><a href="https://docs.google.com/document/d/1y6ZlGc2uH4ZBIrpEVM_wmfHgyvrcQG3LPRzG32FuVkQ/edit?usp=sharing">Original google doc</a></p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/Life_of_frame.png" alt="flow diagram"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/Life_of_frame.png" alt="flow diagram"></p>
 <h2 id="steps">Steps</h2>
 <h3 id="1-beginframe"><code>[1]</code> BeginFrame</h3>
 <p>BeginImplFrame starts a compositor frame (with each vsync) that will wait up until a deadline for a BeginMainFrame plus activation to complete before it times out and draws any asynchronous animation and scroll/pinch updates.</p>
@@ -48,9 +48,9 @@
 <li>SubmitCompositorFrameToPresentationCompositorFrame</li>
 </ul>
 <p>Image below shows how each segment of the Pipeline is tracked in PipelineReporter trace events.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/Life_of_frame_segmented.png" alt="segmented flow diagram"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/Life_of_frame_segmented.png" alt="segmented flow diagram"></p>
 <p>In the traces these pipeline reporters would look like</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/PipelineReporter.png" alt="PipelineReporter trace event"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/PipelineReporter.png" alt="PipelineReporter trace event"></p>
 <p>In which the length of each segment demonstrates the latency of that stage.
 Also SubmitCompositorFrameToPresentationCompositorFrame would have its own, which are:</p>
 <ul>
@@ -63,15 +63,15 @@ Also SubmitCompositorFrameToPresentationCompositorFrame would have its own, whic
 <h2 id="overlapping-pipeline-reporter-events">Overlapping pipeline reporter events</h2>
 <p>One advantage of having multiple processes handling the frame is that multiple frames can be worked on simultaneously. This might create some overlapping pipeline reporter events. In this section we would explore a few examples of these cases.</p>
 <h3 id="example-1">Example 1:</h3>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/PipelineReporter_example_1.png" alt="PipelineReporter trace event example_1"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/PipelineReporter_example_1.png" alt="PipelineReporter trace event example_1"></p>
 <p>In this example the PipelineReporter(PR) on the bottom started earlier and while it was in the <em>EndActivateToSubmitCompositorFrame</em>, vsync for the next frame is reached. In this stage, the compositor thread is already done with activation and is waiting for the deadline to submit the compositor frame, so it can start working on the second frame (top PR).
 When we reach the deadline for submission of frame#1, the frame#2 is in the stage of <em>SendBeginMainFrameToCommit</em> (on the main thread). Frame#1 will be submitted while frame#2 will continue on its stages and will be submitted in the next vsync.</p>
 <h3 id="example-2">Example 2:</h3>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/PipelineReporter_example_2.png" alt="PipelineReporter trace event example_2"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/PipelineReporter_example_2.png" alt="PipelineReporter trace event example_2"></p>
 <p>In this example the two PipelineReporters start at the same time but would not end at the same time. If we look into the arguments of each we would notice that they both correspond to the same sequence number (this would be expected for PRs that start at the same time corresponding to the same vsync).
 In this case, the PR on top has been in middle of <em>SendBeginMainFrameToCommit</em> while the second PR moves to <em>EndActivateToSubmitCompositorFrame</em> and then <em>SubmitCompositorFrameToPresentationCompositorFrame</em>. That means that while the main thread work was taking place we reached the deadline and submitted the compositor updates that were ready (bottom PR), and the PR on top would do the same with main thread updates on the next vsync.</p>
 <h3 id="example-3">Example 3:</h3>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/images/PipelineReporter_example_3.png" alt="PipelineReporter trace event example_3"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/images/PipelineReporter_example_3.png" alt="PipelineReporter trace event example_3"></p>
 <p>In this example the two PRs started at different times but are ending at the same time. This would often happen when a PR takes longer than one vsync and its last stage (e.g. <em>SubmitCompositorFrameToPresentationCompositorFrame</em>) would be synced with the next PR (top PR on the image).
 In such cases the combined update from two PRs would be submitted to the GPU process and be presented together.</p>
 <div class="_attribution">

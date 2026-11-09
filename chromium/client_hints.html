@@ -165,7 +165,7 @@ is set, the resulting origin is <code>opaque</code>.</p>
 <p>The following diagram shows how Client Hints are added to the HTTP request
 header before a response is received from the site. We only parse and persist
 Client Hints for the top-level document.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/initial_navigation_flow.png" alt="initial navigation
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/client_hints/images/initial_navigation_flow.png" alt="initial navigation
 flow"></p>
 <p>When initializing the <code>NavigationRequest</code> in <code>//content</code> layer, we look up the
 existing Client Hints storage to add them to the HTTP request header(the
@@ -183,7 +183,7 @@ values in the <code>Critical-CH</code> header and the existing Client Hints stor
 run on every response in the navigation it’s assigned to. The restart is
 implemented as an internal redirect. It replaces the original response and is
 sent to the navigation stack to proceed as normal.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/navigation_response_flow.png" alt="navigation response
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/client_hints/images/navigation_response_flow.png" alt="navigation response
 flow"></p>
 <p>In <code>URLLoaderThrottle</code>, responses are handled separately for normal(a.k.a.
 “final”) response and redirect response. When a redirect response occurs, the
@@ -324,14 +324,14 @@ the Client Hint preferences are saved to <code>client_hints_preferences_</code> 
 document starts loading(<code>DocumentLoader::StartLoadingInternal</code>). This allows
 <code>FrameFetchContext</code> to add the appropriate Client Hint headers when populating
 resource request.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/subresource_client_hints.png" alt="subresource Client
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/client_hints/images/subresource_client_hints.png" alt="subresource Client
 Hints"></p>
 <h4 id="user-agent-client-hints">User-Agent Client Hints</h4>
 <p>To populate User-Agent Client Hints on the subresource requests, one additional
 information is getting the User-Agent metadata. A frame fetch request will get
 the User-Agent metadata from <code>UserAgentMetadata()</code> in the <code>LocalFrameClient</code>
 interface. Implementation is in <code>LocalFrameClientImpl::UserAgentMetadata()</code>.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/ua_client_hints.png" alt="ua Client Hints"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/client_hints/images/ua_client_hints.png" alt="ua Client Hints"></p>
 <p>The logic then branches based on whether the User-Agent has been overridden.</p>
 <p>If the User-Agent has <strong>not</strong> been overridden, it calls the
 <code>Platform::UserAgentMetadata()</code> API. The <code>RenderBlinkPlatformImpl</code>
@@ -381,7 +381,7 @@ User-Agent Client Hints data in <code>NavigatorUAData</code>. The JS call gets t
 User-Agent metadata from <code>UserAgentMetadata()</code> in the <code>LocalFrameClient</code>
 interface. The remaining logics are the same as subresource requests getting the
 User-Agent metadata.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/js_ua_client_hints.png" alt="js ua Client Hints"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/client_hints/images/js_ua_client_hints.png" alt="js ua Client Hints"></p>
 <p>When web developers call <code>getHighEntropyValues()</code>, it reads data from
 <code>NavigatorUAData</code>, triggers a promise resolver, and returns the values
 asynchronously.</p>
@@ -414,7 +414,7 @@ entries to a hash map. The QUIC stack is responsible for decoding the
 <li>A <code>ConnectedCallback</code> is used to carry the <code>accept_ch_frame</code> raw string from
 <code>HttpStream</code> to <code>URLRequest</code> as a property of <code>TransportInfo</code> struct.</li>
 </ul>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/accept_ch_frame_url_request.png" alt="accept_ch frame url
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/client_hints/images/accept_ch_frame_url_request.png" alt="accept_ch frame url
 request"></p>
 <p>See here for detailed documents on <a href="https://chromium.googlesource.com/chromium/src/+/refs/heads/master/net/docs/life-of-a-url-request.md#check-the-cache_request-an-httpstream">how to request an
 HttpSteam</a>.</p>
@@ -428,7 +428,7 @@ for a given URL. The observer MUST check if the Client Hints in the frame need
 to be added to the request. If so, the request should drop the associated
 <code>URLLoader</code>, terminate the Mojo pipe, and issue a new request with the updated
 headers.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/accept_ch_frame_observer.png" alt="accept_ch frame
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/client_hints/images/accept_ch_frame_observer.png" alt="accept_ch frame
 observer"></p>
 <h4 id="onacceptchframereceived">OnAcceptCHFrameReceived</h4>
 <p><code>OnAcceptCHFrameReceived</code> is used to inform <code>AcceptCHFrameObserver</code> that an
@@ -442,7 +442,7 @@ origin. Finally, we check whether those Client Hints are already in the
 <code>resource_request_-&gt;headers</code>. If not, we restart the request and reset the
 <code>blink::ThrottlingURLLoader</code>.</p>
 <h4 id="a-simple-request">A Simple Request</h4>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/accept_ch_frame_simple_request.png" alt="accept_ch frame simple
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/client_hints/images/accept_ch_frame_simple_request.png" alt="accept_ch frame simple
 request"></p>
 <p>The following are the major steps for how the <code>ACCEPT_CH</code> frame Client Hints
 added to the request header when visiting <code>https://a.com</code>:</p>
@@ -477,7 +477,7 @@ values from the <code>ACCEPT_CH</code> frame.</li>
 returns <code>net::OK</code>.</li>
 </ol>
 <h4 id="a-restart-request-internal-redirect">A Restart Request (Internal Redirect)</h4>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/client_hints/images/accept_ch_frame_restart_request.png" alt="accept_ch frame restart
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/client_hints/images/accept_ch_frame_restart_request.png" alt="accept_ch frame restart
 request"></p>
 <p>Here are the major steps when visiting <code>https//a.com</code> with a rewrite rule to a
 new location: <code>https://a.com?foo=1&amp;bar=2</code> :</p>

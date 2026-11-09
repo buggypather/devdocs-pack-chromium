@@ -38,7 +38,7 @@ launched on-demand and orchestrate their operations over IPC. The <em>server
 process</em> hosts an engine that conducts most of the work of updating software,
 and it is driven by <em>client processes</em> that issue commands to it and potentially
 display UI to the user.</p>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/updater/images/architecture.svg" alt="Updater process architecture diagram"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/updater/images/architecture.svg" alt="Updater process architecture diagram"></p>
 <p>The updater may be installed <em>per-user</em> or <em>system-wide</em>. If installed
 per-user, the updater may lack permissions to update applications owned by
 other users, whereas a system- wide updater can update applications owned by
@@ -87,7 +87,7 @@ except the <code>Crashpad/</code> subtree (if any) in that directory before unpa
 the new installation. This clears out any &quot;broken&quot; prior installation while
 preserving crash reports and updater-specific crash-reporting opt-in flags.</p>
 <h4 id="updater-states">Updater States</h4>
-<p><img src="https://raw.githubusercontent.com/chromium/chromium/6d8da6cca732bc79b00d9977c04a860339dad8ff/docs/updater/images/updater_states.svg" alt="Updater state flowchart"></p>
+<p><img src="https://raw.githubusercontent.com/chromium/chromium/965715222a942389bd39b8eb6adb5c6bfd5a8a72/docs/updater/images/updater_states.svg" alt="Updater state flowchart"></p>
 <p>Only one instance per installation is <code>Active</code> at any time. Only the active
 instance is allowed to update applications or modify any of the updater&#39;s state.
 The state of the updater (including the list of applications registered for
